@@ -1,0 +1,125 @@
+﻿using System;
+
+using Vintagestory.API.Client;
+using Vintagestory.API.Common;
+using Vintagestory.API.MathTools;
+
+namespace VanillaBuildingExtended.BuildHammer;
+internal class BuildPreviewRenderer : IRenderer, IDisposable
+{
+    #region Fields
+    public double RenderOrder => 0.5;
+    public int RenderRange => 256;
+    private readonly ICoreClientAPI api;
+    /// <summary> The tint color applied to the preview model. </summary>
+    protected static readonly Vec4f RenderColor = new(1f, 1f, 1f, 1f);
+    protected static readonly Vec4f RenderColor_Invalid = new(1f, .5f, .5f, 1f);
+    protected Matrixf ModelMat = new();
+    #endregion
+
+    #region Properties
+    protected LoadedTexture ModelTexture;
+    protected MeshRef ModelRef;
+    #endregion
+
+    #region Lifecycle
+    public BuildPreviewRenderer(ICoreClientAPI api)
+    {
+        this.api = api;
+    }
+
+    public void Dispose()
+    {
+    }
+    #endregion
+
+    #region Rendering Logic
+    public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
+    {
+        var buildHammer = GetBuildHammer();
+        if (buildHammer is null) return;
+        BuildBrushState state = buildHammer.State;
+        if (!state.IsActive || state.Position is null || state.ItemStack is null) return;
+
+        IRenderAPI rapi = api.Render;
+        ItemRenderInfo renderInfo = rapi.GetItemStackRenderInfo(state.ItemSlot, EnumItemRenderTarget.Ground, deltaTime);
+        if (renderInfo.ModelRef is null || renderInfo.Transform is null)
+        {
+            return;
+        }
+
+        UpdateModelMatrix(state, renderInfo);
+
+        // Setup the shader
+        const string textureSampleName = "tex";
+        IStandardShaderProgram shader = rapi.StandardShader;
+        shader.Use();
+        shader.RgbaTint = state.IsValid ? RenderColor : RenderColor_Invalid;
+        shader.DontWarpVertices = 0;
+        shader.AlphaTest = renderInfo.AlphaTest;
+        shader.AddRenderFlags = 0;
+
+        shader.OverlayOpacity = renderInfo.OverlayOpacity;
+        if (renderInfo.OverlayTexture is not null && renderInfo.OverlayOpacity > 0f)
+        {
+            shader.Tex2dOverlay2D = renderInfo.OverlayTexture.TextureId;
+            shader.OverlayTextureSize = new Vec2f(renderInfo.OverlayTexture.Width, renderInfo.OverlayTexture.Height);
+            shader.BaseTextureSize = new Vec2f(renderInfo.TextureSize.Width, renderInfo.TextureSize.Height);
+            TextureAtlasPosition texPos = rapi.GetTextureAtlasPosition(state.ItemStack);
+            shader.BaseUvOrigin = new Vec2f(texPos.x1, texPos.y1);
+        }
+
+        // Evaluate the items incandescence based on temperature
+        //int num = (int)state.ItemStack!.Collectible.GetTemperature(api.World, state.ItemStack);
+        //float[] glowColor = ColorUtil.GetIncandescenceColorAsColor4f(num);
+        //int extraGlow = GameMath.Clamp((num - 550) / 2, 0, 255);
+        //GlowRgb.R = glowColor[0];
+        //GlowRgb.G = glowColor[1];
+        //GlowRgb.B = glowColor[2];
+        //GlowRgb.A = extraGlow / 255f;
+
+        shader.ExtraGlow = 0;// extraGlow;
+        shader.RgbaAmbientIn = rapi.AmbientColor;
+        shader.RgbaLightIn = ColorUtil.WhiteArgbVec;
+        shader.RgbaGlowIn = ColorUtil.WhiteArgbVec;
+        shader.RgbaFogIn = rapi.FogColor;
+        shader.FogMinIn = rapi.FogMin;
+        shader.FogDensityIn = 0;
+        shader.ExtraGodray = 0f;
+        shader.NormalShaded = renderInfo.NormalShaded ? 1 : 0;
+        shader.ProjectionMatrix = rapi.CurrentProjectionMatrix;
+        shader.ViewMatrix = rapi.CameraMatrixOriginf;
+        shader.ModelMatrix = ModelMat.Values;
+
+        if (!renderInfo.CullFaces)
+        {
+            rapi.GlDisableCullFace();
+        }
+        rapi.RenderMultiTextureMesh(renderInfo.ModelRef, textureSampleName);
+        if (!renderInfo.CullFaces)
+        {
+            rapi.GlEnableCullFace();
+        }
+
+        shader.AddRenderFlags = 0;
+        shader.DamageEffect = 0f;
+        shader.Stop();
+    }
+    #endregion
+
+    protected void UpdateModelMatrix(in BuildBrushState state, in ItemRenderInfo renderInfo)
+    {
+        ModelTransform itemTransform = renderInfo.Transform;
+        Vec3d pos = state.Position?.ToVec3d() ?? Vec3d.Zero;
+        Vec3d camPos = api.World.Player.Entity.CameraPos;
+
+        ModelMat.Identity();
+        ModelMat.Translate(pos.X - camPos.X, pos.Y - camPos.Y, pos.Z - camPos.Z);
+    }
+
+    protected ItemBuildHammer? GetBuildHammer()
+    {
+        var byEntity = api.World.Player.Entity;
+        return byEntity!.LeftHandItemSlot?.Itemstack?.Item is ItemBuildHammer buildHammer ? buildHammer : null;
+    }
+}

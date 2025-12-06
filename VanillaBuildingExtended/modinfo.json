@@ -1,0 +1,14 @@
+{
+    "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
+    "type": "Code",
+    "modid": "vanillabuildingextended",
+    "name": "VanillaBuildingExtended",
+    "authors": [
+        "Sisco++"
+    ],
+    "description": "Adds QOL improvements related to building while striving to remain as close to the vanilla game as possible.",
+    "version": "0.0.1",
+    "dependencies": {
+        "game": "1.21.0"
+    }
+}

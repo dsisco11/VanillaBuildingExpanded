@@ -1,0 +1,8 @@
+{
+  "vbe-hotkey-rotate-build-cursor": "Rotate Build Cursor",
+  "vbe-hotkey-cycle-snapping-mode": "Cycle Snapping Mode",
+  "vbe-hotkey-rotate-build-cursor--forward": "Rotate Build Cursor Forward",
+  "vbe-hotkey-cycle-snapping-mode--forward": "Cycle Snapping Mode Forward",
+  "vbe-hotkey-rotate-build-cursor--backward": "Rotate Build Cursor Backward",
+  "vbe-hotkey-cycle-snapping-mode--backward": "Cycle Snapping Mode Backward"
+}
