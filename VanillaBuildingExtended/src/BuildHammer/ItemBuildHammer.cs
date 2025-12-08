@@ -28,7 +28,7 @@ public class ItemBuildHammer : Item
         if (world is IClientWorldAccessor clientWorld)
         {
             IClientPlayer byPlayer = clientWorld.Player;
-            BuildBrushManager_Client brushManager = VanillaBuildingExtendedModSystem.buildBrushManager as BuildBrushManager_Client;
+            BuildBrushManager_Client brushManager = VanillaBuildingExtendedModSystem.buildBrushManager_Client;
             var brush = brushManager.GetBrush(byPlayer);
             if (brush is null)
                 return;

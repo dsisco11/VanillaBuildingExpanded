@@ -1,4 +1,4 @@
-﻿using System;
+﻿using System.Collections.Generic;
 
 using VanillaBuildingExtended.Networking;
 
@@ -15,6 +15,7 @@ public class BuildBrushManager_Server : BuildBrushManager
     #region Fields
     private ICoreServerAPI api => (ICoreServerAPI)coreApi;
     protected readonly IServerNetworkChannel serverChannel;
+    protected readonly Dictionary<int, BuildBrushInstance> Brushes = [];
     #endregion
 
     #region Lifecycle
@@ -22,6 +23,13 @@ public class BuildBrushManager_Server : BuildBrushManager
     {
         serverChannel = api.Network.GetChannel(NetworkChannelId);
         serverChannel.SetMessageHandler<Packet_SetBuildBrush>(OnSetBuildBrushPacket);
+        api.Event.AfterActiveSlotChanged += Event_AfterActiveSlotChanged;
+    }
+
+    public override void Dispose()
+    {
+        base.Dispose();
+        Brushes.Clear();
     }
     #endregion
 
@@ -46,7 +54,18 @@ public class BuildBrushManager_Server : BuildBrushManager
     }
     #endregion
 
-    #region Handlers
+    #region Event Handlers
+    private void Event_AfterActiveSlotChanged(IServerPlayer byPlayer, ActiveSlotChangeEventArgs evt)
+    {
+        var brush = GetBrush(byPlayer);
+        if (brush is not null)
+        {
+            brush.BlockId = byPlayer!.InventoryManager.ActiveHotbarSlot?.Itemstack?.Block?.BlockId ?? 0;
+        }
+    }
+    #endregion
+
+    #region Network Handlers
     private void OnSetBuildBrushPacket(IServerPlayer fromPlayer, Packet_SetBuildBrush packet)
     {
         BuildBrushInstance? brush = GetBrush(fromPlayer);

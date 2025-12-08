@@ -38,7 +38,7 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
         if(!player.TryGetBuildHammer(out ItemBuildHammer buildHammer))
             return;
 
-        BuildBrushManager_Client brushManager = VanillaBuildingExtendedModSystem.buildBrushManager as BuildBrushManager_Client;
+        BuildBrushManager_Client brushManager = VanillaBuildingExtendedModSystem.buildBrushManager_Client;
         BuildBrushInstance? brush = brushManager.GetBrush(player);
         if (brush is null || !brush.IsActive || brush.Position is null || brush.ItemStack is null) return;
 

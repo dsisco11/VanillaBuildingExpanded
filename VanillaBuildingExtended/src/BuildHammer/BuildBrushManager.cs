@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 
 using Vintagestory.API.Common;
 
@@ -16,7 +15,6 @@ public abstract class BuildBrushManager : IDisposable
     #endregion
 
     #region Properties
-    public readonly Dictionary<int, BuildBrushInstance> Brushes = [];
     #endregion
 
     #region Accessors
