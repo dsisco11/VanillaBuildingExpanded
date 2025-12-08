@@ -19,6 +19,10 @@ public abstract class BuildBrushManager : IDisposable
     public readonly Dictionary<int, BuildBrushInstance> Brushes = [];
     #endregion
 
+    #region Accessors
+    protected ILogger Logger => coreApi.Logger;
+    #endregion
+
     #region Lifecycle
     public BuildBrushManager(ICoreAPI api)
     {

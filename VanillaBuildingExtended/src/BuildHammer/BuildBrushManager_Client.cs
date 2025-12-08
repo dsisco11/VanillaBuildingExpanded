@@ -2,11 +2,13 @@
 
 using VanillaBuildingExtended.Networking;
 
+using Vintagestory;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Util;
+using Vintagestory.Client;
 
 namespace VanillaBuildingExtended.BuildHammer;
 
@@ -19,22 +21,28 @@ public class BuildBrushManager_Client : BuildBrushManager
     private ICoreClientAPI api => (ICoreClientAPI)coreApi;
     private BuildBrushInstance? _brush;
     protected readonly IClientNetworkChannel clientChannel;
+    private readonly BuildPreviewRenderer renderer;
     #endregion
 
     #region Accessors
-    protected IClientPlayer? Player => api.World.Player;
+    protected IClientWorldAccessor World => api.World;
+    protected IClientPlayer Player => api.World.Player;
     #endregion
 
     #region Lifecycle
     public BuildBrushManager_Client(ICoreClientAPI api) : base(api)
     {
         clientChannel = api.Network.GetChannel(NetworkChannelId);
+        renderer = new BuildPreviewRenderer(api);
         api.Event.PlayerEntitySpawn += Event_PlayerEntitySpawn;
         api.Event.AfterActiveSlotChanged += Event_AfterActiveSlotChanged;
         api.Event.BlockChanged += Event_BlockChanged;
         api.Event.RegisterGameTickListener(Thunk_Client, 50);
 
         clientChannel.SetMessageHandler<Packet_SetBuildBrush>(OnSetBuildBrushPacket);
+        api.Event.RegisterRenderer(renderer, EnumRenderStage.Opaque, "build_brush");
+
+        RegisterInputHandlers();
     }
     #endregion
 
@@ -50,7 +58,7 @@ public class BuildBrushManager_Client : BuildBrushManager
     }
     #endregion
 
-    #region Handlers
+    #region Event Handlers
     private void Event_BlockChanged(BlockPos pos, Block oldBlock)
     {
         var brush = GetBrush(Player);
@@ -158,6 +166,160 @@ public class BuildBrushManager_Client : BuildBrushManager
 
         brush.Rotation = packet.rotation;
         //brush.Position = packet.position;
+    }
+    #endregion
+
+    #region Input Handling
+
+    private void RegisterInputHandlers()
+    {
+        api.Input.RegisterHotKey("vbe.RotateBuildCursorForward", Lang.Get("vbe-hotkey-rotate-build-cursor--forward"), GlKeys.R, HotkeyType.CharacterControls);
+        api.Input.SetHotKeyHandler("vbe.RotateBuildCursorForward", this.Input_RotateBuildCursor_Forward);
+
+        api.Input.RegisterHotKey("vbe.RotateBuildCursorBackward", Lang.Get("vbe-hotkey-rotate-build-cursor--backward"), GlKeys.R, HotkeyType.CharacterControls, shiftPressed: true);
+        api.Input.SetHotKeyHandler("vbe.RotateBuildCursorBackward", this.Input_RotateBuildCursor_Backward);
+
+        api.Input.RegisterHotKeyFirst("vbe.CycleSnappingMode_Forward", Lang.Get("vbe-hotkey-cycle-snapping-mode--forward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.MouseModifiers, shiftPressed: false);
+        api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Forward", this.Input_CycleSnappingMode_Forward);
+
+        api.Input.RegisterHotKeyFirst("vbe.CycleSnappingMode_Backward", Lang.Get("vbe-hotkey-cycle-snapping-mode--backward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.MouseModifiers, shiftPressed: true);
+        api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Backward", this.Input_CycleSnappingMode_Backward);
+
+        api.Input.InWorldAction += this.InWorldAction;
+    }
+
+    private bool Input_RotateBuildCursor_Forward(KeyCombination keys)
+    {
+        var brush = GetBrush(Player);
+        if (brush is null || !brush.IsActive)
+        {
+            return false;
+        }
+        RotateCursor(Player, EModeCycleDirection.Forward);
+        return true;
+    }
+
+    private bool Input_RotateBuildCursor_Backward(KeyCombination keys)
+    {
+        var brush = GetBrush(Player);
+        if (brush is null || !brush.IsActive)
+        {
+            return false;
+        }
+        RotateCursor(Player, EModeCycleDirection.Backward);
+        return true;
+    }
+
+    private bool Input_CycleSnappingMode_Forward(KeyCombination keys)
+    {
+        var brush = GetBrush(Player);
+        if (brush is null || !brush.IsActive)
+        {
+            return false;
+        }
+        CycleSnappingMode(Player, EModeCycleDirection.Forward);
+        return true;
+    }
+
+    private bool Input_CycleSnappingMode_Backward(KeyCombination keys)
+    {
+        var brush = GetBrush(Player);
+        if (brush is null || !brush.IsActive)
+        {
+            return false;
+        }
+        CycleSnappingMode(Player, EModeCycleDirection.Backward);
+        return true;
+    }
+    
+    private void InWorldAction(EnumEntityAction action, bool on, ref EnumHandling handling)
+    {
+        handling = EnumHandling.PassThrough;
+        if (action == EnumEntityAction.InWorldRightMouseDown && on)
+        {
+            TryPlaceBlock(ref handling);
+        }
+    }
+    #endregion
+
+    #region Block Placement
+    protected bool TryPrecheckBlockPlacement(in BlockPos position, in ItemStack itemstack, out string failureCode)
+    {
+        failureCode = string.Empty;
+        if (!World.BlockAccessor.IsValidPos(position))
+        {
+            failureCode = "outsideworld";
+            return false;
+        }
+        // Block.CanPlaceBlock does its own access checks, so we can skip this.
+        //if (!tryAccess(blockSelection, EnumBlockAccessFlags.BuildOrBreak))
+        //{
+        //    return false;
+        //}
+
+        if (itemstack is null || itemstack.Class != EnumItemClass.Block)
+        {
+            return false;
+        }
+
+        Block oldBlock = World.BlockAccessor.GetBlock(position);
+        Block liqBlock = World.BlockAccessor.GetBlock(position, 2);
+        bool preventPlacementInLava = true;// unsure where to get the actual setting from, so we just hardcode it for now
+        if (preventPlacementInLava && liqBlock.LiquidCode == "lava" && Player.WorldData.CurrentGameMode != EnumGameMode.Creative)
+        {
+            failureCode = "toohottoplacehere";
+            return false;
+        }
+        return true;
+    }
+
+    protected void TryPlaceBlock(ref EnumHandling handling)
+    {
+        if (!HasHammer(Player))
+        {
+            return;
+        }
+
+        var brush = GetBrush(Player);
+        BlockPos brushPos = brush.Position;
+        BlockSelection blockSelection = brush.Selection;
+        if (blockSelection is null)
+        {
+            Logger.Warning("[Build Hammer]: No valid placement position.");
+            return;
+        }
+
+        ItemStack? stackToPlace = brush.ItemStack;
+        if (stackToPlace is null)
+        {
+            Logger.Warning("[Build Hammer]: No item selected for placement.");
+            return;
+        }
+
+        Block block = stackToPlace.Block;
+        if (block is null)
+        {
+            Logger.Warning("[Build Hammer]: Selected item is not a block.");
+            return;
+        }
+
+        handling = EnumHandling.PreventSubsequent;
+        if (!TryPrecheckBlockPlacement(brushPos, stackToPlace, out string precheckFailure))
+        {
+            Logger.Warning($"[Build Hammer]: Precheck for block placement failed: {precheckFailure}");
+            api.TriggerIngameError(this, precheckFailure, Lang.Get($"placefailure-{precheckFailure}"));
+            return;
+        }
+
+        string failureCode = string.Empty;
+        if (block.CanPlaceBlock(api.World, Player, blockSelection, ref failureCode))
+        {
+            Block oldBlock = World.BlockAccessor.GetBlock(brushPos);
+            block.DoPlaceBlock(World, Player, blockSelection, stackToPlace);
+            api.Network.SendPacketClient(ClientPackets.BlockInteraction(blockSelection, 1, 0));
+            World.BlockAccessor.MarkBlockModified(brushPos);
+            World.BlockAccessor.TriggerNeighbourBlockUpdate(brushPos);
+        }
     }
     #endregion
 }
