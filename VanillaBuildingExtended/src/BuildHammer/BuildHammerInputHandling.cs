@@ -1,4 +1,6 @@
-﻿using Vintagestory.API.Client;
+﻿using VanillaBuildingExtended.BuildHammer;
+
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
@@ -23,6 +25,8 @@ internal class BuildHammerInputHandling
             return activeSlot?.Itemstack?.Collectible as ItemBuildHammer;
         }
     }
+
+    protected BuildBrushManager_Client brushManager => VanillaBuildingExtendedModSystem.buildBrushManager as BuildBrushManager_Client;
     #endregion
 
     public BuildHammerInputHandling(ICoreClientAPI api)
@@ -32,45 +36,45 @@ internal class BuildHammerInputHandling
 
     public bool Input_RotateBuildCursor_Forward(KeyCombination keys)
     {
-        var brush = this.Hammer?.GetBrush(Player);
+        var brush = this.brushManager.GetBrush(Player);
         if (brush is null || !brush.IsActive)
         {
             return false;
         }
-        this.Hammer?.RotateCursor(Player, EModeCycleDirection.Forward);
+        this.brushManager.RotateCursor(Player, EModeCycleDirection.Forward);
         return true;
     }
 
     public bool Input_RotateBuildCursor_Backward(KeyCombination keys)
     {
-        var brush = this.Hammer?.GetBrush(Player);
+        var brush = this.brushManager.GetBrush(Player);
         if (brush is null || !brush.IsActive)
         {
             return false;
         }
-        this.Hammer?.RotateCursor(Player, EModeCycleDirection.Backward);
+        this.brushManager.RotateCursor(Player, EModeCycleDirection.Backward);
         return true;
     }
 
     public bool Input_CycleSnappingMode_Forward(KeyCombination keys)
     {
-        var brush = this.Hammer?.GetBrush(Player);
+        var brush = this.brushManager.GetBrush(Player);
         if (brush is null || !brush.IsActive)
         {
             return false;
         }
-        this.Hammer?.CycleSnappingMode(Player, EModeCycleDirection.Forward);
+        this.brushManager.CycleSnappingMode(Player, EModeCycleDirection.Forward);
         return true;
     }
 
     public bool Input_CycleSnappingMode_Backward(KeyCombination keys)
     {
-        var brush = this.Hammer?.GetBrush(Player);
+        var brush = this.brushManager.GetBrush(Player);
         if (brush is null || !brush.IsActive)
         {
             return false;
         }
-        this.Hammer?.CycleSnappingMode(Player, EModeCycleDirection.Backward);
+        this.brushManager.CycleSnappingMode(Player, EModeCycleDirection.Backward);
         return true;
     }
 
@@ -117,13 +121,12 @@ internal class BuildHammerInputHandling
 
     private void TryPlaceBlock(in ICoreClientAPI client, ref EnumHandling handling)
     {
-        ItemBuildHammer? hammer = this.Hammer;
-        if (hammer is null)
+        if (!brushManager.HasHammer(client.World.Player))
         {
             return;
         }
 
-        var brush = hammer.GetBrush(client.World.Player);
+        var brush = brushManager.GetBrush(client.World.Player);
         BlockPos brushPos = brush.Position;
         BlockSelection blockSelection = brush.Selection;
         blockSelection.Position = brushPos;
@@ -164,7 +167,7 @@ internal class BuildHammerInputHandling
         {
             Block oldBlock = World.BlockAccessor.GetBlock(brushPos);
             block.DoPlaceBlock(client.World, Player, blockSelection, stackToPlace);
-            //client.Network.SendPacketClient(ClientPackets.BlockInteraction(blockSelection, 1, 0));
+            client.Network.SendPacketClient(ClientPackets.BlockInteraction(blockSelection, 1, 0));
             World.BlockAccessor.MarkBlockModified(brushPos);
             World.BlockAccessor.TriggerNeighbourBlockUpdate(brushPos);
         }

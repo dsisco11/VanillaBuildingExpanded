@@ -12,8 +12,8 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
     public int RenderRange => 256;
     private readonly ICoreClientAPI api;
     /// <summary> The tint color applied to the preview model. </summary>
-    protected static readonly Vec4f RenderColor = new(1f, 1f, 1f, 1f);
-    protected static readonly Vec4f RenderColor_Invalid = new(1f, .5f, .5f, 1f);
+    protected static readonly Vec4f RenderGlow_Normal = new(.7f, .7f, 1f, 1f);
+    protected static readonly Vec4f RenderGlow_Invalid = new(1f, .5f, .5f, 1f);
     protected Matrixf ModelMat = new();
     #endregion
 
@@ -38,7 +38,8 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
         if(!player.TryGetBuildHammer(out ItemBuildHammer buildHammer))
             return;
 
-        BuildBrushInstance? brush = buildHammer.GetBrush(player);
+        BuildBrushManager_Client brushManager = VanillaBuildingExtendedModSystem.buildBrushManager as BuildBrushManager_Client;
+        BuildBrushInstance? brush = brushManager.GetBrush(player);
         if (brush is null || !brush.IsActive || brush.Position is null || brush.ItemStack is null) return;
 
         IRenderAPI rapi = api.Render;
@@ -54,7 +55,7 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
         const string textureSampleName = "tex";
         IStandardShaderProgram shader = rapi.StandardShader;
         shader.Use();
-        shader.RgbaTint = brush.IsValid ? RenderColor : RenderColor_Invalid;
+        shader.RgbaTint = ColorUtil.WhiteArgbVec;
         shader.DontWarpVertices = 0;
         shader.AlphaTest = renderInfo.AlphaTest;
         shader.AddRenderFlags = 0;
@@ -80,11 +81,12 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
         //GlowRgb.A = extraGlow / 255f;
         //shader.ExtraGlow = extraGlow;
 
-        shader.ExtraGlow = 0;
-        //shader.RgbaAmbientIn = rapi.AmbientColor;
-        shader.RgbaAmbientIn = ColorUtil.WhiteRgbVec;
+        var glowColor = brush.IsValid ? RenderGlow_Normal : RenderGlow_Invalid;
+        shader.RgbaGlowIn = glowColor;
+        shader.ExtraGlow = 32;
+        shader.RgbaAmbientIn = rapi.AmbientColor;
+        //shader.RgbaAmbientIn = ColorUtil.WhiteRgbVec;
         shader.RgbaLightIn = ColorUtil.WhiteArgbVec;
-        shader.RgbaGlowIn = ColorUtil.WhiteArgbVec;
         shader.RgbaFogIn = rapi.FogColor;
         shader.FogMinIn = rapi.FogMin;
         shader.FogDensityIn = 0;

@@ -74,8 +74,11 @@ public class BuildBrushInstance
             if (_rotation != value)
             {
                 _rotation = value % 360;
-                var transformedBlock = _blockUntransformed!.GetRotatedBlockCode(_rotation);
-                BlockTransformed = World.GetBlock(transformedBlock);
+                var transformedBlock = _blockUntransformed?.GetRotatedBlockCode(_rotation);
+                if (transformedBlock != null)
+                {
+                    BlockTransformed = World.GetBlock(transformedBlock);
+                }
             }
         }
     }
@@ -133,7 +136,10 @@ public class BuildBrushInstance
         {
             _blockUntransformed = value;
             var transformedBlock = _blockUntransformed!.GetRotatedBlockCode(_rotation);
-            BlockTransformed = World.GetBlock(transformedBlock);
+            if (transformedBlock is not null)
+            {
+                BlockTransformed = World.GetBlock(transformedBlock);
+            }
         }
     }
 

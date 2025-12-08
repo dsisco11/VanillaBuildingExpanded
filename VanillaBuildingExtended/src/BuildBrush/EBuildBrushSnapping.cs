@@ -6,8 +6,12 @@ namespace VanillaBuildingExtended;
 public enum EBuildBrushSnapping : byte
 {
     None = 1 << 0,
+    /// <summary> Snap to horizontal planes. </summary>
     Horizontal = 1 << 1,
+    /// <summary> Snap to vertical planes. </summary>
     Vertical = 1 << 2,
+    /// <summary> Brush is fixed in place and does not move with the player. </summary>
+    Fixed = 1 << 3,
 }
 
 public static class EBuildBrushSnappingExtensions
