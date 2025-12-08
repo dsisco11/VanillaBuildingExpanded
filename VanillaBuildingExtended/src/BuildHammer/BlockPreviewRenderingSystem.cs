@@ -12,7 +12,7 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
     public int RenderRange => 256;
     private readonly ICoreClientAPI api;
     /// <summary> The tint color applied to the preview model. </summary>
-    protected static readonly Vec4f RenderGlow_Normal = new(.7f, .7f, 1f, 1f);
+    protected static readonly Vec4f RenderGlow_Normal = new(1f, 1f, 1f, 1f);
     protected static readonly Vec4f RenderGlow_Invalid = new(1f, .5f, .5f, 1f);
     protected Matrixf ModelMat = new();
     #endregion
