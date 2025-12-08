@@ -2,7 +2,6 @@
 
 using VanillaBuildingExtended.Networking;
 
-using Vintagestory;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -75,7 +74,6 @@ public class BuildBrushManager_Client : BuildBrushManager
 
     private void Event_AfterActiveSlotChanged(ActiveSlotChangeEventArgs obj)
     {
-        int slotId = obj.ToSlot;
         var brush = GetBrush(Player);
         if (brush is not null)
         {
@@ -173,19 +171,19 @@ public class BuildBrushManager_Client : BuildBrushManager
 
     private void RegisterInputHandlers()
     {
-        api.Input.RegisterHotKey("vbe.RotateBuildCursorForward", Lang.Get("vbe-hotkey-rotate-build-cursor--forward"), GlKeys.R, HotkeyType.CharacterControls);
-        api.Input.SetHotKeyHandler("vbe.RotateBuildCursorForward", this.Input_RotateBuildCursor_Forward);
+        api.Input.InWorldAction += this.InWorldAction;
 
-        api.Input.RegisterHotKey("vbe.RotateBuildCursorBackward", Lang.Get("vbe-hotkey-rotate-build-cursor--backward"), GlKeys.R, HotkeyType.CharacterControls, shiftPressed: true);
-        api.Input.SetHotKeyHandler("vbe.RotateBuildCursorBackward", this.Input_RotateBuildCursor_Backward);
+        api.Input.TryRegisterHotKey("vbe.RotateBuildCursor_Forward", Lang.Get("vbe-hotkey-rotate-build-cursor--forward"), GlKeys.R, HotkeyType.CharacterControls);
+        api.Input.SetHotKeyHandler("vbe.RotateBuildCursor_Forward", this.Input_RotateBuildCursor_Forward);
 
-        api.Input.RegisterHotKeyFirst("vbe.CycleSnappingMode_Forward", Lang.Get("vbe-hotkey-cycle-snapping-mode--forward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.MouseModifiers, shiftPressed: false);
+        api.Input.TryRegisterHotKey("vbe.RotateBuildCursor_Backward", Lang.Get("vbe-hotkey-rotate-build-cursor--backward"), GlKeys.R, HotkeyType.CharacterControls, shiftPressed: true);
+        api.Input.SetHotKeyHandler("vbe.RotateBuildCursor_Backward", this.Input_RotateBuildCursor_Backward);
+
+        api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Forward", Lang.Get("vbe-hotkey-cycle-snapping-mode--forward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.MouseModifiers, shiftPressed: false);
         api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Forward", this.Input_CycleSnappingMode_Forward);
 
-        api.Input.RegisterHotKeyFirst("vbe.CycleSnappingMode_Backward", Lang.Get("vbe-hotkey-cycle-snapping-mode--backward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.MouseModifiers, shiftPressed: true);
+        api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Backward", Lang.Get("vbe-hotkey-cycle-snapping-mode--backward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.MouseModifiers, shiftPressed: true);
         api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Backward", this.Input_CycleSnappingMode_Backward);
-
-        api.Input.InWorldAction += this.InWorldAction;
     }
 
     private bool Input_RotateBuildCursor_Forward(KeyCombination keys)
