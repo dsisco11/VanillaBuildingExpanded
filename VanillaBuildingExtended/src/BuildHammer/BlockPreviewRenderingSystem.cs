@@ -38,23 +38,23 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
         if(!player.TryGetBuildHammer(out ItemBuildHammer buildHammer))
             return;
 
-        BuildBrushState state = buildHammer.GetState(player);
-        if (!state.IsActive || state.Position is null || state.ItemStack is null) return;
+        BuildBrushInstance? brush = buildHammer.GetBrush(player);
+        if (brush is null || !brush.IsActive || brush.Position is null || brush.ItemStack is null) return;
 
         IRenderAPI rapi = api.Render;
-        ItemRenderInfo renderInfo = rapi.GetItemStackRenderInfo(state.ItemSlot, EnumItemRenderTarget.Ground, deltaTime);
+        ItemRenderInfo renderInfo = rapi.GetItemStackRenderInfo(brush.DummySlot, EnumItemRenderTarget.Ground, deltaTime);
         if (renderInfo.ModelRef is null || renderInfo.Transform is null)
         {
             return;
         }
 
-        UpdateModelMatrix(state, renderInfo);
+        UpdateModelMatrix(brush, renderInfo);
 
         // Setup the shader
         const string textureSampleName = "tex";
         IStandardShaderProgram shader = rapi.StandardShader;
         shader.Use();
-        shader.RgbaTint = state.IsValid ? RenderColor : RenderColor_Invalid;
+        shader.RgbaTint = brush.IsValid ? RenderColor : RenderColor_Invalid;
         shader.DontWarpVertices = 0;
         shader.AlphaTest = renderInfo.AlphaTest;
         shader.AddRenderFlags = 0;
@@ -66,7 +66,7 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
             shader.Tex2dOverlay2D = renderInfo.OverlayTexture.TextureId;
             shader.OverlayTextureSize = new Vec2f(renderInfo.OverlayTexture.Width, renderInfo.OverlayTexture.Height);
             shader.BaseTextureSize = new Vec2f(renderInfo.TextureSize.Width, renderInfo.TextureSize.Height);
-            TextureAtlasPosition texPos = rapi.GetTextureAtlasPosition(state.ItemStack);
+            TextureAtlasPosition texPos = rapi.GetTextureAtlasPosition(brush.ItemStack);
             shader.BaseUvOrigin = new Vec2f(texPos.x1, texPos.y1);
         }
 
@@ -110,10 +110,10 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
     }
     #endregion
 
-    protected void UpdateModelMatrix(in BuildBrushState state, in ItemRenderInfo renderInfo)
+    protected void UpdateModelMatrix(in BuildBrushInstance brush, in ItemRenderInfo renderInfo)
     {
         ModelTransform itemTransform = renderInfo.Transform;
-        Vec3d pos = state.Position?.ToVec3d() ?? Vec3d.Zero;
+        Vec3d pos = brush.Position?.ToVec3d() ?? Vec3d.Zero;
         Vec3d camPos = api.World.Player.Entity.CameraPos;
 
         ModelMat.Identity();

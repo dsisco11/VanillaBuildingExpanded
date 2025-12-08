@@ -1,5 +1,9 @@
 ﻿using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
+using Vintagestory.API.MathTools;
+using Vintagestory.Client;
+using Vintagestory.Common;
 
 namespace VanillaBuildingExtended.src.BuildHammer;
 internal class BuildHammerInputHandling
@@ -28,8 +32,8 @@ internal class BuildHammerInputHandling
 
     public bool Input_RotateBuildCursor_Forward(KeyCombination keys)
     {
-        var state = this.Hammer?.GetState(Player);
-        if (state is null || !state.IsActive)
+        var brush = this.Hammer?.GetBrush(Player);
+        if (brush is null || !brush.IsActive)
         {
             return false;
         }
@@ -39,8 +43,8 @@ internal class BuildHammerInputHandling
 
     public bool Input_RotateBuildCursor_Backward(KeyCombination keys)
     {
-        var state = this.Hammer?.GetState(Player);
-        if (state is null || !state.IsActive)
+        var brush = this.Hammer?.GetBrush(Player);
+        if (brush is null || !brush.IsActive)
         {
             return false;
         }
@@ -50,8 +54,8 @@ internal class BuildHammerInputHandling
 
     public bool Input_CycleSnappingMode_Forward(KeyCombination keys)
     {
-        var state = this.Hammer?.GetState(Player);
-        if (state is null || !state.IsActive)
+        var brush = this.Hammer?.GetBrush(Player);
+        if (brush is null || !brush.IsActive)
         {
             return false;
         }
@@ -61,8 +65,8 @@ internal class BuildHammerInputHandling
 
     public bool Input_CycleSnappingMode_Backward(KeyCombination keys)
     {
-        var state = this.Hammer?.GetState(Player);
-        if (state is null || !state.IsActive)
+        var brush = this.Hammer?.GetBrush(Player);
+        if (brush is null || !brush.IsActive)
         {
             return false;
         }
@@ -75,8 +79,40 @@ internal class BuildHammerInputHandling
         handling = EnumHandling.PassThrough;
         if (action == EnumEntityAction.InWorldRightMouseDown && on)
         {
-            //TryPlaceBlock(client, ref handling);
+            TryPlaceBlock(client, ref handling);
         }
+    }
+
+    public static bool TryPrecheckBlockPlacement(in ICoreClientAPI client, in BlockPos position, in ItemStack itemstack, out string failureCode)
+    {
+        failureCode = string.Empty;
+        IWorldAccessor World = client.World;
+        IPlayer player = client.World.Player;
+        if (!World.BlockAccessor.IsValidPos(position))
+        {
+            failureCode = "outsideworld";
+            return false;
+        }
+        // Block.CanPlaceBlock does its own access checks, so we can skip this.
+        //if (!tryAccess(blockSelection, EnumBlockAccessFlags.BuildOrBreak))
+        //{
+        //    return false;
+        //}
+
+        if (itemstack is null || itemstack.Class != EnumItemClass.Block)
+        {
+            return false;
+        }
+
+        Block oldBlock = World.BlockAccessor.GetBlock(position);
+        Block liqBlock = World.BlockAccessor.GetBlock(position, 2);
+        bool preventPlacementInLava = true;// unsure where to get the actual setting from, so we just hardcode it for now
+        if (preventPlacementInLava && liqBlock.LiquidCode == "lava" && player.WorldData.CurrentGameMode != EnumGameMode.Creative)
+        {
+            failureCode = "toohottoplacehere";
+            return false;
+        }
+        return true;
     }
 
     private void TryPlaceBlock(in ICoreClientAPI client, ref EnumHandling handling)
@@ -87,35 +123,51 @@ internal class BuildHammerInputHandling
             return;
         }
 
-        var state = hammer.GetState(client.World.Player);
-        BlockSelection blockSelection = state.Selection;
+        var brush = hammer.GetBrush(client.World.Player);
+        BlockPos brushPos = brush.Position;
+        BlockSelection blockSelection = brush.Selection;
+        blockSelection.Position = brushPos;
+
         if (blockSelection is null)
         {
-            Logger.Warning("Build Hammer: No valid placement position.");
+            Logger.Warning("[Build Hammer]: No valid placement position.");
             return;
         }
 
-        ItemStack? stackToPlace = state.ItemStack;
+        ItemStack? stackToPlace = brush.ItemStack;
         if (stackToPlace is null)
         {
-            Logger.Warning("Build Hammer: No item selected for placement.");
+            Logger.Warning("[Build Hammer]: No item selected for placement.");
             return;
         }
 
         Block block = stackToPlace.Block;
         if (block is null)
         {
-            Logger.Warning("Build Hammer: Selected item is not a block.");
+            Logger.Warning("[Build Hammer]: Selected item is not a block.");
             return;
         }
 
-        string failureCode = string.Empty;
         handling = EnumHandling.PreventSubsequent;
-        IBlockAccessor accessor = client.World.BlockAccessor;
+        if (!TryPrecheckBlockPlacement(client, brushPos, stackToPlace, out string precheckFailure))
+        {
+            Logger.Warning($"[Build Hammer]: Precheck for block placement failed: {precheckFailure}");
+            client.TriggerIngameError(this, precheckFailure, Lang.Get($"placefailure-{precheckFailure}"));
+            return;
+        }
+
+        IWorldAccessor World = client.World;
+        IPlayer player = client.World.Player;
+
+        string failureCode = string.Empty;
         if (block.CanPlaceBlock(api.World, Player, blockSelection, ref failureCode))
         {
-            //accessor.SetBlock(block.BlockId, hammer.State.Position, hammer.State.ItemStack);
+            Block oldBlock = World.BlockAccessor.GetBlock(brushPos);
             block.DoPlaceBlock(client.World, Player, blockSelection, stackToPlace);
+            //client.Network.SendPacketClient(ClientPackets.BlockInteraction(blockSelection, 1, 0));
+            World.BlockAccessor.MarkBlockModified(brushPos);
+            World.BlockAccessor.TriggerNeighbourBlockUpdate(brushPos);
         }
     }
+
 }

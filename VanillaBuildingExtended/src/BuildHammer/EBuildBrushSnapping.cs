@@ -9,3 +9,19 @@ public enum EBuildBrushSnapping : byte
     Horizontal = 1 << 1,
     Vertical = 1 << 2,
 }
+
+public static class EBuildBrushSnappingExtensions
+{
+    public static string GetCode(this EBuildBrushSnapping mode)
+    {
+        return mode switch
+        {
+            EBuildBrushSnapping.None => "none",
+            EBuildBrushSnapping.Horizontal => "horizontal",
+            EBuildBrushSnapping.Vertical => "vertical",
+            EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical => "horizontal-vertical",
+            _ => "Unknown",
+        };
+    }
+}
+
