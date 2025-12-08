@@ -18,8 +18,6 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
     #endregion
 
     #region Properties
-    protected LoadedTexture ModelTexture;
-    protected MeshRef ModelRef;
     #endregion
 
     #region Lifecycle
@@ -36,9 +34,11 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
     #region Rendering Logic
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
     {
-        var buildHammer = GetBuildHammer();
-        if (buildHammer is null) return;
-        BuildBrushState state = buildHammer.State;
+        var player = api.World.Player;
+        if(!player.TryGetBuildHammer(out ItemBuildHammer buildHammer))
+            return;
+
+        BuildBrushState state = buildHammer.GetState(player);
         if (!state.IsActive || state.Position is null || state.ItemStack is null) return;
 
         IRenderAPI rapi = api.Render;
@@ -58,6 +58,7 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
         shader.DontWarpVertices = 0;
         shader.AlphaTest = renderInfo.AlphaTest;
         shader.AddRenderFlags = 0;
+        shader.ExtraZOffset = 0;
 
         shader.OverlayOpacity = renderInfo.OverlayOpacity;
         if (renderInfo.OverlayTexture is not null && renderInfo.OverlayOpacity > 0f)
@@ -77,9 +78,11 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
         //GlowRgb.G = glowColor[1];
         //GlowRgb.B = glowColor[2];
         //GlowRgb.A = extraGlow / 255f;
+        //shader.ExtraGlow = extraGlow;
 
-        shader.ExtraGlow = 0;// extraGlow;
-        shader.RgbaAmbientIn = rapi.AmbientColor;
+        shader.ExtraGlow = 0;
+        //shader.RgbaAmbientIn = rapi.AmbientColor;
+        shader.RgbaAmbientIn = ColorUtil.WhiteRgbVec;
         shader.RgbaLightIn = ColorUtil.WhiteArgbVec;
         shader.RgbaGlowIn = ColorUtil.WhiteArgbVec;
         shader.RgbaFogIn = rapi.FogColor;

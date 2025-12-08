@@ -4,5 +4,10 @@
   "vbe-hotkey-rotate-build-cursor--forward": "Rotate Build Cursor Forward",
   "vbe-hotkey-cycle-snapping-mode--forward": "Cycle Snapping Mode Forward",
   "vbe-hotkey-rotate-build-cursor--backward": "Rotate Build Cursor Backward",
-  "vbe-hotkey-cycle-snapping-mode--backward": "Cycle Snapping Mode Backward"
+  "vbe-hotkey-cycle-snapping-mode--backward": "Cycle Snapping Mode Backward",
+  "vbe-snapping-mode-changed": "Snapping Mode Changed to {0}",
+  "vbe-snapping-mode-changed--none": "Snapping disabled",
+  "vbe-snapping-mode-changed--horizontal": "Snapping Mode: Horizontal",
+  "vbe-snapping-mode-changed--vertical": "Snapping Mode: Vertical",
+  "vbe-snapping-mode-changed--horizontal-vertical": "Snapping Mode: Horizontal & Vertical"
 }

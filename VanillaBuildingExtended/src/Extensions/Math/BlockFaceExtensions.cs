@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExtended.src.Extensions.Math;
+namespace VanillaBuildingExtended;
 public static class BlockFaceExtensions
 {
     /// <summary>

@@ -1,70 +1,61 @@
-﻿using System;
+﻿using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
-
-using VanillaBuildingExtended.src.Extensions.Math;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
+using Vintagestory.Common.Collectible.Block;
+using Vintagestory.GameContent;
 
 namespace VanillaBuildingExtended;
-
-[Flags]
-public enum EBuildBrushSnapping
-{
-    None = 1 << 0,
-    Horizontal = 1 << 1,
-    Vertical = 1 << 2,
-}
-
-public record class BuildBrushState
-{
-    private ItemStack? _itemStack;
-    /// <summary>
-    /// Indicates whether the build brush is currently active.
-    /// </summary>
-    public bool IsActive;
-    public EBuildBrushSnapping Snapping = EBuildBrushSnapping.None;
-    /// <summary>
-    /// Indicates whether the current placement position is valid.
-    /// </summary>
-    public bool IsValid;
-    /// <summary>
-    /// The position of the build cursor.
-    /// </summary>
-    public BlockPos? Position;
-    /// <summary>
-    /// The item currently selected for placement.
-    /// </summary>
-    public ItemSlot ItemSlot = new DummySlot();
-    public ItemStack? ItemStack
-    {
-        get => this._itemStack;
-        set
-        {
-            this._itemStack = value;
-            this.ItemSlot.Itemstack = value;
-        }
-    }
-    public BlockSelection? Selection;
-}
 
 public class ItemBuildHammer : Item
 {
     #region Fields
-    private ICoreAPI api;
-    private BlockPos? previousCheckedPlacementPos;
+    private readonly BuildBrushState _state = new();
     #endregion
 
     #region Properties
-    public BuildBrushState State { get; } = new();
+    //public readonly Dictionary<string, BuildBrushState> States = [];
     #endregion
 
     #region Accessors
     protected ILogger Logger => api.Logger;
     protected ICoreServerAPI? server => api as ICoreServerAPI;
     protected ICoreClientAPI? client => api as ICoreClientAPI;
+    protected IPlayer? Player => client?.World.Player;
+
+    public BuildBrushState GetState(in IPlayer? player)
+    {
+        return _state;
+        //if (player is null)
+        //{
+        //    return null;
+        //}
+
+        //if (States.TryGetValue(player.PlayerUID, out BuildBrushState? state))
+        //{
+        //    return state;
+        //}
+
+        //// initialize
+        //state = new BuildBrushState()
+        //{
+        //    IsActive = false,
+        //    Snapping = EBuildBrushSnapping.None,
+        //    IsValid = false,
+        //    Position = null,
+        //    ItemSlot = player.Entity.LeftHandItemSlot!,
+        //    ItemStack = player.Entity.LeftHandItemSlot?.Itemstack,
+        //    Selection = null,
+        //};
+        //States.Add(player.PlayerUID, state);
+
+        //return state;
+    }
     #endregion
 
     #region Handlers
@@ -75,15 +66,38 @@ public class ItemBuildHammer : Item
         {
             client!.Event.PlayerEntitySpawn += Event_PlayerEntitySpawn;
             client!.Event.AfterActiveSlotChanged += Event_AfterActiveSlotChanged;
+            client!.Event.BlockChanged += Event_BlockChanged;
             client!.Event.RegisterGameTickListener(Thunk_Client, 100);
             client!.Event.RegisterGameTickListener(Thunk_Client_Slow, 500);
+        }
+    }
+
+    private void Event_BlockChanged(BlockPos pos, Block oldBlock)
+    {
+        // When a block is changed, we need to re-validate the placement
+        var state = GetState(Player);
+        if (state is null || !state.IsActive)
+            return;
+
+        // make sure the block that changes was the one we were just about to place
+        if (state.Position != pos)
+            return;
+
+        state.Selection = Player.CurrentBlockSelection;
+        if(TryUpdateBlockSelection(client.World!, Player, state.Selection))
+        {
+            UpdateValidPlacementState();
         }
     }
 
     private void Event_AfterActiveSlotChanged(ActiveSlotChangeEventArgs obj)
     {
         int slotId = obj.ToSlot;
-        this.State.ItemStack = client!.World.Player.InventoryManager.GetHotbarInventory()?[slotId]?.Itemstack;
+        var state = GetState(Player);
+        if (state is not null)
+        {
+            state.Block = Player!.InventoryManager.GetHotbarInventory()?[slotId]?.Itemstack?.Block;
+        }
     }
 
     private void Event_PlayerEntitySpawn(IClientPlayer byPlayer)
@@ -106,7 +120,6 @@ public class ItemBuildHammer : Item
             SetBuildModeEnabled(byPlayer, isHoldingHammer);
         }
     }
-
     #endregion
 
     #region Hammer Activation
@@ -124,96 +137,126 @@ public class ItemBuildHammer : Item
 
     private void EnableBuildMode(in IClientPlayer byPlayer)
     {
-        this.State.IsActive = true;
-        //OnBlockSelectionChanged(byPlayer.CurrentBlockSelection, null);
+        var state = GetState(byPlayer);
+        if (state is null)
+            return;
+
+        state.IsActive = true;
     }
 
     private void DisableBuildMode(in IClientPlayer byPlayer)
     {
-        this.State.IsActive = false;
-        //if (api.Side == EnumAppSide.Server)
-        //{
-        //}
-        //else if (api.Side == EnumAppSide.Client)
-        //{
-        //    client!.World.SetBlocksPreviewDimension(-1);
-        //}
+        var state = GetState(byPlayer);
+        if (state is null)
+            return;
+
+        state.IsActive = false;
     }
     #endregion
 
     #region Handlers
-    protected void OnBlockSelection(BlockSelection? value)
+    protected bool TryUpdateBlockSelection(in IWorldAccessor world, in IPlayer byPlayer, BlockSelection? blockSelection)
     {
-        this.State.Selection = value;
-        if (value is null)
+        var state = GetState(Player);
+        if (state is null)
+            return false;
+
+        state.Selection = blockSelection?.Clone();
+        if (blockSelection is null)
         {
-            this.State.IsValid = false;
-            this.State.Position = null;
-            return;
+            state.IsValid = false;
+            state.Position = null;
+            return false;
         }
 
-        BlockPos resolved = value.Position;
-        Vector3 faceNormal = value.Face.Normalf.ToSNT();
-        Vector3 faceCenterPoint = (faceNormal * 0.5f) + new Vector3(0.5f);
-        Vector3 faceRelativeHitPos = value.HitPosition.ToSNT() - faceCenterPoint;
-        Vector2 hitPos = value.Face.ToAB(faceRelativeHitPos);
-
-        if (State.Snapping.HasFlag(EBuildBrushSnapping.Horizontal))
+        BrushSnapping snapping = new (blockSelection);
+        BrushSnappingState snappingState = new (snapping.Horizontal, snapping.Vertical, state.Snapping);
+        if (snappingState == state.PreviousSnappingState && blockSelection.Position == state.Position)
         {
-            int scale = hitPos.X > 0f ? 1 : -1;
-            FastVec3i horzDir = value.Face.Axis switch
-            {
-                EnumAxis.X => new FastVec3i(0, 0, scale),
-                EnumAxis.Y => new FastVec3i(scale, 0, 0),
-                EnumAxis.Z => new FastVec3i(scale, 0, 0),
-                _ => new FastVec3i(0, 0, 0),
-            };
+            return false;
+        }
+        state.PreviousSnappingState = snappingState;
 
-            resolved.Add(horzDir);
+        BlockPos? resolvedPos = ResolveFinalSelectionPosition(world, byPlayer, state.Block, blockSelection, state.Snapping, snapping);
+        bool result = resolvedPos != state.Position;
+
+        state.Position = resolvedPos;
+        //state.Selection.SetPos(resolvedPos.X, resolvedPos.Y, resolvedPos.Z);
+        //state.Selection.DidOffset = true;
+        return result;
+    }
+
+    /// <summary>
+    /// Resolves the block position based on the given snapping mode.
+    /// </summary>
+    /// <param name="blockSelection"></param>
+    /// <param name="snappingMode"></param>
+    /// <returns></returns>
+    public static BlockPos ResolveFinalSelectionPosition(IWorldAccessor world, IPlayer byPlayer, in Block? placingBlock, [NotNull] in BlockSelection blockSelection, EBuildBrushSnapping snappingMode, BrushSnapping? snapping = null)
+    {
+        if (placingBlock is null)
+        {
+            return blockSelection.Position;
         }
 
-        if (State.Snapping.HasFlag(EBuildBrushSnapping.Vertical))
-        {
-            int scale = hitPos.Y > 0f ? 1 : -1;
-            FastVec3i vertDir = value.Face.Axis switch
-            {
-                EnumAxis.X => new FastVec3i(0, scale, 0),
-                EnumAxis.Z => new FastVec3i(0, scale, 0),
-                EnumAxis.Y => new FastVec3i(scale, 0, 0),
-                _ => new FastVec3i(0, 0, 0),
-            };
+        snapping ??= new(blockSelection);
 
-            resolved.Add(vertDir);
+        if (TryGetValidSnappedPosition(world, byPlayer, placingBlock, blockSelection, snapping.Value, snappingMode, out BlockPos outSnappedPos))
+        {
+            return outSnappedPos;
         }
 
-        if (State.Snapping == EBuildBrushSnapping.None)
+        // the snapped position is invalid, use an unsnapped position instead.
+        TryGetValidSnappedPosition(world, byPlayer, placingBlock, blockSelection, snapping.Value, EBuildBrushSnapping.None, out BlockPos outUnsnappedPos);
+        return outUnsnappedPos;
+    }
+
+    /// <summary>
+    /// Resolves a selection position based on the given snapping mode, and checks if the block can be placed there.
+    /// </summary>
+    /// <returns>
+    /// True if a valid placement position was found; otherwise, false.
+    /// </returns>
+    public static bool TryGetValidSnappedPosition(IWorldAccessor world, IPlayer byPlayer, in Block? placingBlock, in BlockSelection blockSelection, in BrushSnapping snapping, EBuildBrushSnapping snappingMode, out BlockPos outBlockPos)
+    {
+        if (placingBlock is null)
         {
-            resolved.Add(value?.Face.Normali);
+            outBlockPos = blockSelection.Position.Copy();
+            return true;
         }
 
-        State.Position = resolved;
-        State.Selection!.Position = resolved;
+        outBlockPos = snapping.ResolvePosition(snappingMode);
+
+        string failureCode = "";
+        var newSelection = blockSelection.Clone();
+        newSelection.DidOffset = true;
+        newSelection.SetPos(outBlockPos.X, outBlockPos.Y, outBlockPos.Z);
+        return placingBlock.CanPlaceBlock(world, byPlayer, newSelection, ref failureCode);
     }
 
     protected void UpdateValidPlacementState()
     {
-        if (this.State.Position is null || this.State.ItemStack is null)
+        var state = GetState(Player);
+        if (state is null)
+            return;
+
+        if (state.Position is null || state.ItemStack is null)
         {
-            this.State.IsValid = false;
+            state.IsValid = false;
             return;
         }
-        this.previousCheckedPlacementPos = this.State.Position;
-        Block block = this.State.ItemStack.Block;
+        state.PreviousCheckedPlacementPos = state.Position;
+        Block block = state.ItemStack.Block;
         if (block is null)
         {
-            this.State.IsValid = false;
+            state.IsValid = false;
             return;
         }
         IBlockAccessor blockAccessor = client!.World.BlockAccessor;
-        Block existingBlock = blockAccessor.GetBlock(this.State.Position);
+        Block existingBlock = blockAccessor.GetBlock(state.Position);
         string failureCode = string.Empty;
-        bool canPlace = block.CanPlaceBlock(client!.World, client.World.Player, this.State.Selection!, ref failureCode);
-        this.State.IsValid = canPlace;
+        bool canPlace = block.CanPlaceBlock(client!.World, client.World.Player, state.Selection!, ref failureCode);
+        state.IsValid = canPlace;
     }
     #endregion
 
@@ -225,42 +268,56 @@ public class ItemBuildHammer : Item
 
     private void Thunk_Client(float dt)
     {
-        if (!this.State.IsActive)
-        {
+        if (Player is null)
             return;
-        }
+
+        if (client?.World is null)
+            return;
+
+        var state = GetState(Player);
+        if (state is null) 
+            return;
+
+        if (!state.IsActive)
+            return;
 
         BlockSelection? currentSelection = this.client!.World?.Player?.CurrentBlockSelection;
-        this.OnBlockSelection(currentSelection);
-        if (this.State.Position != this.previousCheckedPlacementPos)
+        if (TryUpdateBlockSelection(client.World!, Player, currentSelection))
         {
             this.UpdateValidPlacementState();
-        }
-    }
-    private void Thunk_Client_Slow(float dt)
-    {
-        if (!this.State.IsActive)
-        {
             return;
         }
-        // force recheck validity every so often in case something changed
+    }
+
+    private void Thunk_Client_Slow(float dt)
+    {
+        var state = GetState(Player);
+        if (!state?.IsActive ?? false)
+            return;
+
+        // Here we force check validity every so often in case something changed
         this.UpdateValidPlacementState();
     }
     #endregion
 
     #region API
-    public void RotateCursor(int direction = 1)
+    public void RotateCursor(in IPlayer player, EModeCycleDirection direction = EModeCycleDirection.Forward)
     {
-        CollectibleObject item = this.State.ItemStack!.Collectible;
-        if (item is Block block)
-        {
-            AssetLocation nextCode = block.GetRotatedBlockCode(direction >= 0 ? 90 : -90);
-            this.State.ItemStack = new ItemStack(client!.World.BlockAccessor.GetBlock(nextCode)!);
-        }
+        var state = GetState(player);
+        if (state is null)
+            return;
+
+        Block? block = state.Block;
+        if (block is null)
+            return;
+
+        var angle = direction == EModeCycleDirection.Forward ? 90 : -90;
+        state.Rotation += angle;
+        AssetLocation nextCode = block.GetRotatedBlockCode(angle);
+        state.Block = client!.World.BlockAccessor.GetBlock(nextCode);
     }
 
     #region Brush Snapping
-    private static int BrushSnappingMode = 0;
     private static readonly EBuildBrushSnapping[] BrushSnappingModes = [
         EBuildBrushSnapping.None,
         EBuildBrushSnapping.Horizontal,
@@ -272,20 +329,53 @@ public class ItemBuildHammer : Item
     {
         return mode switch
         {
-            EBuildBrushSnapping.None => "None",
-            EBuildBrushSnapping.Horizontal => "Horizontal",
-            EBuildBrushSnapping.Vertical => "Vertical",
-            EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical => "Horizontal & Vertical",
+            EBuildBrushSnapping.None => "none",
+            EBuildBrushSnapping.Horizontal => "horizontal",
+            EBuildBrushSnapping.Vertical => "vertical",
+            EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical => "horizontal-vertical",
             _ => "Unknown",
         };
     }
 
-    public void CycleSnappingMode(int direction = 1)
+    public void CycleSnappingMode(in IPlayer player, EModeCycleDirection direction = EModeCycleDirection.Forward)
     {
-        int d = direction >= 0 ? 1 : -1;
-        BrushSnappingMode = (BrushSnappingMode + d) % BrushSnappingModes.Length;
-        this.State.Snapping = BrushSnappingModes[BrushSnappingMode];
+        if (client?.World is null)
+            return;
+
+        var state = GetState(player);
+        if (state is null)
+        {
+            return;
+        }
+
+        int d = direction == EModeCycleDirection.Forward ? 1 : -1;
+        state.SnappingModeIndex = (state.SnappingModeIndex + d) % BrushSnappingModes.Length;
+        state.Snapping = BrushSnappingModes[state.SnappingModeIndex];
+        string text = Lang.Get($"vbe-snapping-mode-changed--{ToString(state.Snapping)}");
+        client.TriggerIngameError(this, "vbe-snapping-mode-changed", text);
+        TryUpdateBlockSelection(client.World!, player, state.Selection);
     }
     #endregion
+    #endregion
+
+    #region Public
+    public bool TryPlaceBlock(IWorldAccessor world, IPlayer byPlayer, ItemStack itemstack, BlockSelection blockSel, ref string failureCode)
+    {
+        var state = GetState(byPlayer);
+        if (state is null || !state.IsActive || state.Position is null)
+            return false;
+
+        if (itemstack is null || itemstack.Class != EnumItemClass.Block)
+            return false;
+
+        int? blockId = state.BlockId;
+        if (blockId is null)
+            return false;
+
+        // Update itemstack to use the modified block-id (due to rotation)
+        itemstack.Id = blockId.Value;
+        itemstack.ResolveBlockOrItem(world);
+        return true;
+    }
     #endregion
 }

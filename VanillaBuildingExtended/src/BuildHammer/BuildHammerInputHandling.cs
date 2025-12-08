@@ -1,6 +1,5 @@
 ﻿using Vintagestory.API.Client;
 using Vintagestory.API.Common;
-using Vintagestory.GameContent;
 
 namespace VanillaBuildingExtended.src.BuildHammer;
 internal class BuildHammerInputHandling
@@ -27,53 +26,47 @@ internal class BuildHammerInputHandling
         this.api = api;
     }
 
-    public bool Input_RotateBuildCursor(KeyCombination keys)
-    {
-        if (!this.Hammer?.State?.IsActive ?? false)
-        {
-            return false;
-        }
-        this.Hammer?.RotateCursor(1);
-        return true;
-    }
-
     public bool Input_RotateBuildCursor_Forward(KeyCombination keys)
     {
-        if (!this.Hammer?.State?.IsActive ?? false)
+        var state = this.Hammer?.GetState(Player);
+        if (state is null || !state.IsActive)
         {
             return false;
         }
-        this.Hammer?.RotateCursor(1);
+        this.Hammer?.RotateCursor(Player, EModeCycleDirection.Forward);
         return true;
     }
 
     public bool Input_RotateBuildCursor_Backward(KeyCombination keys)
     {
-        if (!this.Hammer?.State?.IsActive ?? false)
+        var state = this.Hammer?.GetState(Player);
+        if (state is null || !state.IsActive)
         {
             return false;
         }
-        this.Hammer?.RotateCursor(-1);
+        this.Hammer?.RotateCursor(Player, EModeCycleDirection.Backward);
         return true;
     }
 
     public bool Input_CycleSnappingMode_Forward(KeyCombination keys)
     {
-        if (!this.Hammer?.State?.IsActive ?? false)
+        var state = this.Hammer?.GetState(Player);
+        if (state is null || !state.IsActive)
         {
             return false;
         }
-        this.Hammer?.CycleSnappingMode(1);
+        this.Hammer?.CycleSnappingMode(Player, EModeCycleDirection.Forward);
         return true;
     }
 
     public bool Input_CycleSnappingMode_Backward(KeyCombination keys)
     {
-        if (!this.Hammer?.State?.IsActive ?? false)
+        var state = this.Hammer?.GetState(Player);
+        if (state is null || !state.IsActive)
         {
             return false;
         }
-        this.Hammer?.CycleSnappingMode(-1);
+        this.Hammer?.CycleSnappingMode(Player, EModeCycleDirection.Backward);
         return true;
     }
 
@@ -82,7 +75,7 @@ internal class BuildHammerInputHandling
         handling = EnumHandling.PassThrough;
         if (action == EnumEntityAction.InWorldRightMouseDown && on)
         {
-            TryPlaceBlock(client, ref handling);
+            //TryPlaceBlock(client, ref handling);
         }
     }
 
@@ -94,14 +87,15 @@ internal class BuildHammerInputHandling
             return;
         }
 
-        BlockSelection blockSelection = hammer.State.Selection;
+        var state = hammer.GetState(client.World.Player);
+        BlockSelection blockSelection = state.Selection;
         if (blockSelection is null)
         {
             Logger.Warning("Build Hammer: No valid placement position.");
             return;
         }
 
-        ItemStack? stackToPlace = hammer.State.ItemStack;
+        ItemStack? stackToPlace = state.ItemStack;
         if (stackToPlace is null)
         {
             Logger.Warning("Build Hammer: No item selected for placement.");

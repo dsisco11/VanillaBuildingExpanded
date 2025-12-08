@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
 
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExtended.src.Extensions.Math;
+namespace VanillaBuildingExtended;
 public static class VecExtensions
 {
     #region To System Numerics Type Extensions
@@ -24,6 +25,29 @@ public static class VecExtensions
     public static System.Numerics.Vector3 ToSNT(this Vec3d vec)
     {
         return new System.Numerics.Vector3([(float)vec.X, (float)vec.Y, (float)vec.Z]);
+    }
+    #endregion
+
+    #region To "FastVec" casts
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static FastVec2i ToSlowVeci(this System.Numerics.Vector2 vec)
+    {
+        return new FastVec2i((int)vec.X, (int)vec.Y);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static FastVec3i ToSlowVeci(this System.Numerics.Vector3 vec)
+    {
+        //System.Numerics.Vector<float> vecf = vec.AsVector128().AsVector();
+        //System.Numerics.Vector<int> veci = System.Numerics.Vector.ConvertToInt32(vecf);
+        return new FastVec3i((int)vec.X, (int)vec.Y, (int)vec.Z);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static FastVec3f ToSlowVecf(this System.Numerics.Vector3 vec)
+    {
+        return Unsafe.As<System.Numerics.Vector3, FastVec3f>(ref vec);
     }
     #endregion
 }

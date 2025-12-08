@@ -1,24 +1,39 @@
-﻿using VanillaBuildingExtended.BuildHammer;
+﻿using HarmonyLib;
+
+using VanillaBuildingExtended.BuildHammer;
+using VanillaBuildingExtended.src.BuildHammer;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
-using VanillaBuildingExtended.src.BuildHammer;
 using Vintagestory.API.Config;
+using Vintagestory.API.Server;
+using Vintagestory.Client;
 
 namespace VanillaBuildingExtended;
 
 public class VanillaBuildingExtendedModSystem : ModSystem
 {
+    #region Fields
+    internal Harmony? harmony;
     private BuildPreviewRenderer previewRenderer;
     private BuildHammerInputHandling inputHandler;
-    public override double ExecuteOrder()
+    #endregion
+
+    public override void Dispose()
     {
-        return 1;// execute after all the blocks JSON defs are loaded, but before they are finalized, so we can inject our own stuff into the JSON defs.
+        base.Dispose();
+        harmony?.UnpatchAll(Mod.Info.ModID);
     }
 
     public override void Start(ICoreAPI api)
     {
         api.RegisterItemClass("BuildHammer", typeof(ItemBuildHammer));
+
+        if (!Harmony.HasAnyPatches(Mod.Info.ModID))
+        {
+            harmony = new Harmony(Mod.Info.ModID);
+            harmony.PatchAll();
+        }
     }
 
     public override void StartClientSide(ICoreClientAPI api)
@@ -37,14 +52,13 @@ public class VanillaBuildingExtendedModSystem : ModSystem
         api.Input.RegisterHotKey("vbe.RotateBuildCursorBackward", Lang.Get("vbe-hotkey-rotate-build-cursor--backward"), GlKeys.R, HotkeyType.CharacterControls, shiftPressed: true);
         api.Input.SetHotKeyHandler("vbe.RotateBuildCursorBackward", this.inputHandler.Input_RotateBuildCursor_Backward);
 
-        api.Input.RegisterHotKey("vbe.CycleSnappingMode_Forward", Lang.Get("vbe-hotkey-cycle-snapping-mode--forward"), GlKeys.V, HotkeyType.CharacterControls);
+        // Looks like for mouse inputs we have to do things manually via ScreenManager's hotkey manager, because the devs didn't care to expose this function on the IInputAPI interface...
+        api.Input.RegisterHotKeyFirst("vbe.CycleSnappingMode_Forward", Lang.Get("vbe-hotkey-cycle-snapping-mode--forward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.MouseModifiers, shiftPressed: false);
+        //ScreenManager.hotkeyManager.RegisterHotKey("vbe.CycleSnappingMode_Forward", Lang.Get("vbe-hotkey-cycle-snapping-mode--forward"), KeyCombination.MouseStart + (int)EnumMouseButton.Middle, shiftPressed: false, type: HotkeyType.MouseModifiers, insertFirst: true);
         api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Forward", this.inputHandler.Input_CycleSnappingMode_Forward);
 
-        api.Input.RegisterHotKey("vbe.CycleSnappingMode_Backward", Lang.Get("vbe-hotkey-cycle-snapping-mode--backward"), GlKeys.V, HotkeyType.CharacterControls, shiftPressed: true);
-        api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Backward", this.inputHandler.Input_CycleSnappingMode_Backward);
-
-        // Looks like for mouse inputs we have to do things manually via ScreenManager's hotkey manager, because the devs didn't care to expose this function on the IInputAPI interface...
-        //ScreenManager.hotkeyManager.RegisterHotKey("vbe.RotateBuildCursor", Lang.Get("vbe-hotkey-rotate-build-cursor"), KeyCombination.MouseStart + (int)EnumMouseButton.Middle, shiftPressed: true, type: HotkeyType.MouseModifiers, insertFirst: true);
-        //api.Input.SetHotKeyHandler("vbe.RotateBuildCursor", this.inputHandler.Input_RotateBuildCursor);
+        api.Input.RegisterHotKeyFirst("vbe.CycleSnappingMode_Backward", Lang.Get("vbe-hotkey-cycle-snapping-mode--backward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.MouseModifiers, shiftPressed: true);
+        //ScreenManager.hotkeyManager.RegisterHotKey("vbe.CycleSnappingMode_Backward", Lang.Get("vbe-hotkey-cycle-snapping-mode--backward"), KeyCombination.MouseStart + (int)EnumMouseButton.Middle, shiftPressed: true, type: HotkeyType.MouseModifiers, insertFirst: true);
+        api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Backward", this.inputHandler.Input_CycleSnappingMode_Forward);
     }
 }
