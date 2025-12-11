@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Threading;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -44,6 +45,9 @@ public class BuildBrushInstance
 
     #region Properties
     public bool IsDirty { get; private set; } = false;
+
+    private long markedDirtyCallbackId;
+
     /// <summary>
     /// Indicates whether the build brush is currently active and in-use by the owning player.
     /// </summary>
@@ -134,6 +138,7 @@ public class BuildBrushInstance
             if (_blockId != value)
             {
                 _blockId = value;
+                MarkDirty();
                 Block block = World.GetBlock(value.Value);
                 _isValidPlacementBlock = IsValidPlacementBlock(block);
                 if (_isValidPlacementBlock)
@@ -219,7 +224,18 @@ public class BuildBrushInstance
     #region Update Logic
     public void MarkDirty()
     {
+        if (IsDirty)
+            return;
+
         IsDirty = true;
+        markedDirtyCallbackId = World.RegisterCallback(this.DoDirtyUpdate, 1);
+    }
+
+    private void DoDirtyUpdate(float dt)
+    {
+        World.UnregisterCallback(markedDirtyCallbackId);
+        markedDirtyCallbackId = 0;
+        TryUpdate();
     }
 
     public bool TryUpdate(BlockSelection? blockSelection = null, bool force = false)
@@ -380,7 +396,7 @@ public class BuildBrushInstance
 
     public void OnBlockPlaced()
     {
-        Logger.Audit($"[{nameof(BuildBrushInstance)}][{nameof(OnBlockPlaced)}]: Block placed by player '{Player.PlayerName}'.");
+        //Logger.Audit($"[{nameof(BuildBrushInstance)}][{nameof(OnBlockPlaced)}]: Block placed by player '{Player.PlayerName}'.");
         Player.InventoryManager.ActiveHotbarSlot?.MarkDirty();
         TryUpdateBlockId();
         if (World.Side != EnumAppSide.Client)
@@ -412,7 +428,7 @@ public class BuildBrushInstance
 
     private void UpdateOrientationVariantsList()
     {
-        Logger.Audit($"[{nameof(BuildBrushInstance)}][{nameof(UpdateOrientationVariantsList)}]: Updating orientation variants for block '{BlockUntransformed}'.");
+        //Logger.Audit($"[{nameof(BuildBrushInstance)}][{nameof(UpdateOrientationVariantsList)}]: Updating orientation variants for block '{BlockUntransformed}'.");
         if (BlockUntransformed is null)
         {
             OrientationVariants = [];
