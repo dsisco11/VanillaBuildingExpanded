@@ -92,6 +92,9 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
             rapi.GlEnableCullFace();
         }
 
+        shader.ExtraGlow = 0;
+        shader.RgbaGlowIn = ColorUtil.WhiteArgbVec;
+        shader.RgbaLightIn = ColorUtil.WhiteArgbVec;
         shader.AddRenderFlags = 0;
         shader.DamageEffect = 0f;
         shader.Stop();
