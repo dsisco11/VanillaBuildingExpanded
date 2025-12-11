@@ -16,36 +16,34 @@ namespace VanillaBuildingExtended.BuildHammer;
 /// <summary>
 /// Handles build brush logic on the client side.
 /// </summary>
-public class BuildBrushManager_Client : BuildBrushManager
+public class BuildBrushSystem_Client : ModSystem
 {
     #region Fields
-    private ICoreClientAPI api => (ICoreClientAPI)coreApi;
+    private ICoreClientAPI? api;
     private BuildBrushInstance? _brush;
-    protected readonly IClientNetworkChannel clientChannel;
-    private readonly BuildPreviewRenderer renderer;
-    private readonly ModInfo modInfo;
+    protected IClientNetworkChannel? clientChannel;
+    private BuildPreviewRenderer? renderer;
     #endregion
 
     #region Accessors
     protected IClientWorldAccessor World => api.World;
     protected IClientPlayer Player => api.World.Player;
+    protected ILogger Logger => api.Logger;
     #endregion
 
     #region Lifecycle
-    public BuildBrushManager_Client(in ModInfo mod, ICoreClientAPI api) : base(api)
+    public override void StartClientSide(ICoreClientAPI api)
     {
-        modInfo = mod;
-
         // Rendering
-        renderer = new BuildPreviewRenderer(api);
+        renderer = new BuildPreviewRenderer(api, this);
         api.Event.RegisterRenderer(renderer, EnumRenderStage.Opaque, "build_brush");
 
         // Networking
-        clientChannel = api.Network.GetChannel(NetworkChannelId);
+        clientChannel = api.Network.GetChannel(Mod.Info.ModID);
         clientChannel.SetMessageHandler<Packet_SetBuildBrush>(HandlePacket_SetBuildBrush);
 
         // User input
-        RegisterInputHandlers(mod);
+        RegisterInputHandlers();
 
         // Game events
         api.Event.RegisterGameTickListener(Thunk_Client, 50);
@@ -62,8 +60,7 @@ public class BuildBrushManager_Client : BuildBrushManager
     #endregion
 
     #region Public
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public override BuildBrushInstance GetBrush(in IPlayer? player)
+    public BuildBrushInstance GetBrush(in IPlayer? player)
     {
         if(Player is null || api?.World is null)
         {
@@ -297,23 +294,23 @@ public class BuildBrushManager_Client : BuildBrushManager
 
     #region Input Handling
 
-    private void RegisterInputHandlers(in ModInfo mod)
+    private void RegisterInputHandlers()
     {
         api.Input.InWorldAction += this.InWorldAction;
-        api.Input.TryRegisterHotKey("vbe.ToggleFaceOffsetPlacement", Lang.Get($"{mod.ModID}:vbe-hotkey-toggle-face-offset"), GlKeys.LShift, HotkeyType.CharacterControls);
+        api.Input.TryRegisterHotKey("vbe.ToggleFaceOffsetPlacement", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-toggle-face-offset"), GlKeys.LShift, HotkeyType.CharacterControls);
         api.Input.SetHotKeyHandler("vbe.ToggleFaceOffsetPlacement", this.Input_ToggleFaceOffsetPlacement);
         api.Input.GetHotKeyByCode("vbe.ToggleFaceOffsetPlacement").TriggerOnUpAlso = true;
 
-        api.Input.TryRegisterHotKey("vbe.RotateBuildCursor_Forward", Lang.Get($"{mod.ModID}:vbe-hotkey-rotate-build-cursor-forward"), GlKeys.R, HotkeyType.CharacterControls);
+        api.Input.TryRegisterHotKey("vbe.RotateBuildCursor_Forward", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-rotate-build-cursor-forward"), GlKeys.R, HotkeyType.CharacterControls);
         api.Input.SetHotKeyHandler("vbe.RotateBuildCursor_Forward", this.Input_RotateBuildCursor_Forward);
 
-        api.Input.TryRegisterHotKey("vbe.RotateBuildCursor_Backward", Lang.Get($"{mod.ModID}:vbe-hotkey-rotate-build-cursor-backward"), GlKeys.R, HotkeyType.CharacterControls, shiftPressed: true);
+        api.Input.TryRegisterHotKey("vbe.RotateBuildCursor_Backward", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-rotate-build-cursor-backward"), GlKeys.R, HotkeyType.CharacterControls, shiftPressed: true);
         api.Input.SetHotKeyHandler("vbe.RotateBuildCursor_Backward", this.Input_RotateBuildCursor_Backward);
 
-        api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Forward", Lang.Get($"{mod.ModID}:vbe-hotkey-cycle-snapping-mode-forward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.CharacterControls, shiftPressed: false);
+        api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Forward", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-cycle-snapping-mode-forward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.CharacterControls, shiftPressed: false);
         api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Forward", this.Input_CycleSnappingMode_Forward);
 
-        api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Backward", Lang.Get($"{mod.ModID}:vbe-hotkey-cycle-snapping-mode-backward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.CharacterControls, shiftPressed: true);
+        api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Backward", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-cycle-snapping-mode-backward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.CharacterControls, shiftPressed: true);
         api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Backward", this.Input_CycleSnappingMode_Backward);
     }
 

@@ -16,15 +16,17 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
     protected static readonly Vec4f RenderColor_Invalid = new(1f, .2f, .2f, 0.1f);
     protected static readonly Vec4f RenderGlow = new(1f, 1f, 1f, .1f);
     protected Matrixf ModelMat = new();
+    protected readonly BuildBrushSystem_Client brushManager;
     #endregion
 
     #region Properties
     #endregion
 
     #region Lifecycle
-    public BuildPreviewRenderer(ICoreClientAPI api)
+    public BuildPreviewRenderer(ICoreClientAPI api, BuildBrushSystem_Client brushManager)
     {
         this.api = api;
+        this.brushManager = brushManager;
     }
 
     public void Dispose()
@@ -36,7 +38,6 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
     {
         var player = api.World.Player;
-        BuildBrushManager_Client brushManager = VanillaBuildingExtendedModSystem.buildBrushManager_Client;
         BuildBrushInstance? brush = brushManager.GetBrush(player);
         if (brush is null || brush.IsDisabled || brush.ItemStack is null) 
             return;
