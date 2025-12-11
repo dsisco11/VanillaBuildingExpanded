@@ -22,6 +22,7 @@ public class BuildBrushSystem_Server : ModSystem
     #region Lifecycle
     public override void StartServerSide(ICoreServerAPI api)
     {
+        this.api = api;
         // Networking
         serverChannel = api.Network.GetChannel(Mod.Info.ModID);
         serverChannel.SetMessageHandler<Packet_SetBuildBrush>(HandlePacket_SetBuildBrush);

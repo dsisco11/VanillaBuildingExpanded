@@ -34,6 +34,7 @@ public class BuildBrushSystem_Client : ModSystem
     #region Lifecycle
     public override void StartClientSide(ICoreClientAPI api)
     {
+        this.api = api;
         // Rendering
         renderer = new BuildPreviewRenderer(api, this);
         api.Event.RegisterRenderer(renderer, EnumRenderStage.Opaque, "build_brush");
