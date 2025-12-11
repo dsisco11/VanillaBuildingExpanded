@@ -11,19 +11,19 @@ namespace VanillaBuildingExtended.BuildHammer;
 /// <summary>
 /// Handles build brush logic on the server side.
 /// </summary>
-public class BuildBrushManager_Server : BuildBrushManager
+public class BuildBrushSystem_Server : ModSystem
 {
     #region Fields
-    private ICoreServerAPI api => (ICoreServerAPI)coreApi;
-    protected readonly IServerNetworkChannel serverChannel;
+    protected ICoreServerAPI api;
+    protected IServerNetworkChannel serverChannel;
     protected readonly Dictionary<int, BuildBrushInstance> Brushes = [];
     #endregion
 
     #region Lifecycle
-    public BuildBrushManager_Server(ICoreServerAPI api) : base(api)
+    public override void StartServerSide(ICoreServerAPI api)
     {
         // Networking
-        serverChannel = api.Network.GetChannel(NetworkChannelId);
+        serverChannel = api.Network.GetChannel(Mod.Info.ModID);
         serverChannel.SetMessageHandler<Packet_SetBuildBrush>(HandlePacket_SetBuildBrush);
 
         // Game Events
@@ -34,14 +34,13 @@ public class BuildBrushManager_Server : BuildBrushManager
 
     public override void Dispose()
     {
-        base.Dispose();
         Brushes.Clear();
         BuildBrushInstance.OrientationVariantCache.Clear();
     }
     #endregion
 
     #region Public
-    public override BuildBrushInstance GetBrush(in IPlayer? player)
+    public BuildBrushInstance? GetBrush(in IPlayer? player)
     {
         if (player is null || api.World is null)
             return null;
