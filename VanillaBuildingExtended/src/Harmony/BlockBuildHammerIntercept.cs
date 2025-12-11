@@ -16,10 +16,8 @@ public static class BlockBuildHammerIntercept
         if (world.Side == EnumAppSide.Server)
         {
             BuildBrushManager_Server brushManager = VanillaBuildingExtendedModSystem.buildBrushManager_Server;
-            BuildBrushInstance brush = brushManager.GetBrush(byPlayer)!;
-            if (brush is not null && brush.BlockTransformed is not null)
+            if (brushManager.TryPlaceBrushBlock(world, byPlayer, itemstack, blockSel))
             {
-                brush.BlockTransformed.DoPlaceBlock(world, byPlayer, blockSel, itemstack);
                 __result = true;
                 return false;// skip original
             }

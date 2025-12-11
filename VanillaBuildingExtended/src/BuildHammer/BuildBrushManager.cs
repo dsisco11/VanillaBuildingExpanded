@@ -33,12 +33,4 @@ public abstract class BuildBrushManager : IDisposable
     public virtual void Dispose()
     {
     }
-
-    /// <summary>
-    /// Checks if the player is currently holding a build hammer in their offhand.
-    /// </summary>
-    public bool HasHammer(IPlayer player)
-    {
-        return player?.InventoryManager?.OffhandHotbarSlot?.Itemstack?.Collectible is ItemBuildHammer;
-    }
 }

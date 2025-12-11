@@ -3,8 +3,8 @@
 /// <summary>
 /// Represents the direction to cycle through some abstract collection of modes.
 /// </summary>
-public enum EModeCycleDirection
+public enum EModeCycleDirection : int
 {
-    Forward = 0,
-    Backward = 1,
+    Backward = -1,
+    Forward = 1,
 }

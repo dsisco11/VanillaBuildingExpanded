@@ -12,8 +12,9 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
     public int RenderRange => 256;
     private readonly ICoreClientAPI api;
     /// <summary> The tint color applied to the preview model. </summary>
-    protected static readonly Vec4f RenderGlow_Normal = new(1f, 1f, 1f, 1f);
-    protected static readonly Vec4f RenderGlow_Invalid = new(1f, .5f, .5f, 1f);
+    protected static readonly Vec4f RenderColor_Normal = ColorUtil.WhiteArgbVec;
+    protected static readonly Vec4f RenderColor_Invalid = new(1f, .2f, .2f, 0.1f);
+    protected static readonly Vec4f RenderGlow = new(1f, 1f, 1f, .1f);
     protected Matrixf ModelMat = new();
     #endregion
 
@@ -35,19 +36,15 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
     {
         var player = api.World.Player;
-        if(!player.TryGetBuildHammer(out ItemBuildHammer buildHammer))
-            return;
-
         BuildBrushManager_Client brushManager = VanillaBuildingExtendedModSystem.buildBrushManager_Client;
         BuildBrushInstance? brush = brushManager.GetBrush(player);
-        if (brush is null || !brush.IsActive || brush.Position is null || brush.ItemStack is null) return;
+        if (brush is null || brush.IsDisabled || brush.ItemStack is null) 
+            return;
 
         IRenderAPI rapi = api.Render;
         ItemRenderInfo renderInfo = rapi.GetItemStackRenderInfo(brush.DummySlot, EnumItemRenderTarget.Ground, deltaTime);
-        if (renderInfo.ModelRef is null || renderInfo.Transform is null)
-        {
+        if (renderInfo.ModelRef is null)
             return;
-        }
 
         UpdateModelMatrix(brush, renderInfo);
 
@@ -71,22 +68,10 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
             shader.BaseUvOrigin = new Vec2f(texPos.x1, texPos.y1);
         }
 
-        // Evaluate the items incandescence based on temperature
-        //int num = (int)state.ItemStack!.Collectible.GetTemperature(api.World, state.ItemStack);
-        //float[] glowColor = ColorUtil.GetIncandescenceColorAsColor4f(num);
-        //int extraGlow = GameMath.Clamp((num - 550) / 2, 0, 255);
-        //GlowRgb.R = glowColor[0];
-        //GlowRgb.G = glowColor[1];
-        //GlowRgb.B = glowColor[2];
-        //GlowRgb.A = extraGlow / 255f;
-        //shader.ExtraGlow = extraGlow;
-
-        var glowColor = brush.IsValid ? RenderGlow_Normal : RenderGlow_Invalid;
-        shader.RgbaGlowIn = glowColor;
-        shader.ExtraGlow = 32;
+        shader.RgbaLightIn = brush.IsValidPlacement ? RenderColor_Normal : RenderColor_Invalid;
+        shader.ExtraGlow = 64;
+        shader.RgbaGlowIn = RenderGlow;
         shader.RgbaAmbientIn = rapi.AmbientColor;
-        //shader.RgbaAmbientIn = ColorUtil.WhiteRgbVec;
-        shader.RgbaLightIn = ColorUtil.WhiteArgbVec;
         shader.RgbaFogIn = rapi.FogColor;
         shader.FogMinIn = rapi.FogMin;
         shader.FogDensityIn = 0;
@@ -114,17 +99,11 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
 
     protected void UpdateModelMatrix(in BuildBrushInstance brush, in ItemRenderInfo renderInfo)
     {
-        ModelTransform itemTransform = renderInfo.Transform;
+        //ModelTransform itemTransform = renderInfo.Transform ?? ModelTransform.NoTransform;
         Vec3d pos = brush.Position?.ToVec3d() ?? Vec3d.Zero;
         Vec3d camPos = api.World.Player.Entity.CameraPos;
 
         ModelMat.Identity();
         ModelMat.Translate(pos.X - camPos.X, pos.Y - camPos.Y, pos.Z - camPos.Z);
-    }
-
-    protected ItemBuildHammer? GetBuildHammer()
-    {
-        var byEntity = api.World.Player.Entity;
-        return byEntity!.LeftHandItemSlot?.Itemstack?.Item is ItemBuildHammer buildHammer ? buildHammer : null;
     }
 }

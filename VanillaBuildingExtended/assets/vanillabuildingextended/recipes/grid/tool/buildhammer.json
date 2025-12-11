@@ -4,8 +4,8 @@
     "ingredients": {
       "T": {
         "type": "block",
-        "code": "game:log-*",
-        "quantity": 1
+        "code": "game:log-placed-*-ud",
+        "name": "material"
       },
       "H": {
         "type": "item",
@@ -17,7 +17,7 @@
     "height": 2,
     "output": {
       "type": "item",
-      "code": "buildhammer-wood",
+      "code": "buildhammer-{material}",
       "quantity": 1
     }
   }

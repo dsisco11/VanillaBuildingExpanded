@@ -1,7 +1,10 @@
-﻿using VanillaBuildingExtended.BuildHammer;
+﻿using System.Text;
+
+using VanillaBuildingExtended.BuildHammer;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.Server;
 
 namespace VanillaBuildingExtended;
@@ -11,35 +14,22 @@ public class ItemBuildHammer : Item
     #region Fields
     #endregion
 
-    #region Accessors
-    protected ILogger Logger => api.Logger;
-    protected ICoreServerAPI? server => api as ICoreServerAPI;
-    protected ICoreClientAPI? client => api as ICoreClientAPI;
-    protected IPlayer? Player => client?.World.Player;
-    #endregion
-
     public override void OnLoaded(ICoreAPI api)
     {
         this.api = api;
     }
 
-    public override void OnModifiedInInventorySlot(IWorldAccessor world, ItemSlot slot, ItemStack extractedStack = null)
+    public override void GetHeldItemInfo(ItemSlot inSlot, StringBuilder dsc, IWorldAccessor world, bool withDebugInfo)
     {
-        if (world is IClientWorldAccessor clientWorld)
-        {
-            IClientPlayer byPlayer = clientWorld.Player;
-            BuildBrushManager_Client brushManager = VanillaBuildingExtendedModSystem.buildBrushManager_Client;
-            var brush = brushManager.GetBrush(byPlayer);
-            if (brush is null)
-                return;
+        base.GetHeldItemInfo(inSlot, dsc, world, withDebugInfo);
 
-            if (extractedStack is not null)
-            {
-                brush.IsActive = false;
-                return;
-            }
-            bool isHoldingHammer = brushManager.HasHammer(byPlayer);
-            brush.IsActive = isHoldingHammer;
-        }
+        string wood = inSlot.Itemstack.Attributes.GetString("material", "oak");
+        dsc.AppendLine(Lang.Get("Material: {0}", Lang.Get($"material-{wood}")));
+    }
+
+    public override string GetHeldItemName(ItemStack itemStack)
+    {
+        var material = itemStack.Attributes.GetString("material", "oak");
+        return Lang.GetMatching($"item-{Code.Path}-{material}", Lang.Get($"material-{material}"));
     }
 }

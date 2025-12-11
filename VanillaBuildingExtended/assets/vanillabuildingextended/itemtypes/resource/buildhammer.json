@@ -30,6 +30,7 @@
     },
     "rememberToolModeWhenBroken": true
   },
+  "tool": "hammer",
   "behaviors": [
     {
       "name": "GroundStorable",
@@ -60,24 +61,29 @@
   "variantgroups": [
     {
       "code": "material",
-      "states": [ "wood" ]
+      "states": [ "wood", "aged" ],
+      "loadFromProperties": "block/wood"
     }
   ],
   "damagedby": [],
   "heldTpHitAnimation": "smithingwide",
   "shape": { "base": "game:item/tool/hammer" },
   "texturesByType": {
-    "*": {
+    "*-wood": {
       "metal": { "base": "game:item/tool/material/wood" },
       "wood": { "base": "game:item/tool/material/wood" }
     },
+    "*": {
+      "metal": { "base": "game:block/wood/debarked/{material}" },
+      "wood": { "base": "game:item/tool/material/wood" }
+    }
   },
   "tooltierbytype": {
-    "*": 1
+    "*": 0
   },
   "durabilitybytype": {},
   "attackpowerbytype": {
-    "*": 1
+    "*": 0
   },
   "creativeinventory": {
     "general": [ "*" ],

@@ -65,9 +65,9 @@ public readonly record struct BrushSnapping
     public readonly BlockPos ResolvePosition(EBuildBrushSnapping snappingMode)
     {
         BlockPos resolved = Selection.Position.Copy();
-        if (snappingMode == EBuildBrushSnapping.None)
+        if (snappingMode == EBuildBrushSnapping.None || snappingMode.HasFlag(EBuildBrushSnapping.ApplyFaceNormalOffset))
         {
-            return resolved.Add(Selection.Face.Normali);
+            resolved.Add(Selection.Face.Normali);
         }
 
         if (snappingMode.HasFlag(EBuildBrushSnapping.Horizontal))

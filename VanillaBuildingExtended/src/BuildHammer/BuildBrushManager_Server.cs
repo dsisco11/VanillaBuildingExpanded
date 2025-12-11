@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 using VanillaBuildingExtended.Networking;
 
@@ -21,40 +22,138 @@ public class BuildBrushManager_Server : BuildBrushManager
     #region Lifecycle
     public BuildBrushManager_Server(ICoreServerAPI api) : base(api)
     {
+        // Networking
         serverChannel = api.Network.GetChannel(NetworkChannelId);
-        serverChannel.SetMessageHandler<Packet_SetBuildBrush>(OnSetBuildBrushPacket);
+        serverChannel.SetMessageHandler<Packet_SetBuildBrush>(HandlePacket_SetBuildBrush);
+
+        // Game Events
         api.Event.AfterActiveSlotChanged += Event_AfterActiveSlotChanged;
+        api.Event.PlayerJoin += Event_PlayerJoin;
+        api.Event.PlayerDisconnect += Event_PlayerDisconnect;
     }
 
     public override void Dispose()
     {
         base.Dispose();
         Brushes.Clear();
+        BuildBrushInstance.OrientationVariantCache.Clear();
     }
     #endregion
 
     #region Public
-    public override BuildBrushInstance? GetBrush(in IPlayer? player)
+    public override BuildBrushInstance GetBrush(in IPlayer? player)
     {
         if (player is null || api.World is null)
-        {
             return null;
-        }
 
-        if (Brushes.TryGetValue(player.ClientId, out BuildBrushInstance? brush))
+        if (!Brushes.TryGetValue(player.ClientId, out BuildBrushInstance? brush))
         {
-            return brush;
+            throw new KeyNotFoundException("Build brush instance was null for player.");
         }
-
-        // initialize
-        brush = new BuildBrushInstance(player, api.World);
-        Brushes.Add(player.ClientId, brush);
 
         return brush;
     }
     #endregion
 
+    #region Block Placement
+    public bool TryPlaceBrushBlock(in IWorldAccessor world, in IPlayer byPlayer, in ItemStack itemstack, in BlockSelection blockSel)
+    {
+        BuildBrushInstance brush = GetBrush(byPlayer)!;
+        if (brush.IsDisabled)
+            return false;
+
+        // We should be able to place the block, if we dont have a transformed block then we will still return true to act as though we placed it (to prevent normal placement and unexpected behavior)
+        if (brush.BlockTransformed is not null)
+        {
+            brush.BlockTransformed.DoPlaceBlock(world, byPlayer, blockSel, itemstack);
+            world.BlockAccessor.MarkBlockModified(blockSel.Position);
+            world.BlockAccessor.TriggerNeighbourBlockUpdate(blockSel.Position);
+            brush.OnBlockPlaced();
+        }
+        return true;
+    }
+    #endregion
+
     #region Event Handlers
+    /// <summary>
+    /// Initializes the player's build brush instance on join.
+    /// </summary>
+    private void Event_PlayerJoin(IServerPlayer byPlayer)
+    {
+        BuildBrushInstance brush = new(byPlayer, api.World);
+        Brushes.Add(byPlayer.ClientId, brush);
+
+        IInventory? hotbarInv = byPlayer.InventoryManager?.GetHotbarInventory();
+        if (hotbarInv is not null)
+        {
+            hotbarInv.SlotModified += (int slot) => Event_HotbarSlotModified(byPlayer, slot);
+        }
+
+        IInventory? offhandInventory = byPlayer.InventoryManager?.OffhandHotbarSlot.Inventory;
+        if (offhandInventory is not null)
+        {
+            offhandInventory.SlotModified += (int slot) => Event_OffhandSlotModified(byPlayer, slot);
+        }
+
+        brush.IsActive = byPlayer.IsHoldingBuildHammer();
+        brush.TryUpdateBlockId();
+    }
+
+    /// <summary>
+    /// Erases the player's build brush instance on disconnect.
+    /// </summary>
+    private void Event_PlayerDisconnect(IServerPlayer byPlayer)
+    {
+        Brushes.Remove(byPlayer.ClientId);
+    }
+
+    /// <summary>
+    /// Handles offhand slot modifications to update the brush's active state if the build hammer is equipped.
+    /// </summary>
+    private void Event_OffhandSlotModified(IServerPlayer byPlayer, int slot)
+    {
+        BuildBrushInstance brush = GetBrush(byPlayer);
+        if (brush is null)
+            return;
+
+        bool oldState = brush.IsActive;
+        bool newState = byPlayer.IsHoldingBuildHammer();
+
+        brush.IsActive = newState;
+        if (oldState && !newState)
+        {
+            brush.OnUnequipped();
+        }
+        else if (!oldState && newState)
+        {
+            brush.OnEquipped();
+        }
+    }
+
+    /// <summary>
+    /// Handles hotbar slot modifications to update the brush's block ID incase the contents of the active slot changes.
+    /// </summary>
+    /// <param name="player"></param>
+    /// <param name="slotId"></param>
+    private void Event_HotbarSlotModified(in IServerPlayer player, int slotId)
+    {
+        IPlayerInventoryManager? inventory = player.InventoryManager;
+        if (inventory is null)
+            return;
+
+        if (slotId != inventory.ActiveHotbarSlotNumber)
+            return;
+
+        BuildBrushInstance? brush = GetBrush(player);
+        if (brush is null)
+            return;
+
+        brush.BlockId = inventory.ActiveHotbarSlot?.Itemstack?.Block?.BlockId ?? 0;
+    }
+
+    /// <summary>
+    /// Handles updating the brush's block ID after a players active held item changes.
+    /// </summary>
     private void Event_AfterActiveSlotChanged(IServerPlayer byPlayer, ActiveSlotChangeEventArgs evt)
     {
         var brush = GetBrush(byPlayer);
@@ -66,14 +165,19 @@ public class BuildBrushManager_Server : BuildBrushManager
     #endregion
 
     #region Network Handlers
-    private void OnSetBuildBrushPacket(IServerPlayer fromPlayer, Packet_SetBuildBrush packet)
+    /// <summary>
+    /// Handles the <see cref="Packet_SetBuildBrush"/> packet from clients to update their brush state on the server.
+    /// </summary>
+    private void HandlePacket_SetBuildBrush(IServerPlayer fromPlayer, Packet_SetBuildBrush packet)
     {
-        BuildBrushInstance? brush = GetBrush(fromPlayer);
+        BuildBrushInstance brush = GetBrush(fromPlayer);
         if (brush is null)
             return;
 
-        brush.Rotation = packet.rotation;
-        //brush.Position = packet.position;
+        brush.IsActive = packet.isActive;
+        brush.Snapping = packet.snapping;
+        brush.OrientationIndex = packet.orientationIndex;
+        brush.Position = packet.position;
     }
     #endregion
 }

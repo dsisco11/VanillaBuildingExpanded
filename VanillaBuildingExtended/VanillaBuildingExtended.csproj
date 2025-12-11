@@ -49,10 +49,6 @@
 </ItemGroup>
 
 <ItemGroup>
-  <Folder Include="MethodImpl\" />
-</ItemGroup>
-
-<ItemGroup>
   <PackageReference Include="protobuf-net" Version="2.4.9" />
 </ItemGroup>
 

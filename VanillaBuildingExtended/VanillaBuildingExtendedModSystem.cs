@@ -5,6 +5,7 @@ using VanillaBuildingExtended.Networking;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.Server;
 
 namespace VanillaBuildingExtended;
@@ -46,7 +47,7 @@ public class VanillaBuildingExtendedModSystem : ModSystem
         {
             case EnumAppSide.Client:
                 {
-                    buildBrushManager_Client = new BuildBrushManager_Client(api as ICoreClientAPI);
+                    buildBrushManager_Client = new BuildBrushManager_Client(this.Mod.Info, api as ICoreClientAPI);
                     break;
                 }
             case EnumAppSide.Server:

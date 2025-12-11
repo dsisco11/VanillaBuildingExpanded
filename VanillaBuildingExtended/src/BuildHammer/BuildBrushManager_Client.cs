@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 using VanillaBuildingExtended.Networking;
 
@@ -6,6 +7,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
+using Vintagestory.API.Server;
 using Vintagestory.API.Util;
 using Vintagestory.Client;
 
@@ -21,6 +23,7 @@ public class BuildBrushManager_Client : BuildBrushManager
     private BuildBrushInstance? _brush;
     protected readonly IClientNetworkChannel clientChannel;
     private readonly BuildPreviewRenderer renderer;
+    private readonly ModInfo modInfo;
     #endregion
 
     #region Accessors
@@ -29,38 +32,54 @@ public class BuildBrushManager_Client : BuildBrushManager
     #endregion
 
     #region Lifecycle
-    public BuildBrushManager_Client(ICoreClientAPI api) : base(api)
+    public BuildBrushManager_Client(in ModInfo mod, ICoreClientAPI api) : base(api)
     {
-        clientChannel = api.Network.GetChannel(NetworkChannelId);
-        renderer = new BuildPreviewRenderer(api);
-        api.Event.PlayerEntitySpawn += Event_PlayerEntitySpawn;
-        api.Event.AfterActiveSlotChanged += Event_AfterActiveSlotChanged;
-        api.Event.BlockChanged += Event_BlockChanged;
-        api.Event.RegisterGameTickListener(Thunk_Client, 50);
+        modInfo = mod;
 
-        clientChannel.SetMessageHandler<Packet_SetBuildBrush>(OnSetBuildBrushPacket);
+        // Rendering
+        renderer = new BuildPreviewRenderer(api);
         api.Event.RegisterRenderer(renderer, EnumRenderStage.Opaque, "build_brush");
 
-        RegisterInputHandlers();
+        // Networking
+        clientChannel = api.Network.GetChannel(NetworkChannelId);
+        clientChannel.SetMessageHandler<Packet_SetBuildBrush>(HandlePacket_SetBuildBrush);
+
+        // User input
+        RegisterInputHandlers(mod);
+
+        // Game events
+        api.Event.RegisterGameTickListener(Thunk_Client, 50);
+        api.Event.RegisterGameTickListener(Thunk_Client_Slow, 150);
+        api.Event.PlayerJoin += Event_PlayerJoin;
+        api.Event.BlockChanged += Event_BlockChanged;
+        api.Event.AfterActiveSlotChanged += Event_AfterActiveSlotChanged;
+    }
+
+    public override void Dispose()
+    {
+        BuildBrushInstance.OrientationVariantCache.Clear();
     }
     #endregion
 
     #region Public
-    public override BuildBrushInstance? GetBrush(in IPlayer? player)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public override BuildBrushInstance GetBrush(in IPlayer? player)
     {
-        // if brush is null but we have the player and world, initialize it
-        if (_brush is null && Player is not null && api?.World is not null)
+        if(Player is null || api?.World is null)
         {
-            _brush = new BuildBrushInstance(Player!, api!.World);
+            throw new InvalidOperationException("Cannot get build brush instance: Player or World is null.");
         }
-        return _brush;
+
+        // if brush is null but we have the player and world, initialize it
+        _brush ??= new BuildBrushInstance(Player!, api!.World);
+        return _brush!;
     }
     #endregion
 
     #region Event Handlers
     private void Event_BlockChanged(BlockPos pos, Block oldBlock)
     {
-        var brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush(Player);
         // When a block is changed, we need to re-validate the placement
         if (brush is null || !brush.IsActive)
             return;
@@ -69,25 +88,92 @@ public class BuildBrushManager_Client : BuildBrushManager
         if (brush.Position != pos)
             return;
 
-        brush.TryUpdateBrush();
+        brush.OnBlockPlaced();
+        brush.TryUpdateBlockId();
+        brush.TryUpdate();
     }
 
-    private void Event_AfterActiveSlotChanged(ActiveSlotChangeEventArgs obj)
+    private void Event_AfterActiveSlotChanged(ActiveSlotChangeEventArgs e)
     {
-        var brush = GetBrush(Player);
-        if (brush is not null)
+        BuildBrushInstance? brush = GetBrush(Player);
+        if (brush is null)
+            return;
+
+        IPlayerInventoryManager inv = Player!.InventoryManager;
+        ItemSlot? activeSlot = inv.GetHotbarInventory()[e.ToSlot];
+        if (activeSlot is not null)
         {
-            brush.BlockId = Player!.InventoryManager.ActiveHotbarSlot?.Itemstack?.Block?.BlockId ?? 0;
+            brush.BlockId = activeSlot.Itemstack?.Block?.BlockId ?? 0;
         }
     }
 
-    private void Event_PlayerEntitySpawn(IClientPlayer byPlayer)
+    private void Event_PlayerJoin(IClientPlayer byPlayer)
     {
-        var brush = GetBrush(byPlayer);
+        if (byPlayer != Player)
+            return;
+
+        IInventory? hotbarInv = byPlayer.InventoryManager?.GetHotbarInventory();
+        // unsure if inventory instance persists across respawns, so re-subscribe each time
+        if (hotbarInv is not null)
+        {
+            hotbarInv.SlotModified += Event_HotbarSlotModified;
+        }
+
+        IInventory? offhandInventory = byPlayer.InventoryManager?.OffhandHotbarSlot.Inventory;
+        if (offhandInventory is not null)
+        {
+            offhandInventory.SlotModified += (int slot) => Event_OffhandSlotModified(byPlayer, slot);
+        }
+
+        BuildBrushInstance? brush = GetBrush(byPlayer);
         if (brush is null)
             return;
-        bool isHoldingHammer = GetIsHoldingBuildHammer(byPlayer);
-        brush.IsActive = isHoldingHammer;
+
+        brush.IsActive = byPlayer.IsHoldingBuildHammer();
+        Logger.Audit("[BuildBrush][OnPlayerJoin]: Initializing build brush for player.");
+    }
+
+    /// <summary>
+    /// Handles offhand slot modifications to update the brush's active state if the build hammer is equipped.
+    /// </summary>
+    private void Event_OffhandSlotModified(IClientPlayer byPlayer, int slot)
+    {
+        BuildBrushInstance brush = GetBrush(byPlayer);
+        if (brush is null)
+            return;
+
+        bool oldState = brush.IsActive;
+        bool newState = byPlayer.IsHoldingBuildHammer();
+
+        brush.IsActive = newState;
+        //brushManager.SendToServer();
+        if (oldState && !newState)
+        {
+            brush.OnUnequipped();
+        }
+        else if (!oldState && newState)
+        {
+            brush.OnEquipped();
+        }
+    }
+
+    /// <summary>
+    /// Handles hotbar slot modifications to update the brush's block ID if the contents of the active slot changes.
+    /// </summary>
+    private void Event_HotbarSlotModified(int slotId)
+    {
+        IPlayerInventoryManager? inventory = Player!.InventoryManager;
+        if (inventory is null)
+            return;
+
+        if (slotId != inventory.ActiveHotbarSlotNumber)
+            return;
+
+        BuildBrushInstance? brush = GetBrush(Player);
+        if (brush is null)
+            return;
+
+        brush.BlockId = inventory.ActiveHotbarSlot?.Itemstack?.Block?.BlockId ?? 0;
     }
 
     private void Thunk_Client(float dt)
@@ -98,138 +184,197 @@ public class BuildBrushManager_Client : BuildBrushManager
         if (api?.World is null)
             return;
 
-        var brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush(Player);
         if (brush is null)
             return;
 
-        if (!brush.IsActive)
+        if (!brush.IsActive && !brush.IsDirty)
             return;
 
         BlockSelection? currentSelection = this.api!.World?.Player?.CurrentBlockSelection;
-        brush.TryUpdateBrush(currentSelection);
+        brush.TryUpdate(currentSelection);
+        try
+        {
+            brush.TryUpdateBlockId();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[Build Brush] Error updating BlockId: {ex}");
+        }
     }
-    #endregion
 
-    #region Private Methods
-    private bool GetIsHoldingBuildHammer(in IClientPlayer? byPlayer)
+    private void Thunk_Client_Slow(float dt)
     {
-        return byPlayer?.Entity.LeftHandItemSlot?.Itemstack?.Item is ItemBuildHammer;
+        if (Player is null)
+            return;
+
+        if (api?.World is null)
+            return;
+
+        BuildBrushInstance? brush = GetBrush(Player);
+        if (brush is null)
+            return;
+
+        if (!brush.IsActive && !brush.IsDirty)
+            return;
+
+        BlockSelection? currentSelection = this.api!.World?.Player?.CurrentBlockSelection;
+        if (currentSelection is null)
+            return;
+
+        brush.TryUpdatePlacementValidity(currentSelection!);
     }
     #endregion
 
     #region API
     public void RotateCursor(in IPlayer player, EModeCycleDirection direction = EModeCycleDirection.Forward)
     {
-        var brush = GetBrush(player);
+        BuildBrushInstance? brush = GetBrush(player);
         if (brush is null || !brush.IsActive)
+        {
             return;
+        }
 
-        var angle = direction == EModeCycleDirection.Forward ? 90 : -90;
-        brush.Rotation += angle;
-        clientChannel.SendPacket(
-            new Packet_SetBuildBrush()
-            {
-                rotation = brush.Rotation,
-                position = brush.Position,
-            });
+        brush.OrientationIndex += (int)direction;
+        SendToServer();
     }
 
     public void CycleSnappingMode(in IPlayer player, EModeCycleDirection direction = EModeCycleDirection.Forward)
     {
         if (api?.World is null)
+        {
             return;
+        }
 
-        var brush = GetBrush(player);
+        BuildBrushInstance? brush = GetBrush(player);
         if (brush is null)
         {
             return;
         }
 
-        int d = direction == EModeCycleDirection.Forward ? 1 : -1;
-        int SnappingModeIndex = BuildBrushInstance.BrushSnappingModes.IndexOf(brush.Snapping);
-        SnappingModeIndex = (SnappingModeIndex + d) % BuildBrushInstance.BrushSnappingModes.Length;
+        int d = (int)direction;
+        EBuildBrushSnapping ModeSearchFilter = EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical;
+        int SnappingModeIndex = BuildBrushInstance.BrushSnappingModes.IndexOf(brush.Snapping & ModeSearchFilter);
+        SnappingModeIndex = (SnappingModeIndex + d + BuildBrushInstance.BrushSnappingModes.Length) % BuildBrushInstance.BrushSnappingModes.Length;
         brush.Snapping = BuildBrushInstance.BrushSnappingModes[SnappingModeIndex];
+        brush.DisplaySnappingModeNotice();
+    }
 
-        string text = Lang.Get($"vbe-snapping-mode-changed--{brush.Snapping.GetCode()}");
-        api.TriggerIngameError(this, "vbe-snapping-mode-changed", text);
+    /// <summary>
+    /// Sends the current build brush state to the server.
+    /// </summary>
+    public void SendToServer()
+    {
+        BuildBrushInstance? brush = GetBrush(Player);
+        if (brush is null)
+        {
+            return;
+        }
+
+        clientChannel.SendPacket(
+            new Packet_SetBuildBrush()
+            {
+                isActive = brush.IsActive,
+                orientationIndex = brush.OrientationIndex,
+                position = brush.Position,
+                snapping = brush.Snapping
+            });
     }
     #endregion
 
     #region Network Handlers
-    private void OnSetBuildBrushPacket(Packet_SetBuildBrush packet)
+    private void HandlePacket_SetBuildBrush(Packet_SetBuildBrush packet)
     {
-        var brush = GetBrush(Player);
+        Logger.Audit("[BuildBrush][OnSetBuildBrushPacket]: Received brush update from server - this should not happen.");
+        BuildBrushInstance? brush = GetBrush(Player);
         if (brush is null)
             return;
 
-        brush.Rotation = packet.rotation;
+        brush.OrientationIndex = packet.orientationIndex;
         //brush.Position = packet.position;
     }
     #endregion
 
     #region Input Handling
 
-    private void RegisterInputHandlers()
+    private void RegisterInputHandlers(in ModInfo mod)
     {
         api.Input.InWorldAction += this.InWorldAction;
+        api.Input.TryRegisterHotKey("vbe.ToggleFaceOffsetPlacement", Lang.Get($"{mod.ModID}:vbe-hotkey-toggle-face-offset"), GlKeys.LShift, HotkeyType.CharacterControls);
+        api.Input.SetHotKeyHandler("vbe.ToggleFaceOffsetPlacement", this.Input_ToggleFaceOffsetPlacement);
+        api.Input.GetHotKeyByCode("vbe.ToggleFaceOffsetPlacement").TriggerOnUpAlso = true;
 
-        api.Input.TryRegisterHotKey("vbe.RotateBuildCursor_Forward", Lang.Get("vbe-hotkey-rotate-build-cursor--forward"), GlKeys.R, HotkeyType.CharacterControls);
+        api.Input.TryRegisterHotKey("vbe.RotateBuildCursor_Forward", Lang.Get($"{mod.ModID}:vbe-hotkey-rotate-build-cursor-forward"), GlKeys.R, HotkeyType.CharacterControls);
         api.Input.SetHotKeyHandler("vbe.RotateBuildCursor_Forward", this.Input_RotateBuildCursor_Forward);
 
-        api.Input.TryRegisterHotKey("vbe.RotateBuildCursor_Backward", Lang.Get("vbe-hotkey-rotate-build-cursor--backward"), GlKeys.R, HotkeyType.CharacterControls, shiftPressed: true);
+        api.Input.TryRegisterHotKey("vbe.RotateBuildCursor_Backward", Lang.Get($"{mod.ModID}:vbe-hotkey-rotate-build-cursor-backward"), GlKeys.R, HotkeyType.CharacterControls, shiftPressed: true);
         api.Input.SetHotKeyHandler("vbe.RotateBuildCursor_Backward", this.Input_RotateBuildCursor_Backward);
 
-        api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Forward", Lang.Get("vbe-hotkey-cycle-snapping-mode--forward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.MouseModifiers, shiftPressed: false);
+        api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Forward", Lang.Get($"{mod.ModID}:vbe-hotkey-cycle-snapping-mode-forward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.CharacterControls, shiftPressed: false);
         api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Forward", this.Input_CycleSnappingMode_Forward);
 
-        api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Backward", Lang.Get("vbe-hotkey-cycle-snapping-mode--backward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.MouseModifiers, shiftPressed: true);
+        api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Backward", Lang.Get($"{mod.ModID}:vbe-hotkey-cycle-snapping-mode-backward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.CharacterControls, shiftPressed: true);
         api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Backward", this.Input_CycleSnappingMode_Backward);
+    }
+
+    private bool Input_ToggleFaceOffsetPlacement(KeyCombination keys)
+    {
+        BuildBrushInstance? brush = GetBrush(Player);
+        if (brush is null)
+            return false;
+
+        if (keys.OnKeyUp)
+        {
+            brush.Snapping &= ~EBuildBrushSnapping.ApplyFaceNormalOffset;
+        }
+        else
+        {
+            brush.Snapping |= EBuildBrushSnapping.ApplyFaceNormalOffset;
+        }
+
+        return true;
     }
 
     private bool Input_RotateBuildCursor_Forward(KeyCombination keys)
     {
-        var brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush(Player);
         if (brush is null || !brush.IsActive)
-        {
             return false;
-        }
+
         RotateCursor(Player, EModeCycleDirection.Forward);
         return true;
     }
 
     private bool Input_RotateBuildCursor_Backward(KeyCombination keys)
     {
-        var brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush(Player);
         if (brush is null || !brush.IsActive)
-        {
             return false;
-        }
+
         RotateCursor(Player, EModeCycleDirection.Backward);
         return true;
     }
 
     private bool Input_CycleSnappingMode_Forward(KeyCombination keys)
     {
-        var brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush(Player);
         if (brush is null || !brush.IsActive)
-        {
             return false;
-        }
+
         CycleSnappingMode(Player, EModeCycleDirection.Forward);
         return true;
     }
 
     private bool Input_CycleSnappingMode_Backward(KeyCombination keys)
     {
-        var brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush(Player);
         if (brush is null || !brush.IsActive)
-        {
             return false;
-        }
+
         CycleSnappingMode(Player, EModeCycleDirection.Backward);
         return true;
     }
-    
+
     private void InWorldAction(EnumEntityAction action, bool on, ref EnumHandling handling)
     {
         handling = EnumHandling.PassThrough;
@@ -241,9 +386,78 @@ public class BuildBrushManager_Client : BuildBrushManager
     #endregion
 
     #region Block Placement
-    protected bool TryPrecheckBlockPlacement(in BlockPos position, in ItemStack itemstack, out string failureCode)
+    /// <summary>
+    /// Attempts to place a block at the current brush position.
+    /// </summary>
+    /// <param name="handling">
+    /// The handling enum to modify based on whether the placement was successful.
+    /// </param>
+    protected void TryPlaceBlock(ref EnumHandling handling)
+    {
+        if (!Player.IsHoldingBuildHammer())
+            return;
+
+        BuildBrushInstance? brush = GetBrush(Player);
+        if (brush is null || brush.IsDisabled)
+            return;
+
+        BlockPos brushPos = brush.Position;
+        BlockSelection blockSelection = brush.Selection;
+        if (blockSelection is null)
+        {
+            Logger.Warning($"[BuildBrush][{nameof(TryPlaceBlock)}]: No valid BlockSelection.");
+            return;
+        }
+
+        ItemStack? stackToPlace = brush.ItemStack;
+        if (stackToPlace is null)
+        {
+            Logger.Warning($"[BuildBrush][{nameof(TryPlaceBlock)}]: No item selected for placement.");
+            return;
+        }
+
+        Block block = stackToPlace.Block;
+        if (block is null)
+        {
+            Logger.Warning($"[BuildBrush][{nameof(TryPlaceBlock)}]: Selected item is not a block.");
+            return;
+        }
+
+        if (!CheckBlockPlacement(brushPos, stackToPlace, out string precheckFailure))
+            return;
+
+        string failureCode = string.Empty;
+        if (block.CanPlaceBlock(api.World, Player, blockSelection, ref failureCode))
+        {
+            Block oldBlock = World.BlockAccessor.GetBlock(brushPos);
+            block.DoPlaceBlock(World, Player, blockSelection, stackToPlace);
+            api.Network.SendPacketClient(ClientPackets.BlockInteraction(blockSelection, 1, 0));
+            World.BlockAccessor.MarkBlockModified(brushPos);
+            World.BlockAccessor.TriggerNeighbourBlockUpdate(brushPos);
+            handling = EnumHandling.PreventSubsequent;
+            brush.MarkDirty();
+        }
+        else
+        {
+            Player.InventoryManager.ActiveHotbarSlot.MarkDirty();
+        }
+    }
+
+    /// <summary>
+    /// Checks whether a block could be placed at the given position with the given itemstack.
+    /// </summary>
+    /// <param name="position"></param>
+    /// <param name="itemstack"></param>
+    /// <param name="failureCode"></param>
+    /// <returns></returns>
+    protected bool CheckBlockPlacement(in BlockPos position, in ItemStack itemstack, out string failureCode)
     {
         failureCode = string.Empty;
+        if (position is null || itemstack is null)
+        {
+            return false;
+        }
+
         if (!World.BlockAccessor.IsValidPos(position))
         {
             failureCode = "outsideworld";
@@ -271,53 +485,5 @@ public class BuildBrushManager_Client : BuildBrushManager
         return true;
     }
 
-    protected void TryPlaceBlock(ref EnumHandling handling)
-    {
-        if (!HasHammer(Player))
-        {
-            return;
-        }
-
-        var brush = GetBrush(Player);
-        BlockPos brushPos = brush.Position;
-        BlockSelection blockSelection = brush.Selection;
-        if (blockSelection is null)
-        {
-            Logger.Warning("[Build Hammer]: No valid placement position.");
-            return;
-        }
-
-        ItemStack? stackToPlace = brush.ItemStack;
-        if (stackToPlace is null)
-        {
-            Logger.Warning("[Build Hammer]: No item selected for placement.");
-            return;
-        }
-
-        Block block = stackToPlace.Block;
-        if (block is null)
-        {
-            Logger.Warning("[Build Hammer]: Selected item is not a block.");
-            return;
-        }
-
-        handling = EnumHandling.PreventSubsequent;
-        if (!TryPrecheckBlockPlacement(brushPos, stackToPlace, out string precheckFailure))
-        {
-            Logger.Warning($"[Build Hammer]: Precheck for block placement failed: {precheckFailure}");
-            api.TriggerIngameError(this, precheckFailure, Lang.Get($"placefailure-{precheckFailure}"));
-            return;
-        }
-
-        string failureCode = string.Empty;
-        if (block.CanPlaceBlock(api.World, Player, blockSelection, ref failureCode))
-        {
-            Block oldBlock = World.BlockAccessor.GetBlock(brushPos);
-            block.DoPlaceBlock(World, Player, blockSelection, stackToPlace);
-            api.Network.SendPacketClient(ClientPackets.BlockInteraction(blockSelection, 1, 0));
-            World.BlockAccessor.MarkBlockModified(brushPos);
-            World.BlockAccessor.TriggerNeighbourBlockUpdate(brushPos);
-        }
-    }
     #endregion
 }

@@ -1,13 +1,17 @@
 {
   "vbe-hotkey-rotate-build-cursor": "Rotate Build Cursor",
   "vbe-hotkey-cycle-snapping-mode": "Cycle Snapping Mode",
-  "vbe-hotkey-rotate-build-cursor--forward": "Rotate Build Cursor Forward",
-  "vbe-hotkey-cycle-snapping-mode--forward": "Cycle Snapping Mode Forward",
-  "vbe-hotkey-rotate-build-cursor--backward": "Rotate Build Cursor Backward",
-  "vbe-hotkey-cycle-snapping-mode--backward": "Cycle Snapping Mode Backward",
-  "vbe-snapping-mode-changed": "Snapping Mode Changed to {0}",
-  "vbe-snapping-mode-changed--none": "Snapping disabled",
-  "vbe-snapping-mode-changed--horizontal": "Snapping Mode: Horizontal",
-  "vbe-snapping-mode-changed--vertical": "Snapping Mode: Vertical",
-  "vbe-snapping-mode-changed--horizontal-vertical": "Snapping Mode: Horizontal & Vertical"
+  "vbe-hotkey-rotate-build-cursor-forward": "Rotate Build Cursor Forward",
+  "vbe-hotkey-cycle-snapping-mode-forward": "Cycle Snapping Mode Forward",
+  "vbe-hotkey-rotate-build-cursor-backward": "Rotate Build Cursor Backward",
+  "vbe-hotkey-cycle-snapping-mode-backward": "Cycle Snapping Mode Backward",
+  "brush-snapping-mode-changed": "Snapping Mode Changed to {0}",
+  "brush-snapping-mode-changed-none": "Snapping disabled",
+  "brush-snapping-mode-changed-horizontal": "Snapping Mode: Horizontal",
+  "brush-snapping-mode-changed-vertical": "Snapping Mode: Vertical",
+  "brush-snapping-mode-changed-horizontal-vertical": "Snapping Mode: Horizontal & Vertical",
+
+  "item-buildhammer-*": "{0} Building Hammer",
+  "itemdesc-buildhammer-*": "A basic wooden building hammer used for controlled block placement.",
+  "item-buildhammer-wood": "Wooden Building Hammer"
 }

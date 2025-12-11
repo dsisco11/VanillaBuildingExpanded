@@ -1,18 +1,27 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
+using Vintagestory.API.Util;
 
 namespace VanillaBuildingExtended.BuildHammer;
 public class BuildBrushInstance
 {
     #region Constants
     public static readonly EBuildBrushSnapping[] BrushSnappingModes = [
-        EBuildBrushSnapping.None,
+        EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical,
         EBuildBrushSnapping.Horizontal,
         EBuildBrushSnapping.Vertical,
-        EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical,
+        EBuildBrushSnapping.None,
     ];
+
+    public static readonly Dictionary<AssetLocation, Block[]> OrientationVariantCache = [];
     #endregion
 
     #region Fields
@@ -21,28 +30,42 @@ public class BuildBrushInstance
     /// </summary>
     public IPlayer Player { get; internal set; }
     public IWorldAccessor World { get; internal set; }
-
-    private bool IsDirty = false;
-    private int _blockId = 0;
-    private int _rotation = 0;
-    private BlockPos _position = new (0,0,0);
+    private int? _blockId = null;
+    private int _orientationIndex = 0;
+    private BlockPos _position = new(0, 0, 0);
     private Block? _blockUntransformed = null;
     private Block? _blockTransformed = null;
     private ItemStack? _itemStack = null;
-    private EBuildBrushSnapping _snapping = EBuildBrushSnapping.None;
+    private EBuildBrushSnapping _snapping = BrushSnappingModes[0];
     private BrushSnappingState lastCheckedSnappingState = new();
+    private bool _isValidPlacementBlock = true;
+    private bool _isActive = false;
     #endregion
 
     #region Properties
+    public bool IsDirty { get; private set; } = false;
     /// <summary>
-    /// Indicates whether the build brush is currently active.
+    /// Indicates whether the build brush is currently active and in-use by the owning player.
     /// </summary>
-    public bool IsActive { get; set; }
+    public bool IsActive 
+    { 
+        get => _isActive;
+        set
+        {
+            _isActive = value; 
+            IsDirty = true;
+        }
+    }
 
     /// <summary>
     /// Indicates whether the current placement position is valid.
     /// </summary>
-    public bool IsValid { get; private set; }
+    public bool IsValidPlacement { get; private set; }
+
+    /// <summary>
+    /// Indicates whether the brush can currently be used to place blocks.
+    /// </summary>
+    public bool IsDisabled => !IsActive || !_isValidPlacementBlock || Position is null;
 
     /// <summary>
     /// The fully resolved position of the build cursor.
@@ -50,7 +73,7 @@ public class BuildBrushInstance
     public BlockPos Position
     {
         get => _position;
-        private set
+        set
         {
             _position = value;
             Selection = new()
@@ -64,42 +87,68 @@ public class BuildBrushInstance
     }
 
     /// <summary>
-    /// The rotation angle for the item placement.
+    /// The orientation index for the block placement.
+    /// This determines which orientation variant of the block is used.
     /// </summary>
-    public int Rotation 
+    public int OrientationIndex
     {
-        get => _rotation;
+        get => this._orientationIndex;
         set
         {
-            if (_rotation != value)
+            //Logger.Audit($"[{nameof(BuildBrushInstance)}][set {nameof(OrientationIndex)}]: Setting orientation index to '{value}' for block '{_blockUntransformed}'.");
+            this._orientationIndex = 0;
+            if (OrientationVariants.IsDefaultOrEmpty)
             {
-                _rotation = value % 360;
-                var transformedBlock = _blockUntransformed?.GetRotatedBlockCode(_rotation);
-                if (transformedBlock != null)
+                this.Logger.Warning($"[{nameof(BuildBrushInstance)}][set {nameof(OrientationIndex)}]: Block {_blockUntransformed} has no orientation variants.");
+                return;
+            }
+            int clampedIndex = (value + OrientationVariants.Length) % OrientationVariants.Length;
+            this._orientationIndex = clampedIndex;
+
+            // Update the transformed block based on the new orientation
+            if (!OrientationVariants.IsDefaultOrEmpty)
+            {
+                BlockTransformed = OrientationVariants[this._orientationIndex];
+            }
+        }
+    }
+
+    public ImmutableArray<Block> OrientationVariants { get; private set; } = ImmutableArray<Block>.Empty;
+
+    /// <summary>
+    /// The block currently chosen for placement.
+    /// </summary>
+    public int? BlockId
+    {
+        get => _blockId;
+        set
+        {
+            if (value is null)
+            {
+                _blockId = null;
+                _isValidPlacementBlock = false;
+                BlockUntransformed = null;
+                return;
+            }
+
+            if (_blockId != value)
+            {
+                _blockId = value;
+                Block block = World.GetBlock(value.Value);
+                _isValidPlacementBlock = IsValidPlacementBlock(block);
+                if (_isValidPlacementBlock)
                 {
-                    BlockTransformed = World.GetBlock(transformedBlock);
+                    BlockUntransformed = block;
+                }
+                else
+                {
+                    _blockId = null;
+                    BlockUntransformed = null;
                 }
             }
         }
     }
 
-    /// <summary>
-    /// The block currently chosen for placement.
-    /// </summary>
-    public int BlockId
-    {
-        get => _blockId;
-        set
-        {
-            if (_blockId != value)
-            {
-                _blockId = value;
-                var block = World.GetBlock(value);
-                BlockUntransformed = block;
-            }
-        }
-    }
-    
     /// <summary>
     /// The snapping mode for this brush placement.
     /// </summary>
@@ -115,7 +164,32 @@ public class BuildBrushInstance
     #endregion
 
     #region Accessors
+    protected ILogger Logger => World.Logger;
     public BlockSelection Selection { get; private set; } = new();
+    public Block BlockUntransformed
+    {
+        get => _blockUntransformed!;
+        private set
+        {
+            //Logger.Audit($"[{nameof(BuildBrushInstance)}][set {nameof(BlockUntransformed)}]: Setting untransformed block to '{value}'.");
+            if (_blockUntransformed == value)
+                return;
+
+            _blockUntransformed = value;
+            UpdateOrientationVariantsList();
+        }
+    }
+
+    public Block BlockTransformed
+    {
+        get => _blockTransformed!;
+        private set
+        {
+            //Logger.Audit($"[{nameof(BuildBrushInstance)}][set {nameof(BlockTransformed)}]: Setting transformed block to '{value}'.");
+            _blockTransformed = value;
+            ItemStack = value is not null ? new ItemStack(value) : null;
+        }
+    }
 
     public ItemStack? ItemStack
     {
@@ -129,29 +203,6 @@ public class BuildBrushInstance
 
     public ItemSlot? DummySlot { get; private set; } = null;
 
-    public Block BlockUntransformed
-    {
-        get => _blockUntransformed!;
-        private set
-        {
-            _blockUntransformed = value;
-            var transformedBlock = _blockUntransformed!.GetRotatedBlockCode(_rotation);
-            if (transformedBlock is not null)
-            {
-                BlockTransformed = World.GetBlock(transformedBlock);
-            }
-        }
-    }
-
-    public Block BlockTransformed
-    {
-        get => _blockTransformed!;
-        private set
-        {
-            _blockTransformed = value;
-            ItemStack = value is not null ? new ItemStack(value) : null;
-        }
-    }
     #endregion
 
     #region Constructors
@@ -159,17 +210,24 @@ public class BuildBrushInstance
     {
         Player = player;
         World = world;
+
+        // Initialize with the block in the player's active hotbar slot
+        TryUpdateBlockId();
     }
     #endregion
 
     #region Update Logic
+    public void MarkDirty()
+    {
+        IsDirty = true;
+    }
 
-    public bool TryUpdateBrush(BlockSelection? blockSelection = null, bool force = false)
+    public bool TryUpdate(BlockSelection? blockSelection = null, bool force = false)
     {
         blockSelection ??= Player.CurrentBlockSelection;
         if (blockSelection is null)
         {// Player currently has no block selection
-            IsValid = false;
+            IsValidPlacement = false;
             Position = null;
             return false;
         }
@@ -186,13 +244,63 @@ public class BuildBrushInstance
         bool result = resolvedPos != Position;
 
         IsDirty = false;
-        IsValid = isValidPlacement;
+        IsValidPlacement = isValidPlacement;
         Position = resolvedPos;
         return result;
+    }
+
+    /// <summary>
+    /// Updates the BlockId based on the player's currently active hotbar slot.
+    /// </summary>
+    /// <returns> True if the BlockId was updated; otherwise, false. </returns>
+    public bool TryUpdateBlockId()
+    {
+        int currentBlockId = Player.InventoryManager.ActiveHotbarSlot?.Itemstack?.Block?.Id ?? 0;
+        if (currentBlockId != BlockId)
+        {
+            BlockId = currentBlockId;
+            return true;
+        }
+        return false;
     }
     #endregion
 
     #region Placement Logic
+
+    /// <summary>
+    /// Determines if the specified block type is valid for placement with this brush.
+    /// </summary>
+    /// <param name="blockType"></param>
+    /// <returns></returns>
+    public bool IsValidPlacementBlock(in Block? blockType)
+    {
+        if (blockType is null)
+        {
+            return false;
+        }
+
+        if (blockType.BlockId == 0)
+        {
+            return false;
+        }
+
+        if (blockType.IsMissing)
+        {
+            return false;
+        }
+
+        if (blockType.IsLiquid())
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(blockType.EntityClass))
+        {
+            return false;
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Resolves the block position based on the given snapping mode.
@@ -207,8 +315,6 @@ public class BuildBrushInstance
             isValidPos = true;
             return blockSelection.Position;
         }
-
-        //snapping ??= new(blockSelection);
 
         if (TryGetValidSnappedPosition(placingBlock, blockSelection, snapping, snappingMode, out BlockPos outSnappedPos))
         {
@@ -238,10 +344,135 @@ public class BuildBrushInstance
         outBlockPos = snapping.ResolvePosition(snappingMode);
 
         string failureCode = "";
-        var newSelection = blockSelection.Clone();
+        BlockSelection newSelection = blockSelection.Clone();
         newSelection.DidOffset = true;
         newSelection.SetPos(outBlockPos.X, outBlockPos.Y, outBlockPos.Z);
         return placingBlock.CanPlaceBlock(World, Player, newSelection, ref failureCode);
+    }
+
+    public bool TryUpdatePlacementValidity(in BlockSelection blockSelection)
+    {
+        if (_blockTransformed is null || Position is null)
+        {
+            return false;
+        }
+        string failureCode = "";
+        BlockSelection newSelection = blockSelection.Clone();
+        newSelection.DidOffset = true;
+        newSelection.SetPos(Position.X, Position.Y, Position.Z);
+        this.IsValidPlacement = _blockTransformed.CanPlaceBlock(World, Player, newSelection, ref failureCode);
+        return this.IsValidPlacement;
+    }
+    #endregion
+
+    #region Event Handlers
+    public void OnEquipped()
+    {
+        DisplaySnappingModeNotice();
+        TryUpdateBlockId();
+    }
+
+    public void OnUnequipped()
+    {
+        IsActive = false;
+        BlockId = 0;
+    }
+
+    public void OnBlockPlaced()
+    {
+        Logger.Audit($"[{nameof(BuildBrushInstance)}][{nameof(OnBlockPlaced)}]: Block placed by player '{Player.PlayerName}'.");
+        Player.InventoryManager.ActiveHotbarSlot?.MarkDirty();
+        TryUpdateBlockId();
+        if (World.Side != EnumAppSide.Client)
+            return;
+
+        TryUpdate();
+    }
+    #endregion
+
+    #region Private
+    /// <summary>
+    /// Shows a HUD notice to the player indicating the current snapping mode.
+    /// </summary>
+    public void DisplaySnappingModeNotice()
+    {
+        if (World.Side != EnumAppSide.Client)
+            return;
+
+        var modInfo = World.Api.ModLoader.GetModSystem<VanillaBuildingExtendedModSystem>()?.Mod.Info;
+        if (modInfo is null)
+            return;
+
+        ICoreClientAPI? client = World.Api as ICoreClientAPI;
+        if (client is null)
+            return;
+
+        client.TriggerIngameError(this, $"{modInfo.ModID}:brush-snapping-mode-changed", Lang.Get($"{modInfo.ModID}:brush-snapping-mode-changed-{Snapping.GetCode()}"));
+    }
+
+    private void UpdateOrientationVariantsList()
+    {
+        Logger.Audit($"[{nameof(BuildBrushInstance)}][{nameof(UpdateOrientationVariantsList)}]: Updating orientation variants for block '{BlockUntransformed}'.");
+        if (BlockUntransformed is null)
+        {
+            OrientationVariants = [];
+            return;
+        }
+
+        if (!IsValidPlacementBlock(BlockUntransformed))
+        {
+            OrientationVariants = [BlockUntransformed];
+            return;
+        }
+
+        string baseCode = BlockUntransformed.Code.FirstCodePart();
+        if (OrientationVariantCache.TryGetValue(baseCode, out Block[]? cachedVariants))
+        {
+            OrientationVariants = cachedVariants.ToImmutableArray();
+            SetOrientationToBaseBlock();
+            return;
+        }
+
+        string[] possibleVariantGroups = ["rot", "horizontalorientation", "orientation", "v"];
+        // find the first of the possible variant groups which the block-definition actually has.
+        string? foundVariantGroup = BlockUntransformed.Variant.Keys.Where(k => possibleVariantGroups.Contains(k)).FirstOrDefault();
+        if (foundVariantGroup is null)
+        {
+            OrientationVariants = [BlockUntransformed];
+            OrientationIndex = 0;
+            //Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(UpdateOrientationVariantsList)}]: Unable to find orientation variantGroup for block '{baseCode}'.");
+            return;
+        }
+
+        AssetLocation? searchCode = BlockUntransformed.CodeWithVariant(foundVariantGroup, "*");
+        if (searchCode is null)
+            return;
+
+        Block[] variants = World.SearchBlocks(searchCode);
+        if (!OrientationVariantCache.TryAdd(baseCode, variants))
+        {
+            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(UpdateOrientationVariantsList)}]: Failed to add orientation variants to cache for block code '{baseCode}'.");
+        }
+        OrientationVariants = variants.ToImmutableArray();
+        SetOrientationToBaseBlock();
+    }
+
+    /// <summary>
+    /// Synchronizes the current orientation index to match the base block's orientation variant.
+    /// </summary>
+    /// <param name="baseCode"></param>
+    /// <returns></returns>
+    private bool SetOrientationToBaseBlock()
+    {
+        var blockId = this.BlockId;
+        var foundIndex = OrientationVariants.IndexOf(OrientationVariants.FirstOrDefault(block => block.BlockId == blockId));
+        if (foundIndex < 0)
+        {
+            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(SetOrientationToBaseBlock)}]: Unable to find untransformed block '{BlockUntransformed}' in orientation variants.");
+            return false;
+        }
+        OrientationIndex = foundIndex;
+        return true;
     }
     #endregion
 }
