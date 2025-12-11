@@ -8,7 +8,7 @@ namespace VanillaBuildingExtended.BuildHammer;
 internal class BuildPreviewRenderer : IRenderer, IDisposable
 {
     #region Fields
-    public double RenderOrder => 0.5;
+    public double RenderOrder => 0.55;
     public int RenderRange => 256;
     private readonly ICoreClientAPI api;
     /// <summary> The tint color applied to the preview model. </summary>
@@ -57,7 +57,7 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
         shader.DontWarpVertices = 0;
         shader.AlphaTest = renderInfo.AlphaTest;
         shader.AddRenderFlags = 0;
-        shader.ExtraZOffset = 0;
+        shader.ExtraZOffset = 0.00001f;
 
         shader.OverlayOpacity = renderInfo.OverlayOpacity;
         if (renderInfo.OverlayTexture is not null && renderInfo.OverlayOpacity > 0f)
@@ -86,7 +86,9 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
         {
             rapi.GlDisableCullFace();
         }
+        // Render the mesh
         rapi.RenderMultiTextureMesh(renderInfo.ModelRef, textureSampleName);
+        // Reset state
         if (!renderInfo.CullFaces)
         {
             rapi.GlEnableCullFace();
