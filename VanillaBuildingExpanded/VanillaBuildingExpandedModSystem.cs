@@ -1,20 +1,16 @@
 ﻿using HarmonyLib;
 
-using VanillaBuildingExpanded.BuildHammer;
 using VanillaBuildingExpanded.Networking;
 
-using Vintagestory.API.Client;
 using Vintagestory.API.Common;
-using Vintagestory.API.Config;
-using Vintagestory.API.Server;
 
 namespace VanillaBuildingExpanded;
 
 public class VanillaBuildingExpandedModSystem : ModSystem
 {
     #region Constants
-    public static readonly string BuildHammerItemCode = "vanillabuildingextended:buildhammer";
-    public static readonly string BuildHammerGuiDialogId = "vanillabuildingextended:buildhammer-gui";
+    public static readonly string BuildHammerItemCode = "vanillabuildingexpanded:buildhammer";
+    public static readonly string BuildHammerGuiDialogId = "vanillabuildingexpanded:buildhammer-gui";
     #endregion
 
     #region Fields
@@ -30,7 +26,7 @@ public class VanillaBuildingExpandedModSystem : ModSystem
     public override void StartPre(ICoreAPI api)
     {
         api.Network
-            .RegisterChannel(BuildBrushManager.NetworkChannelId)
+            .RegisterChannel(Mod.Info.ModID)
             .RegisterMessageType(typeof(Packet_SetBuildBrush));
     }
 

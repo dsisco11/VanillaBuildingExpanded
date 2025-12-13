@@ -23,13 +23,15 @@ public class ItemBuildHammer : Item
     {
         base.GetHeldItemInfo(inSlot, dsc, world, withDebugInfo);
 
-        string wood = inSlot.Itemstack.Attributes.GetString("material", "oak");
-        dsc.AppendLine(Lang.Get("Material: {0}", Lang.Get($"material-{wood}")));
+        //string wood = inSlot.Itemstack.Attributes.GetString("material", defaultValue: "oak");
+        //dsc.AppendLine(Lang.Get("Material: {0}", Lang.Get($"material-{wood}")));
     }
 
     public override string GetHeldItemName(ItemStack itemStack)
     {
-        var material = itemStack.Attributes.GetString("material", "oak");
-        return Lang.GetMatching($"item-{Code.Path}-{material}", Lang.Get($"material-{material}"));
+        //var material = itemStack.Attributes.GetString("material", defaultValue: "oak");
+        //var materialName = Lang.Get($"material-{material}");
+        //return Lang.GetMatching($"item-{Code.Path}", materialName);
+        return Lang.GetMatching($"vanillabuildingexpanded:item-{Code.Path}");
     }
 }
