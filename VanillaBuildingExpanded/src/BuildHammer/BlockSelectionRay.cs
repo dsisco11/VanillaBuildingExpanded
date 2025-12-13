@@ -5,7 +5,7 @@ using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded;
 
-public record struct BlockSelectionRay
+public readonly record struct BlockSelectionRay
 {
     /// <summary>
     /// The position of the block that was hit.
