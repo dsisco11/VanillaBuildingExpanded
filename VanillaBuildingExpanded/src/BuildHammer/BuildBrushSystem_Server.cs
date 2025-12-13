@@ -19,7 +19,8 @@ public class BuildBrushSystem_Server : ModSystem
     protected readonly Dictionary<int, BuildBrushInstance> Brushes = [];
     #endregion
 
-    #region Lifecycle
+    #region Hooks
+    public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Server;
     public override void StartServerSide(ICoreServerAPI api)
     {
         this.api = api;

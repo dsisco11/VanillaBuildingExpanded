@@ -31,7 +31,8 @@ public class BuildBrushSystem_Client : ModSystem
     protected ILogger Logger => api.Logger;
     #endregion
 
-    #region Lifecycle
+    #region Hooks
+    public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Client;
     public override void StartClientSide(ICoreClientAPI api)
     {
         this.api = api;
