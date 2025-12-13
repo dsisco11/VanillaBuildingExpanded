@@ -15,6 +15,10 @@ A Vintage Story mod that adds quality-of-life improvements for building while st
 
 The **Build Hammer** is the core tool introduced by this mod. It provides builders with precise control over block placement through an advanced preview and snapping system.
 
+#### Using the build hammer
+
+Simply place the build hammer in your off-hand and then switch to a placeable block on your hotbar. The build preview will instantly appear!
+
 #### Key Features
 
 - **Block Preview Rendering** - See exactly where your block will be placed before committing, with a real-time ghost preview of the block
