@@ -43,6 +43,9 @@ Simply place a log above a stick in the crafting grid to create a Building Hamme
 | Rotate Build Cursor Backward | `Shift + R`            |
 | Cycle Snapping Mode Forward  | `Middle Mouse`         |
 | Cycle Snapping Mode Backward | `Shift + Middle Mouse` |
+| Shift Placement              | `Shift`                |
+
+__NOTE:__ The _"Shift placement"_ keybind will offset the block placement position by 1 block in the direction of the block face you are targeting, this is useful for placing roofing or stairs, for example.
 
 ## Compatibility
 
