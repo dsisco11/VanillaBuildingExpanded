@@ -4,7 +4,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExtended.BuildHammer;
+namespace VanillaBuildingExpanded.BuildHammer;
 internal class BuildPreviewRenderer : IRenderer, IDisposable
 {
     #region Fields

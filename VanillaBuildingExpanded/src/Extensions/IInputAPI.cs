@@ -1,6 +1,6 @@
 ﻿using Vintagestory.API.Client;
 
-namespace VanillaBuildingExtended;
+namespace VanillaBuildingExpanded;
 internal static class IInputAPIExtensions
 {
     /// <inheritdoc cref="IInputAPI.RegisterHotKey"/>

@@ -4,7 +4,7 @@ using System.Runtime.Intrinsics;
 
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExtended;
+namespace VanillaBuildingExpanded;
 public static class VecExtensions
 {
     #region To System Numerics Type Extensions

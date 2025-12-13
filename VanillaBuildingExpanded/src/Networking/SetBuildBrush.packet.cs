@@ -2,7 +2,7 @@
 
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExtended.Networking;
+namespace VanillaBuildingExpanded.Networking;
 
 [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
 public class Packet_SetBuildBrush

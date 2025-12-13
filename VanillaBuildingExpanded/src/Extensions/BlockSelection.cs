@@ -1,7 +1,7 @@
 ﻿using Vintagestory.API.Common;
 using Vintagestory.Common.Collectible.Block;
 
-namespace VanillaBuildingExtended;
+namespace VanillaBuildingExpanded;
 public static class BlockSelectionExtensions
 {
     public static BlockPosFacing ToPosFacing(this BlockSelection blockSelection)

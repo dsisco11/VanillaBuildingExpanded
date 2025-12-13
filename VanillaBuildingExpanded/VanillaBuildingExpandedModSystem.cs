@@ -1,16 +1,16 @@
 ﻿using HarmonyLib;
 
-using VanillaBuildingExtended.BuildHammer;
-using VanillaBuildingExtended.Networking;
+using VanillaBuildingExpanded.BuildHammer;
+using VanillaBuildingExpanded.Networking;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.Server;
 
-namespace VanillaBuildingExtended;
+namespace VanillaBuildingExpanded;
 
-public class VanillaBuildingExtendedModSystem : ModSystem
+public class VanillaBuildingExpandedModSystem : ModSystem
 {
     #region Constants
     public static readonly string BuildHammerItemCode = "vanillabuildingextended:buildhammer";

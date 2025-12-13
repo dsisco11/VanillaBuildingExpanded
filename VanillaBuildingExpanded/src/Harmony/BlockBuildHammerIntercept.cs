@@ -1,10 +1,10 @@
 ﻿using HarmonyLib;
 
-using VanillaBuildingExtended.BuildHammer;
+using VanillaBuildingExpanded.BuildHammer;
 
 using Vintagestory.API.Common;
 
-namespace VanillaBuildingExtended.src.Harmony;
+namespace VanillaBuildingExpanded.src.Harmony;
 
 [Harmony]
 public static class BlockBuildHammerIntercept

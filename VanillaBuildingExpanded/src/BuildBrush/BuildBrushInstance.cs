@@ -11,7 +11,7 @@ using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Util;
 
-namespace VanillaBuildingExtended.BuildHammer;
+namespace VanillaBuildingExpanded.BuildHammer;
 public class BuildBrushInstance
 {
     #region Constants
@@ -415,7 +415,7 @@ public class BuildBrushInstance
         if (World.Side != EnumAppSide.Client)
             return;
 
-        var modInfo = World.Api.ModLoader.GetModSystem<VanillaBuildingExtendedModSystem>()?.Mod.Info;
+        var modInfo = World.Api.ModLoader.GetModSystem<VanillaBuildingExpandedModSystem>()?.Mod.Info;
         if (modInfo is null)
             return;
 

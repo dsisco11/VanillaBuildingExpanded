@@ -3,7 +3,7 @@
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExtended;
+namespace VanillaBuildingExpanded;
 
 public record struct BlockSelectionRay
 {

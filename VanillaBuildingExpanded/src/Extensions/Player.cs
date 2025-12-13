@@ -2,7 +2,7 @@
 
 using Vintagestory.API.Common;
 
-namespace VanillaBuildingExtended;
+namespace VanillaBuildingExpanded;
 public static class IPlayerExtensions
 {
     /// <summary>

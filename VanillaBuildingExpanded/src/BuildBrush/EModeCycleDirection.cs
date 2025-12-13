@@ -1,4 +1,4 @@
-﻿namespace VanillaBuildingExtended;
+﻿namespace VanillaBuildingExpanded;
 
 /// <summary>
 /// Represents the direction to cycle through some abstract collection of modes.

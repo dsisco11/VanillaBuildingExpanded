@@ -2,7 +2,7 @@
 
 using Vintagestory.API.Common;
 
-namespace VanillaBuildingExtended.BuildHammer;
+namespace VanillaBuildingExpanded.BuildHammer;
 
 public abstract class BuildBrushManager : IDisposable
 {

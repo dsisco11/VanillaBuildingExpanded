@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace VanillaBuildingExtended;
+namespace VanillaBuildingExpanded;
 
 [Flags]
 public enum EBuildBrushSnapping : byte

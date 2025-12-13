@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
 
-using VanillaBuildingExtended.Networking;
+using VanillaBuildingExpanded.Networking;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -11,7 +11,7 @@ using Vintagestory.API.Server;
 using Vintagestory.API.Util;
 using Vintagestory.Client;
 
-namespace VanillaBuildingExtended.BuildHammer;
+namespace VanillaBuildingExpanded.BuildHammer;
 
 /// <summary>
 /// Handles build brush logic on the client side.

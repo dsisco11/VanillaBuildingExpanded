@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExtended;
+namespace VanillaBuildingExpanded;
 
 /// <summary>
 /// Used to track and compare snapping state changes.

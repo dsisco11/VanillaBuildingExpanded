@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExtended.src.Extensions.Math;
+namespace VanillaBuildingExpanded.src.Extensions.Math;
 public static class FastVecExtensions
 {
     #region AsSpan Extensions

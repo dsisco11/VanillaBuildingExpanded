@@ -1,13 +1,13 @@
 ﻿using System.Text;
 
-using VanillaBuildingExtended.BuildHammer;
+using VanillaBuildingExpanded.BuildHammer;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.Server;
 
-namespace VanillaBuildingExtended;
+namespace VanillaBuildingExpanded;
 
 public class ItemBuildHammer : Item
 {

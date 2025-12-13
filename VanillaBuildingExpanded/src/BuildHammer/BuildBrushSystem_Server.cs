@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 
-using VanillaBuildingExtended.Networking;
+using VanillaBuildingExpanded.Networking;
 
 using Vintagestory.API.Common;
 using Vintagestory.API.Server;
 
-namespace VanillaBuildingExtended.BuildHammer;
+namespace VanillaBuildingExpanded.BuildHammer;
 
 /// <summary>
 /// Handles build brush logic on the server side.
