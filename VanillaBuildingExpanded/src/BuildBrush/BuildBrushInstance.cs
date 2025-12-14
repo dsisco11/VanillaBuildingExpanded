@@ -1,15 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Threading;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
-using Vintagestory.API.Util;
 
 namespace VanillaBuildingExpanded.BuildHammer;
 public class BuildBrushInstance
@@ -23,6 +20,13 @@ public class BuildBrushInstance
     ];
 
     public static readonly Dictionary<AssetLocation, Block[]> OrientationVariantCache = [];
+    public static readonly ImmutableArray<string> ValidOrientationVariantKeys = [
+        "rot",
+        "horizontalorientation",
+        "orientation",
+        "v",
+        "side",
+    ];
     #endregion
 
     #region Fields
@@ -51,12 +55,12 @@ public class BuildBrushInstance
     /// <summary>
     /// Indicates whether the build brush is currently active and in-use by the owning player.
     /// </summary>
-    public bool IsActive 
-    { 
+    public bool IsActive
+    {
         get => _isActive;
         set
         {
-            _isActive = value; 
+            _isActive = value;
             IsDirty = true;
         }
     }
@@ -178,7 +182,9 @@ public class BuildBrushInstance
         {
             //Logger.Audit($"[{nameof(BuildBrushInstance)}][set {nameof(BlockUntransformed)}]: Setting untransformed block to '{value}'.");
             if (_blockUntransformed == value)
+            {
                 return;
+            }
 
             _blockUntransformed = value;
             UpdateOrientationVariantsList();
@@ -225,7 +231,9 @@ public class BuildBrushInstance
     public void MarkDirty()
     {
         if (IsDirty)
+        {
             return;
+        }
 
         IsDirty = true;
         markedDirtyCallbackId = World.RegisterCallback(this.DoDirtyUpdate, 1);
@@ -310,12 +318,7 @@ public class BuildBrushInstance
             return false;
         }
 
-        if (!string.IsNullOrEmpty(blockType.EntityClass))
-        {
-            return false;
-        }
-
-        return true;
+        return string.IsNullOrEmpty(blockType.EntityClass);
     }
 
     /// <summary>
@@ -400,7 +403,9 @@ public class BuildBrushInstance
         Player.InventoryManager.ActiveHotbarSlot?.MarkDirty();
         TryUpdateBlockId();
         if (World.Side != EnumAppSide.Client)
+        {
             return;
+        }
 
         TryUpdate();
     }
@@ -413,15 +418,21 @@ public class BuildBrushInstance
     public void DisplaySnappingModeNotice()
     {
         if (World.Side != EnumAppSide.Client)
+        {
             return;
+        }
 
-        var modInfo = World.Api.ModLoader.GetModSystem<VanillaBuildingExpandedModSystem>()?.Mod.Info;
+        ModInfo? modInfo = World.Api.ModLoader.GetModSystem<VanillaBuildingExpandedModSystem>()?.Mod.Info;
         if (modInfo is null)
+        {
             return;
+        }
 
         ICoreClientAPI? client = World.Api as ICoreClientAPI;
         if (client is null)
+        {
             return;
+        }
 
         client.TriggerIngameError(this, $"{modInfo.ModID}:brush-snapping-mode-changed", Lang.Get($"{modInfo.ModID}:brush-snapping-mode-changed-{Snapping.GetCode()}"));
     }
@@ -445,31 +456,33 @@ public class BuildBrushInstance
         if (OrientationVariantCache.TryGetValue(baseCode, out Block[]? cachedVariants))
         {
             OrientationVariants = cachedVariants.ToImmutableArray();
-            SetOrientationToBaseBlock();
-            return;
+            if (SetOrientationToBaseBlock())
+            {
+                return;
+            }
         }
 
-        string[] possibleVariantGroups = ["rot", "horizontalorientation", "orientation", "v"];
         // find the first of the possible variant groups which the block-definition actually has.
-        string? foundVariantGroup = BlockUntransformed.Variant.Keys.Where(k => possibleVariantGroups.Contains(k)).FirstOrDefault();
+        string? foundVariantGroup = BlockUntransformed.Variant.Keys.Where(static k => ValidOrientationVariantKeys.Contains(k)).FirstOrDefault();
         if (foundVariantGroup is null)
         {
             OrientationVariants = [BlockUntransformed];
             OrientationIndex = 0;
-            //Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(UpdateOrientationVariantsList)}]: Unable to find orientation variantGroup for block '{baseCode}'.");
             return;
         }
 
         AssetLocation? searchCode = BlockUntransformed.CodeWithVariant(foundVariantGroup, "*");
         if (searchCode is null)
+        {
             return;
+        }
 
         Block[] variants = World.SearchBlocks(searchCode);
         if (!OrientationVariantCache.TryAdd(baseCode, variants))
         {
             Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(UpdateOrientationVariantsList)}]: Failed to add orientation variants to cache for block code '{baseCode}'.");
         }
-        OrientationVariants = variants.ToImmutableArray();
+        OrientationVariants = [.. variants];
         SetOrientationToBaseBlock();
     }
 
@@ -480,13 +493,19 @@ public class BuildBrushInstance
     /// <returns></returns>
     private bool SetOrientationToBaseBlock()
     {
-        var blockId = this.BlockId;
-        var foundIndex = OrientationVariants.IndexOf(OrientationVariants.FirstOrDefault(block => block.BlockId == blockId));
-        if (foundIndex < 0)
+        int? blockId = this.BlockId;
+        Block? foundVariant = OrientationVariants.FirstOrDefault(block => block.BlockId == blockId);
+        if (foundVariant is null)
         {
-            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(SetOrientationToBaseBlock)}]: Unable to find untransformed block '{BlockUntransformed}' in orientation variants.");
             return false;
         }
+
+        int foundIndex = OrientationVariants.IndexOf(foundVariant);
+        if (foundIndex < 0)
+        {
+            return false;
+        }
+
         OrientationIndex = foundIndex;
         return true;
     }
