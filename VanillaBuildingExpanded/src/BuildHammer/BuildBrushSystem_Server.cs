@@ -19,6 +19,10 @@ public class BuildBrushSystem_Server : ModSystem
     protected readonly Dictionary<int, BuildBrushInstance> Brushes = [];
     #endregion
 
+    #region Accessors
+    protected ILogger Logger => api.Logger;
+    #endregion
+
     #region Hooks
     public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Server;
     public override void StartServerSide(ICoreServerAPI api)
@@ -49,7 +53,8 @@ public class BuildBrushSystem_Server : ModSystem
 
         if (!Brushes.TryGetValue(player.ClientId, out BuildBrushInstance? brush))
         {
-            throw new KeyNotFoundException("Build brush instance was null for player.");
+            Logger.Warning($"Build brush instance not found for player {player.PlayerName} (ID: {player.ClientId})");
+            return null;
         }
 
         return brush;
@@ -113,7 +118,7 @@ public class BuildBrushSystem_Server : ModSystem
     /// </summary>
     private void Event_OffhandSlotModified(IServerPlayer byPlayer, int slot)
     {
-        BuildBrushInstance brush = GetBrush(byPlayer);
+        BuildBrushInstance? brush = GetBrush(byPlayer);
         if (brush is null)
             return;
 
