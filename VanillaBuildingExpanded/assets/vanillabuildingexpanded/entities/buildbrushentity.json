@@ -1,0 +1,13 @@
+{
+	code: "buildbrushentity",
+	class: "BuildBrushEntity",
+	tags: ["inanimate"],
+	hitboxSize: { x: 1, y: 1 },
+	client: {
+		renderer: "BuildBrushRenderer",
+		behaviors: [{ code: "passivephysics" }],
+	},
+	server: {
+		behaviors: [{ code: "passivephysics" }]
+	},
+}

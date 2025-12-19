@@ -47,7 +47,7 @@ public class BuildBrushInstance
     /// <summary>
     /// The entity that renders the brush preview.
     /// </summary>
-    private EntityChunky? _entity;
+    private BuildBrushEntity? _entity;
 
     /// <summary>
     /// Encapsulates all rotation data and logic for the current block.
@@ -104,7 +104,7 @@ public class BuildBrushInstance
     /// <summary>
     /// The entity that renders the brush preview.
     /// </summary>
-    public EntityChunky? Entity => _entity;
+    public BuildBrushEntity? Entity => _entity;
 
     /// <summary>
     /// The rotation info for the current block.
@@ -607,7 +607,7 @@ public class BuildBrushInstance
         if (sapi is null)
             return false;
 
-        _entity = EntityChunky.CreateAndLinkWithDimension(sapi, _dimension.Dimension);
+        _entity = BuildBrushEntity.CreateAndLink(sapi, _dimension.Dimension);
         
         // Set initial position
         if (_position is not null)
@@ -627,7 +627,7 @@ public class BuildBrushInstance
     /// Called on the client when receiving the entity from server.
     /// </summary>
     /// <param name="entity">The entity received from server.</param>
-    public void AssociateEntity(EntityChunky entity)
+    public void AssociateEntity(BuildBrushEntity entity)
     {
         _entity = entity;
     }

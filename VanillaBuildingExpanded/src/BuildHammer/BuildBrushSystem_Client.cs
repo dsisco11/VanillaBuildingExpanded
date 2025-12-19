@@ -5,6 +5,7 @@ using VanillaBuildingExpanded.Networking;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
@@ -41,6 +42,10 @@ public class BuildBrushSystem_Client : ModSystem
     public override void StartClientSide(ICoreClientAPI api)
     {
         this.api = api;
+
+        // Register entity renderer
+        api.RegisterEntityRendererClass(BuildBrushEntity.RendererClassName, typeof(BuildBrushEntityRenderer));
+
         // Rendering
         renderer = new BuildPreviewRenderer(api, this);
         api.Event.RegisterRenderer(renderer, EnumRenderStage.Opaque, "build_brush");
