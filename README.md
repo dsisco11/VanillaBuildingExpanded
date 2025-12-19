@@ -3,7 +3,7 @@
 A Vintage Story mod that adds quality-of-life improvements for building while staying true to the vanilla game experience.
 
 ![Game Version](https://img.shields.io/badge/Vintage%20Story-1.21.5+-blue)
-![Version](https://img.shields.io/badge/Alpha-0.0.6-red)
+![Version](https://img.shields.io/badge/Alpha-0.0.7-red)
 
 ## Overview
 
@@ -45,7 +45,7 @@ Simply place a log above a stick in the crafting grid to create a Building Hamme
 | Cycle Snapping Mode Backward | `Shift + Middle Mouse` |
 | Shift Placement              | `Shift`                |
 
-__NOTE:__ The _"Shift placement"_ keybind will offset the block placement position by 1 block in the direction of the block face you are targeting, this is useful for placing roofing or stairs, for example.
+**NOTE:** The _"Shift placement"_ keybind will offset the block placement position by 1 block in the direction of the block face you are targeting, this is useful for placing roofing or stairs, for example.
 
 ## Compatibility
 
