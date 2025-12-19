@@ -1,4 +1,5 @@
-﻿using System.Collections.Immutable;
+﻿using System;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 
 using Vintagestory.API.Client;
@@ -53,6 +54,16 @@ public class BuildBrushInstance
     /// Encapsulates all rotation data and logic for the current block.
     /// </summary>
     private BuildBrushRotationInfo? _rotation;
+
+    /// <summary>
+    /// Event raised when the dimension is activated (server-side only).
+    /// </summary>
+    public event Action<BuildBrushInstance, int>? OnDimensionActivated;
+
+    /// <summary>
+    /// Event raised when the dimension is deactivated (server-side only).
+    /// </summary>
+    public event Action<BuildBrushInstance>? OnDimensionDeactivated;
     #endregion
 
     #region Properties
@@ -540,6 +551,9 @@ public class BuildBrushInstance
         {
             SpawnEntity();
             UpdateDimensionBlock();
+
+            // Notify listeners that dimension is ready
+            OnDimensionActivated?.Invoke(this, _dimension!.DimensionId);
         }
         else
         {
@@ -555,6 +569,12 @@ public class BuildBrushInstance
         // Only server manages dimensions
         if (World.Side != EnumAppSide.Server)
             return;
+
+        // Notify listeners before destroying
+        if (_dimension is not null)
+        {
+            OnDimensionDeactivated?.Invoke(this);
+        }
 
         DestroyDimension();
     }

@@ -27,7 +27,8 @@ public class VanillaBuildingExpandedModSystem : ModSystem
     {
         api.Network
             .RegisterChannel(Mod.Info.ModID)
-            .RegisterMessageType(typeof(Packet_SetBuildBrush));
+            .RegisterMessageType(typeof(Packet_SetBuildBrush))
+            .RegisterMessageType(typeof(Packet_BrushDimensionPreview));
     }
 
     public override void Start(ICoreAPI api)
