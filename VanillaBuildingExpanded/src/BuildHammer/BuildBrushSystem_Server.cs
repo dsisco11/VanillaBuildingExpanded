@@ -62,10 +62,10 @@ public class BuildBrushSystem_Server : ModSystem
     #endregion
 
     #region Block Placement
-    public bool TryPlaceBrushBlock(in IWorldAccessor world, in IPlayer byPlayer, in ItemStack itemstack, in BlockSelection blockSel)
+    public bool TryPlaceBrushBlock(in IWorldAccessor world, in IPlayer? byPlayer, in ItemStack? itemstack, in BlockSelection blockSel)
     {
-        BuildBrushInstance brush = GetBrush(byPlayer)!;
-        if (brush.IsDisabled)
+        var brush = GetBrush(byPlayer);
+        if (brush is null || brush.IsDisabled)
             return false;
 
         // We should be able to place the block, if we dont have a transformed block then we will still return true to act as though we placed it (to prevent normal placement and unexpected behavior)
