@@ -47,7 +47,7 @@ public class BuildBrushInstance
     /// <summary>
     /// The entity that renders the brush preview.
     /// </summary>
-    private BuildBrushEntity? _entity;
+    private EntityChunky? _entity;
 
     /// <summary>
     /// Encapsulates all rotation data and logic for the current block.
@@ -104,7 +104,7 @@ public class BuildBrushInstance
     /// <summary>
     /// The entity that renders the brush preview.
     /// </summary>
-    public BuildBrushEntity? Entity => _entity;
+    public EntityChunky? Entity => _entity;
 
     /// <summary>
     /// The rotation info for the current block.
@@ -607,12 +607,13 @@ public class BuildBrushInstance
         if (sapi is null)
             return false;
 
-        _entity = BuildBrushEntity.CreateAndLink(sapi, _dimension.Dimension);
+        _entity = EntityChunky.CreateAndLinkWithDimension(sapi, _dimension.Dimension);
         
         // Set initial position
         if (_position is not null)
         {
-            _entity.SetWorldPosition(_position);
+            _entity.Pos.SetPos(_position.ToVec3d());
+            _entity.ServerPos.SetPos(_position.ToVec3d());
         }
 
         // Spawn the entity in the world
@@ -626,7 +627,7 @@ public class BuildBrushInstance
     /// Called on the client when receiving the entity from server.
     /// </summary>
     /// <param name="entity">The entity received from server.</param>
-    public void AssociateEntity(BuildBrushEntity entity)
+    public void AssociateEntity(EntityChunky entity)
     {
         _entity = entity;
     }
@@ -654,7 +655,12 @@ public class BuildBrushInstance
         if (_position is null)
             return;
 
-        _entity?.SetWorldPosition(_position);
+        if (_entity is not null)
+        {
+            var vec = _position.ToVec3d();
+            _entity.Pos.SetPos(vec);
+            _entity.ServerPos.SetPos(vec);
+        }
         _dimension?.SetPosition(_position);
     }
 
@@ -711,9 +717,11 @@ public class BuildBrushInstance
         }
 
         // Update entity yaw for visual rotation if using IRotatable
-        if (_rotation.HasRotatableEntity)
+        if (_rotation.HasRotatableEntity && _entity is not null)
         {
-            _entity?.SetYawRotation(_rotation.CurrentAngle);
+            float yawRadians = _rotation.CurrentAngle * GameMath.DEG2RAD;
+            _entity.Pos.Yaw = yawRadians;
+            _entity.ServerPos.Yaw = yawRadians;
         }
     }
 

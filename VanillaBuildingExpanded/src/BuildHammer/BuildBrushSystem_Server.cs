@@ -29,9 +29,6 @@ public class BuildBrushSystem_Server : ModSystem
     {
         this.api = api;
 
-        // Register the entity type
-        api.RegisterEntity(BuildBrushEntity.EntityCode, typeof(BuildBrushEntity));
-
         // Networking
         serverChannel = api.Network.GetChannel(Mod.Info.ModID);
         serverChannel.SetMessageHandler<Packet_SetBuildBrush>(HandlePacket_SetBuildBrush);
