@@ -98,16 +98,6 @@ public class BuildBrushSystem_Server : ModSystem
         BuildBrushInstance brush = new(byPlayer, api.World);
         Brushes.Add(byPlayer.ClientId, brush);
 
-        // Initialize dimension and entity for this player
-        if (brush.InitializeDimension())
-        {
-            brush.SpawnEntity();
-        }
-        else
-        {
-            Logger.Warning($"[{nameof(BuildBrushSystem_Server)}] Failed to initialize dimension for player {byPlayer.PlayerName}");
-        }
-
         IInventory? hotbarInv = byPlayer.InventoryManager?.GetHotbarInventory();
         if (hotbarInv is not null)
         {

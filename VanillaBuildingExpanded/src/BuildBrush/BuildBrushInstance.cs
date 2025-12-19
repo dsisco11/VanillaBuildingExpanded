@@ -68,8 +68,21 @@ public class BuildBrushInstance
         get => _isActive;
         set
         {
+            if (_isActive == value)
+                return;
+
             _isActive = value;
             IsDirty = true;
+
+            // Manage dimension/entity lifecycle based on active state
+            if (value)
+            {
+                ActivateDimension();
+            }
+            else
+            {
+                DeactivateDimension();
+            }
         }
     }
 
@@ -512,12 +525,47 @@ public class BuildBrushInstance
 
     #region Dimension & Entity Management
     /// <summary>
+    /// Activates the dimension and entity when the brush becomes active.
+    /// </summary>
+    private void ActivateDimension()
+    {
+        // Only server creates dimensions
+        if (World.Side != EnumAppSide.Server)
+            return;
+
+        if (_dimension is not null)
+            return; // Already active
+
+        if (InitializeDimension())
+        {
+            SpawnEntity();
+            UpdateDimensionBlock();
+        }
+        else
+        {
+            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(ActivateDimension)}]: Failed to initialize dimension for player {Player.PlayerName}");
+        }
+    }
+
+    /// <summary>
+    /// Deactivates and destroys the dimension and entity when the brush becomes inactive.
+    /// </summary>
+    private void DeactivateDimension()
+    {
+        // Only server manages dimensions
+        if (World.Side != EnumAppSide.Server)
+            return;
+
+        DestroyDimension();
+    }
+
+    /// <summary>
     /// Initializes the mini-dimension and entity for this brush instance.
     /// Must be called from the server side.
     /// </summary>
     /// <param name="existingDimensionId">Optional existing dimension ID to reuse.</param>
     /// <returns>True if initialization succeeded.</returns>
-    public bool InitializeDimension(int existingDimensionId = -1)
+    private bool InitializeDimension(int existingDimensionId = -1)
     {
         if (World.Side != EnumAppSide.Server)
         {
@@ -541,7 +589,7 @@ public class BuildBrushInstance
     /// Must be called after InitializeDimension().
     /// </summary>
     /// <returns>True if the entity was spawned successfully.</returns>
-    public bool SpawnEntity()
+    private bool SpawnEntity()
     {
         if (_dimension?.Dimension is null || !_dimension.IsInitialized)
         {
