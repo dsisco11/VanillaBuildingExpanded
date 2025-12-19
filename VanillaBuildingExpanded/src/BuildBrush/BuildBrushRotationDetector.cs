@@ -68,27 +68,15 @@ public static class BuildBrushRotationDetector
         if (string.IsNullOrEmpty(block.EntityClass))
             return false;
 
-        // Try to create a temporary instance to check if it implements IRotatable
         try
         {
-            BlockEntity be = world.ClassRegistry.CreateBlockEntity(block.EntityClass);
-            if (be is null)
-                return false;
-
-            // Check if the block entity itself implements IRotatable
-            if (be is IRotatable)
-                return true;
-
-            // Also check behaviors - some blocks use behaviors for rotation
-            // We need to create behaviors to check them
-            be.CreateBehaviors(block, world);
-            foreach (var behavior in be.Behaviors)
+            Type? entityType = world.Api.ClassRegistry.GetBlockEntity(block.EntityClass);
+            if (entityType is null)
             {
-                if (behavior is IRotatable)
-                    return true;
+                return false;
             }
 
-            return false;
+            return typeof(IRotatable).IsAssignableFrom(entityType);
         }
         catch
         {
