@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Reflection;
 
 using VanillaBuildingExpanded.Networking;
 
 using Vintagestory.API.Common;
+using Vintagestory.API.Datastructures;
+using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
 namespace VanillaBuildingExpanded.BuildHammer;
@@ -88,7 +89,7 @@ public class BuildBrushSystem_Server : ModSystem
     }
 
     /// <summary>
-    /// Attempts to set the mesh angle/rotation on a placed block entity.
+    /// Attempts to set the mesh angle/rotation on a placed block entity using IRotatable.OnTransformed.
     /// </summary>
     /// <param name="world">The world accessor.</param>
     /// <param name="position">The position of the block entity.</param>
@@ -97,36 +98,26 @@ public class BuildBrushSystem_Server : ModSystem
     private bool TryApplyBlockEntityRotation(IWorldAccessor world, Vintagestory.API.MathTools.BlockPos position, float rotationRadians)
     {
         BlockEntity? blockEntity = world.BlockAccessor.GetBlockEntity(position);
-        if (blockEntity is null)
+        if (blockEntity is not IRotatable rotatable)
         {
             return false;
         }
 
-        // Try common property names for mesh angle
-        string[] propertyNames = ["MeshAngle", "MeshAngleRad", "MeshAngleY"];
-        
-        Type beType = blockEntity.GetType();
-        foreach (string propName in propertyNames)
-        {
-            PropertyInfo? property = beType.GetProperty(propName, BindingFlags.Public | BindingFlags.Instance);
-            if (property is not null && property.CanWrite && property.PropertyType == typeof(float))
-            {
-                property.SetValue(blockEntity, rotationRadians);
-                blockEntity.MarkDirty(true);
-                return true;
-            }
+        // Convert radians to degrees for OnTransformed (it expects degrees)
+        int degreeRotation = -(int)Math.Round(rotationRadians * GameMath.RAD2DEG);
 
-            // Also try fields
-            FieldInfo? field = beType.GetField(propName, BindingFlags.Public | BindingFlags.Instance);
-            if (field is not null && field.FieldType == typeof(float))
-            {
-                field.SetValue(blockEntity, rotationRadians);
-                blockEntity.MarkDirty(true);
-                return true;
-            }
-        }
+        // Get the current tree attributes from the block entity
+        TreeAttribute tree = new();
+        blockEntity.ToTreeAttributes(tree);
 
-        return false;
+        // Apply the rotation via OnTransformed - it modifies the tree attributes
+        rotatable.OnTransformed(world, tree, degreeRotation, [], [], null);
+
+        // Re-apply the modified attributes back to the block entity
+        blockEntity.FromTreeAttributes(tree, world);
+        blockEntity.MarkDirty(true);
+
+        return true;
     }
     #endregion
 
