@@ -9,6 +9,11 @@ using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.BuildHammer;
+
+/// <summary>
+/// Central owner of all placement state for the build brush.
+/// Manages position, rotation, block selection, and drives the mini-dimension entity.
+/// </summary>
 public class BuildBrushInstance
 {
     #region Constants
@@ -38,6 +43,7 @@ public class BuildBrushInstance
     public IWorldAccessor World { get; internal set; }
     private int? _blockId = null;
     private int _orientationIndex = 0;
+    private int _rotationAngle = 0;
     private BlockPos _position = new(0, 0, 0);
     private Block? _blockUntransformed = null;
     private Block? _blockTransformed = null;
@@ -46,6 +52,21 @@ public class BuildBrushInstance
     private BrushSnappingState lastCheckedSnappingState = new();
     private bool _isValidPlacementBlock = true;
     private bool _isActive = false;
+
+    /// <summary>
+    /// The mini-dimension wrapper for this brush.
+    /// </summary>
+    private BuildBrushDimension? _dimension;
+
+    /// <summary>
+    /// The entity that renders the brush preview.
+    /// </summary>
+    private BuildBrushEntity? _entity;
+
+    /// <summary>
+    /// The detected rotation mode for the current block.
+    /// </summary>
+    private EBuildBrushRotationMode _rotationMode = EBuildBrushRotationMode.None;
     #endregion
 
     #region Properties
@@ -77,6 +98,38 @@ public class BuildBrushInstance
     public bool IsDisabled => !IsActive || !_isValidPlacementBlock || Position is null;
 
     /// <summary>
+    /// The mini-dimension wrapper for this brush.
+    /// </summary>
+    public BuildBrushDimension? Dimension => _dimension;
+
+    /// <summary>
+    /// The entity that renders the brush preview.
+    /// </summary>
+    public BuildBrushEntity? Entity => _entity;
+
+    /// <summary>
+    /// The detected rotation mode for the current block.
+    /// </summary>
+    public EBuildBrushRotationMode RotationMode => _rotationMode;
+
+    /// <summary>
+    /// The current rotation angle in degrees (0, 90, 180, 270).
+    /// </summary>
+    public int RotationAngle
+    {
+        get => _rotationAngle;
+        set
+        {
+            int normalizedAngle = ((value % 360) + 360) % 360;
+            if (_rotationAngle == normalizedAngle)
+                return;
+
+            _rotationAngle = normalizedAngle;
+            ApplyRotation();
+        }
+    }
+
+    /// <summary>
     /// The fully resolved position of the build cursor.
     /// </summary>
     public BlockPos Position
@@ -92,6 +145,9 @@ public class BuildBrushInstance
                 HitPosition = new Vec3d(0.5, 0.5, 0.5),
                 DidOffset = true
             };
+
+            // Update entity and dimension position
+            UpdateEntityPosition();
         }
     }
 
@@ -118,6 +174,9 @@ public class BuildBrushInstance
             if (!OrientationVariants.IsDefaultOrEmpty)
             {
                 BlockTransformed = OrientationVariants[this._orientationIndex];
+                
+                // Update dimension with new variant
+                UpdateDimensionBlock();
             }
         }
     }
@@ -188,7 +247,19 @@ public class BuildBrushInstance
             }
 
             _blockUntransformed = value;
+
+            // Detect rotation mode for the new block
+            _rotationMode = value is not null
+                ? BuildBrushRotationDetector.DetectRotationMode(value, World)
+                : EBuildBrushRotationMode.None;
+
+            // Reset rotation angle when block changes
+            _rotationAngle = 0;
+
             UpdateOrientationVariantsList();
+
+            // Update dimension with new block
+            UpdateDimensionBlock();
         }
     }
 
@@ -509,6 +580,175 @@ public class BuildBrushInstance
 
         OrientationIndex = foundIndex;
         return true;
+    }
+    #endregion
+
+    #region Dimension & Entity Management
+    /// <summary>
+    /// Initializes the mini-dimension and entity for this brush instance.
+    /// Must be called from the server side.
+    /// </summary>
+    /// <param name="existingDimensionId">Optional existing dimension ID to reuse.</param>
+    /// <returns>True if initialization succeeded.</returns>
+    public bool InitializeDimension(int existingDimensionId = -1)
+    {
+        if (World.Side != EnumAppSide.Server)
+        {
+            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(InitializeDimension)}]: Cannot initialize dimension on client side.");
+            return false;
+        }
+
+        _dimension = new BuildBrushDimension(World);
+        if (!_dimension.Initialize(existingDimensionId))
+        {
+            Logger.Error($"[{nameof(BuildBrushInstance)}][{nameof(InitializeDimension)}]: Failed to initialize dimension.");
+            _dimension = null;
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Spawns the brush entity and associates it with the dimension.
+    /// Must be called after InitializeDimension().
+    /// </summary>
+    /// <returns>True if the entity was spawned successfully.</returns>
+    public bool SpawnEntity()
+    {
+        if (_dimension?.Dimension is null || !_dimension.IsInitialized)
+        {
+            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(SpawnEntity)}]: Cannot spawn entity without initialized dimension.");
+            return false;
+        }
+
+        if (World.Side != EnumAppSide.Server)
+        {
+            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(SpawnEntity)}]: Cannot spawn entity on client side.");
+            return false;
+        }
+
+        var sapi = World.Api as Vintagestory.API.Server.ICoreServerAPI;
+        if (sapi is null)
+            return false;
+
+        _entity = BuildBrushEntity.CreateAndLink(sapi, _dimension.Dimension);
+        
+        // Set initial position
+        if (_position is not null)
+        {
+            _entity.SetWorldPosition(_position);
+        }
+
+        // Spawn the entity in the world
+        World.SpawnEntity(_entity);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Associates this brush instance with an existing client-side entity.
+    /// Called on the client when receiving the entity from server.
+    /// </summary>
+    /// <param name="entity">The entity received from server.</param>
+    public void AssociateEntity(BuildBrushEntity entity)
+    {
+        _entity = entity;
+    }
+
+    /// <summary>
+    /// Destroys the entity and dimension.
+    /// </summary>
+    public void DestroyDimension()
+    {
+        if (_entity is not null)
+        {
+            _entity.Die(Vintagestory.API.Common.EnumDespawnReason.Removed);
+            _entity = null;
+        }
+
+        _dimension?.Destroy();
+        _dimension = null;
+    }
+
+    /// <summary>
+    /// Updates the entity position to match the current brush position.
+    /// </summary>
+    private void UpdateEntityPosition()
+    {
+        if (_position is null)
+            return;
+
+        _entity?.SetWorldPosition(_position);
+        _dimension?.SetPosition(_position);
+    }
+
+    /// <summary>
+    /// Updates the block in the dimension.
+    /// </summary>
+    private void UpdateDimensionBlock()
+    {
+        if (_dimension is null || !_dimension.IsInitialized)
+            return;
+
+        if (_blockTransformed is not null)
+        {
+            _dimension.SetBlock(_blockTransformed, OrientationVariants.IsDefaultOrEmpty ? null : [.. OrientationVariants]);
+        }
+        else if (_blockUntransformed is not null)
+        {
+            _dimension.SetBlock(_blockUntransformed, OrientationVariants.IsDefaultOrEmpty ? null : [.. OrientationVariants]);
+        }
+        else
+        {
+            _dimension.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Applies the current rotation based on rotation mode.
+    /// </summary>
+    private void ApplyRotation()
+    {
+        if (_dimension is null || !_dimension.IsInitialized)
+            return;
+
+        switch (_rotationMode)
+        {
+            case EBuildBrushRotationMode.None:
+                // No rotation possible
+                break;
+
+            case EBuildBrushRotationMode.VariantBased:
+                // Variant rotation is handled by OrientationIndex, dimension uses variant block
+                _dimension.ApplyRotation(_rotationAngle, _blockTransformed);
+                break;
+
+            case EBuildBrushRotationMode.Rotatable:
+                // Apply IRotatable rotation
+                _dimension.ApplyRotation(_rotationAngle);
+                break;
+
+            case EBuildBrushRotationMode.Hybrid:
+                // Apply both
+                _dimension.ApplyRotation(_rotationAngle, _blockTransformed);
+                break;
+        }
+
+        // Update entity yaw for visual rotation if using IRotatable
+        if (_rotationMode is EBuildBrushRotationMode.Rotatable or EBuildBrushRotationMode.Hybrid)
+        {
+            _entity?.SetYawRotation(_rotationAngle);
+        }
+    }
+
+    /// <summary>
+    /// Syncs the dimension to nearby players.
+    /// </summary>
+    /// <param name="players">The players to sync to.</param>
+    public void SyncDimensionToPlayers(IPlayer[] players)
+    {
+        _dimension?.SyncToPlayers(players);
     }
     #endregion
 }

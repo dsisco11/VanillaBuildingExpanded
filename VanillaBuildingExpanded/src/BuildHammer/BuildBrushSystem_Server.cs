@@ -28,6 +28,10 @@ public class BuildBrushSystem_Server : ModSystem
     public override void StartServerSide(ICoreServerAPI api)
     {
         this.api = api;
+
+        // Register the entity type
+        api.RegisterEntity(BuildBrushEntity.EntityCode, typeof(BuildBrushEntity));
+
         // Networking
         serverChannel = api.Network.GetChannel(Mod.Info.ModID);
         serverChannel.SetMessageHandler<Packet_SetBuildBrush>(HandlePacket_SetBuildBrush);
@@ -40,8 +44,14 @@ public class BuildBrushSystem_Server : ModSystem
 
     public override void Dispose()
     {
+        // Destroy all brush dimensions before clearing
+        foreach (var brush in Brushes.Values)
+        {
+            brush.DestroyDimension();
+        }
         Brushes.Clear();
         BuildBrushInstance.OrientationVariantCache.Clear();
+        BuildBrushRotationDetector.ClearCache();
     }
     #endregion
 
@@ -89,6 +99,16 @@ public class BuildBrushSystem_Server : ModSystem
         BuildBrushInstance brush = new(byPlayer, api.World);
         Brushes.Add(byPlayer.ClientId, brush);
 
+        // Initialize dimension and entity for this player
+        if (brush.InitializeDimension())
+        {
+            brush.SpawnEntity();
+        }
+        else
+        {
+            Logger.Warning($"[{nameof(BuildBrushSystem_Server)}] Failed to initialize dimension for player {byPlayer.PlayerName}");
+        }
+
         IInventory? hotbarInv = byPlayer.InventoryManager?.GetHotbarInventory();
         if (hotbarInv is not null)
         {
@@ -110,7 +130,11 @@ public class BuildBrushSystem_Server : ModSystem
     /// </summary>
     private void Event_PlayerDisconnect(IServerPlayer byPlayer)
     {
-        Brushes.Remove(byPlayer.ClientId);
+        if (Brushes.TryGetValue(byPlayer.ClientId, out var brush))
+        {
+            brush.DestroyDimension();
+            Brushes.Remove(byPlayer.ClientId);
+        }
     }
 
     /// <summary>
@@ -184,6 +208,12 @@ public class BuildBrushSystem_Server : ModSystem
         brush.Snapping = packet.snapping;
         brush.OrientationIndex = packet.orientationIndex;
         brush.Position = packet.position;
+
+        // Sync dimension changes to nearby players
+        if (brush.Dimension?.IsInitialized == true)
+        {
+            brush.SyncDimensionToPlayers([fromPlayer]);
+        }
     }
     #endregion
 }

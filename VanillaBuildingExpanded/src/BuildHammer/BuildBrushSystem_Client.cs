@@ -58,6 +58,7 @@ public class BuildBrushSystem_Client : ModSystem
     public override void Dispose()
     {
         BuildBrushInstance.OrientationVariantCache.Clear();
+        BuildBrushRotationDetector.ClearCache();
     }
     #endregion
 

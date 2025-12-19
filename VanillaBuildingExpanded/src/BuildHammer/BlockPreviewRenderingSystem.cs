@@ -5,6 +5,14 @@ using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.BuildHammer;
+
+/// <summary>
+/// Renders the build brush preview.
+/// 
+/// When the brush has an initialized mini-dimension entity, the game's MeshDataPoolManager
+/// handles rendering automatically. This renderer serves as a fallback for cases where
+/// the dimension is not available, and provides custom effects (glow, tint for invalid placement).
+/// </summary>
 internal class BuildPreviewRenderer : IRenderer, IDisposable
 {
     #region Fields
@@ -17,6 +25,11 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
     protected static readonly Vec4f RenderGlow = new(1f, 1f, 1f, .1f);
     protected Matrixf ModelMat = new();
     protected readonly BuildBrushSystem_Client brushManager;
+
+    /// <summary>
+    /// When true, skip custom rendering and let the mini-dimension system handle it.
+    /// </summary>
+    public bool UseDimensionRendering { get; set; } = false;
     #endregion
 
     #region Properties
@@ -41,6 +54,14 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
         BuildBrushInstance? brush = brushManager.GetBrush(player);
         if (brush is null || brush.IsDisabled || brush.ItemStack is null) 
             return;
+
+        // If using dimension-based rendering with an entity, skip custom rendering
+        // The game's MeshDataPoolManager will handle the mini-dimension rendering
+        if (UseDimensionRendering && brush.Entity is not null && brush.Dimension?.IsInitialized == true)
+        {
+            // TODO: Future enhancement - apply custom effects to dimension rendering
+            return;
+        }
 
         IRenderAPI rapi = api.Render;
         ItemRenderInfo renderInfo = rapi.GetItemStackRenderInfo(brush.DummySlot, EnumItemRenderTarget.Ground, deltaTime);
