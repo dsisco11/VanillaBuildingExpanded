@@ -48,7 +48,6 @@ public class BuildBrushSystem_Client : ModSystem
         // Networking
         clientChannel = api.Network.GetChannel(Mod.Info.ModID);
         clientChannel.SetMessageHandler<Packet_SetBuildBrush>(HandlePacket_SetBuildBrush);
-        clientChannel.SetMessageHandler<Packet_BrushDimensionPreview>(HandlePacket_DimensionPreview);
 
         // User input
         RegisterInputHandlers();
@@ -63,8 +62,6 @@ public class BuildBrushSystem_Client : ModSystem
 
     public override void Dispose()
     {
-        // Disable dimension preview when disposing
-        api?.World?.SetBlocksPreviewDimension(-1);
         BuildBrushRotationInfo.ClearCaches();
     }
     #endregion
@@ -307,19 +304,6 @@ public class BuildBrushSystem_Client : ModSystem
 
         brush.OrientationIndex = packet.orientationIndex;
         //brush.Position = packet.position;
-    }
-
-    private void HandlePacket_DimensionPreview(Packet_BrushDimensionPreview packet)
-    {
-        Logger.Notification($"[BuildBrush][HandlePacket_DimensionPreview]: Dimension ID = {packet.DimensionId}, Position = {packet.Position}");
-
-        api.World.SetBlocksPreviewDimension(packet.DimensionId);
-
-        if (packet.DimensionId >= 0 && packet.Position is not null)
-        {
-            IMiniDimension dim = api.World.GetOrCreateDimension(packet.DimensionId, packet.Position.ToVec3d());
-            dim.selectionTrackingOriginalPos = packet.Position;
-        }
     }
     #endregion
 

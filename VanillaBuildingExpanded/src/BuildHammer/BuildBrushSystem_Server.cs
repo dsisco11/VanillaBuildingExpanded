@@ -96,10 +96,6 @@ public class BuildBrushSystem_Server : ModSystem
         BuildBrushInstance brush = new(byPlayer, api.World);
         Brushes.Add(byPlayer.ClientId, brush);
 
-        // Subscribe to dimension events
-        brush.OnDimensionActivated += (instance, dimId) => SendDimensionPreview(byPlayer, dimId, instance.Position);
-        brush.OnDimensionDeactivated += (instance) => SendDimensionPreview(byPlayer, -1, null);
-
         IInventory? hotbarInv = byPlayer.InventoryManager?.GetHotbarInventory();
         if (hotbarInv is not null)
         {
@@ -114,18 +110,6 @@ public class BuildBrushSystem_Server : ModSystem
 
         brush.IsActive = byPlayer.IsHoldingBuildHammer();
         brush.TryUpdateBlockId();
-    }
-
-    /// <summary>
-    /// Sends a dimension preview packet to a player.
-    /// </summary>
-    private void SendDimensionPreview(IServerPlayer player, int dimensionId, BlockPos? position)
-    {
-        serverChannel.SendPacket(new Packet_BrushDimensionPreview
-        {
-            DimensionId = dimensionId,
-            Position = position
-        }, player);
     }
 
     /// <summary>
