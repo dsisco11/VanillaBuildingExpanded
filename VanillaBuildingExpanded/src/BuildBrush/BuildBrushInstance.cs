@@ -1,7 +1,5 @@
-﻿using System.Collections.Generic;
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -23,16 +21,6 @@ public class BuildBrushInstance
         EBuildBrushSnapping.Vertical,
         EBuildBrushSnapping.None,
     ];
-
-    public static readonly Dictionary<AssetLocation, Block[]> OrientationVariantCache = [];
-    public static readonly ImmutableArray<string> ValidOrientationVariantKeys = [
-        "rot",
-        "rotation",
-        "horizontalorientation",
-        "orientation",
-        "v",
-        "side",
-    ];
     #endregion
 
     #region Fields
@@ -42,8 +30,6 @@ public class BuildBrushInstance
     public IPlayer Player { get; internal set; }
     public IWorldAccessor World { get; internal set; }
     private int? _blockId = null;
-    private int _orientationIndex = 0;
-    private int _rotationAngle = 0;
     private BlockPos _position = new(0, 0, 0);
     private Block? _blockUntransformed = null;
     private Block? _blockTransformed = null;
@@ -64,9 +50,9 @@ public class BuildBrushInstance
     private BuildBrushEntity? _entity;
 
     /// <summary>
-    /// The detected rotation mode for the current block.
+    /// Encapsulates all rotation data and logic for the current block.
     /// </summary>
-    private EBuildBrushRotationMode _rotationMode = EBuildBrushRotationMode.None;
+    private BuildBrushRotationInfo? _rotation;
     #endregion
 
     #region Properties
@@ -108,23 +94,31 @@ public class BuildBrushInstance
     public BuildBrushEntity? Entity => _entity;
 
     /// <summary>
+    /// The rotation info for the current block.
+    /// </summary>
+    public BuildBrushRotationInfo? Rotation => _rotation;
+
+    /// <summary>
     /// The detected rotation mode for the current block.
     /// </summary>
-    public EBuildBrushRotationMode RotationMode => _rotationMode;
+    public EBuildBrushRotationMode RotationMode => _rotation?.Mode ?? EBuildBrushRotationMode.None;
 
     /// <summary>
     /// The current rotation angle in degrees (0, 90, 180, 270).
     /// </summary>
     public int RotationAngle
     {
-        get => _rotationAngle;
+        get => _rotation?.CurrentAngle ?? 0;
         set
         {
-            int normalizedAngle = ((value % 360) + 360) % 360;
-            if (_rotationAngle == normalizedAngle)
+            if (_rotation is null)
                 return;
 
-            _rotationAngle = normalizedAngle;
+            int normalizedAngle = ((value % 360) + 360) % 360;
+            if (_rotation.CurrentAngle == normalizedAngle)
+                return;
+
+            _rotation.CurrentAngle = normalizedAngle;
             ApplyRotation();
         }
     }
@@ -157,31 +151,33 @@ public class BuildBrushInstance
     /// </summary>
     public int OrientationIndex
     {
-        get => this._orientationIndex;
+        get => _rotation?.CurrentIndex ?? 0;
         set
         {
+            if (_rotation is null)
+                return;
+
             //Logger.Audit($"[{nameof(BuildBrushInstance)}][set {nameof(OrientationIndex)}]: Setting orientation index to '{value}' for block '{_blockUntransformed}'.");
-            this._orientationIndex = 0;
-            if (OrientationVariants.IsDefaultOrEmpty)
+            if (_rotation.Variants.IsDefaultOrEmpty)
             {
                 this.Logger.Warning($"[{nameof(BuildBrushInstance)}][set {nameof(OrientationIndex)}]: Block {_blockUntransformed} has no orientation variants.");
                 return;
             }
-            int clampedIndex = (value + OrientationVariants.Length) % OrientationVariants.Length;
-            this._orientationIndex = clampedIndex;
+
+            _rotation.CurrentIndex = value;
 
             // Update the transformed block based on the new orientation
-            if (!OrientationVariants.IsDefaultOrEmpty)
-            {
-                BlockTransformed = OrientationVariants[this._orientationIndex];
-                
-                // Update dimension with new variant
-                UpdateDimensionBlock();
-            }
+            BlockTransformed = _rotation.CurrentVariant;
+
+            // Update dimension with new variant
+            UpdateDimensionBlock();
         }
     }
 
-    public ImmutableArray<Block> OrientationVariants { get; private set; } = ImmutableArray<Block>.Empty;
+    /// <summary>
+    /// Available orientation variants for the current block.
+    /// </summary>
+    public ImmutableArray<Block> OrientationVariants => _rotation?.Variants ?? ImmutableArray<Block>.Empty;
 
     /// <summary>
     /// The block currently chosen for placement.
@@ -248,15 +244,19 @@ public class BuildBrushInstance
 
             _blockUntransformed = value;
 
-            // Detect rotation mode for the new block
-            _rotationMode = value is not null
-                ? BuildBrushRotationDetector.DetectRotationMode(value, World)
-                : EBuildBrushRotationMode.None;
+            // Create rotation info for the new block
+            _rotation = value is not null
+                ? BuildBrushRotationInfo.Create(value, World)
+                : null;
 
-            // Reset rotation angle when block changes
-            _rotationAngle = 0;
+            // Sync orientation index to match the block's current variant
+            if (_rotation is not null && _blockId.HasValue)
+            {
+                _rotation.TrySetIndexForBlock(_blockId.Value);
+            }
 
-            UpdateOrientationVariantsList();
+            // Update transformed block to current variant
+            BlockTransformed = _rotation?.CurrentVariant;
 
             // Update dimension with new block
             UpdateDimensionBlock();
@@ -508,79 +508,6 @@ public class BuildBrushInstance
 
         client.TriggerIngameError(this, $"{modInfo.ModID}:brush-snapping-mode-changed", Lang.Get($"{modInfo.ModID}:brush-snapping-mode-changed-{Snapping.GetCode()}"));
     }
-
-    private void UpdateOrientationVariantsList()
-    {
-        //Logger.Audit($"[{nameof(BuildBrushInstance)}][{nameof(UpdateOrientationVariantsList)}]: Updating orientation variants for block '{BlockUntransformed}'.");
-        if (BlockUntransformed is null)
-        {
-            OrientationVariants = [];
-            return;
-        }
-
-        if (!IsValidPlacementBlock(BlockUntransformed))
-        {
-            OrientationVariants = [BlockUntransformed];
-            return;
-        }
-
-        string baseCode = BlockUntransformed.Code.FirstCodePart();
-        if (OrientationVariantCache.TryGetValue(baseCode, out Block[]? cachedVariants))
-        {
-            OrientationVariants = cachedVariants.ToImmutableArray();
-            if (SetOrientationToBaseBlock())
-            {
-                return;
-            }
-        }
-
-        // find the first of the possible variant groups which the block-definition actually has.
-        string? foundVariantGroup = BlockUntransformed.Variant.Keys.Where(static k => ValidOrientationVariantKeys.Contains(k)).FirstOrDefault();
-        if (foundVariantGroup is null)
-        {
-            OrientationVariants = [BlockUntransformed];
-            OrientationIndex = 0;
-            return;
-        }
-
-        AssetLocation? searchCode = BlockUntransformed.CodeWithVariant(foundVariantGroup, "*");
-        if (searchCode is null)
-        {
-            return;
-        }
-
-        Block[] variants = World.SearchBlocks(searchCode);
-        if (!OrientationVariantCache.TryAdd(baseCode, variants))
-        {
-            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(UpdateOrientationVariantsList)}]: Failed to add orientation variants to cache for block code '{baseCode}'.");
-        }
-        OrientationVariants = [.. variants];
-        SetOrientationToBaseBlock();
-    }
-
-    /// <summary>
-    /// Synchronizes the current orientation index to match the base block's orientation variant.
-    /// </summary>
-    /// <param name="baseCode"></param>
-    /// <returns></returns>
-    private bool SetOrientationToBaseBlock()
-    {
-        int? blockId = this.BlockId;
-        Block? foundVariant = OrientationVariants.FirstOrDefault(block => block.BlockId == blockId);
-        if (foundVariant is null)
-        {
-            return false;
-        }
-
-        int foundIndex = OrientationVariants.IndexOf(foundVariant);
-        if (foundIndex < 0)
-        {
-            return false;
-        }
-
-        OrientationIndex = foundIndex;
-        return true;
-    }
     #endregion
 
     #region Dimension & Entity Management
@@ -691,13 +618,13 @@ public class BuildBrushInstance
         if (_dimension is null || !_dimension.IsInitialized)
             return;
 
-        if (_blockTransformed is not null)
+        Block? block = _blockTransformed ?? _blockUntransformed;
+        if (block is not null)
         {
-            _dimension.SetBlock(_blockTransformed, OrientationVariants.IsDefaultOrEmpty ? null : [.. OrientationVariants]);
-        }
-        else if (_blockUntransformed is not null)
-        {
-            _dimension.SetBlock(_blockUntransformed, OrientationVariants.IsDefaultOrEmpty ? null : [.. OrientationVariants]);
+            Block[]? variants = _rotation?.Variants.IsDefaultOrEmpty == false
+                ? [.. _rotation.Variants]
+                : null;
+            _dimension.SetBlock(block, variants, _rotation?.Mode);
         }
         else
         {
@@ -710,10 +637,10 @@ public class BuildBrushInstance
     /// </summary>
     private void ApplyRotation()
     {
-        if (_dimension is null || !_dimension.IsInitialized)
+        if (_dimension is null || !_dimension.IsInitialized || _rotation is null)
             return;
 
-        switch (_rotationMode)
+        switch (_rotation.Mode)
         {
             case EBuildBrushRotationMode.None:
                 // No rotation possible
@@ -721,24 +648,24 @@ public class BuildBrushInstance
 
             case EBuildBrushRotationMode.VariantBased:
                 // Variant rotation is handled by OrientationIndex, dimension uses variant block
-                _dimension.ApplyRotation(_rotationAngle, _blockTransformed);
+                _dimension.ApplyRotation(_rotation.CurrentAngle, _blockTransformed);
                 break;
 
             case EBuildBrushRotationMode.Rotatable:
                 // Apply IRotatable rotation
-                _dimension.ApplyRotation(_rotationAngle);
+                _dimension.ApplyRotation(_rotation.CurrentAngle);
                 break;
 
             case EBuildBrushRotationMode.Hybrid:
                 // Apply both
-                _dimension.ApplyRotation(_rotationAngle, _blockTransformed);
+                _dimension.ApplyRotation(_rotation.CurrentAngle, _blockTransformed);
                 break;
         }
 
         // Update entity yaw for visual rotation if using IRotatable
-        if (_rotationMode is EBuildBrushRotationMode.Rotatable or EBuildBrushRotationMode.Hybrid)
+        if (_rotation.HasRotatableEntity)
         {
-            _entity?.SetYawRotation(_rotationAngle);
+            _entity?.SetYawRotation(_rotation.CurrentAngle);
         }
     }
 

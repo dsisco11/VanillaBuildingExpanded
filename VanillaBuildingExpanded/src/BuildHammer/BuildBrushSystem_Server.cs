@@ -50,8 +50,7 @@ public class BuildBrushSystem_Server : ModSystem
             brush.DestroyDimension();
         }
         Brushes.Clear();
-        BuildBrushInstance.OrientationVariantCache.Clear();
-        BuildBrushRotationDetector.ClearCache();
+        BuildBrushRotationInfo.ClearCaches();
     }
     #endregion
 

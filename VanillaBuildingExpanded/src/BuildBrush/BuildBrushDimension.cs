@@ -154,7 +154,8 @@ public class BuildBrushDimension
     /// </summary>
     /// <param name="block">The block to display.</param>
     /// <param name="orientationVariants">Pre-computed orientation variants for variant-based rotation.</param>
-    public void SetBlock(Block block, Block[]? orientationVariants = null)
+    /// <param name="rotationMode">The rotation mode for this block (optional, auto-detects if not provided).</param>
+    public void SetBlock(Block block, Block[]? orientationVariants = null, EBuildBrushRotationMode? rotationMode = null)
     {
         if (dimension is null || !IsInitialized)
             return;
@@ -164,7 +165,7 @@ public class BuildBrushDimension
 
         originalBlock = block;
         currentBlock = block;
-        RotationMode = BuildBrushRotationDetector.DetectRotationMode(block, world);
+        RotationMode = rotationMode ?? EBuildBrushRotationMode.None;
 
         // Initialize block entity tree if needed
         if (RotationMode is EBuildBrushRotationMode.Rotatable or EBuildBrushRotationMode.Hybrid)
