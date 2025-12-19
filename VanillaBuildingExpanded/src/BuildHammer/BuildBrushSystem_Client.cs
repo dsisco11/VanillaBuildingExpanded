@@ -234,7 +234,24 @@ public class BuildBrushSystem_Client : ModSystem
             return;
         }
 
-        brush.OrientationIndex += (int)direction;
+        switch (brush.OrientationMode)
+        {
+            case EOrientationMode.Static:
+                brush.OrientationIndex += (int)direction;
+                break;
+            case EOrientationMode.Dynamic:
+                // Only rotate if increment is non-zero (rotation is enabled)
+                if (brush.RotationIncrementRadians > 0f)
+                {
+                    brush.RotationY += brush.RotationIncrementRadians * (int)direction;
+                }
+                break;
+            case EOrientationMode.None:
+            default:
+                // No rotation available for this block
+                return;
+        }
+
         SendToServer();
     }
 
@@ -275,6 +292,7 @@ public class BuildBrushSystem_Client : ModSystem
             {
                 isActive = brush.IsActive,
                 orientationIndex = brush.OrientationIndex,
+                rotationY = brush.RotationY,
                 position = brush.Position,
                 snapping = brush.Snapping
             });

@@ -112,5 +112,14 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
         ModelMat.Identity();
         // TODO: Shouldnt need to subtract the camera position here, the view matrix theoretically should have already been inverse offset by the camera position...
         ModelMat.Translate(pos.X - camPos.X, pos.Y - camPos.Y, pos.Z - camPos.Z);
+
+        // Apply Y-axis rotation for dynamic orientation blocks
+        if (brush.OrientationMode == EOrientationMode.Dynamic && brush.RotationY != 0f)
+        {
+            // Rotate around the center of the block (0.5, 0, 0.5)
+            ModelMat.Translate(0.5f, 0f, 0.5f);
+            ModelMat.RotateY(brush.RotationY);
+            ModelMat.Translate(-0.5f, 0f, -0.5f);
+        }
     }
 }

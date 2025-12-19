@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -45,6 +46,9 @@ public class BuildBrushInstance
     private BrushSnappingState lastCheckedSnappingState = new();
     private bool _isValidPlacementBlock = true;
     private bool _isActive = false;
+    private EOrientationMode _orientationMode = EOrientationMode.None;
+    private float _rotationY = 0f;
+    private float _rotationIncrementRadians = 0f;
     #endregion
 
     #region Properties
@@ -169,6 +173,45 @@ public class BuildBrushInstance
             _snapping = value;
             IsDirty = true;
         }
+    }
+
+    /// <summary>
+    /// The orientation mode for the current block. Determines whether rotation uses
+    /// code variants (Static) or block entity rotation (Dynamic).
+    /// </summary>
+    public EOrientationMode OrientationMode
+    {
+        get => _orientationMode;
+        private set => _orientationMode = value;
+    }
+
+    /// <summary>
+    /// The Y-axis rotation in radians for dynamic orientation blocks.
+    /// Only applicable when <see cref="OrientationMode"/> is <see cref="EOrientationMode.Dynamic"/>.
+    /// </summary>
+    public float RotationY
+    {
+        get => _rotationY;
+        set
+        {
+            // Normalize to [0, 2*PI) range
+            _rotationY = value % (2f * GameMath.PI);
+            if (_rotationY < 0f)
+            {
+                _rotationY += 2f * GameMath.PI;
+            }
+            IsDirty = true;
+        }
+    }
+
+    /// <summary>
+    /// The rotation increment in radians used when rotating dynamic orientation blocks.
+    /// A value of 0 indicates rotation is disabled for this block.
+    /// </summary>
+    public float RotationIncrementRadians
+    {
+        get => _rotationIncrementRadians;
+        private set => _rotationIncrementRadians = value;
     }
     #endregion
 
@@ -318,7 +361,35 @@ public class BuildBrushInstance
             return false;
         }
 
-        return string.IsNullOrEmpty(blockType.EntityClass);
+        // Allow blocks without an EntityClass
+        if (string.IsNullOrEmpty(blockType.EntityClass))
+        {
+            return true;
+        }
+
+        // Allow blocks with EntityClass if the entity type implements IRotatable
+        return IsBlockEntityRotatable(blockType);
+    }
+
+    /// <summary>
+    /// Checks if the block's entity class implements <see cref="IRotatable"/>.
+    /// </summary>
+    /// <param name="block">The block to check.</param>
+    /// <returns>True if the block entity implements IRotatable; otherwise, false.</returns>
+    private bool IsBlockEntityRotatable(in Block? block)
+    {
+        if (block is null || string.IsNullOrEmpty(block.EntityClass))
+        {
+            return false;
+        }
+
+        Type? entityType = World.Api.ClassRegistry.GetBlockEntity(block.EntityClass);
+        if (entityType is null)
+        {
+            return false;
+        }
+
+        return typeof(IRotatable).IsAssignableFrom(entityType);
     }
 
     /// <summary>
@@ -440,6 +511,12 @@ public class BuildBrushInstance
     private void UpdateOrientationVariantsList()
     {
         //Logger.Audit($"[{nameof(BuildBrushInstance)}][{nameof(UpdateOrientationVariantsList)}]: Updating orientation variants for block '{BlockUntransformed}'.");
+        
+        // Reset orientation state
+        OrientationMode = EOrientationMode.None;
+        RotationIncrementRadians = 0f;
+        RotationY = 0f;
+        
         if (BlockUntransformed is null)
         {
             OrientationVariants = [];
@@ -452,12 +529,22 @@ public class BuildBrushInstance
             return;
         }
 
+        // Check for dynamic (block entity based) rotation first
+        if (TrySetupDynamicOrientation(BlockUntransformed))
+        {
+            OrientationVariants = [BlockUntransformed];
+            BlockTransformed = BlockUntransformed;
+            return;
+        }
+
+        // Fall through to static (variant based) orientation
         string baseCode = BlockUntransformed.Code.FirstCodePart();
         if (OrientationVariantCache.TryGetValue(baseCode, out Block[]? cachedVariants))
         {
             OrientationVariants = cachedVariants.ToImmutableArray();
             if (SetOrientationToBaseBlock())
             {
+                OrientationMode = OrientationVariants.Length > 1 ? EOrientationMode.Static : EOrientationMode.None;
                 return;
             }
         }
@@ -468,6 +555,7 @@ public class BuildBrushInstance
         {
             OrientationVariants = [BlockUntransformed];
             OrientationIndex = 0;
+            OrientationMode = EOrientationMode.None;
             return;
         }
 
@@ -484,6 +572,93 @@ public class BuildBrushInstance
         }
         OrientationVariants = [.. variants];
         SetOrientationToBaseBlock();
+        OrientationMode = OrientationVariants.Length > 1 ? EOrientationMode.Static : EOrientationMode.None;
+    }
+
+    /// <summary>
+    /// Attempts to set up dynamic orientation for blocks that use block entity rotation.
+    /// </summary>
+    /// <param name="block">The block to check.</param>
+    /// <returns>True if the block supports dynamic orientation; otherwise, false.</returns>
+    private bool TrySetupDynamicOrientation(in Block block)
+    {
+        if (!IsBlockEntityRotatable(block))
+        {
+            return false;
+        }
+
+        OrientationMode = EOrientationMode.Dynamic;
+        RotationIncrementRadians = ParseRotationInterval(block);
+        return true;
+    }
+
+    /// <summary>
+    /// Parses the rotation interval from block attributes.
+    /// </summary>
+    /// <param name="block">The block to parse rotation interval from.</param>
+    /// <returns>The rotation increment in radians, or 0 if not found.</returns>
+    private float ParseRotationInterval(in Block block)
+    {
+        if (block.Attributes is null)
+        {
+            return 0f;
+        }
+
+        // Get the type from the player's ItemStack attributes (for typed containers like chests/crates)
+        string? type = Player.InventoryManager.ActiveHotbarSlot?.Itemstack?.Attributes?.GetString("type");
+        if (string.IsNullOrEmpty(type))
+        {
+            // Fall back to defaultType if no type in ItemStack
+            type = block.Attributes["defaultType"]?.AsString();
+        }
+
+        string? intervalString = null;
+
+        // Try to get rotatatableInterval - it can be:
+        // 1. A dictionary keyed by type (chest.json): rotatatableInterval: { "normal-generic": "22.5deg" }
+        // 2. Nested in properties (crate.json): properties: { "wood-aged": { rotatatableInterval: "22.5deg" } }
+        var rotatatableIntervalAttr = block.Attributes["rotatatableInterval"];
+        if (rotatatableIntervalAttr is not null && rotatatableIntervalAttr.Exists)
+        {
+            if (!string.IsNullOrEmpty(type))
+            {
+                // Try to get interval for this specific type
+                intervalString = rotatatableIntervalAttr[type]?.AsString();
+            }
+            
+            // If still not found, try direct string value (unlikely but possible)
+            if (string.IsNullOrEmpty(intervalString))
+            {
+                intervalString = rotatatableIntervalAttr.AsString();
+            }
+        }
+
+        // Check properties[type].rotatatableInterval (crate-style)
+        if (string.IsNullOrEmpty(intervalString) && !string.IsNullOrEmpty(type))
+        {
+            intervalString = block.Attributes["properties"]?[type]?["rotatatableInterval"]?.AsString();
+            
+            // Try wildcard fallback
+            if (string.IsNullOrEmpty(intervalString))
+            {
+                intervalString = block.Attributes["properties"]?["*"]?["rotatatableInterval"]?.AsString();
+            }
+        }
+
+        if (string.IsNullOrEmpty(intervalString))
+        {
+            // Default to 0 - rotation disabled if no interval specified
+            return 0f;
+        }
+
+        return intervalString switch
+        {
+            "22.5deg" => 22.5f * GameMath.DEG2RAD,
+            "22.5degnot45deg" => 22.5f * GameMath.DEG2RAD, // Still uses 22.5 degree increments
+            "45deg" => 45f * GameMath.DEG2RAD,
+            "90deg" => 90f * GameMath.DEG2RAD,
+            _ => 0f
+        };
     }
 
     /// <summary>

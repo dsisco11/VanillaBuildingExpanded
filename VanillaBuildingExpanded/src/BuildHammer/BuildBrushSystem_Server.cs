@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 using VanillaBuildingExpanded.Networking;
 
@@ -72,11 +73,60 @@ public class BuildBrushSystem_Server : ModSystem
         if (brush.BlockTransformed is not null)
         {
             brush.BlockTransformed.DoPlaceBlock(world, byPlayer, blockSel, itemstack);
+            
+            // Apply rotation for dynamic orientation blocks
+            if (brush.OrientationMode == EOrientationMode.Dynamic && brush.RotationY != 0f)
+            {
+                TryApplyBlockEntityRotation(world, blockSel.Position, brush.RotationY);
+            }
+            
             world.BlockAccessor.MarkBlockModified(blockSel.Position);
             world.BlockAccessor.TriggerNeighbourBlockUpdate(blockSel.Position);
             brush.OnBlockPlaced();
         }
         return true;
+    }
+
+    /// <summary>
+    /// Attempts to set the mesh angle/rotation on a placed block entity.
+    /// </summary>
+    /// <param name="world">The world accessor.</param>
+    /// <param name="position">The position of the block entity.</param>
+    /// <param name="rotationRadians">The rotation angle in radians.</param>
+    /// <returns>True if the rotation was applied successfully; otherwise, false.</returns>
+    private bool TryApplyBlockEntityRotation(IWorldAccessor world, Vintagestory.API.MathTools.BlockPos position, float rotationRadians)
+    {
+        BlockEntity? blockEntity = world.BlockAccessor.GetBlockEntity(position);
+        if (blockEntity is null)
+        {
+            return false;
+        }
+
+        // Try common property names for mesh angle
+        string[] propertyNames = ["MeshAngle", "MeshAngleRad", "MeshAngleY"];
+        
+        Type beType = blockEntity.GetType();
+        foreach (string propName in propertyNames)
+        {
+            PropertyInfo? property = beType.GetProperty(propName, BindingFlags.Public | BindingFlags.Instance);
+            if (property is not null && property.CanWrite && property.PropertyType == typeof(float))
+            {
+                property.SetValue(blockEntity, rotationRadians);
+                blockEntity.MarkDirty(true);
+                return true;
+            }
+
+            // Also try fields
+            FieldInfo? field = beType.GetField(propName, BindingFlags.Public | BindingFlags.Instance);
+            if (field is not null && field.FieldType == typeof(float))
+            {
+                field.SetValue(blockEntity, rotationRadians);
+                blockEntity.MarkDirty(true);
+                return true;
+            }
+        }
+
+        return false;
     }
     #endregion
 
@@ -183,6 +233,7 @@ public class BuildBrushSystem_Server : ModSystem
         brush.IsActive = packet.isActive;
         brush.Snapping = packet.snapping;
         brush.OrientationIndex = packet.orientationIndex;
+        brush.RotationY = packet.rotationY;
         brush.Position = packet.position;
     }
     #endregion
