@@ -83,13 +83,12 @@ public class BuildBrushSystem_Client : ModSystem
         if (brush is null || !brush.IsActive)
             return;
 
-        // make sure the block that changes was the one we were just about to place
+        // make sure the block that changed is the one we were just about to place
         if (brush.Position != pos)
             return;
 
-        brush.OnBlockPlaced();
-        brush.TryUpdateBlockId();
-        brush.TryUpdate();
+        brush.OnBlockPlaced(pos);
+        brush.MarkDirty();
     }
 
     private void Event_AfterActiveSlotChanged(ActiveSlotChangeEventArgs e)

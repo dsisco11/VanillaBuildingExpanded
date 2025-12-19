@@ -468,17 +468,27 @@ public class BuildBrushInstance
         BlockId = 0;
     }
 
-    public void OnBlockPlaced()
+    /// <summary>
+    /// Called after a block has been placed using this brush.
+    /// </summary>
+    public void OnBlockPlaced(in BlockPos? position)
     {
         //Logger.Audit($"[{nameof(BuildBrushInstance)}][{nameof(OnBlockPlaced)}]: Block placed by player '{Player.PlayerName}'.");
-        Player.InventoryManager.ActiveHotbarSlot?.MarkDirty();
-        TryUpdateBlockId();
-        if (World.Side != EnumAppSide.Client)
+        Player.InventoryManager?.ActiveHotbarSlot?.MarkDirty();
+
+        // Apply rotation for dynamic orientation blocks (server-side only)
+         if (World.Side == EnumAppSide.Server && OrientationMode == EOrientationMode.Dynamic && Position is not null)
+        //if (OrientationMode == EOrientationMode.Dynamic && position is not null)
         {
-            return;
+            BlockEntityRotationHelper.TrySetRotation(World, position, RotationY);
         }
 
-        TryUpdate();
+        TryUpdateBlockId();
+
+        if (World.Side == EnumAppSide.Client)
+        {
+            TryUpdate();
+        }
     }
     #endregion
 
@@ -529,7 +539,16 @@ public class BuildBrushInstance
             return;
         }
 
-        // Check for dynamic (block entity based) rotation first
+        // Check for static (variant based) orientation FIRST
+        // This takes priority because blocks like chests have both variants AND IRotatable,
+        // but the variants are the primary rotation mechanism
+        if (TrySetupStaticOrientation(BlockUntransformed))
+        {
+            return;
+        }
+
+        // Fall through to dynamic (block entity based) rotation
+        // Only used for blocks without orientation variants but with IRotatable entity
         if (TrySetupDynamicOrientation(BlockUntransformed))
         {
             OrientationVariants = [BlockUntransformed];
@@ -537,42 +556,63 @@ public class BuildBrushInstance
             return;
         }
 
-        // Fall through to static (variant based) orientation
-        string baseCode = BlockUntransformed.Code.FirstCodePart();
+        // No orientation support
+        OrientationVariants = [BlockUntransformed];
+        OrientationIndex = 0;
+        OrientationMode = EOrientationMode.None;
+    }
+
+    /// <summary>
+    /// Attempts to set up static orientation using block variants.
+    /// </summary>
+    /// <param name="block">The block to check.</param>
+    /// <returns>True if the block has orientation variants; otherwise, false.</returns>
+    private bool TrySetupStaticOrientation(in Block block)
+    {
+        string baseCode = block.Code.FirstCodePart();
+        
+        // Check cache first
         if (OrientationVariantCache.TryGetValue(baseCode, out Block[]? cachedVariants))
         {
-            OrientationVariants = cachedVariants.ToImmutableArray();
-            if (SetOrientationToBaseBlock())
+            if (cachedVariants.Length > 1)
             {
-                OrientationMode = OrientationVariants.Length > 1 ? EOrientationMode.Static : EOrientationMode.None;
-                return;
+                OrientationVariants = cachedVariants.ToImmutableArray();
+                SetOrientationToBaseBlock();
+                OrientationMode = EOrientationMode.Static;
+                return true;
             }
+            // Cached but only 1 variant means no static orientation
+            return false;
         }
 
-        // find the first of the possible variant groups which the block-definition actually has.
-        string? foundVariantGroup = BlockUntransformed.Variant.Keys.Where(static k => ValidOrientationVariantKeys.Contains(k)).FirstOrDefault();
+        // Find the first valid orientation variant group
+        string? foundVariantGroup = block.Variant.Keys
+            .Where(static k => ValidOrientationVariantKeys.Contains(k))
+            .FirstOrDefault();
+        
         if (foundVariantGroup is null)
         {
-            OrientationVariants = [BlockUntransformed];
-            OrientationIndex = 0;
-            OrientationMode = EOrientationMode.None;
-            return;
+            return false;
         }
 
-        AssetLocation? searchCode = BlockUntransformed.CodeWithVariant(foundVariantGroup, "*");
+        AssetLocation? searchCode = block.CodeWithVariant(foundVariantGroup, "*");
         if (searchCode is null)
         {
-            return;
+            return false;
         }
 
         Block[] variants = World.SearchBlocks(searchCode);
-        if (!OrientationVariantCache.TryAdd(baseCode, variants))
+        OrientationVariantCache.TryAdd(baseCode, variants);
+        
+        if (variants.Length <= 1)
         {
-            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(UpdateOrientationVariantsList)}]: Failed to add orientation variants to cache for block code '{baseCode}'.");
+            return false;
         }
+
         OrientationVariants = [.. variants];
         SetOrientationToBaseBlock();
-        OrientationMode = OrientationVariants.Length > 1 ? EOrientationMode.Static : EOrientationMode.None;
+        OrientationMode = EOrientationMode.Static;
+        return true;
     }
 
     /// <summary>

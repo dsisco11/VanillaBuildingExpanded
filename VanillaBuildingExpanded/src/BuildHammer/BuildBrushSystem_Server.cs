@@ -1,11 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 using VanillaBuildingExpanded.Networking;
 
 using Vintagestory.API.Common;
-using Vintagestory.API.Datastructures;
-using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
 namespace VanillaBuildingExpanded.BuildHammer;
@@ -74,49 +71,11 @@ public class BuildBrushSystem_Server : ModSystem
         if (brush.BlockTransformed is not null)
         {
             brush.BlockTransformed.DoPlaceBlock(world, byPlayer, blockSel, itemstack);
-            
-            // Apply rotation for dynamic orientation blocks
-            if (brush.OrientationMode == EOrientationMode.Dynamic && brush.RotationY != 0f)
-            {
-                TryApplyBlockEntityRotation(world, blockSel.Position, brush.RotationY);
-            }
-            
             world.BlockAccessor.MarkBlockModified(blockSel.Position);
             world.BlockAccessor.TriggerNeighbourBlockUpdate(blockSel.Position);
-            brush.OnBlockPlaced();
+            // Rotation for dynamic orientation blocks is applied in OnBlockPlaced
+            brush.OnBlockPlaced(blockSel.Position);
         }
-        return true;
-    }
-
-    /// <summary>
-    /// Attempts to set the mesh angle/rotation on a placed block entity using IRotatable.OnTransformed.
-    /// </summary>
-    /// <param name="world">The world accessor.</param>
-    /// <param name="position">The position of the block entity.</param>
-    /// <param name="rotationRadians">The rotation angle in radians.</param>
-    /// <returns>True if the rotation was applied successfully; otherwise, false.</returns>
-    private bool TryApplyBlockEntityRotation(IWorldAccessor world, Vintagestory.API.MathTools.BlockPos position, float rotationRadians)
-    {
-        BlockEntity? blockEntity = world.BlockAccessor.GetBlockEntity(position);
-        if (blockEntity is not IRotatable rotatable)
-        {
-            return false;
-        }
-
-        // Convert radians to degrees for OnTransformed (it expects degrees)
-        int degreeRotation = -(int)Math.Round(rotationRadians * GameMath.RAD2DEG);
-
-        // Get the current tree attributes from the block entity
-        TreeAttribute tree = new();
-        blockEntity.ToTreeAttributes(tree);
-
-        // Apply the rotation via OnTransformed - it modifies the tree attributes
-        rotatable.OnTransformed(world, tree, degreeRotation, [], [], null);
-
-        // Re-apply the modified attributes back to the block entity
-        blockEntity.FromTreeAttributes(tree, world);
-        blockEntity.MarkDirty(true);
-
         return true;
     }
     #endregion
