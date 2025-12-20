@@ -230,6 +230,26 @@ public class BuildBrushInstance
     public ImmutableArray<Block> OrientationVariants => _rotation?.Variants ?? ImmutableArray<Block>.Empty;
 
     /// <summary>
+    /// Rotates the brush cursor in the specified direction.
+    /// Handles both variant-based rotation and IRotatable blocks.
+    /// </summary>
+    /// <param name="direction">The direction to rotate (Forward = +1, Backward = -1).</param>
+    /// <returns>True if rotation was applied, false if rotation is not supported for current block.</returns>
+    public bool Rotate(EModeCycleDirection direction = EModeCycleDirection.Forward)
+    {
+        if (_rotation is null)
+            return false;
+
+        // @todo: Add IRotatable support here
+        // For now, just cycle through orientation variants
+        if (_rotation.Variants.IsDefaultOrEmpty)
+            return false;
+
+        OrientationIndex += (int)direction;
+        return true;
+    }
+
+    /// <summary>
     /// The block currently chosen for placement.
     /// </summary>
     public int? BlockId

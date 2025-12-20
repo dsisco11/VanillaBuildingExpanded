@@ -252,8 +252,10 @@ public class BuildBrushSystem_Client : ModSystem
             return;
         }
 
-        brush.OrientationIndex += (int)direction;
-        SendToServer();
+        if (brush.Rotate(direction))
+        {
+            SendToServer();
+        }
     }
 
     public void CycleSnappingMode(in IPlayer player, EModeCycleDirection direction = EModeCycleDirection.Forward)
