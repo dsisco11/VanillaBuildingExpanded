@@ -441,12 +441,35 @@ public class BuildBrushInstance
             return false;
         }
 
-        if (blockType.IsLiquid())
+        // Allow blocks without an EntityClass
+        if (string.IsNullOrEmpty(blockType.EntityClass))
+        {
+            return true;
+        }
+
+        // Allow blocks with EntityClass if the entity type implements IRotatable
+        return IsBlockEntityRotatable(blockType);
+    }
+
+    /// <summary>
+    /// Checks if the block's entity class implements <see cref="IRotatable"/>.
+    /// </summary>
+    /// <param name="block">The block to check.</param>
+    /// <returns>True if the block entity implements IRotatable; otherwise, false.</returns>
+    private bool IsBlockEntityRotatable(in Block? block)
+    {
+        if (block is null || string.IsNullOrEmpty(block.EntityClass))
         {
             return false;
         }
 
-        return string.IsNullOrEmpty(blockType.EntityClass);
+        Type? entityType = World.Api.ClassRegistry.GetBlockEntity(block.EntityClass);
+        if (entityType is null)
+        {
+            return false;
+        }
+
+        return typeof(IRotatable).IsAssignableFrom(entityType);
     }
 
     /// <summary>
