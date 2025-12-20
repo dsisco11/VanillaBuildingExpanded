@@ -3,7 +3,8 @@
 A Vintage Story mod that adds quality-of-life improvements for building while staying true to the vanilla game experience.
 
 ![Game Version](https://img.shields.io/badge/Vintage%20Story-1.21.5+-blue)
-![Version](https://img.shields.io/badge/Alpha-0.0.7-red)
+![Version](https://img.shields.io/badge/Alpha-0.0.8-red)
+![Multiplayer](https://img.shields.io/badge/Multiplayer-supported-green)
 
 ## Overview
 
