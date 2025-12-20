@@ -1,0 +1,12 @@
+# Short-Term:
+    ☐ Snapping indicators to visualize which edges the "build brush" is snapping to.
+    ☐ Placement restriction modes (e.g. only placing blocks along a specific plane, such as when you are building a long straight wall or flooring).
+
+# Mid-Term:
+    ☐ Support for "block-entities" (e.g. crates, chests, double-chests, doors, etc).
+    ☐ Mini-dimension based build-brush.
+    ☐ Check if chiseled blocks can be rotated and implement if not.
+
+# Long-Term:
+    ☐ Support for duplicating chiseled blocks.
+    ☐ Support for schematicas (e.g. importing/exporting building blueprints).
