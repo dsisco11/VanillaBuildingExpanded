@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 
+using VanillaBuildingExpanded.BuildHammer;
 using VanillaBuildingExpanded.Networking;
 
 using Vintagestory.API.Common;
@@ -33,6 +34,9 @@ public class VanillaBuildingExpandedModSystem : ModSystem
     public override void Start(ICoreAPI api)
     {
         api.RegisterItemClass("BuildHammer", typeof(ItemBuildHammer));
+
+        // Register entity class (must be in Start, before entity types are loaded)
+        api.RegisterEntity(BuildBrushEntity.ClassName, typeof(BuildBrushEntity));
 
         if (!Harmony.HasAnyPatches(Mod.Info.ModID))
         {
