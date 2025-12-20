@@ -237,16 +237,39 @@ public class BuildBrushInstance
     /// <returns>True if rotation was applied, false if rotation is not supported for current block.</returns>
     public bool Rotate(EModeCycleDirection direction = EModeCycleDirection.Forward)
     {
-        if (_rotation is null)
+        if (_rotation is null || !_rotation.CanRotate)
             return false;
 
-        // @todo: Add IRotatable support here
-        // For now, just cycle through orientation variants
-        if (_rotation.Variants.IsDefaultOrEmpty)
-            return false;
+        int angleStep = direction == EModeCycleDirection.Forward ? 90 : -90;
 
-        OrientationIndex += (int)direction;
-        return true;
+        switch (_rotation.Mode)
+        {
+            case EBuildBrushRotationMode.None:
+                return false;
+
+            case EBuildBrushRotationMode.VariantBased:
+                // Cycle through orientation variants
+                OrientationIndex += (int)direction;
+                return true;
+
+            case EBuildBrushRotationMode.Rotatable:
+                // Apply rotation via IRotatable entity
+                _rotation.CurrentAngle += angleStep;
+                _rotation.ApplyRotationToEntityTree(_rotation.CurrentAngle);
+                // Raise block changed to update the renderer
+                OnBlockChanged?.Invoke(this, _blockTransformed);
+                return true;
+
+            case EBuildBrushRotationMode.Hybrid:
+                // For hybrid blocks, cycle variants AND apply IRotatable rotation
+                OrientationIndex += (int)direction;
+                _rotation.CurrentAngle += angleStep;
+                _rotation.ApplyRotationToEntityTree(_rotation.CurrentAngle);
+                return true;
+
+            default:
+                return false;
+        }
     }
 
     /// <summary>
