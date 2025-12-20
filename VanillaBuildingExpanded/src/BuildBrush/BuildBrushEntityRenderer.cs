@@ -13,7 +13,6 @@ namespace VanillaBuildingExpanded.BuildHammer;
 public class BuildBrushEntityRenderer : EntityRenderer
 {
     private ItemRenderInfo? renderInfo;
-    //private MultiTextureMeshRef? meshRef;
     private int currentBlockId;
     private readonly Matrixf modelMat = new();
     private readonly BuildBrushEntity brushEntity;
@@ -27,7 +26,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
 
     #region Accessors
     private BuildBrushInstance? BrushInstance => brushEntity?.BrushInstance;
-    private MultiTextureMeshRef? meshRef => renderInfo?.ModelRef;
     #endregion
 
     public BuildBrushEntityRenderer(Entity entity, ICoreClientAPI api) : base(entity, api)
@@ -65,8 +63,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
         IMiniDimension? dimension = brushEntity.Dimension;
         if (dimension is null)
         {
-            //meshRef?.Dispose();
-            //meshRef = null;
             renderInfo = null;
             currentBlockId = 0;
             return;
@@ -83,38 +79,16 @@ public class BuildBrushEntityRenderer : EntityRenderer
 
         if (block is null || block.BlockId == 0)
         {
-            //meshRef?.Dispose();
-            //meshRef = null;
             renderInfo = null;
             currentBlockId = 0;
             return;
         }
 
-        if (block.BlockId == currentBlockId && meshRef is not null)
+        if (block.BlockId == currentBlockId)
             return;
 
         currentBlockId = block.BlockId;
-        //meshRef?.Dispose();
-
         renderInfo = capi.Render.GetItemStackRenderInfo(BrushInstance?.DummySlot, EnumItemRenderTarget.Ground, 0);
-        if (renderInfo?.ModelRef is null)
-            return;
-
-        // Use the TesselatorManager to get the pre-tessellated mesh
-        //MeshData? blockMesh = capi.TesselatorManager.GetDefaultBlockMesh(block);
-        //var blockMesh = capi.TesselatorManager.GetDefaultBlockMeshRef(block);
-        //if (blockMesh is null)
-        //{
-        //    meshRef = null;
-        //    return;
-        //}
-
-        //// Clone it so we don't modify the cached version
-        //MeshData mesh = blockMesh.Clone();
-
-        //// Upload to GPU
-        //meshRef = capi.Render.UploadMesh(mesh);
-        //meshRef = blockMesh;
     }
 
     public override void DoRender3DOpaque(float dt, bool isShadowPass)
@@ -144,7 +118,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
         );
 
         // Get validity state
-        bool isValid = brush.IsValidPlacement; // entity.WatchedAttributes.GetBool("isValid", true);
+        bool isValid = brush.IsValidPlacement;
 
         // Setup the shader
         IStandardShaderProgram shader = rapi.StandardShader;
@@ -152,15 +126,15 @@ public class BuildBrushEntityRenderer : EntityRenderer
         // settings
         shader.OverlayOpacity = renderInfo.OverlayOpacity;
         shader.NormalShaded = renderInfo.NormalShaded ? 1 : 0;
-        shader.AlphaTest =renderInfo.AlphaTest;
-        shader.ExtraZOffset = 0.00001f;
+        shader.AlphaTest = renderInfo.AlphaTest;
+        shader.ExtraZOffset = 0.00001f;// to prevent z-fighting
         shader.DontWarpVertices = 1;
         shader.AddRenderFlags = 0;
         // colors
         //shader.RgbaTint = ColorUtil.WhiteArgbVec;
         //shader.RgbaLightIn = isValid ? ColorValid : ColorInvalid;
         shader.RgbaTint = isValid ? ColorValid : ColorInvalid;
-        shader.ExtraGlow = 64;
+        shader.ExtraGlow = 32;
         shader.RgbaGlowIn = RenderGlow;
         // lighting
         shader.RgbaLightIn = ColorUtil.WhiteArgbVec;
@@ -198,7 +172,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
         shader.ExtraGlow = 0;
         shader.RgbaGlowIn = ColorUtil.WhiteArgbVec;
         shader.RgbaLightIn = ColorUtil.WhiteArgbVec;
-        shader.AddRenderFlags = 0;
         shader.DamageEffect = 0f;
         shader.Stop();
     }
