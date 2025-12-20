@@ -20,6 +20,7 @@ public class BuildBrushRotationInfo
     /// </summary>
     public static readonly ImmutableArray<string> ValidOrientationVariantKeys = [
         "rot",
+        "rotation",
         "horizontalorientation",
         "orientation",
         "v",
