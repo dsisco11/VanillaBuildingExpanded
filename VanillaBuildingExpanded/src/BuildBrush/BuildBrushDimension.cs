@@ -348,36 +348,6 @@ public class BuildBrushDimension
     }
     #endregion
 
-    #region Position
-    /// <summary>
-    /// Updates the world position of the dimension.
-    /// </summary>
-    /// <param name="position">The new world position.</param>
-    public void SetPosition(Vec3d position)
-    {
-        if (dimension is null)
-            return;
-
-        if (dimension.CurrentPos is not null)
-        {
-            dimension.CurrentPos.SetPos(position);
-        }
-
-        // Required for the mesh pool renderer to render this dimension
-        dimension.selectionTrackingOriginalPos = new BlockPos((int)position.X, (int)position.Y, (int)position.Z, Dimensions.MiniDimensions);
-        dimension.Dirty = true;
-    }
-
-    /// <summary>
-    /// Updates the world position of the dimension.
-    /// </summary>
-    /// <param name="position">The new world position.</param>
-    public void SetPosition(BlockPos position)
-    {
-        SetPosition(position.ToVec3d());
-    }
-    #endregion
-
     #region Sync
     /// <summary>
     /// Sends dirty chunks to nearby players.

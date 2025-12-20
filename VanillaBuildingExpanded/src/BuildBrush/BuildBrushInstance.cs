@@ -1,4 +1,5 @@
-﻿using System.Collections.Immutable;
+﻿using System;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 
 using Vintagestory.API.Client;
@@ -55,6 +56,18 @@ public class BuildBrushInstance
     private BuildBrushRotationInfo? _rotation;
     #endregion
 
+    #region Events
+    /// <summary>
+    /// Raised when the brush block changes (including rotation variants).
+    /// </summary>
+    public event Action<BuildBrushInstance, Block?>? OnBlockChanged;
+
+    /// <summary>
+    /// Raised when the brush position changes.
+    /// </summary>
+    public event Action<BuildBrushInstance, BlockPos?>? OnPositionChanged;
+    #endregion
+
     #region Properties
     public bool IsDirty { get; private set; } = false;
 
@@ -89,7 +102,28 @@ public class BuildBrushInstance
     /// <summary>
     /// Indicates whether the current placement position is valid.
     /// </summary>
-    public bool IsValidPlacement { get; private set; }
+    public bool IsValidPlacement
+    {
+        get => _isValidPlacement;
+        private set
+        {
+            _isValidPlacement = value;
+            UpdateEntityValidity(value);
+        }
+    }
+    private bool _isValidPlacement;
+
+    /// <summary>
+    /// Updates the entity's validity watched attribute for rendering.
+    /// </summary>
+    private void UpdateEntityValidity(bool isValid)
+    {
+        if (_entity is null)
+            return;
+
+        _entity.WatchedAttributes.SetBool("isValid", isValid);
+        _entity.WatchedAttributes.MarkPathDirty("isValid");
+    }
 
     /// <summary>
     /// Indicates whether the brush can currently be used to place blocks.
@@ -144,6 +178,9 @@ public class BuildBrushInstance
         get => _position;
         set
         {
+            if (_position == value)
+                return;
+
             _position = value;
             Selection = new()
             {
@@ -153,8 +190,8 @@ public class BuildBrushInstance
                 DidOffset = true
             };
 
-            // Update entity and dimension position
-            UpdateEntityPosition();
+            // Raise position changed event
+            OnPositionChanged?.Invoke(this, _position);
         }
     }
 
@@ -270,9 +307,6 @@ public class BuildBrushInstance
 
             // Update transformed block to current variant
             BlockTransformed = _rotation?.CurrentVariant;
-
-            // Update dimension with new block
-            UpdateDimensionBlock();
         }
     }
 
@@ -281,9 +315,16 @@ public class BuildBrushInstance
         get => _blockTransformed!;
         private set
         {
+            if (_blockTransformed == value)
+                return;
+
             //Logger.Audit($"[{nameof(BuildBrushInstance)}][set {nameof(BlockTransformed)}]: Setting transformed block to '{value}'.");
             _blockTransformed = value;
             ItemStack = value is not null ? new ItemStack(value) : null;
+
+            // Notify listeners of block change
+            OnBlockChanged?.Invoke(this, value);
+            UpdateDimensionBlock();
         }
     }
 
@@ -607,7 +648,7 @@ public class BuildBrushInstance
         if (sapi is null)
             return false;
 
-        _entity = BuildBrushEntity.CreateAndLink(sapi, _dimension.Dimension);
+        _entity = BuildBrushEntity.CreateAndLink(sapi, _dimension.Dimension, Player.PlayerUID);
         
         // Set initial position
         if (_position is not null)
@@ -616,10 +657,26 @@ public class BuildBrushInstance
             _entity.ServerPos.SetPos(_position.ToVec3d());
         }
 
+        // Subscribe to position changes on server
+        OnPositionChanged += OnBrushPositionChanged_Server;
+
         // Spawn the entity in the world
         World.SpawnEntity(_entity);
 
         return true;
+    }
+
+    /// <summary>
+    /// Server-side handler for position changes to update entity position.
+    /// </summary>
+    private void OnBrushPositionChanged_Server(BuildBrushInstance instance, BlockPos? position)
+    {
+        if (_entity is null || position is null)
+            return;
+
+        var vec = position.ToVec3d();
+        _entity.Pos.SetPos(vec);
+        _entity.ServerPos.SetPos(vec);
     }
 
     /// <summary>
@@ -637,6 +694,9 @@ public class BuildBrushInstance
     /// </summary>
     public void DestroyDimension()
     {
+        // Unsubscribe from server-side position events
+        OnPositionChanged -= OnBrushPositionChanged_Server;
+
         if (_entity is not null)
         {
             _entity.Die(Vintagestory.API.Common.EnumDespawnReason.Removed);
@@ -645,23 +705,6 @@ public class BuildBrushInstance
 
         _dimension?.Destroy();
         _dimension = null;
-    }
-
-    /// <summary>
-    /// Updates the entity position to match the current brush position.
-    /// </summary>
-    private void UpdateEntityPosition()
-    {
-        if (_position is null)
-            return;
-
-        if (_entity is not null)
-        {
-            var vec = _position.ToVec3d();
-            _entity.Pos.SetPos(vec);
-            _entity.ServerPos.SetPos(vec);
-        }
-        _dimension?.SetPosition(_position);
     }
 
     /// <summary>
