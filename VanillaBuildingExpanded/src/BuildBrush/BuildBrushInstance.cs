@@ -22,6 +22,7 @@ public class BuildBrushInstance
     public static readonly Dictionary<AssetLocation, Block[]> OrientationVariantCache = [];
     public static readonly ImmutableArray<string> ValidOrientationVariantKeys = [
         "rot",
+        "rotation",
         "horizontalorientation",
         "orientation",
         "v",
