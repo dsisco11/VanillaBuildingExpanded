@@ -245,21 +245,23 @@ public class BuildBrushInstance
                 return;
             }
 
-            if (_blockId != value)
+            if (value == _blockId)
             {
-                _blockId = value;
-                MarkDirty();
-                Block block = World.GetBlock(value.Value);
-                _isValidPlacementBlock = IsValidPlacementBlock(block);
-                if (_isValidPlacementBlock)
-                {
-                    BlockUntransformed = block;
-                }
-                else
-                {
-                    _blockId = null;
-                    BlockUntransformed = null;
-                }
+                return;
+            }
+
+            _blockId = value;
+            MarkDirty();
+            Block block = World.GetBlock(value.Value);
+            _isValidPlacementBlock = IsValidPlacementBlock(block);
+            if (_isValidPlacementBlock)
+            {
+                BlockUntransformed = block;
+            }
+            else
+            {
+                //_blockId = null; // we don't set to null here to preserve the attempted block id (for change detection)
+                BlockUntransformed = null;
             }
         }
     }
@@ -281,7 +283,7 @@ public class BuildBrushInstance
     #region Accessors
     protected ILogger Logger => World.Logger;
     public BlockSelection Selection { get; private set; } = new();
-    public Block BlockUntransformed
+    public Block? BlockUntransformed
     {
         get => _blockUntransformed!;
         private set
@@ -310,7 +312,7 @@ public class BuildBrushInstance
         }
     }
 
-    public Block BlockTransformed
+    public Block? BlockTransformed
     {
         get => _blockTransformed!;
         private set
@@ -405,7 +407,7 @@ public class BuildBrushInstance
     /// <returns> True if the BlockId was updated; otherwise, false. </returns>
     public bool TryUpdateBlockId()
     {
-        int currentBlockId = Player.InventoryManager.ActiveHotbarSlot?.Itemstack?.Block?.Id ?? 0;
+        var currentBlockId = Player.InventoryManager.ActiveHotbarSlot?.Itemstack?.Block?.Id;
         if (currentBlockId != BlockId)
         {
             BlockId = currentBlockId;
