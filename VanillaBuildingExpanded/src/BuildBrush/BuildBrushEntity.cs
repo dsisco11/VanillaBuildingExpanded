@@ -31,7 +31,7 @@ public class BuildBrushEntity : EntityChunky
     /// </summary>
     public static BuildBrushEntity CreateAndLink(ICoreServerAPI sapi, IMiniDimension dimension)
     {
-        BuildBrushEntity entity = (BuildBrushEntity)sapi.World.ClassRegistry.CreateEntity(EntityCode);
+        BuildBrushEntity entity = (BuildBrushEntity)sapi.World.ClassRegistry.CreateEntity(ClassName);
         entity.Code = new AssetLocation(EntityCode);
         entity.AssociateWithDimension(dimension);
         return entity;
