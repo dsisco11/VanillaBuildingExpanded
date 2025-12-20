@@ -42,6 +42,7 @@ internal class BuildPreviewRenderer : IRenderer, IDisposable
     #region Rendering Logic
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
     {
+        return;
         var player = api.World.Player;
         BuildBrushInstance? brush = brushManager.GetBrush(player);
         if (brush is null || brush.IsDisabled || brush.ItemStack is null) 

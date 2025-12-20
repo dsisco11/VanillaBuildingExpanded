@@ -355,11 +355,17 @@ public class BuildBrushDimension
     /// <param name="position">The new world position.</param>
     public void SetPosition(Vec3d position)
     {
-        if (dimension?.CurrentPos is not null)
+        if (dimension is null)
+            return;
+
+        if (dimension.CurrentPos is not null)
         {
             dimension.CurrentPos.SetPos(position);
-            dimension.Dirty = true;
         }
+
+        // Required for the mesh pool renderer to render this dimension
+        dimension.selectionTrackingOriginalPos = new BlockPos((int)position.X, (int)position.Y, (int)position.Z, Dimensions.MiniDimensions);
+        dimension.Dirty = true;
     }
 
     /// <summary>
