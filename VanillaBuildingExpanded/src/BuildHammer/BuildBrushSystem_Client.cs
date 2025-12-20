@@ -112,7 +112,7 @@ public class BuildBrushSystem_Client : ModSystem
         ItemSlot? activeSlot = inv.GetHotbarInventory()[e.ToSlot];
         if (activeSlot is not null)
         {
-            brush.BlockId = activeSlot.Itemstack?.Block?.BlockId ?? 0;
+            brush.BlockId = activeSlot.Itemstack?.Block?.BlockId;
         }
     }
 
@@ -182,7 +182,7 @@ public class BuildBrushSystem_Client : ModSystem
         if (brush is null)
             return;
 
-        brush.BlockId = inventory.ActiveHotbarSlot?.Itemstack?.Block?.BlockId ?? 0;
+        brush.BlockId = inventory.ActiveHotbarSlot?.Itemstack?.Block?.BlockId;
     }
 
     private void Thunk_Client(float dt)

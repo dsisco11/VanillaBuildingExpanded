@@ -165,7 +165,7 @@ public class BuildBrushSystem_Server : ModSystem
         if (brush is null)
             return;
 
-        brush.BlockId = inventory.ActiveHotbarSlot?.Itemstack?.Block?.BlockId ?? 0;
+        brush.BlockId = inventory.ActiveHotbarSlot?.Itemstack?.Block?.BlockId;
     }
 
     /// <summary>
@@ -176,7 +176,7 @@ public class BuildBrushSystem_Server : ModSystem
         var brush = GetBrush(byPlayer);
         if (brush is not null)
         {
-            brush.BlockId = byPlayer!.InventoryManager.ActiveHotbarSlot?.Itemstack?.Block?.BlockId ?? 0;
+            brush.BlockId = byPlayer!.InventoryManager.ActiveHotbarSlot?.Itemstack?.Block?.BlockId;
         }
     }
     #endregion
