@@ -35,6 +35,7 @@ public class BuildBrushInstance
     private Block? _blockUntransformed = null;
     private Block? _blockTransformed = null;
     private ItemStack? _itemStack = null;
+    /// <summary> The original ItemStack held by the player when selecting the block. </summary>
     private ItemStack? _sourceItemStack = null;
     private EBuildBrushSnapping _snapping = BrushSnappingModes[0];
     private BrushSnappingState lastCheckedSnappingState = new();
@@ -72,6 +73,8 @@ public class BuildBrushInstance
     /// Raised when the brush position changes.
     /// </summary>
     public event Action<BuildBrushInstance, BlockPos?>? OnPositionChanged;
+    public event Action<BuildBrushInstance, EBuildBrushSnapping>? OnSnappingModeChanged;
+    public event Action<BuildBrushInstance, int, BlockOrientationDefinition>? OnOrientationChanged;
     #endregion
 
     #region Properties
@@ -208,6 +211,9 @@ public class BuildBrushInstance
             // Update the transformed block based on the new orientation state
             BlockTransformed = _rotation.CurrentBlock;
 
+            // Raise orientation changed event
+            OnOrientationChanged?.Invoke(this, _rotation.CurrentIndex, _rotation.Current);
+
             // Update dimension with new block/rotation
             UpdateDimensionBlock();
         }
@@ -219,12 +225,12 @@ public class BuildBrushInstance
     public int OrientationCount => _rotation?.OrientationCount ?? 0;
 
     /// <summary>
-    /// Rotates the brush cursor in the specified direction.
-    /// Cycles through precomputed rotation definitions.
+    /// Cycles to the next or previous orientation for the current block.
+    /// Cycles through precomputed orientation definitions.
     /// </summary>
-    /// <param name="direction">The direction to rotate (Forward = +1, Backward = -1).</param>
-    /// <returns>True if rotation was applied, false if rotation is not supported for current block.</returns>
-    public bool Rotate(EModeCycleDirection direction = EModeCycleDirection.Forward)
+    /// <param name="direction">The direction to cycle (forward or backward).</param>
+    /// <returns>True if orientation was applied, false if orientation is not supported for current block.</returns>
+    public bool CycleOrientation(EModeCycleDirection direction = EModeCycleDirection.Forward)
     {
         if (_rotation is null || !_rotation.CanRotate)
             return false;
@@ -289,8 +295,12 @@ public class BuildBrushInstance
         get => _snapping;
         set
         {
+            if (_snapping == value)
+                return;
+
             _snapping = value;
             IsDirty = true;
+            OnSnappingModeChanged?.Invoke(this, value);
         }
     }
     #endregion

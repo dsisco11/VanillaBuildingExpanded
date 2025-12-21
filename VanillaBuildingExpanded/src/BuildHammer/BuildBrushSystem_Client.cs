@@ -252,7 +252,7 @@ public class BuildBrushSystem_Client : ModSystem
             return;
         }
 
-        if (brush.Rotate(direction))
+        if (brush.CycleOrientation(direction))
         {
             SendToServer();
         }
