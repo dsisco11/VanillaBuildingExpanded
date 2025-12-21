@@ -351,7 +351,20 @@ public class BuildBrushInstance
 
             //Logger.Audit($"[{nameof(BuildBrushInstance)}][set {nameof(BlockTransformed)}]: Setting transformed block to '{value}'.");
             _blockTransformed = value;
-            ItemStack = value is not null ? new ItemStack(value) : null;
+
+            if (value is not null)
+            {
+                var stack = new ItemStack(value);
+
+                // Apply orientation attributes (type, meshAngle) for proper rendering
+                _rotation?.ApplyOrientationAttributes(stack.Attributes, _sourceItemStack?.Attributes);
+
+                ItemStack = stack;
+            }
+            else
+            {
+                ItemStack = null;
+            }
 
             // Notify listeners of block change
             OnBlockChanged?.Invoke(this, value);

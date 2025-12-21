@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 
 using Vintagestory.API.Common;
+using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.BuildHammer;
@@ -164,6 +165,31 @@ public class BuildBrushRotationInfo
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Applies current orientation state to a tree attribute.
+    /// Sets type (from source) and meshAngle (from current rotation) for proper rendering.
+    /// </summary>
+    /// <param name="targetAttributes">The tree attributes to apply orientation to.</param>
+    /// <param name="sourceAttributes">Optional source attributes to copy type from.</param>
+    public void ApplyOrientationAttributes(ITreeAttribute targetAttributes, ITreeAttribute? sourceAttributes = null)
+    {
+        if (targetAttributes is null)
+            return;
+
+        // Copy type attribute from source (for typed containers like crates/chests)
+        string? type = sourceAttributes?.GetString("type");
+        if (!string.IsNullOrEmpty(type))
+        {
+            targetAttributes.SetString("type", type);
+        }
+
+        // Set meshAngle for IRotatable blocks
+        if (HasRotatableEntity)
+        {
+            targetAttributes.SetFloat("meshAngle", CurrentMeshAngleRadians);
+        }
     }
     #endregion
 }
