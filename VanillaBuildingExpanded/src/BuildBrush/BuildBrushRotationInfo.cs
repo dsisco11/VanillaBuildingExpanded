@@ -5,6 +5,7 @@ using System.Linq;
 
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
+using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.BuildHammer;
 
@@ -41,6 +42,7 @@ public class BuildBrushRotationInfo
     #region Fields
     private readonly IWorldAccessor world;
     private readonly Block originalBlock;
+    private readonly float rotatableIntervalRadians;
     private int _currentIndex = 0;
     private int _currentAngle = 0;
     #endregion
@@ -111,7 +113,7 @@ public class BuildBrushRotationInfo
     /// <summary>
     /// The rotation increment in degrees for this block.
     /// For variant-based rotation, this is calculated from the number of variants (360 / count).
-    /// For IRotatable blocks without variants, defaults to 90 degrees.
+    /// For IRotatable blocks, uses the rotatatableInterval from block attributes.
     /// </summary>
     public int RotationIncrement
     {
@@ -124,11 +126,22 @@ public class BuildBrushRotationInfo
                 return 360 / Variants.Length;
             }
 
-            // For pure IRotatable blocks, default to 90 degrees
-            // This could be enhanced to query the block entity for its preferred increment
+            // For IRotatable blocks, use the resolved interval from block attributes
+            if (HasRotatableEntity && rotatableIntervalRadians > 0)
+            {
+                return (int)(rotatableIntervalRadians * GameMath.RAD2DEG);
+            }
+
+            // Default to 90 degrees
             return 90;
         }
     }
+
+    /// <summary>
+    /// The rotation increment in radians for IRotatable blocks.
+    /// Returns 0 if not applicable.
+    /// </summary>
+    public float RotationIncrementRadians => rotatableIntervalRadians > 0 ? rotatableIntervalRadians : (GameMath.PIHALF);
     #endregion
 
     #region Constructor
@@ -136,12 +149,14 @@ public class BuildBrushRotationInfo
         IWorldAccessor world,
         Block block,
         EBuildBrushRotationMode mode,
-        ImmutableArray<Block> variants)
+        ImmutableArray<Block> variants,
+        float rotatableIntervalRadians)
     {
         this.world = world;
         this.originalBlock = block;
         this.Mode = mode;
         this.Variants = variants;
+        this.rotatableIntervalRadians = rotatableIntervalRadians;
 
         // Initialize entity tree if block has IRotatable
         if (HasRotatableEntity)
@@ -169,7 +184,14 @@ public class BuildBrushRotationInfo
         // Get variants
         ImmutableArray<Block> variants = GetOrientationVariants(block, world);
 
-        return new BuildBrushRotationInfo(world, block, mode, variants);
+        // Resolve rotatable interval for IRotatable blocks
+        float rotatableInterval = 0f;
+        if (mode is EBuildBrushRotationMode.Rotatable or EBuildBrushRotationMode.Hybrid)
+        {
+            rotatableInterval = BlockEntityRotationHelper.ResolveRotationInterval(block);
+        }
+
+        return new BuildBrushRotationInfo(world, block, mode, variants, rotatableInterval);
     }
 
     /// <summary>
@@ -181,7 +203,8 @@ public class BuildBrushRotationInfo
             world,
             null!,
             EBuildBrushRotationMode.None,
-            ImmutableArray<Block>.Empty);
+            ImmutableArray<Block>.Empty,
+            0f);
     }
     #endregion
 
