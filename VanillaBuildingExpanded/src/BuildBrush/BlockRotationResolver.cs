@@ -35,9 +35,9 @@ public class BlockRotationResolver
     public IWorldAccessor World { get; }
 
     /// <summary>
-    /// Cache of rotation definitions keyed by untransformed block ID.
+    /// Cache of orientation definitions keyed by untransformed block ID.
     /// </summary>
-    private readonly Dictionary<int, BlockRotationDefinition[]> _rotationCache = [];
+    private readonly Dictionary<int, BlockOrientationDefinition[]> _rotationCache = [];
 
     /// <summary>
     /// Cache of rotation modes keyed by block code (for classification).
@@ -59,12 +59,12 @@ public class BlockRotationResolver
 
     #region Public API
     /// <summary>
-    /// Gets the precomputed rotation definitions for a block.
+    /// Gets the precomputed orientation definitions for a block.
     /// Returns cached array if available, otherwise computes and caches it.
     /// </summary>
-    /// <param name="untransformedBlockId">The block ID to get rotations for.</param>
-    /// <returns>Array of all valid rotation states for the block.</returns>
-    public BlockRotationDefinition[] GetRotations(int untransformedBlockId)
+    /// <param name="untransformedBlockId">The block ID to get orientations for.</param>
+    /// <returns>Array of all valid orientation states for the block.</returns>
+    public BlockOrientationDefinition[] GetRotations(int untransformedBlockId)
     {
         if (_rotationCache.TryGetValue(untransformedBlockId, out var cached))
             return cached;
@@ -72,7 +72,7 @@ public class BlockRotationResolver
         Block? block = World.GetBlock(untransformedBlockId);
         if (block is null)
         {
-            var fallback = new[] { new BlockRotationDefinition(untransformedBlockId, 0f) };
+            var fallback = new[] { new BlockOrientationDefinition(untransformedBlockId, 0f) };
             _rotationCache[untransformedBlockId] = fallback;
             return fallback;
         }
@@ -99,13 +99,13 @@ public class BlockRotationResolver
     }
 
     /// <summary>
-    /// Finds the index in the rotation array that matches a specific block ID.
+    /// Finds the index in the orientation array that matches a specific block ID.
     /// Useful for syncing state when the brush block changes.
     /// </summary>
-    /// <param name="definitions">The rotation definitions array.</param>
+    /// <param name="definitions">The orientation definitions array.</param>
     /// <param name="blockId">The block ID to find.</param>
     /// <returns>The index of the matching definition, or 0 if not found.</returns>
-    public static int FindIndexForBlockId(BlockRotationDefinition[] definitions, int blockId)
+    public static int FindIndexForBlockId(BlockOrientationDefinition[] definitions, int blockId)
     {
         for (int i = 0; i < definitions.Length; i++)
         {
@@ -128,43 +128,43 @@ public class BlockRotationResolver
 
     #region Computation
     /// <summary>
-    /// Computes all rotation definitions for a block based on its rotation mode.
+    /// Computes all orientation definitions for a block based on its rotation mode.
     /// </summary>
-    private BlockRotationDefinition[] ComputeRotations(Block block)
+    private BlockOrientationDefinition[] ComputeRotations(Block block)
     {
         EBuildBrushRotationMode mode = GetRotationMode(block);
 
         return mode switch
         {
-            EBuildBrushRotationMode.None => [new BlockRotationDefinition(block.BlockId, 0f)],
+            EBuildBrushRotationMode.None => [new BlockOrientationDefinition(block.BlockId, 0f)],
             EBuildBrushRotationMode.VariantBased => ComputeVariantRotations(block),
             EBuildBrushRotationMode.Rotatable => ComputeRotatableRotations(block),
             EBuildBrushRotationMode.Hybrid => ComputeHybridRotations(block),
-            _ => [new BlockRotationDefinition(block.BlockId, 0f)]
+            _ => [new BlockOrientationDefinition(block.BlockId, 0f)]
         };
     }
 
     /// <summary>
-    /// Computes rotations for variant-based blocks (one definition per variant, 0° mesh angle).
+    /// Computes orientations for variant-based blocks (one definition per variant, 0° mesh angle).
     /// </summary>
-    private BlockRotationDefinition[] ComputeVariantRotations(Block block)
+    private BlockOrientationDefinition[] ComputeVariantRotations(Block block)
     {
         Block[] variants = GetOrientationVariants(block);
         if (variants.Length == 0)
-            return [new BlockRotationDefinition(block.BlockId, 0f)];
+            return [new BlockOrientationDefinition(block.BlockId, 0f)];
 
-        var definitions = new BlockRotationDefinition[variants.Length];
+        var definitions = new BlockOrientationDefinition[variants.Length];
         for (int i = 0; i < variants.Length; i++)
         {
-            definitions[i] = new BlockRotationDefinition(variants[i].BlockId, 0f);
+            definitions[i] = new BlockOrientationDefinition(variants[i].BlockId, 0f);
         }
         return definitions;
     }
 
     /// <summary>
-    /// Computes rotations for IRotatable blocks (same block ID, different mesh angles).
+    /// Computes orientations for IRotatable blocks (same block ID, different mesh angles).
     /// </summary>
-    private BlockRotationDefinition[] ComputeRotatableRotations(Block block)
+    private BlockOrientationDefinition[] ComputeRotatableRotations(Block block)
     {
         float intervalDegrees = ResolveRotationIntervalDegrees(block);
         if (intervalDegrees <= 0f)
@@ -177,20 +177,20 @@ public class BlockRotationResolver
         if (stepCount <= 0)
             stepCount = 1;
 
-        var definitions = new BlockRotationDefinition[stepCount];
+        var definitions = new BlockOrientationDefinition[stepCount];
         for (int i = 0; i < stepCount; i++)
         {
             float angle = i * intervalDegrees;
-            definitions[i] = new BlockRotationDefinition(block.BlockId, angle);
+            definitions[i] = new BlockOrientationDefinition(block.BlockId, angle);
         }
         return definitions;
     }
 
     /// <summary>
-    /// Computes rotations for hybrid blocks.
+    /// Computes orientations for hybrid blocks.
     /// Each variant gets mesh-angle sub-steps within its "slice" of 360°.
     /// </summary>
-    private BlockRotationDefinition[] ComputeHybridRotations(Block block)
+    private BlockOrientationDefinition[] ComputeHybridRotations(Block block)
     {
         Block[] variants = GetOrientationVariants(block);
         if (variants.Length == 0)
@@ -211,7 +211,7 @@ public class BlockRotationResolver
         if (stepsPerVariant <= 0)
             stepsPerVariant = 1;
 
-        var definitions = new List<BlockRotationDefinition>();
+        var definitions = new List<BlockOrientationDefinition>();
 
         for (int v = 0; v < variants.Length; v++)
         {
@@ -220,13 +220,13 @@ public class BlockRotationResolver
             for (int s = 0; s < stepsPerVariant; s++)
             {
                 float meshAngle = s * intervalDegrees;
-                definitions.Add(new BlockRotationDefinition(variantBlockId, meshAngle));
+                definitions.Add(new BlockOrientationDefinition(variantBlockId, meshAngle));
             }
         }
 
         return definitions.Count > 0
             ? [.. definitions]
-            : [new BlockRotationDefinition(block.BlockId, 0f)];
+            : [new BlockOrientationDefinition(block.BlockId, 0f)];
     }
     #endregion
 

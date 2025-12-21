@@ -192,7 +192,7 @@ public class BuildBrushSystem_Server : ModSystem
 
         brush.IsActive = packet.isActive;
         brush.Snapping = packet.snapping;
-        brush.RotationIndex = packet.rotationIndex;
+        brush.OrientationIndex = packet.orientationIndex;
         brush.Position = packet.position;
 
         // Sync dimension changes to nearby players

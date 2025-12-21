@@ -294,7 +294,7 @@ public class BuildBrushSystem_Client : ModSystem
             new Packet_SetBuildBrush()
             {
                 isActive = brush.IsActive,
-                rotationIndex = brush.RotationIndex,
+                orientationIndex = brush.OrientationIndex,
                 position = brush.Position,
                 snapping = brush.Snapping
             });
@@ -309,7 +309,7 @@ public class BuildBrushSystem_Client : ModSystem
         if (brush is null)
             return;
 
-        brush.RotationIndex = packet.rotationIndex;
+        brush.OrientationIndex = packet.orientationIndex;
         //brush.Position = packet.position;
     }
     #endregion

@@ -22,10 +22,10 @@ public class BuildBrushRotationInfo
     public EBuildBrushRotationMode Mode { get; }
 
     /// <summary>
-    /// All valid rotation definitions for this block.
+    /// All valid orientation definitions for this block.
     /// Precomputed array that can be cycled through.
     /// </summary>
-    public BlockRotationDefinition[] Definitions { get; }
+    public BlockOrientationDefinition[] Definitions { get; }
 
     /// <summary>
     /// The current index into the <see cref="Definitions"/> array.
@@ -46,11 +46,11 @@ public class BuildBrushRotationInfo
     }
 
     /// <summary>
-    /// The current rotation definition (block-id + mesh-angle).
+    /// The current orientation definition (block-id + mesh-angle).
     /// </summary>
-    public BlockRotationDefinition Current => Definitions.Length > 0
+    public BlockOrientationDefinition Current => Definitions.Length > 0
         ? Definitions[_currentIndex]
-        : new BlockRotationDefinition(_originalBlock?.BlockId ?? 0, 0f);
+        : new BlockOrientationDefinition(_originalBlock?.BlockId ?? 0, 0f);
 
     /// <summary>
     /// The block corresponding to the current rotation state.
@@ -83,9 +83,9 @@ public class BuildBrushRotationInfo
     public bool HasRotatableEntity => Mode is EBuildBrushRotationMode.Rotatable or EBuildBrushRotationMode.Hybrid;
 
     /// <summary>
-    /// The total number of rotation states available.
+    /// The total number of orientation states available.
     /// </summary>
-    public int RotationCount => Definitions.Length;
+    public int OrientationCount => Definitions.Length;
     #endregion
 
     #region Constructor
@@ -93,7 +93,7 @@ public class BuildBrushRotationInfo
         IWorldAccessor world,
         Block originalBlock,
         EBuildBrushRotationMode mode,
-        BlockRotationDefinition[] definitions)
+        BlockOrientationDefinition[] definitions)
     {
         _world = world;
         _originalBlock = originalBlock;
@@ -116,7 +116,7 @@ public class BuildBrushRotationInfo
             return CreateEmpty(resolver?.World);
 
         EBuildBrushRotationMode mode = resolver.GetRotationMode(block);
-        BlockRotationDefinition[] definitions = resolver.GetRotations(block.BlockId);
+        BlockOrientationDefinition[] definitions = resolver.GetRotations(block.BlockId);
 
         return new BuildBrushRotationInfo(resolver.World, block, mode, definitions);
     }
@@ -136,11 +136,11 @@ public class BuildBrushRotationInfo
 
     #region Rotation
     /// <summary>
-    /// Advances to the next rotation state.
+    /// Advances to the next orientation state.
     /// </summary>
     /// <param name="direction">Direction to cycle (Forward = +1, Backward = -1).</param>
-    /// <returns>The new current rotation definition.</returns>
-    public BlockRotationDefinition Rotate(EModeCycleDirection direction = EModeCycleDirection.Forward)
+    /// <returns>The new current orientation definition.</returns>
+    public BlockOrientationDefinition Rotate(EModeCycleDirection direction = EModeCycleDirection.Forward)
     {
         CurrentIndex += (int)direction;
         return Current;

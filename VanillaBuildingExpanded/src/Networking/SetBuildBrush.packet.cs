@@ -8,7 +8,7 @@ namespace VanillaBuildingExpanded.Networking;
 public class Packet_SetBuildBrush
 {
     public required bool isActive;
-    public required int rotationIndex;
+    public required int orientationIndex;
     public required BlockPos position;
     public required EBuildBrushSnapping snapping;
 }

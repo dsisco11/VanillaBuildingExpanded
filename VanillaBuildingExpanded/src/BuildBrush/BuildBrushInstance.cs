@@ -186,10 +186,10 @@ public class BuildBrushInstance
     }
 
     /// <summary>
-    /// The current rotation index for the block placement.
-    /// This indexes into the precomputed rotation definitions array.
+    /// The current orientation index for the block placement.
+    /// This indexes into the precomputed orientation definitions array.
     /// </summary>
-    public int RotationIndex
+    public int OrientationIndex
     {
         get => _rotation?.CurrentIndex ?? 0;
         set
@@ -204,7 +204,7 @@ public class BuildBrushInstance
 
             _rotation.CurrentIndex = value;
 
-            // Update the transformed block based on the new rotation state
+            // Update the transformed block based on the new orientation state
             BlockTransformed = _rotation.CurrentBlock;
 
             // Update dimension with new block/rotation
@@ -213,9 +213,9 @@ public class BuildBrushInstance
     }
 
     /// <summary>
-    /// The total number of rotation states available for the current block.
+    /// The total number of orientation states available for the current block.
     /// </summary>
-    public int RotationCount => _rotation?.RotationCount ?? 0;
+    public int OrientationCount => _rotation?.OrientationCount ?? 0;
 
     /// <summary>
     /// Rotates the brush cursor in the specified direction.
