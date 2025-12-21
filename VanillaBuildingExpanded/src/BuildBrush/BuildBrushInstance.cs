@@ -54,6 +54,11 @@ public class BuildBrushInstance
     /// Encapsulates all rotation data and logic for the current block.
     /// </summary>
     private BuildBrushRotationInfo? _rotation;
+
+    /// <summary>
+    /// Resolver for precomputing and caching rotation definitions.
+    /// </summary>
+    private BlockRotationResolver? _rotationResolver;
     #endregion
 
     #region Events
@@ -151,24 +156,9 @@ public class BuildBrushInstance
     public EBuildBrushRotationMode RotationMode => _rotation?.Mode ?? EBuildBrushRotationMode.None;
 
     /// <summary>
-    /// The current rotation angle in degrees (0, 90, 180, 270).
+    /// The current rotation angle in degrees (from the current rotation definition).
     /// </summary>
-    public int RotationAngle
-    {
-        get => _rotation?.CurrentAngle ?? 0;
-        set
-        {
-            if (_rotation is null)
-                return;
-
-            int normalizedAngle = ((value % 360) + 360) % 360;
-            if (_rotation.CurrentAngle == normalizedAngle)
-                return;
-
-            _rotation.CurrentAngle = normalizedAngle;
-            ApplyRotation();
-        }
-    }
+    public float RotationAngleDegrees => _rotation?.CurrentMeshAngleDegrees ?? 0f;
 
     /// <summary>
     /// The fully resolved position of the build cursor.
@@ -196,10 +186,10 @@ public class BuildBrushInstance
     }
 
     /// <summary>
-    /// The orientation index for the block placement.
-    /// This determines which orientation variant of the block is used.
+    /// The current rotation index for the block placement.
+    /// This indexes into the precomputed rotation definitions array.
     /// </summary>
-    public int OrientationIndex
+    public int RotationIndex
     {
         get => _rotation?.CurrentIndex ?? 0;
         set
@@ -207,31 +197,29 @@ public class BuildBrushInstance
             if (_rotation is null)
                 return;
 
-            //Logger.Audit($"[{nameof(BuildBrushInstance)}][set {nameof(OrientationIndex)}]: Setting orientation index to '{value}' for block '{_blockUntransformed}'.");
-            if (_rotation.Variants.IsDefaultOrEmpty)
+            if (_rotation.Definitions.Length <= 1)
             {
-                this.Logger.Warning($"[{nameof(BuildBrushInstance)}][set {nameof(OrientationIndex)}]: Block {_blockUntransformed} has no orientation variants.");
                 return;
             }
 
             _rotation.CurrentIndex = value;
 
-            // Update the transformed block based on the new orientation
-            BlockTransformed = _rotation.CurrentVariant;
+            // Update the transformed block based on the new rotation state
+            BlockTransformed = _rotation.CurrentBlock;
 
-            // Update dimension with new variant
+            // Update dimension with new block/rotation
             UpdateDimensionBlock();
         }
     }
 
     /// <summary>
-    /// Available orientation variants for the current block.
+    /// The total number of rotation states available for the current block.
     /// </summary>
-    public ImmutableArray<Block> OrientationVariants => _rotation?.Variants ?? ImmutableArray<Block>.Empty;
+    public int RotationCount => _rotation?.RotationCount ?? 0;
 
     /// <summary>
     /// Rotates the brush cursor in the specified direction.
-    /// Handles both variant-based rotation and IRotatable blocks.
+    /// Cycles through precomputed rotation definitions.
     /// </summary>
     /// <param name="direction">The direction to rotate (Forward = +1, Backward = -1).</param>
     /// <returns>True if rotation was applied, false if rotation is not supported for current block.</returns>
@@ -240,36 +228,19 @@ public class BuildBrushInstance
         if (_rotation is null || !_rotation.CanRotate)
             return false;
 
-        int angleStep = _rotation.RotationIncrement * (direction == EModeCycleDirection.Forward ? 1 : -1);
+        // Cycle to next/previous rotation definition
+        _rotation.Rotate(direction);
 
-        switch (_rotation.Mode)
-        {
-            case EBuildBrushRotationMode.None:
-                return false;
+        // Update the transformed block based on the new rotation state
+        BlockTransformed = _rotation.CurrentBlock;
 
-            case EBuildBrushRotationMode.VariantBased:
-                // Cycle through orientation variants
-                OrientationIndex += (int)direction;
-                return true;
+        // Update dimension with new block/rotation
+        UpdateDimensionBlock();
 
-            case EBuildBrushRotationMode.Rotatable:
-                // Apply rotation via IRotatable entity
-                _rotation.CurrentAngle += angleStep;
-                _rotation.ApplyRotationToEntityTree(_rotation.CurrentAngle);
-                // Raise block changed to update the renderer
-                OnBlockChanged?.Invoke(this, _blockTransformed);
-                return true;
+        // Raise block changed to update the renderer
+        OnBlockChanged?.Invoke(this, _blockTransformed);
 
-            case EBuildBrushRotationMode.Hybrid:
-                // For hybrid blocks, cycle variants AND apply IRotatable rotation
-                OrientationIndex += (int)direction;
-                _rotation.CurrentAngle += angleStep;
-                _rotation.ApplyRotationToEntityTree(_rotation.CurrentAngle);
-                return true;
-
-            default:
-                return false;
-        }
+        return true;
     }
 
     /// <summary>
@@ -339,19 +310,22 @@ public class BuildBrushInstance
 
             _blockUntransformed = value;
 
-            // Create rotation info for the new block
+            // Ensure resolver exists
+            _rotationResolver ??= new BlockRotationResolver(World);
+
+            // Create rotation info for the new block using the resolver
             _rotation = value is not null
-                ? BuildBrushRotationInfo.Create(value, World)
+                ? BuildBrushRotationInfo.Create(value, _rotationResolver)
                 : null;
 
-            // Sync orientation index to match the block's current variant
+            // Sync rotation index to match the block's current variant
             if (_rotation is not null && _blockId.HasValue)
             {
-                _rotation.TrySetIndexForBlock(_blockId.Value);
+                _rotation.TrySetIndexForBlockId(_blockId.Value);
             }
 
-            // Update transformed block to current variant
-            BlockTransformed = _rotation?.CurrentVariant;
+            // Update transformed block to current rotation state
+            BlockTransformed = _rotation?.CurrentBlock;
         }
     }
 
@@ -776,7 +750,7 @@ public class BuildBrushInstance
     }
 
     /// <summary>
-    /// Updates the block in the dimension.
+    /// Updates the block in the dimension based on current rotation state.
     /// </summary>
     private void UpdateDimensionBlock()
     {
@@ -786,10 +760,13 @@ public class BuildBrushInstance
         Block? block = _blockTransformed ?? _blockUntransformed;
         if (block is not null)
         {
-            Block[]? variants = _rotation?.Variants.IsDefaultOrEmpty == false
-                ? [.. _rotation.Variants]
-                : null;
-            _dimension.SetBlock(block, variants, _rotation?.Mode);
+            _dimension.SetBlock(block, _rotation?.Mode);
+            
+            // Apply mesh angle rotation if applicable
+            if (_rotation is not null && _rotation.HasRotatableEntity)
+            {
+                ApplyRotation();
+            }
         }
         else
         {
@@ -799,11 +776,15 @@ public class BuildBrushInstance
 
     /// <summary>
     /// Applies the current rotation based on rotation mode.
+    /// Uses the mesh angle from the current rotation definition.
     /// </summary>
     private void ApplyRotation()
     {
         if (_dimension is null || !_dimension.IsInitialized || _rotation is null)
             return;
+
+        // Get the mesh angle in degrees from the current definition
+        float meshAngleDegrees = _rotation.CurrentMeshAngleDegrees;
 
         switch (_rotation.Mode)
         {
@@ -812,25 +793,25 @@ public class BuildBrushInstance
                 break;
 
             case EBuildBrushRotationMode.VariantBased:
-                // Variant rotation is handled by OrientationIndex, dimension uses variant block
-                _dimension.ApplyRotation(_rotation.CurrentAngle, _blockTransformed);
+                // Variant rotation is handled by block ID swap, no mesh angle needed
+                _dimension.ApplyRotation(0, _blockTransformed);
                 break;
 
             case EBuildBrushRotationMode.Rotatable:
-                // Apply IRotatable rotation
-                _dimension.ApplyRotation(_rotation.CurrentAngle);
+                // Apply mesh angle rotation
+                _dimension.ApplyRotation((int)meshAngleDegrees);
                 break;
 
             case EBuildBrushRotationMode.Hybrid:
-                // Apply both
-                _dimension.ApplyRotation(_rotation.CurrentAngle, _blockTransformed);
+                // Block ID swap is already handled, apply mesh angle offset
+                _dimension.ApplyRotation((int)meshAngleDegrees, _blockTransformed);
                 break;
         }
 
         // Update entity yaw for visual rotation if using IRotatable
         if (_rotation.HasRotatableEntity && _entity is not null)
         {
-            float yawRadians = _rotation.CurrentAngle * GameMath.DEG2RAD;
+            float yawRadians = _rotation.CurrentMeshAngleRadians;
             _entity.Pos.Yaw = yawRadians;
             _entity.ServerPos.Yaw = yawRadians;
         }

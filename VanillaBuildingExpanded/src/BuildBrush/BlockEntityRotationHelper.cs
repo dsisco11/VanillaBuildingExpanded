@@ -32,9 +32,9 @@ public static class BlockEntityRotationHelper
     /// </summary>
     /// <param name="world">The world accessor.</param>
     /// <param name="position">The position of the block entity.</param>
-    /// <param name="rotationRadians">The absolute rotation angle in radians to apply.</param>
+    /// <param name="rotationDegrees">The absolute rotation angle in degrees to apply.</param>
     /// <returns>True if the rotation was applied successfully; otherwise, false.</returns>
-    public static bool TrySetRotation(IWorldAccessor world, BlockPos position, float rotationRadians)
+    public static bool TrySetRotation(IWorldAccessor world, BlockPos position, float rotationDegrees)
     {
         BlockEntity? blockEntity = world.BlockAccessor.GetBlockEntity(position);
         if (blockEntity is not IRotatable)
@@ -45,6 +45,9 @@ public static class BlockEntityRotationHelper
         // Get the current tree attributes from the block entity
         TreeAttribute tree = new();
         blockEntity.ToTreeAttributes(tree);
+
+        // Convert degrees to radians for internal use
+        float rotationRadians = rotationDegrees * GameMath.DEG2RAD;
 
         // Try to set the rotation using known attribute names
         bool applied = TrySetRotationInTree(tree, rotationRadians);
@@ -87,73 +90,6 @@ public static class BlockEntityRotationHelper
         return true;
     }
     
-    /// <summary>
-    /// Parses the rotation interval from block attributes.
-    /// </summary>
-    /// <param name="block">The block to parse rotation interval from.</param>
-    /// <returns>The rotation increment in radians, or 0 if not found.</returns>
-    public static float ResolveRotationInterval(in Block? block)
-    {
-        if (block?.Attributes is null)
-        {
-            return 0f;
-        }
-
-        string? type = block.Attributes["type"]?.AsString();
-        if (string.IsNullOrEmpty(type))
-        {
-            return 0f;
-        }
-
-        string? intervalString = null;
-
-        // Try to get rotatatableInterval - it can be:
-        // 1. A dictionary keyed by type (chest.json): rotatatableInterval: { "normal-generic": "22.5deg" }
-        // 2. Nested in properties (crate.json): properties: { "wood-aged": { rotatatableInterval: "22.5deg" } }
-        var rotatatableIntervalAttr = block.Attributes["rotatatableInterval"];
-        if (rotatatableIntervalAttr is not null && rotatatableIntervalAttr.Exists)
-        {
-            if (!string.IsNullOrEmpty(type))
-            {
-                // Try to get interval for this specific type
-                intervalString = rotatatableIntervalAttr[type]?.AsString();
-            }
-            
-            // If still not found, try direct string value (unlikely but possible)
-            if (string.IsNullOrEmpty(intervalString))
-            {
-                intervalString = rotatatableIntervalAttr.AsString();
-            }
-        }
-
-        // Check properties[type].rotatatableInterval (crate-style)
-        if (string.IsNullOrEmpty(intervalString) && !string.IsNullOrEmpty(type))
-        {
-            intervalString = block.Attributes["properties"]?[type]?["rotatatableInterval"]?.AsString();
-            
-            // Try wildcard fallback
-            if (string.IsNullOrEmpty(intervalString))
-            {
-                intervalString = block.Attributes["properties"]?["*"]?["rotatatableInterval"]?.AsString();
-            }
-        }
-
-        if (string.IsNullOrEmpty(intervalString))
-        {
-            // Default to 0 - rotation disabled if no interval specified
-            return 0f;
-        }
-
-        return intervalString switch
-        {
-            "22.5deg" => 22.5f * GameMath.DEG2RAD,
-            "22.5degnot45deg" => 22.5f * GameMath.DEG2RAD, // Still uses 22.5 degree increments
-            "45deg" => 45f * GameMath.DEG2RAD,
-            "90deg" => 90f * GameMath.DEG2RAD,
-            _ => 0f
-        };
-    }
-
     /// <summary>
     /// Configuration for a rotation attribute.
     /// </summary>

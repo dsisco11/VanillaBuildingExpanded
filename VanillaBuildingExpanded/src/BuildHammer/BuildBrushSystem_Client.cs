@@ -67,7 +67,7 @@ public class BuildBrushSystem_Client : ModSystem
 
     public override void Dispose()
     {
-        BuildBrushRotationInfo.ClearCaches();
+        // Resolver caches are managed per-instance, no global cleanup needed
     }
     #endregion
 
@@ -294,7 +294,7 @@ public class BuildBrushSystem_Client : ModSystem
             new Packet_SetBuildBrush()
             {
                 isActive = brush.IsActive,
-                orientationIndex = brush.OrientationIndex,
+                rotationIndex = brush.RotationIndex,
                 position = brush.Position,
                 snapping = brush.Snapping
             });
@@ -309,7 +309,7 @@ public class BuildBrushSystem_Client : ModSystem
         if (brush is null)
             return;
 
-        brush.OrientationIndex = packet.orientationIndex;
+        brush.RotationIndex = packet.rotationIndex;
         //brush.Position = packet.position;
     }
     #endregion

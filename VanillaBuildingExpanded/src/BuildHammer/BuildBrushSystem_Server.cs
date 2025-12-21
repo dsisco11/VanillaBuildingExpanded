@@ -48,7 +48,6 @@ public class BuildBrushSystem_Server : ModSystem
             brush.DestroyDimension();
         }
         Brushes.Clear();
-        BuildBrushRotationInfo.ClearCaches();
     }
     #endregion
 
@@ -193,7 +192,7 @@ public class BuildBrushSystem_Server : ModSystem
 
         brush.IsActive = packet.isActive;
         brush.Snapping = packet.snapping;
-        brush.OrientationIndex = packet.orientationIndex;
+        brush.RotationIndex = packet.rotationIndex;
         brush.Position = packet.position;
 
         // Sync dimension changes to nearby players

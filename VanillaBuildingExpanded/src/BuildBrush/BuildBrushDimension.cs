@@ -153,9 +153,8 @@ public class BuildBrushDimension
     /// Sets the block to be displayed in the dimension.
     /// </summary>
     /// <param name="block">The block to display.</param>
-    /// <param name="orientationVariants">Pre-computed orientation variants for variant-based rotation.</param>
     /// <param name="rotationMode">The rotation mode for this block (optional, auto-detects if not provided).</param>
-    public void SetBlock(Block block, Block[]? orientationVariants = null, EBuildBrushRotationMode? rotationMode = null)
+    public void SetBlock(Block block, EBuildBrushRotationMode? rotationMode = null)
     {
         if (dimension is null || !IsInitialized)
             return;
