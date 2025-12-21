@@ -206,10 +206,19 @@ public class BuildBrushInstance
                 return;
             }
 
+            if (value == _rotation.CurrentIndex)
+                return;
+
             _rotation.CurrentIndex = value;
 
             // Update the transformed block based on the new orientation state
             BlockTransformed = _rotation.CurrentBlock;
+
+            if (ItemStack is not null)
+            {
+                // Apply orientation attributes (type, meshAngle) for proper rendering
+                _rotation?.ApplyOrientationAttributes(ItemStack!.Attributes, _sourceItemStack?.Attributes);
+            }
 
             // Raise orientation changed event
             OnOrientationChanged?.Invoke(this, _rotation.CurrentIndex, _rotation.Current);
@@ -354,12 +363,7 @@ public class BuildBrushInstance
 
             if (value is not null)
             {
-                var stack = new ItemStack(value);
-
-                // Apply orientation attributes (type, meshAngle) for proper rendering
-                _rotation?.ApplyOrientationAttributes(stack.Attributes, _sourceItemStack?.Attributes);
-
-                ItemStack = stack;
+                ItemStack = new ItemStack(value);
             }
             else
             {
@@ -378,6 +382,7 @@ public class BuildBrushInstance
         private set
         {
             _itemStack = value;
+            // TODO: just update the stack inside the dummyslot, dont ctor a new one...
             DummySlot = value is not null ? new DummySlot(value) : (ItemSlot?)null;
         }
     }
