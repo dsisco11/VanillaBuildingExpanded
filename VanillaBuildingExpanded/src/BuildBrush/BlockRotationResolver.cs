@@ -323,8 +323,26 @@ public class BlockRotationResolver
     }
 
     /// <summary>
-    /// Resolves the rotation interval in degrees from block attributes.
+    /// Resolves the "type" value for a typed block (e.g., crates, chests).
     /// Mirrors how BlockGenericTypedContainer resolves type: stack.Attributes?.GetString("type", defaultType)
+    /// </summary>
+    /// <param name="block">The block to resolve type for.</param>
+    /// <param name="itemStack">Optional ItemStack to resolve type from.</param>
+    /// <returns>The resolved type string, or null if no type is defined.</returns>
+    public static string? ResolveBlockType(Block? block, ItemStack? itemStack = null)
+    {
+        if (block?.Attributes is null)
+            return null;
+
+        // Get defaultType from block attributes (same pattern as BlockGenericTypedContainer.OnLoaded)
+        string? defaultType = block.Attributes["defaultType"]?.AsString();
+
+        // Resolve type from ItemStack with defaultType fallback (same pattern as BlockGenericTypedContainer)
+        return itemStack?.Attributes?.GetString("type", defaultType) ?? defaultType;
+    }
+
+    /// <summary>
+    /// Resolves the rotation interval in degrees from block attributes.
     /// </summary>
     /// <param name="block">The block to get rotation interval for.</param>
     /// <param name="itemStack">Optional ItemStack to resolve type from (for typed containers).</param>
@@ -333,11 +351,7 @@ public class BlockRotationResolver
         if (block?.Attributes is null)
             return 0f;
 
-        // Get defaultType from block attributes (same pattern as BlockGenericTypedContainer.OnLoaded)
-        string? defaultType = block.Attributes["defaultType"]?.AsString();
-
-        // Resolve type from ItemStack with defaultType fallback (same pattern as BlockGenericTypedContainer)
-        string? type = itemStack?.Attributes?.GetString("type", defaultType) ?? defaultType;
+        string? type = ResolveBlockType(block, itemStack);
 
         string? intervalString = null;
 
