@@ -60,7 +60,7 @@ public class BuildBrushInstance
     /// <summary>
     /// Resolver for precomputing and caching rotation definitions.
     /// </summary>
-    private BlockRotationResolver? _rotationResolver;
+    private BlockOrientationResolver? _orientationResolver;
     #endregion
 
     #region Events
@@ -322,12 +322,12 @@ public class BuildBrushInstance
             _blockUntransformed = value;
 
             // Ensure resolver exists
-            _rotationResolver ??= new BlockRotationResolver(World);
+            _orientationResolver ??= new BlockOrientationResolver(World);
 
             // Create rotation info for the new block using the resolver
             // Pass source ItemStack to resolve type-specific properties (e.g., for typed containers)
             _rotation = value is not null
-                ? BuildBrushRotationInfo.Create(value, _rotationResolver, _sourceItemStack)
+                ? BuildBrushRotationInfo.Create(value, _orientationResolver, _sourceItemStack)
                 : null;
 
             // Sync rotation index to match the block's current variant

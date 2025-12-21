@@ -113,13 +113,13 @@ public class BuildBrushRotationInfo
     /// <param name="resolver">The resolver to get rotation definitions from.</param>
     /// <param name="itemStack">Optional ItemStack to resolve type-specific properties (e.g., for typed containers).</param>
     /// <returns>Rotation info for the block.</returns>
-    public static BuildBrushRotationInfo Create(Block block, BlockRotationResolver resolver, ItemStack? itemStack = null)
+    public static BuildBrushRotationInfo Create(Block block, BlockOrientationResolver resolver, ItemStack? itemStack = null)
     {
         if (block is null || resolver is null)
             return CreateEmpty(resolver?.World);
 
         EBuildBrushRotationMode mode = resolver.GetRotationMode(block);
-        ImmutableArray<BlockOrientationDefinition> definitions = resolver.GetRotations(block.BlockId, itemStack);
+        ImmutableArray<BlockOrientationDefinition> definitions = resolver.GetOrientations(block.BlockId, itemStack);
 
         return new BuildBrushRotationInfo(resolver.World, block, mode, definitions);
     }
@@ -157,7 +157,7 @@ public class BuildBrushRotationInfo
     /// <returns>True if a matching definition was found.</returns>
     public bool TrySetIndexForBlockId(int blockId)
     {
-        int index = BlockRotationResolver.FindIndexForBlockId(Definitions, blockId);
+        int index = BlockOrientationResolver.FindIndexForBlockId(Definitions, blockId);
         if (index >= 0 && index < Definitions.Length && Definitions[index].BlockId == blockId)
         {
             CurrentIndex = index;

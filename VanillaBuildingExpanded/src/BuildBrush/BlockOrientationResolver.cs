@@ -9,10 +9,10 @@ using Vintagestory.API.MathTools;
 namespace VanillaBuildingExpanded.BuildHammer;
 
 /// <summary>
-/// Resolves and caches all valid rotation states for blocks.
-/// Precomputes <see cref="BlockOrientationDefinition"/> arrays for efficient rotation cycling.
+/// Resolves and caches all valid orientation states for blocks.
+/// Precomputes <see cref="BlockOrientationDefinition"/> arrays for efficient orientation cycling.
 /// </summary>
-public class BlockRotationResolver
+public class BlockOrientationResolver
 {
     #region Constants
     /// <summary>
@@ -37,10 +37,10 @@ public class BlockRotationResolver
     /// <summary>
     /// Cache of orientation definitions keyed by untransformed block ID.
     /// </summary>
-    private readonly Dictionary<int, ImmutableArray<BlockOrientationDefinition>> _rotationCache = [];
+    private readonly Dictionary<int, ImmutableArray<BlockOrientationDefinition>> _orientationCache = [];
 
     /// <summary>
-    /// Cache of rotation modes keyed by block code (for classification).
+    /// Cache of orientation modes keyed by block code (for classification).
     /// </summary>
     private readonly Dictionary<AssetLocation, EBuildBrushRotationMode> _modeCache = [];
 
@@ -51,7 +51,7 @@ public class BlockRotationResolver
     #endregion
 
     #region Constructor
-    public BlockRotationResolver(IWorldAccessor world)
+    public BlockOrientationResolver(IWorldAccessor world)
     {
         World = world;
     }
@@ -65,21 +65,21 @@ public class BlockRotationResolver
     /// <param name="untransformedBlockId">The block ID to get orientations for.</param>
     /// <param name="itemStack">Optional ItemStack to resolve type-specific properties (e.g., for typed containers).</param>
     /// <returns>Array of all valid orientation states for the block.</returns>
-    public ImmutableArray<BlockOrientationDefinition> GetRotations(int untransformedBlockId, ItemStack? itemStack = null)
+    public ImmutableArray<BlockOrientationDefinition> GetOrientations(int untransformedBlockId, ItemStack? itemStack = null)
     {
-        if (_rotationCache.TryGetValue(untransformedBlockId, out var cached))
+        if (_orientationCache.TryGetValue(untransformedBlockId, out var cached))
             return cached;
 
         Block? block = World.GetBlock(untransformedBlockId);
         if (block is null)
         {
             var fallback = ImmutableArray.Create(new BlockOrientationDefinition(untransformedBlockId, 0f));
-            _rotationCache[untransformedBlockId] = fallback;
+            _orientationCache[untransformedBlockId] = fallback;
             return fallback;
         }
 
-        var definitions = ComputeRotations(block, itemStack);
-        _rotationCache[untransformedBlockId] = definitions;
+        var definitions = ComputeOrientations(block, itemStack);
+        _orientationCache[untransformedBlockId] = definitions;
         return definitions;
     }
 
@@ -121,7 +121,7 @@ public class BlockRotationResolver
     /// </summary>
     public void ClearCaches()
     {
-        _rotationCache.Clear();
+        _orientationCache.Clear();
         _modeCache.Clear();
         _variantCache.Clear();
     }
@@ -129,11 +129,11 @@ public class BlockRotationResolver
 
     #region Computation
     /// <summary>
-    /// Computes all orientation definitions for a block based on its rotation mode.
+    /// Computes all orientation definitions for a block based on its orientation mode.
     /// </summary>
-    /// <param name="block">The block to compute rotations for.</param>
+    /// <param name="block">The block to compute orientations for.</param>
     /// <param name="itemStack">Optional ItemStack to resolve type-specific properties.</param>
-    private ImmutableArray<BlockOrientationDefinition> ComputeRotations(Block block, ItemStack? itemStack = null)
+    private ImmutableArray<BlockOrientationDefinition> ComputeOrientations(Block block, ItemStack? itemStack = null)
     {
         EBuildBrushRotationMode mode = GetRotationMode(block);
 
