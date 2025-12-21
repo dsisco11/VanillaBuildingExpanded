@@ -41,16 +41,22 @@ public class BuildBrushEntityRenderer : EntityRenderer
         var brushInstance = BrushInstance;
         if (brushInstance is not null)
         {
-            brushInstance.OnBlockChanged += OnBrushBlockChanged;
+            brushInstance.OnBlockChanged += BrushInstance_OnBrushBlockChanged;
+            brushInstance.OnOrientationChanged += BrushInstance_OnOrientationChanged;
         }
 
+        RebuildMesh();
+    }
+
+    private void BrushInstance_OnOrientationChanged(BuildBrushInstance arg1, int arg2, BlockOrientationDefinition arg3)
+    {
         RebuildMesh();
     }
 
     /// <summary>
     /// Called when the brush block changes.
     /// </summary>
-    private void OnBrushBlockChanged(BuildBrushInstance instance, Block? block)
+    private void BrushInstance_OnBrushBlockChanged(BuildBrushInstance instance, Block? block)
     {
         RebuildMesh();
     }
@@ -84,8 +90,8 @@ public class BuildBrushEntityRenderer : EntityRenderer
             return;
         }
 
-        if (block.BlockId == currentBlockId)
-            return;
+        //if (block.BlockId == currentBlockId)
+        //    return;
 
         currentBlockId = block.BlockId;
         renderInfo = capi.Render.GetItemStackRenderInfo(BrushInstance?.DummySlot, EnumItemRenderTarget.Ground, 0);
@@ -105,10 +111,10 @@ public class BuildBrushEntityRenderer : EntityRenderer
 
         IRenderAPI rapi = capi.Render;
         Vec3d camPos = capi.World.Player.Entity.CameraPos;
-        //Vec3d entityPos = entity.Pos.XYZ;
-        Vec3d entityPos = brush.Position?.ToVec3d() ?? Vec3d.Zero;
+        Vec3d entityPos = brush.Position?.ToVec3d() ?? entity?.Pos.XYZ ?? Vec3d.Zero;
 
         // Build model matrix
+        // Apply renderInfo.Transform
         modelMat.Identity();
         // TODO: Shouldnt need to subtract the camera position here, the view matrix theoretically should have already been inverse offset by the camera position...
         modelMat.Translate(
@@ -116,6 +122,10 @@ public class BuildBrushEntityRenderer : EntityRenderer
             (float)(entityPos.Y - camPos.Y),
             (float)(entityPos.Z - camPos.Z)
         );
+        //modelMat.Translate(-renderInfo.Transform.Origin.X, -renderInfo.Transform.Origin.Y, -renderInfo.Transform.Origin.Z);
+        //modelMat.RotateZDeg(renderInfo.Transform.Rotation.Z);
+        //modelMat.RotateYDeg(renderInfo.Transform.Rotation.Y);
+        //modelMat.RotateXDeg(renderInfo.Transform.Rotation.X);
 
         // Get validity state
         bool isValid = brush.IsValidPlacement;
@@ -182,7 +192,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
         var brushInstance = BrushInstance;
         if (brushInstance is not null)
         {
-            brushInstance.OnBlockChanged -= OnBrushBlockChanged;
+            brushInstance.OnBlockChanged -= BrushInstance_OnBrushBlockChanged;
         }
 
         //meshRef?.Dispose();
