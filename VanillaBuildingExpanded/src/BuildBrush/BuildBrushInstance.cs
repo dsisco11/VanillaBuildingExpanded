@@ -197,7 +197,7 @@ public class BuildBrushInstance
             if (_rotation is null)
                 return;
 
-            if (_rotation.Definitions.Length <= 1)
+            if (_rotation.Definitions.IsDefaultOrEmpty || _rotation.Definitions.Length <= 1)
             {
                 return;
             }

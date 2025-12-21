@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
@@ -25,7 +27,7 @@ public class BuildBrushRotationInfo
     /// All valid orientation definitions for this block.
     /// Precomputed array that can be cycled through.
     /// </summary>
-    public BlockOrientationDefinition[] Definitions { get; }
+    public ImmutableArray<BlockOrientationDefinition> Definitions { get; }
 
     /// <summary>
     /// The current index into the <see cref="Definitions"/> array.
@@ -35,7 +37,7 @@ public class BuildBrushRotationInfo
         get => _currentIndex;
         set
         {
-            if (Definitions.Length == 0)
+            if (Definitions.IsDefaultOrEmpty)
             {
                 _currentIndex = 0;
                 return;
@@ -48,7 +50,7 @@ public class BuildBrushRotationInfo
     /// <summary>
     /// The current orientation definition (block-id + mesh-angle).
     /// </summary>
-    public BlockOrientationDefinition Current => Definitions.Length > 0
+    public BlockOrientationDefinition Current => !Definitions.IsDefaultOrEmpty
         ? Definitions[_currentIndex]
         : new BlockOrientationDefinition(_originalBlock?.BlockId ?? 0, 0f);
 
@@ -70,7 +72,7 @@ public class BuildBrushRotationInfo
     /// <summary>
     /// Whether this block supports any form of rotation.
     /// </summary>
-    public bool CanRotate => Mode != EBuildBrushRotationMode.None && Definitions.Length > 1;
+    public bool CanRotate => Mode != EBuildBrushRotationMode.None && !Definitions.IsDefaultOrEmpty && Definitions.Length > 1;
 
     /// <summary>
     /// Whether this block uses variant-based rotation (including hybrid).
@@ -93,7 +95,7 @@ public class BuildBrushRotationInfo
         IWorldAccessor world,
         Block originalBlock,
         EBuildBrushRotationMode mode,
-        BlockOrientationDefinition[] definitions)
+        ImmutableArray<BlockOrientationDefinition> definitions)
     {
         _world = world;
         _originalBlock = originalBlock;
@@ -116,7 +118,7 @@ public class BuildBrushRotationInfo
             return CreateEmpty(resolver?.World);
 
         EBuildBrushRotationMode mode = resolver.GetRotationMode(block);
-        BlockOrientationDefinition[] definitions = resolver.GetRotations(block.BlockId);
+        ImmutableArray<BlockOrientationDefinition> definitions = resolver.GetRotations(block.BlockId);
 
         return new BuildBrushRotationInfo(resolver.World, block, mode, definitions);
     }
@@ -130,7 +132,7 @@ public class BuildBrushRotationInfo
             world!,
             null!,
             EBuildBrushRotationMode.None,
-            []);
+            ImmutableArray<BlockOrientationDefinition>.Empty);
     }
     #endregion
 

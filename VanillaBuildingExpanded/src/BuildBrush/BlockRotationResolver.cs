@@ -10,7 +10,7 @@ namespace VanillaBuildingExpanded.BuildHammer;
 
 /// <summary>
 /// Resolves and caches all valid rotation states for blocks.
-/// Precomputes <see cref="BlockRotationDefinition"/> arrays for efficient rotation cycling.
+/// Precomputes <see cref="BlockOrientationDefinition"/> arrays for efficient rotation cycling.
 /// </summary>
 public class BlockRotationResolver
 {
@@ -37,7 +37,7 @@ public class BlockRotationResolver
     /// <summary>
     /// Cache of orientation definitions keyed by untransformed block ID.
     /// </summary>
-    private readonly Dictionary<int, BlockOrientationDefinition[]> _rotationCache = [];
+    private readonly Dictionary<int, ImmutableArray<BlockOrientationDefinition>> _rotationCache = [];
 
     /// <summary>
     /// Cache of rotation modes keyed by block code (for classification).
@@ -64,7 +64,7 @@ public class BlockRotationResolver
     /// </summary>
     /// <param name="untransformedBlockId">The block ID to get orientations for.</param>
     /// <returns>Array of all valid orientation states for the block.</returns>
-    public BlockOrientationDefinition[] GetRotations(int untransformedBlockId)
+    public ImmutableArray<BlockOrientationDefinition> GetRotations(int untransformedBlockId)
     {
         if (_rotationCache.TryGetValue(untransformedBlockId, out var cached))
             return cached;
@@ -72,7 +72,7 @@ public class BlockRotationResolver
         Block? block = World.GetBlock(untransformedBlockId);
         if (block is null)
         {
-            var fallback = new[] { new BlockOrientationDefinition(untransformedBlockId, 0f) };
+            var fallback = ImmutableArray.Create(new BlockOrientationDefinition(untransformedBlockId, 0f));
             _rotationCache[untransformedBlockId] = fallback;
             return fallback;
         }
@@ -105,7 +105,7 @@ public class BlockRotationResolver
     /// <param name="definitions">The orientation definitions array.</param>
     /// <param name="blockId">The block ID to find.</param>
     /// <returns>The index of the matching definition, or 0 if not found.</returns>
-    public static int FindIndexForBlockId(BlockOrientationDefinition[] definitions, int blockId)
+    public static int FindIndexForBlockId(ImmutableArray<BlockOrientationDefinition> definitions, int blockId)
     {
         for (int i = 0; i < definitions.Length; i++)
         {
@@ -130,7 +130,7 @@ public class BlockRotationResolver
     /// <summary>
     /// Computes all orientation definitions for a block based on its rotation mode.
     /// </summary>
-    private BlockOrientationDefinition[] ComputeRotations(Block block)
+    private ImmutableArray<BlockOrientationDefinition> ComputeRotations(Block block)
     {
         EBuildBrushRotationMode mode = GetRotationMode(block);
 
@@ -147,24 +147,24 @@ public class BlockRotationResolver
     /// <summary>
     /// Computes orientations for variant-based blocks (one definition per variant, 0° mesh angle).
     /// </summary>
-    private BlockOrientationDefinition[] ComputeVariantRotations(Block block)
+    private ImmutableArray<BlockOrientationDefinition> ComputeVariantRotations(Block block)
     {
         Block[] variants = GetOrientationVariants(block);
         if (variants.Length == 0)
             return [new BlockOrientationDefinition(block.BlockId, 0f)];
 
-        var definitions = new BlockOrientationDefinition[variants.Length];
+        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(variants.Length);
         for (int i = 0; i < variants.Length; i++)
         {
-            definitions[i] = new BlockOrientationDefinition(variants[i].BlockId, 0f);
+            builder.Add(new BlockOrientationDefinition(variants[i].BlockId, 0f));
         }
-        return definitions;
+        return builder.MoveToImmutable();
     }
 
     /// <summary>
     /// Computes orientations for IRotatable blocks (same block ID, different mesh angles).
     /// </summary>
-    private BlockOrientationDefinition[] ComputeRotatableRotations(Block block)
+    private ImmutableArray<BlockOrientationDefinition> ComputeRotatableRotations(Block block)
     {
         float intervalDegrees = ResolveRotationIntervalDegrees(block);
         if (intervalDegrees <= 0f)
@@ -177,20 +177,20 @@ public class BlockRotationResolver
         if (stepCount <= 0)
             stepCount = 1;
 
-        var definitions = new BlockOrientationDefinition[stepCount];
+        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(stepCount);
         for (int i = 0; i < stepCount; i++)
         {
             float angle = i * intervalDegrees;
-            definitions[i] = new BlockOrientationDefinition(block.BlockId, angle);
+            builder.Add(new BlockOrientationDefinition(block.BlockId, angle));
         }
-        return definitions;
+        return builder.MoveToImmutable();
     }
 
     /// <summary>
     /// Computes orientations for hybrid blocks.
     /// Each variant gets mesh-angle sub-steps within its "slice" of 360°.
     /// </summary>
-    private BlockOrientationDefinition[] ComputeHybridRotations(Block block)
+    private ImmutableArray<BlockOrientationDefinition> ComputeHybridRotations(Block block)
     {
         Block[] variants = GetOrientationVariants(block);
         if (variants.Length == 0)
@@ -211,7 +211,7 @@ public class BlockRotationResolver
         if (stepsPerVariant <= 0)
             stepsPerVariant = 1;
 
-        var definitions = new List<BlockOrientationDefinition>();
+        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(variants.Length * stepsPerVariant);
 
         for (int v = 0; v < variants.Length; v++)
         {
@@ -220,12 +220,12 @@ public class BlockRotationResolver
             for (int s = 0; s < stepsPerVariant; s++)
             {
                 float meshAngle = s * intervalDegrees;
-                definitions.Add(new BlockOrientationDefinition(variantBlockId, meshAngle));
+                builder.Add(new BlockOrientationDefinition(variantBlockId, meshAngle));
             }
         }
 
-        return definitions.Count > 0
-            ? [.. definitions]
+        return builder.Count > 0
+            ? builder.ToImmutable()
             : [new BlockOrientationDefinition(block.BlockId, 0f)];
     }
     #endregion
