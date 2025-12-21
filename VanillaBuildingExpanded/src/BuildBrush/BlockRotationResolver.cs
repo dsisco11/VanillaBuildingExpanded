@@ -323,7 +323,15 @@ public class BlockRotationResolver
         if (block?.Attributes is null)
             return 0f;
 
-        string? type = block.Attributes["type"]?.AsString();
+        // Create a dummy ItemStack to get the default 'type' attribute
+        // (typed blocks like crates store 'type' in itemstack attributes, not block attributes)
+        ItemStack dummyStack = new(block);
+        string? type = dummyStack.Attributes.GetString("type");
+
+        // Fall back to block attributes if itemstack doesn't have type
+        if (string.IsNullOrEmpty(type))
+            type = block.Attributes["type"]?.AsString();
+
         string? intervalString = null;
 
         // Try rotatatableInterval (dictionary or direct)
