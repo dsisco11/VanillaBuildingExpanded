@@ -107,6 +107,28 @@ public class BuildBrushRotationInfo
     /// Whether this block has an IRotatable block entity.
     /// </summary>
     public bool HasRotatableEntity => Mode is EBuildBrushRotationMode.Rotatable or EBuildBrushRotationMode.Hybrid;
+
+    /// <summary>
+    /// The rotation increment in degrees for this block.
+    /// For variant-based rotation, this is calculated from the number of variants (360 / count).
+    /// For IRotatable blocks without variants, defaults to 90 degrees.
+    /// </summary>
+    public int RotationIncrement
+    {
+        get
+        {
+            // For variant-based rotation, calculate from variant count
+            if (HasVariants && !Variants.IsDefaultOrEmpty)
+            {
+                // Common cases: 4 variants = 90°, 8 variants = 45°, 16 variants = 22.5° (rounded to 22)
+                return 360 / Variants.Length;
+            }
+
+            // For pure IRotatable blocks, default to 90 degrees
+            // This could be enhanced to query the block entity for its preferred increment
+            return 90;
+        }
+    }
     #endregion
 
     #region Constructor

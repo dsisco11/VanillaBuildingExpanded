@@ -240,7 +240,7 @@ public class BuildBrushInstance
         if (_rotation is null || !_rotation.CanRotate)
             return false;
 
-        int angleStep = direction == EModeCycleDirection.Forward ? 90 : -90;
+        int angleStep = _rotation.RotationIncrement * (direction == EModeCycleDirection.Forward ? 1 : -1);
 
         switch (_rotation.Mode)
         {
