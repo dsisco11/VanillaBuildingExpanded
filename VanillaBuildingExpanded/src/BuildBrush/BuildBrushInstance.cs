@@ -55,7 +55,7 @@ public class BuildBrushInstance
     /// <summary>
     /// Encapsulates all rotation data and logic for the current block.
     /// </summary>
-    private BuildBrushRotationInfo? _rotation;
+    private BuildBrushOrientationInfo? _rotation;
 
     /// <summary>
     /// Resolver for precomputing and caching rotation definitions.
@@ -152,7 +152,7 @@ public class BuildBrushInstance
     /// <summary>
     /// The rotation info for the current block.
     /// </summary>
-    public BuildBrushRotationInfo? Rotation => _rotation;
+    public BuildBrushOrientationInfo? Rotation => _rotation;
 
     /// <summary>
     /// The detected rotation mode for the current block.
@@ -327,7 +327,7 @@ public class BuildBrushInstance
             // Create rotation info for the new block using the resolver
             // Pass source ItemStack to resolve type-specific properties (e.g., for typed containers)
             _rotation = value is not null
-                ? BuildBrushRotationInfo.Create(value, _orientationResolver, _sourceItemStack)
+                ? BuildBrushOrientationInfo.Create(value, _orientationResolver, _sourceItemStack)
                 : null;
 
             // Sync rotation index to match the block's current variant

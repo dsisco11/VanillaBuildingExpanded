@@ -7,10 +7,10 @@ using Vintagestory.API.MathTools;
 namespace VanillaBuildingExpanded.BuildHammer;
 
 /// <summary>
-/// Encapsulates rotation state for a build brush block.
-/// Holds a reference to the precomputed rotation definitions and tracks current index.
+/// Encapsulates orientation state for a build brush block.
+/// Holds a reference to the precomputed orientation definitions and tracks current index.
 /// </summary>
-public class BuildBrushRotationInfo
+public class BuildBrushOrientationInfo
 {
     #region Fields
     private readonly IWorldAccessor _world;
@@ -92,7 +92,7 @@ public class BuildBrushRotationInfo
     #endregion
 
     #region Constructor
-    private BuildBrushRotationInfo(
+    private BuildBrushOrientationInfo(
         IWorldAccessor world,
         Block originalBlock,
         EBuildBrushRotationMode mode,
@@ -114,7 +114,7 @@ public class BuildBrushRotationInfo
     /// <param name="resolver">The resolver to get rotation definitions from.</param>
     /// <param name="itemStack">Optional ItemStack to resolve type-specific properties (e.g., for typed containers).</param>
     /// <returns>Rotation info for the block.</returns>
-    public static BuildBrushRotationInfo Create(Block block, BlockOrientationResolver resolver, ItemStack? itemStack = null)
+    public static BuildBrushOrientationInfo Create(Block block, BlockOrientationResolver resolver, ItemStack? itemStack = null)
     {
         if (block is null || resolver is null)
             return CreateEmpty(resolver?.World);
@@ -122,15 +122,15 @@ public class BuildBrushRotationInfo
         EBuildBrushRotationMode mode = resolver.GetRotationMode(block);
         ImmutableArray<BlockOrientationDefinition> definitions = resolver.GetOrientations(block.BlockId, itemStack);
 
-        return new BuildBrushRotationInfo(resolver.World, block, mode, definitions);
+        return new BuildBrushOrientationInfo(resolver.World, block, mode, definitions);
     }
 
     /// <summary>
     /// Creates an empty rotation info (for null/invalid blocks).
     /// </summary>
-    private static BuildBrushRotationInfo CreateEmpty(IWorldAccessor? world)
+    private static BuildBrushOrientationInfo CreateEmpty(IWorldAccessor? world)
     {
-        return new BuildBrushRotationInfo(
+        return new BuildBrushOrientationInfo(
             world!,
             null!,
             EBuildBrushRotationMode.None,
