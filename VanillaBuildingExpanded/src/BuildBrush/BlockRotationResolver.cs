@@ -63,8 +63,9 @@ public class BlockRotationResolver
     /// Returns cached array if available, otherwise computes and caches it.
     /// </summary>
     /// <param name="untransformedBlockId">The block ID to get orientations for.</param>
+    /// <param name="itemStack">Optional ItemStack to resolve type-specific properties (e.g., for typed containers).</param>
     /// <returns>Array of all valid orientation states for the block.</returns>
-    public ImmutableArray<BlockOrientationDefinition> GetRotations(int untransformedBlockId)
+    public ImmutableArray<BlockOrientationDefinition> GetRotations(int untransformedBlockId, ItemStack? itemStack = null)
     {
         if (_rotationCache.TryGetValue(untransformedBlockId, out var cached))
             return cached;
@@ -77,7 +78,7 @@ public class BlockRotationResolver
             return fallback;
         }
 
-        var definitions = ComputeRotations(block);
+        var definitions = ComputeRotations(block, itemStack);
         _rotationCache[untransformedBlockId] = definitions;
         return definitions;
     }
@@ -130,7 +131,9 @@ public class BlockRotationResolver
     /// <summary>
     /// Computes all orientation definitions for a block based on its rotation mode.
     /// </summary>
-    private ImmutableArray<BlockOrientationDefinition> ComputeRotations(Block block)
+    /// <param name="block">The block to compute rotations for.</param>
+    /// <param name="itemStack">Optional ItemStack to resolve type-specific properties.</param>
+    private ImmutableArray<BlockOrientationDefinition> ComputeRotations(Block block, ItemStack? itemStack = null)
     {
         EBuildBrushRotationMode mode = GetRotationMode(block);
 
@@ -138,8 +141,8 @@ public class BlockRotationResolver
         {
             EBuildBrushRotationMode.None => [new BlockOrientationDefinition(block.BlockId, 0f)],
             EBuildBrushRotationMode.VariantBased => ComputeVariantRotations(block),
-            EBuildBrushRotationMode.Rotatable => ComputeRotatableRotations(block),
-            EBuildBrushRotationMode.Hybrid => ComputeHybridRotations(block),
+            EBuildBrushRotationMode.Rotatable => ComputeRotatableRotations(block, itemStack),
+            EBuildBrushRotationMode.Hybrid => ComputeHybridRotations(block, itemStack),
             _ => [new BlockOrientationDefinition(block.BlockId, 0f)]
         };
     }
@@ -164,9 +167,11 @@ public class BlockRotationResolver
     /// <summary>
     /// Computes orientations for IRotatable blocks (same block ID, different mesh angles).
     /// </summary>
-    private ImmutableArray<BlockOrientationDefinition> ComputeRotatableRotations(Block block)
+    /// <param name="block">The block to compute rotations for.</param>
+    /// <param name="itemStack">Optional ItemStack to resolve type-specific properties.</param>
+    private ImmutableArray<BlockOrientationDefinition> ComputeRotatableRotations(Block block, ItemStack? itemStack = null)
     {
-        float intervalDegrees = ResolveRotationIntervalDegrees(block);
+        float intervalDegrees = ResolveRotationIntervalDegrees(block, itemStack);
         if (intervalDegrees <= 0f)
         {
             // Default to 90° if no interval specified
@@ -190,13 +195,15 @@ public class BlockRotationResolver
     /// Computes orientations for hybrid blocks.
     /// Each variant gets mesh-angle sub-steps within its "slice" of 360°.
     /// </summary>
-    private ImmutableArray<BlockOrientationDefinition> ComputeHybridRotations(Block block)
+    /// <param name="block">The block to compute rotations for.</param>
+    /// <param name="itemStack">Optional ItemStack to resolve type-specific properties.</param>
+    private ImmutableArray<BlockOrientationDefinition> ComputeHybridRotations(Block block, ItemStack? itemStack = null)
     {
         Block[] variants = GetOrientationVariants(block);
         if (variants.Length == 0)
-            return ComputeRotatableRotations(block);
+            return ComputeRotatableRotations(block, itemStack);
 
-        float intervalDegrees = ResolveRotationIntervalDegrees(block);
+        float intervalDegrees = ResolveRotationIntervalDegrees(block, itemStack);
         if (intervalDegrees <= 0f)
         {
             // No mesh-angle interval, fall back to variant-only
@@ -317,20 +324,20 @@ public class BlockRotationResolver
 
     /// <summary>
     /// Resolves the rotation interval in degrees from block attributes.
+    /// Mirrors how BlockGenericTypedContainer resolves type: stack.Attributes?.GetString("type", defaultType)
     /// </summary>
-    private static float ResolveRotationIntervalDegrees(Block block)
+    /// <param name="block">The block to get rotation interval for.</param>
+    /// <param name="itemStack">Optional ItemStack to resolve type from (for typed containers).</param>
+    private static float ResolveRotationIntervalDegrees(Block block, ItemStack? itemStack = null)
     {
         if (block?.Attributes is null)
             return 0f;
 
-        // Create a dummy ItemStack to get the default 'type' attribute
-        // (typed blocks like crates store 'type' in itemstack attributes, not block attributes)
-        ItemStack dummyStack = new(block);
-        string? type = dummyStack.Attributes.GetString("type");
+        // Get defaultType from block attributes (same pattern as BlockGenericTypedContainer.OnLoaded)
+        string? defaultType = block.Attributes["defaultType"]?.AsString();
 
-        // Fall back to block attributes if itemstack doesn't have type
-        if (string.IsNullOrEmpty(type))
-            type = block.Attributes["type"]?.AsString();
+        // Resolve type from ItemStack with defaultType fallback (same pattern as BlockGenericTypedContainer)
+        string? type = itemStack?.Attributes?.GetString("type", defaultType) ?? defaultType;
 
         string? intervalString = null;
 

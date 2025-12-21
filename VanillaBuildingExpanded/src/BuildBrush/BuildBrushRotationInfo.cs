@@ -111,14 +111,15 @@ public class BuildBrushRotationInfo
     /// </summary>
     /// <param name="block">The block to create rotation info for.</param>
     /// <param name="resolver">The resolver to get rotation definitions from.</param>
+    /// <param name="itemStack">Optional ItemStack to resolve type-specific properties (e.g., for typed containers).</param>
     /// <returns>Rotation info for the block.</returns>
-    public static BuildBrushRotationInfo Create(Block block, BlockRotationResolver resolver)
+    public static BuildBrushRotationInfo Create(Block block, BlockRotationResolver resolver, ItemStack? itemStack = null)
     {
         if (block is null || resolver is null)
             return CreateEmpty(resolver?.World);
 
         EBuildBrushRotationMode mode = resolver.GetRotationMode(block);
-        ImmutableArray<BlockOrientationDefinition> definitions = resolver.GetRotations(block.BlockId);
+        ImmutableArray<BlockOrientationDefinition> definitions = resolver.GetRotations(block.BlockId, itemStack);
 
         return new BuildBrushRotationInfo(resolver.World, block, mode, definitions);
     }

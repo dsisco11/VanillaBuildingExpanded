@@ -35,6 +35,7 @@ public class BuildBrushInstance
     private Block? _blockUntransformed = null;
     private Block? _blockTransformed = null;
     private ItemStack? _itemStack = null;
+    private ItemStack? _sourceItemStack = null;
     private EBuildBrushSnapping _snapping = BrushSnappingModes[0];
     private BrushSnappingState lastCheckedSnappingState = new();
     private bool _isValidPlacementBlock = true;
@@ -314,8 +315,9 @@ public class BuildBrushInstance
             _rotationResolver ??= new BlockRotationResolver(World);
 
             // Create rotation info for the new block using the resolver
+            // Pass source ItemStack to resolve type-specific properties (e.g., for typed containers)
             _rotation = value is not null
-                ? BuildBrushRotationInfo.Create(value, _rotationResolver)
+                ? BuildBrushRotationInfo.Create(value, _rotationResolver, _sourceItemStack)
                 : null;
 
             // Sync rotation index to match the block's current variant
@@ -424,9 +426,13 @@ public class BuildBrushInstance
     /// <returns> True if the BlockId was updated; otherwise, false. </returns>
     public bool TryUpdateBlockId()
     {
-        var currentBlockId = Player.InventoryManager.ActiveHotbarSlot?.Itemstack?.Block?.Id;
+        var hotbarSlot = Player.InventoryManager.ActiveHotbarSlot;
+        var currentItemStack = hotbarSlot?.Itemstack;
+        var currentBlockId = currentItemStack?.Block?.Id;
         if (currentBlockId != BlockId)
         {
+            // Store source ItemStack for type resolution (e.g., for typed containers like crates/chests)
+            _sourceItemStack = currentItemStack;
             BlockId = currentBlockId;
             return true;
         }
