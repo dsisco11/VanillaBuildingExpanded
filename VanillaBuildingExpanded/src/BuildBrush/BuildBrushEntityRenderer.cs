@@ -12,7 +12,7 @@ namespace VanillaBuildingExpanded.BuildHammer;
 /// </summary>
 public class BuildBrushEntityRenderer : EntityRenderer
 {
-    private ItemRenderInfo? renderInfo;
+    private MultiTextureMeshRef? meshRef;
     private int currentBlockId;
     private readonly Matrixf modelMat = new();
     private readonly BuildBrushEntity brushEntity;
@@ -69,7 +69,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
         IMiniDimension? dimension = brushEntity.Dimension;
         if (dimension is null)
         {
-            renderInfo = null;
+            DisposeMesh();
             currentBlockId = 0;
             return;
         }
@@ -85,16 +85,34 @@ public class BuildBrushEntityRenderer : EntityRenderer
 
         if (block is null || block.BlockId == 0)
         {
-            renderInfo = null;
+            DisposeMesh();
             currentBlockId = 0;
             return;
         }
 
-        //if (block.BlockId == currentBlockId)
-        //    return;
+        // Skip if block hasn't changed
+        if (block.BlockId == currentBlockId && meshRef is not null)
+            return;
 
         currentBlockId = block.BlockId;
-        renderInfo = capi.Render.GetItemStackRenderInfo(BrushInstance?.DummySlot, EnumItemRenderTarget.Ground, 0);
+
+        // Dispose old mesh before creating new one
+        DisposeMesh();
+
+        // Tesselate the block using the game's tesselator
+        capi.Tesselator.TesselateBlock(block, out MeshData meshData);
+
+        // Upload to GPU as multi-texture mesh
+        meshRef = capi.Render.UploadMultiTextureMesh(meshData);
+    }
+
+    /// <summary>
+    /// Disposes the current mesh and frees GPU resources.
+    /// </summary>
+    private void DisposeMesh()
+    {
+        meshRef?.Dispose();
+        meshRef = null;
     }
 
     public override void DoRender3DOpaque(float dt, bool isShadowPass)
@@ -102,7 +120,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
         if (isShadowPass)
             return;
 
-        if (renderInfo is null)
+        if (meshRef is null)
             return;
 
         BuildBrushInstance? brush = BrushInstance;
@@ -113,19 +131,13 @@ public class BuildBrushEntityRenderer : EntityRenderer
         Vec3d camPos = capi.World.Player.Entity.CameraPos;
         Vec3d entityPos = brush.Position?.ToVec3d() ?? entity?.Pos.XYZ ?? Vec3d.Zero;
 
-        // Build model matrix
-        // Apply renderInfo.Transform
+        // Build model matrix - translate to world position relative to camera
         modelMat.Identity();
-        // TODO: Shouldnt need to subtract the camera position here, the view matrix theoretically should have already been inverse offset by the camera position...
         modelMat.Translate(
             (float)(entityPos.X - camPos.X),
             (float)(entityPos.Y - camPos.Y),
             (float)(entityPos.Z - camPos.Z)
         );
-        //modelMat.Translate(-renderInfo.Transform.Origin.X, -renderInfo.Transform.Origin.Y, -renderInfo.Transform.Origin.Z);
-        //modelMat.RotateZDeg(renderInfo.Transform.Rotation.Z);
-        //modelMat.RotateYDeg(renderInfo.Transform.Rotation.Y);
-        //modelMat.RotateXDeg(renderInfo.Transform.Rotation.X);
 
         // Get validity state
         bool isValid = brush.IsValidPlacement;
@@ -134,15 +146,13 @@ public class BuildBrushEntityRenderer : EntityRenderer
         IStandardShaderProgram shader = rapi.StandardShader;
         shader.Use();
         // settings
-        shader.OverlayOpacity = renderInfo.OverlayOpacity;
-        shader.NormalShaded = renderInfo.NormalShaded ? 1 : 0;
-        shader.AlphaTest = renderInfo.AlphaTest;
-        shader.ExtraZOffset = 0.00001f;// to prevent z-fighting
+        shader.OverlayOpacity = 0;
+        shader.NormalShaded = 1;
+        shader.AlphaTest = 0.05f;
+        shader.ExtraZOffset = 0.00001f; // to prevent z-fighting
         shader.DontWarpVertices = 1;
         shader.AddRenderFlags = 0;
         // colors
-        //shader.RgbaTint = ColorUtil.WhiteArgbVec;
-        //shader.RgbaLightIn = isValid ? ColorValid : ColorInvalid;
         shader.RgbaTint = isValid ? ColorValid : ColorInvalid;
         shader.ExtraGlow = 32;
         shader.RgbaGlowIn = RenderGlow;
@@ -152,33 +162,15 @@ public class BuildBrushEntityRenderer : EntityRenderer
         shader.RgbaFogIn = rapi.FogColor;
         shader.FogMinIn = rapi.FogMin;
         shader.FogDensityIn = rapi.FogDensity;
-        // matricies
+        // matrices
         shader.ProjectionMatrix = rapi.CurrentProjectionMatrix;
         shader.ViewMatrix = rapi.CameraMatrixOriginf;
         shader.ModelMatrix = modelMat.Values;
-        // texturing
-        if (renderInfo.OverlayTexture is not null && renderInfo.OverlayOpacity > 0f)
-        {
-            shader.Tex2dOverlay2D = renderInfo.OverlayTexture.TextureId;
-            shader.OverlayTextureSize = new Vec2f(renderInfo.OverlayTexture.Width, renderInfo.OverlayTexture.Height);
-            shader.BaseTextureSize = new Vec2f(renderInfo.TextureSize.Width, renderInfo.TextureSize.Height);
-            TextureAtlasPosition texPos = rapi.GetTextureAtlasPosition(brush.ItemStack);
-            shader.BaseUvOrigin = new Vec2f(texPos.x1, texPos.y1);
-        }
 
         // Render the mesh
-        if (!renderInfo.CullFaces)
-        {
-            rapi.GlDisableCullFace();
-        }
-        // Render the mesh
-        rapi.RenderMultiTextureMesh(renderInfo.ModelRef, "tex");
-        // Reset state
-        if (!renderInfo.CullFaces)
-        {
-            rapi.GlEnableCullFace();
-        }
+        rapi.RenderMultiTextureMesh(meshRef, "tex");
 
+        // Reset shader state
         shader.ExtraGlow = 0;
         shader.RgbaGlowIn = ColorUtil.WhiteArgbVec;
         shader.RgbaLightIn = ColorUtil.WhiteArgbVec;
@@ -193,9 +185,9 @@ public class BuildBrushEntityRenderer : EntityRenderer
         if (brushInstance is not null)
         {
             brushInstance.OnBlockChanged -= BrushInstance_OnBrushBlockChanged;
+            brushInstance.OnOrientationChanged -= BrushInstance_OnOrientationChanged;
         }
 
-        //meshRef?.Dispose();
-        //meshRef = null;
+        DisposeMesh();
     }
 }
