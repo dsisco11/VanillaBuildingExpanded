@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.Immutable;
 
 using Vintagestory.API.Common;
@@ -84,6 +85,29 @@ public class BuildBrushOrientationInfo
     /// Whether this block has an IRotatable block entity (including hybrid).
     /// </summary>
     public bool HasRotatableEntity => Mode is EBuildBrushRotationMode.Rotatable or EBuildBrushRotationMode.Hybrid;
+
+    /// <summary>
+    /// Gets the mesh angle increment in degrees between orientation steps.
+    /// For rotatable blocks, this is typically 90°. For variant-only blocks, returns 0.
+    /// </summary>
+    public float MeshIncrementAngleDegrees
+    {
+        get
+        {
+            if (Definitions.IsDefaultOrEmpty || Definitions.Length <= 1)
+                return 0f;
+
+            // For IRotatable/Hybrid modes, compute the increment from definitions
+            if (HasRotatableEntity && Definitions.Length >= 2)
+            {
+                // Use the difference between first two definitions as the step
+                return Definitions[1].MeshAngleDegrees - Definitions[0].MeshAngleDegrees;
+            }
+
+            // Variant-based rotation doesn't use mesh angles (returns 0)
+            return 0f;
+        }
+    }
 
     /// <summary>
     /// The total number of orientation states available.
@@ -190,6 +214,82 @@ public class BuildBrushOrientationInfo
         {
             targetAttributes.SetFloat("meshAngle", CurrentMeshAngleRadians);
         }
+    }
+
+    /// <summary>
+    /// Applies orientation to an existing block entity in-place using IRotatable.OnTransformed.
+    /// This resets the BE to the original state first, then applies the absolute rotation.
+    /// This matches how WorldEdit/schematics apply rotations.
+    /// </summary>
+    /// <param name="blockEntity">The block entity to update.</param>
+    /// <param name="originalTree">The original (un-rotated) tree attributes to start from.</param>
+    /// <param name="absoluteAngleDegrees">The absolute rotation angle in degrees (0, 90, 180, 270).</param>
+    /// <param name="sourceAttributes">Optional source attributes to copy type from.</param>
+    /// <returns>True if rotation was applied, false if the block entity doesn't support rotation.</returns>
+    public bool ApplyOrientationToBlockEntity(BlockEntity blockEntity, ITreeAttribute? originalTree, int absoluteAngleDegrees, ITreeAttribute? sourceAttributes = null)
+    {
+        if (blockEntity is null)
+            return false;
+
+        // Find IRotatable on entity or behaviors
+        IRotatable? rotatable = blockEntity as IRotatable;
+        if (rotatable is null)
+        {
+            foreach (var behavior in blockEntity.Behaviors)
+            {
+                if (behavior is IRotatable r)
+                {
+                    rotatable = r;
+                    break;
+                }
+            }
+        }
+
+        if (rotatable is null)
+            return false;
+
+        // Start from original tree state (clone it to avoid modifying the original)
+        TreeAttribute tree = new();
+        if (originalTree is not null)
+        {
+            // Clone original tree by serializing/deserializing
+            foreach (var attr in originalTree)
+            {
+                tree[attr.Key] = attr.Value;
+            }
+        }
+        else
+        {
+            // Fallback: get current tree from BE (not ideal but better than nothing)
+            blockEntity.ToTreeAttributes(tree);
+        }
+
+        // Copy type attribute from source (for typed containers)
+        string? type = sourceAttributes?.GetString("type");
+        if (!string.IsNullOrEmpty(type))
+        {
+            tree.SetString("type", type);
+        }
+
+        // Apply absolute rotation from original state via OnTransformed
+        // This is how WorldEdit/schematics work - always from original with absolute angle
+        if (absoluteAngleDegrees != 0)
+        {
+            rotatable.OnTransformed(
+                _world,
+                tree,
+                absoluteAngleDegrees,
+                new Dictionary<int, AssetLocation>(), // oldBlockIdMapping - not needed for live rotation
+                new Dictionary<int, AssetLocation>(), // oldItemIdMapping - not needed for live rotation
+                null // flipAxis - no flip, only rotation
+            );
+        }
+
+        // Write back to BE
+        blockEntity.FromTreeAttributes(tree, _world);
+        blockEntity.MarkDirty(true);
+
+        return true;
     }
     #endregion
 }

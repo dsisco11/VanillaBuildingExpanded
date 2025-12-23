@@ -17,7 +17,6 @@ namespace VanillaBuildingExpanded.BuildHammer;
 public class BuildBrushEntityRenderer : EntityRenderer
 {
     private MultiTextureMeshRef? meshRef;
-    private int currentBlockId;
     private readonly Matrixf modelMat = new();
     private readonly BuildBrushEntity brushEntity;
     private readonly MiniDimensionTessellator tessellator;
@@ -53,12 +52,26 @@ public class BuildBrushEntityRenderer : EntityRenderer
         {
             brushInstance.OnBlockChanged += BrushInstance_OnBrushBlockChanged;
             brushInstance.OnOrientationChanged += BrushInstance_OnOrientationChanged;
+
+            // Subscribe to dimension dirty events
+            if (brushInstance.Dimension is not null)
+            {
+                brushInstance.Dimension.OnDirty += Dimension_OnDirty;
+            }
         }
 
         RebuildMesh();
     }
 
     private void BrushInstance_OnOrientationChanged(BuildBrushInstance arg1, int arg2, BlockOrientationDefinition arg3)
+    {
+        //RebuildMesh();
+    }
+
+    /// <summary>
+    /// Called when the dimension is marked dirty and needs mesh rebuild.
+    /// </summary>
+    private void Dimension_OnDirty(object? sender, DimensionDirtyEventArgs e)
     {
         RebuildMesh();
     }
@@ -68,7 +81,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
     /// </summary>
     private void BrushInstance_OnBrushBlockChanged(BuildBrushInstance instance, Block? block)
     {
-        RebuildMesh();
+        //RebuildMesh();
     }
 
     /// <summary>
@@ -82,7 +95,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
         if (dimension is null || brushDimension is null)
         {
             DisposeMesh();
-            currentBlockId = 0;
             return;
         }
 
@@ -97,15 +109,8 @@ public class BuildBrushEntityRenderer : EntityRenderer
         if (block is null || block.BlockId == 0)
         {
             DisposeMesh();
-            currentBlockId = 0;
             return;
         }
-
-        // Skip if block hasn't changed and we have a valid mesh
-        if (block.BlockId == currentBlockId && meshRef is not null)
-            return;
-
-        currentBlockId = block.BlockId;
 
         // Get active bounds from the dimension
         if (!brushDimension.GetActiveBounds(out BlockPos min, out BlockPos max))
@@ -189,11 +194,11 @@ public class BuildBrushEntityRenderer : EntityRenderer
         if (isShadowPass)
             return;
 
-        if (meshRef is null)
-            return;
-
         BuildBrushInstance? brush = BrushInstance;
         if (brush is null)
+            return;
+
+        if (meshRef is null)
             return;
 
         IRenderAPI rapi = capi.Render;
@@ -258,6 +263,12 @@ public class BuildBrushEntityRenderer : EntityRenderer
         {
             brushInstance.OnBlockChanged -= BrushInstance_OnBrushBlockChanged;
             brushInstance.OnOrientationChanged -= BrushInstance_OnOrientationChanged;
+
+            // Unsubscribe from dimension dirty events
+            if (brushInstance.Dimension is not null)
+            {
+                brushInstance.Dimension.OnDirty -= Dimension_OnDirty;
+            }
         }
 
         DisposeMesh();

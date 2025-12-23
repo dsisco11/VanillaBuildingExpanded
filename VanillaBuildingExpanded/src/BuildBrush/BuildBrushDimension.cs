@@ -10,6 +10,22 @@ using Vintagestory.API.Server;
 namespace VanillaBuildingExpanded.BuildHammer;
 
 /// <summary>
+/// Event args for dimension dirty events.
+/// </summary>
+public class DimensionDirtyEventArgs : EventArgs
+{
+    /// <summary>
+    /// The reason the dimension was marked dirty.
+    /// </summary>
+    public string Reason { get; }
+
+    public DimensionDirtyEventArgs(string reason = "")
+    {
+        Reason = reason;
+    }
+}
+
+/// <summary>
 /// Wrapper class that manages a mini-dimension for the build brush system.
 /// Handles block placement and rotation within the preview dimension.
 /// </summary>
@@ -92,6 +108,19 @@ public class BuildBrushDimension
     /// Whether there are any blocks placed in the dimension.
     /// </summary>
     public bool HasActiveBounds => activeBoundsMin is not null && activeBoundsMax is not null;
+
+    /// <summary>
+    /// The original (un-rotated) block entity tree attributes.
+    /// Used as the base state when applying rotations.
+    /// </summary>
+    public ITreeAttribute? OriginalBlockEntityTree => blockEntityTree;
+    #endregion
+
+    #region Events
+    /// <summary>
+    /// Raised when the dimension content changes and the mesh needs to be rebuilt.
+    /// </summary>
+    public event EventHandler<DimensionDirtyEventArgs>? OnDirty;
     #endregion
 
     #region Constructor
@@ -190,6 +219,7 @@ public class BuildBrushDimension
         activeBoundsMax = null;
         RotationAngle = 0;
         RotationMode = EBuildBrushRotationMode.None;
+        OnDirty?.Invoke(this, new DimensionDirtyEventArgs("Clear"));
     }
 
     /// <summary>
@@ -205,6 +235,27 @@ public class BuildBrushDimension
         dimension = null;
         dimensionId = -1;
         Clear();
+    }
+
+    /// <summary>
+    /// Marks the dimension as dirty, indicating the mesh needs to be rebuilt.
+    /// </summary>
+    /// <param name="reason">Optional reason for the dirty state (for debugging).</param>
+    public void MarkDirty(string reason = "")
+    {
+        OnDirty?.Invoke(this, new DimensionDirtyEventArgs(reason));
+    }
+
+    /// <summary>
+    /// Gets the block entity at the internal block position.
+    /// </summary>
+    /// <returns>The block entity if one exists, null otherwise.</returns>
+    public BlockEntity? GetBlockEntity()
+    {
+        if (dimension is null || internalBlockPos is null)
+            return null;
+
+        return dimension.GetBlockEntity(internalBlockPos);
     }
     #endregion
 
@@ -304,6 +355,7 @@ public class BuildBrushDimension
         }
 
         dimension.Dirty = true;
+        MarkDirty("PlaceBlockInDimension");
     }
 
     /// <summary>
