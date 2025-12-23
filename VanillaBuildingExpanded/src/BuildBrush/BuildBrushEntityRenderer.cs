@@ -127,40 +127,48 @@ public class BuildBrushEntityRenderer : EntityRenderer
         tessellationCts = new CancellationTokenSource();
         CancellationToken token = tessellationCts.Token;
 
-        tessellator.TessellateAsync(dimension, min, max, token)
-            .ContinueWith(task =>
+        MeshData? meshData = tessellator.Tessellate(dimension, min, max);
+        _upload_mesh(meshData);
+
+        //tessellator.TessellateAsync(dimension, min, max, token)
+        //    .ContinueWith(task =>
+        //    {
+        //        // Check if cancelled or faulted
+        //        if (task.IsCanceled || task.IsFaulted || token.IsCancellationRequested)
+        //        {
+        //            isTessellating = false;
+        //            return;
+        //        }
+
+        //        MeshData? meshData = task.Result;
+        //        _upload_mesh(meshData);
+        //    }, token);
+
+        void _upload_mesh(MeshData? meshData)
+        {
+            if (meshData is null || meshData.VerticesCount == 0)
             {
-                // Check if cancelled or faulted
-                if (task.IsCanceled || task.IsFaulted || token.IsCancellationRequested)
-                {
-                    isTessellating = false;
-                    return;
-                }
+                isTessellating = false;
+                return;
+            }
 
-                MeshData? meshData = task.Result;
-                if (meshData is null || meshData.VerticesCount == 0)
-                {
-                    isTessellating = false;
-                    return;
-                }
+            // Marshal back to main thread for GPU upload
+            capi.Event.EnqueueMainThreadTask(() =>
+            {
+                // Double-check we weren't cancelled while waiting
+                //if (token.IsCancellationRequested)
+                //{
+                //    isTessellating = false;
+                //    return;
+                //}
 
-                // Marshal back to main thread for GPU upload
-                capi.Event.EnqueueMainThreadTask(() =>
-                {
-                    // Double-check we weren't cancelled while waiting
-                    if (token.IsCancellationRequested)
-                    {
-                        isTessellating = false;
-                        return;
-                    }
+                // Dispose old mesh and upload new one
 
-                    // Dispose old mesh and upload new one
-
-                    DisposeMesh();
-                    meshRef = capi.Render.UploadMultiTextureMesh(meshData);
-                    isTessellating = false;
-                }, "BuildBrushEntityRenderer.UploadMesh");
-            }, token);
+                DisposeMesh();
+                meshRef = capi.Render.UploadMultiTextureMesh(meshData);
+                isTessellating = false;
+            }, "BuildBrushEntityRenderer.UploadMesh");
+        }
     }
 
     /// <summary>
