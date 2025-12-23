@@ -249,18 +249,15 @@ public class BuildBrushOrientationInfo
             return false;
 
         // Start from original tree state (clone it to avoid modifying the original)
-        TreeAttribute tree = new();
+        ITreeAttribute tree;
         if (originalTree is not null)
         {
-            // Clone original tree by serializing/deserializing
-            foreach (var attr in originalTree)
-            {
-                tree[attr.Key] = attr.Value;
-            }
+            tree = originalTree.Clone();
         }
         else
         {
             // Fallback: get current tree from BE (not ideal but better than nothing)
+            tree = new TreeAttribute();
             blockEntity.ToTreeAttributes(tree);
         }
 
