@@ -226,9 +226,6 @@ public class BuildBrushInstance
 
             // Update dimension with new block/rotation
             UpdateDimensionBlock();
-
-            // Apply orientation to block entity in-place via IRotatable.OnTransformed
-            ApplyOrientationToBlockEntity();
         }
     }
 
@@ -256,9 +253,6 @@ public class BuildBrushInstance
 
         // Update dimension with new block/rotation
         UpdateDimensionBlock();
-
-        // Apply orientation to block entity in-place via IRotatable.OnTransformed
-        ApplyOrientationToBlockEntity();
 
         // Raise block changed to update the renderer
         OnBlockChanged?.Invoke(this, _blockTransformed);
@@ -864,33 +858,6 @@ public class BuildBrushInstance
             float yawRadians = _rotation.CurrentMeshAngleRadians;
             _entity.Pos.Yaw = yawRadians;
             _entity.ServerPos.Yaw = yawRadians;
-        }
-    }
-
-    /// <summary>
-    /// Applies the current orientation to the block entity in the dimension using IRotatable.OnTransformed.
-    /// Resets BE to original state first, then applies the absolute rotation angle.
-    /// </summary>
-    private void ApplyOrientationToBlockEntity()
-    {
-        if (_dimension is null || _rotation is null || !_rotation.HasRotatableEntity)
-            return;
-
-        BlockEntity? be = _dimension.GetBlockEntity();
-        if (be is null)
-            return;
-
-        // Get the absolute rotation angle (not delta)
-        int absoluteAngle = (int)_rotation.CurrentMeshAngleDegrees;
-
-        // Get the original (un-rotated) tree from the dimension
-        ITreeAttribute? originalTree = _dimension.OriginalBlockEntityTree;
-
-        // Apply rotation via IRotatable.OnTransformed, resetting to original state first
-        if (_rotation.ApplyOrientationToBlockEntity(be, originalTree, absoluteAngle, _sourceItemStack?.Attributes))
-        {
-            // Mark dimension dirty to trigger mesh rebuild
-            _dimension.MarkDirty("ApplyOrientationToBlockEntity");
         }
     }
 

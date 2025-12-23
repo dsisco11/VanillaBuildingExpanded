@@ -359,6 +359,39 @@ public class BuildBrushDimension
     }
 
     /// <summary>
+    /// Places the current block in the mini-dimension with a specific tree attribute.
+    /// Used by rotation to apply a rotated tree without modifying the original.
+    /// </summary>
+    /// <param name="tree">The tree attributes to apply to the block entity.</param>
+    private void PlaceBlockInDimensionWithTree(ITreeAttribute tree)
+    {
+        if (dimension is null || currentBlock is null)
+            return;
+
+        // Calculate position in mini-dimension space
+        internalBlockPos = new BlockPos(0, 0, 0, Dimensions.MiniDimensions);
+        dimension.AdjustPosForSubDimension(internalBlockPos);
+
+        // Set the block
+        dimension.SetBlock(currentBlock.BlockId, internalBlockPos);
+
+        // Update active bounds to include this position
+        UpdateActiveBounds(internalBlockPos);
+
+        // If block has entity data, apply the provided tree
+        if (tree is not null && !string.IsNullOrEmpty(currentBlock.EntityClass))
+        {
+            // Spawn block entity and apply tree
+            world.BlockAccessor.SpawnBlockEntity(currentBlock.EntityClass, internalBlockPos);
+            var be = dimension.GetBlockEntity(internalBlockPos);
+            be?.FromTreeAttributes(tree, world);
+        }
+
+        dimension.Dirty = true;
+        MarkDirty("PlaceBlockInDimensionWithTree");
+    }
+
+    /// <summary>
     /// Updates the active bounds to include the specified position.
     /// </summary>
     /// <param name="pos">The position to include in bounds.</param>
@@ -451,8 +484,9 @@ public class BuildBrushDimension
 
     /// <summary>
     /// Applies rotation to IRotatable block entities.
+    /// Clones the original tree and applies absolute rotation to avoid cumulative transforms.
     /// </summary>
-    private void ApplyRotatableRotation(int angle)
+    private void ApplyRotatableRotation(int absoluteAngle)
     {
         if (blockEntityTree is null || currentBlock is null || internalBlockPos is null)
             return;
@@ -460,50 +494,58 @@ public class BuildBrushDimension
         if (string.IsNullOrEmpty(currentBlock.EntityClass))
             return;
 
-        try
+        // Clone the original tree - we need to apply absolute rotation from the original state
+        ITreeAttribute rotatedTree = blockEntityTree.Clone();
+
+        // Only apply rotation if angle is non-zero
+        if (absoluteAngle != 0)
         {
-            // Create block entity and apply rotation
-            BlockEntity be = world.ClassRegistry.CreateBlockEntity(currentBlock.EntityClass);
-            if (be is null)
-                return;
-
-            be.Pos = internalBlockPos;
-            be.CreateBehaviors(currentBlock, world);
-
-            // Check both entity and behaviors for IRotatable
-            IRotatable? rotatable = be as IRotatable;
-            if (rotatable is null)
+            try
             {
-                foreach (var behavior in be.Behaviors)
+                // Create block entity to get IRotatable
+                BlockEntity be = world.ClassRegistry.CreateBlockEntity(currentBlock.EntityClass);
+                if (be is null)
+                    return;
+
+                be.Pos = internalBlockPos;
+                be.CreateBehaviors(currentBlock, world);
+
+                // Check both entity and behaviors for IRotatable
+                IRotatable? rotatable = be as IRotatable;
+                if (rotatable is null)
                 {
-                    if (behavior is IRotatable r)
+                    foreach (var behavior in be.Behaviors)
                     {
-                        rotatable = r;
-                        break;
+                        if (behavior is IRotatable r)
+                        {
+                            rotatable = r;
+                            break;
+                        }
                     }
                 }
-            }
 
-            if (rotatable is not null)
+                if (rotatable is not null)
+                {
+                    // Apply absolute rotation from original state to cloned tree
+                    rotatable.OnTransformed(
+                        world,
+                        rotatedTree,
+                        absoluteAngle,
+                        new Dictionary<int, AssetLocation>(), // oldBlockIdMapping
+                        new Dictionary<int, AssetLocation>(), // oldItemIdMapping
+                        null // flipAxis
+                    );
+                }
+            }
+            catch
             {
-                // Apply rotation to tree attributes
-                rotatable.OnTransformed(
-                    world,
-                    blockEntityTree,
-                    angle,
-                    new Dictionary<int, AssetLocation>(), // oldBlockIdMapping
-                    new Dictionary<int, AssetLocation>(), // oldItemIdMapping
-                    null // flipAxis
-                );
+                // Rotation failed, use unrotated tree
+                return;
             }
+        }
 
-            // Re-place block with updated tree
-            PlaceBlockInDimension();
-        }
-        catch
-        {
-            // Rotation failed, keep current state
-        }
+        // Place block with rotated tree
+        PlaceBlockInDimensionWithTree(rotatedTree);
     }
     #endregion
 
