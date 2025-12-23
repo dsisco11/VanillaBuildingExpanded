@@ -9,7 +9,7 @@
                 "build",
                 "-c",
                 "Debug",
-                "${workspaceFolder}/VanillaBuildingExtended/VanillaBuildingExtended.csproj"
+                "${workspaceFolder}/VanillaBuildingExpanded/VanillaBuildingExpanded.csproj"
             ],
             "problemMatcher": "$msCompile"
         },
