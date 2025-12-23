@@ -763,6 +763,13 @@ public class BuildBrushInstance
     public void AssociateEntity(BuildBrushEntity entity)
     {
         _entity = entity;
+
+        // On client side, wrap the entity's dimension so the renderer can access it
+        if (World.Side == EnumAppSide.Client && entity.Dimension is not null && _dimension is null)
+        {
+            _dimension = new BuildBrushDimension(World);
+            _dimension.InitializeClientSide(entity.Dimension);
+        }
     }
 
     /// <summary>

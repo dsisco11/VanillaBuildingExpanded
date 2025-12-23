@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using Vintagestory.API.Common;
@@ -39,6 +40,16 @@ public class BuildBrushDimension
     /// The position within the mini-dimension where the block is placed.
     /// </summary>
     private BlockPos? internalBlockPos;
+
+    /// <summary>
+    /// Minimum corner of the active bounds (blocks that have been placed).
+    /// </summary>
+    private BlockPos? activeBoundsMin;
+
+    /// <summary>
+    /// Maximum corner of the active bounds (blocks that have been placed).
+    /// </summary>
+    private BlockPos? activeBoundsMax;
     #endregion
 
     #region Properties
@@ -76,6 +87,11 @@ public class BuildBrushDimension
     /// The original unrotated block.
     /// </summary>
     public Block? OriginalBlock => originalBlock;
+
+    /// <summary>
+    /// Whether there are any blocks placed in the dimension.
+    /// </summary>
+    public bool HasActiveBounds => activeBoundsMin is not null && activeBoundsMax is not null;
     #endregion
 
     #region Constructor
@@ -119,6 +135,48 @@ public class BuildBrushDimension
     }
 
     /// <summary>
+    /// Initializes the dimension wrapper on client side by wrapping an existing dimension.
+    /// This is used when the entity is received from the server and we need to wrap its dimension.
+    /// </summary>
+    /// <param name="existingDimension">The dimension from the entity to wrap.</param>
+    /// <returns>True if initialization succeeded.</returns>
+    public bool InitializeClientSide(IMiniDimension existingDimension)
+    {
+        if (existingDimension is null)
+            return false;
+
+        dimension = existingDimension;
+        dimensionId = existingDimension.subDimensionId;
+
+        // Try to detect active bounds from existing blocks
+        UpdateActiveBoundsFromDimension();
+
+        return true;
+    }
+
+    /// <summary>
+    /// Scans the dimension to update active bounds based on existing blocks.
+    /// Used on client side when wrapping a dimension that already has content.
+    /// </summary>
+    private void UpdateActiveBoundsFromDimension()
+    {
+        if (dimension is null)
+            return;
+
+        // Check the origin position for a block (most common case for single-block brush)
+        BlockPos originPos = new(0, 0, 0, Dimensions.MiniDimensions);
+        Block? block = dimension.GetBlock(originPos);
+        if (block is not null && block.BlockId != 0)
+        {
+            currentBlock = block;
+            originalBlock = block;
+            internalBlockPos = originPos.Copy();
+            activeBoundsMin = originPos.Copy();
+            activeBoundsMax = originPos.Copy();
+        }
+    }
+
+    /// <summary>
     /// Clears the dimension contents without destroying it.
     /// </summary>
     public void Clear()
@@ -128,6 +186,8 @@ public class BuildBrushDimension
         originalBlock = null;
         blockEntityTree = null;
         internalBlockPos = null;
+        activeBoundsMin = null;
+        activeBoundsMax = null;
         RotationAngle = 0;
         RotationMode = EBuildBrushRotationMode.None;
     }
@@ -231,6 +291,9 @@ public class BuildBrushDimension
         // Set the block
         dimension.SetBlock(currentBlock.BlockId, internalBlockPos);
 
+        // Update active bounds to include this position
+        UpdateActiveBounds(internalBlockPos);
+
         // If block has entity data, apply it
         if (blockEntityTree is not null && !string.IsNullOrEmpty(currentBlock.EntityClass))
         {
@@ -241,6 +304,51 @@ public class BuildBrushDimension
         }
 
         dimension.Dirty = true;
+    }
+
+    /// <summary>
+    /// Updates the active bounds to include the specified position.
+    /// </summary>
+    /// <param name="pos">The position to include in bounds.</param>
+    private void UpdateActiveBounds(BlockPos pos)
+    {
+        if (activeBoundsMin is null || activeBoundsMax is null)
+        {
+            // First block placed, initialize bounds
+            activeBoundsMin = pos.Copy();
+            activeBoundsMax = pos.Copy();
+        }
+        else
+        {
+            // Expand bounds to include this position
+            activeBoundsMin.X = Math.Min(activeBoundsMin.X, pos.X);
+            activeBoundsMin.Y = Math.Min(activeBoundsMin.Y, pos.Y);
+            activeBoundsMin.Z = Math.Min(activeBoundsMin.Z, pos.Z);
+
+            activeBoundsMax.X = Math.Max(activeBoundsMax.X, pos.X);
+            activeBoundsMax.Y = Math.Max(activeBoundsMax.Y, pos.Y);
+            activeBoundsMax.Z = Math.Max(activeBoundsMax.Z, pos.Z);
+        }
+    }
+
+    /// <summary>
+    /// Gets the active bounds of the dimension (the region containing placed blocks).
+    /// </summary>
+    /// <param name="min">Output: minimum corner of the bounds.</param>
+    /// <param name="max">Output: maximum corner of the bounds.</param>
+    /// <returns>True if there are active bounds, false if the dimension is empty.</returns>
+    public bool GetActiveBounds(out BlockPos min, out BlockPos max)
+    {
+        if (activeBoundsMin is null || activeBoundsMax is null)
+        {
+            min = new BlockPos(0, 0, 0, Dimensions.MiniDimensions);
+            max = new BlockPos(0, 0, 0, Dimensions.MiniDimensions);
+            return false;
+        }
+
+        min = activeBoundsMin.Copy();
+        max = activeBoundsMax.Copy();
+        return true;
     }
     #endregion
 

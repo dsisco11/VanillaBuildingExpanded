@@ -1,14 +1,18 @@
+using System.Threading;
+
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 
+using VanillaBuildingExpanded.BuildHammer.Tessellation;
+
 namespace VanillaBuildingExpanded.BuildHammer;
 
 /// <summary>
 /// Custom renderer for the build brush entity.
-/// Uses the TesselatorManager to get pre-tessellated block meshes for rendering.
+/// Uses the MiniDimensionTessellator to tessellate blocks including block entities.
 /// </summary>
 public class BuildBrushEntityRenderer : EntityRenderer
 {
@@ -16,6 +20,11 @@ public class BuildBrushEntityRenderer : EntityRenderer
     private int currentBlockId;
     private readonly Matrixf modelMat = new();
     private readonly BuildBrushEntity brushEntity;
+    private readonly MiniDimensionTessellator tessellator;
+
+    // Async tessellation state
+    private CancellationTokenSource? tessellationCts;
+    private volatile bool isTessellating;
 
     #region Constants
     // Render colors
@@ -31,6 +40,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
     public BuildBrushEntityRenderer(Entity entity, ICoreClientAPI api) : base(entity, api)
     {
         brushEntity = (BuildBrushEntity)entity;
+        tessellator = new MiniDimensionTessellator(api);
     }
 
     public override void OnEntityLoaded()
@@ -62,24 +72,25 @@ public class BuildBrushEntityRenderer : EntityRenderer
     }
 
     /// <summary>
-    /// Rebuilds the mesh from the block in the dimension.
+    /// Rebuilds the mesh from the blocks in the dimension using async tessellation.
     /// </summary>
     public void RebuildMesh()
     {
         IMiniDimension? dimension = brushEntity.Dimension;
-        if (dimension is null)
+        BuildBrushDimension? brushDimension = BrushInstance?.Dimension;
+
+        if (dimension is null || brushDimension is null)
         {
             DisposeMesh();
             currentBlockId = 0;
             return;
         }
 
-        // Get the block from the dimension at origin (0,0,0)
+        // Get the block to check if it changed
         BlockPos originPos = new(0, 0, 0, Dimensions.MiniDimensions);
         Block? block = dimension.GetBlock(originPos);
         if (block is null || block.BlockId == 0)
         {
-            // get block from the build brush instance instead
             block = brushEntity?.BrushInstance?.BlockTransformed;
         }
 
@@ -90,20 +101,78 @@ public class BuildBrushEntityRenderer : EntityRenderer
             return;
         }
 
-        // Skip if block hasn't changed
+        // Skip if block hasn't changed and we have a valid mesh
         if (block.BlockId == currentBlockId && meshRef is not null)
             return;
 
         currentBlockId = block.BlockId;
 
-        // Dispose old mesh before creating new one
-        DisposeMesh();
+        // Get active bounds from the dimension
+        if (!brushDimension.GetActiveBounds(out BlockPos min, out BlockPos max))
+        {
+            DisposeMesh();
+            return;
+        }
 
-        // Tesselate the block using the game's tesselator
-        capi.Tesselator.TesselateBlock(block, out MeshData meshData);
+        // Cancel any pending tessellation
+        CancelPendingTessellation();
 
-        // Upload to GPU as multi-texture mesh
-        meshRef = capi.Render.UploadMultiTextureMesh(meshData);
+        // Start async tessellation
+        isTessellating = true;
+        tessellationCts = new CancellationTokenSource();
+        CancellationToken token = tessellationCts.Token;
+
+        tessellator.TessellateAsync(dimension, min, max, token)
+            .ContinueWith(task =>
+            {
+                // Check if cancelled or faulted
+                if (task.IsCanceled || task.IsFaulted || token.IsCancellationRequested)
+                {
+                    isTessellating = false;
+                    return;
+                }
+
+                MeshData? meshData = task.Result;
+                if (meshData is null || meshData.VerticesCount == 0)
+                {
+                    isTessellating = false;
+                    return;
+                }
+
+                // Marshal back to main thread for GPU upload
+                capi.Event.EnqueueMainThreadTask(() =>
+                {
+                    // Double-check we weren't cancelled while waiting
+                    if (token.IsCancellationRequested)
+                    {
+                        isTessellating = false;
+                        return;
+                    }
+
+                    // Dispose old mesh and upload new one
+
+                    DisposeMesh();
+                    meshRef = capi.Render.UploadMultiTextureMesh(meshData);
+                    isTessellating = false;
+                }, "BuildBrushEntityRenderer.UploadMesh");
+            }, token);
+    }
+
+    /// <summary>
+    /// Cancels any pending tessellation operation.
+    /// </summary>
+    private void CancelPendingTessellation()
+    {
+        try
+        {
+            tessellationCts?.Cancel();
+            tessellationCts?.Dispose();
+        }
+        catch { }
+        finally
+        {
+            tessellationCts = null;
+        }
     }
 
     /// <summary>
@@ -180,6 +249,9 @@ public class BuildBrushEntityRenderer : EntityRenderer
 
     public override void Dispose()
     {
+        // Cancel any pending tessellation
+        CancelPendingTessellation();
+
         // Unsubscribe from events
         var brushInstance = BrushInstance;
         if (brushInstance is not null)
