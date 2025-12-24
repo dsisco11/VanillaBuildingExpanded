@@ -66,6 +66,16 @@ public class BuildBrushDimension
     /// Maximum corner of the active bounds (blocks that have been placed).
     /// </summary>
     private BlockPos? activeBoundsMax;
+
+    /// <summary>
+    /// Tracks nested BeginUpdate/EndUpdate calls.
+    /// </summary>
+    private int _updateDepth = 0;
+
+    /// <summary>
+    /// Whether MarkDirty was called during a batch update.
+    /// </summary>
+    private bool _isDirtyDuringUpdate = false;
     #endregion
 
     #region Properties
@@ -219,7 +229,7 @@ public class BuildBrushDimension
         activeBoundsMax = null;
         RotationAngle = 0;
         RotationMode = EBuildBrushRotationMode.None;
-        OnDirty?.Invoke(this, new DimensionDirtyEventArgs("Clear"));
+        MarkDirty("Clear");
     }
 
     /// <summary>
@@ -238,11 +248,44 @@ public class BuildBrushDimension
     }
 
     /// <summary>
+    /// Begins a batch update. MarkDirty calls will be deferred until EndUpdate is called.
+    /// Supports nested calls.
+    /// </summary>
+    public void BeginUpdate()
+    {
+        _updateDepth++;
+    }
+
+    /// <summary>
+    /// Ends a batch update. If MarkDirty was called during the batch, raises OnDirty once.
+    /// </summary>
+    public void EndUpdate()
+    {
+        if (_updateDepth <= 0)
+            return;
+
+        _updateDepth--;
+
+        if (_updateDepth == 0 && _isDirtyDuringUpdate)
+        {
+            _isDirtyDuringUpdate = false;
+            OnDirty?.Invoke(this, new DimensionDirtyEventArgs("BatchUpdate"));
+        }
+    }
+
+    /// <summary>
     /// Marks the dimension as dirty, indicating the mesh needs to be rebuilt.
+    /// If inside a BeginUpdate/EndUpdate block, defers the event until EndUpdate.
     /// </summary>
     /// <param name="reason">Optional reason for the dirty state (for debugging).</param>
     public void MarkDirty(string reason = "")
     {
+        if (_updateDepth > 0)
+        {
+            _isDirtyDuringUpdate = true;
+            return;
+        }
+
         OnDirty?.Invoke(this, new DimensionDirtyEventArgs(reason));
     }
 

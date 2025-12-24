@@ -795,26 +795,35 @@ public class BuildBrushInstance
 
     /// <summary>
     /// Updates the block in the dimension based on current rotation state.
+    /// Uses BeginUpdate/EndUpdate to batch multiple dirty events into a single mesh rebuild.
     /// </summary>
     private void UpdateDimensionBlock()
     {
         if (_dimension is null || !_dimension.IsInitialized)
             return;
 
-        Block? block = _blockTransformed ?? _blockUntransformed;
-        if (block is not null)
+        _dimension.BeginUpdate();
+        try
         {
-            _dimension.SetBlock(block, _rotation?.Mode);
-
-            // Apply mesh angle rotation if applicable
-            if (_rotation is not null && _rotation.HasRotatableEntity)
+            Block? block = _blockTransformed ?? _blockUntransformed;
+            if (block is not null)
             {
-                ApplyRotation();
+                _dimension.SetBlock(block, _rotation?.Mode);
+
+                // Apply mesh angle rotation if applicable
+                if (_rotation is not null && _rotation.HasRotatableEntity)
+                {
+                    ApplyRotation();
+                }
+            }
+            else
+            {
+                _dimension.Clear();
             }
         }
-        else
+        finally
         {
-            _dimension.Clear();
+            _dimension.EndUpdate();
         }
     }
 
