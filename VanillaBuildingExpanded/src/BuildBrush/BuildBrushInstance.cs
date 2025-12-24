@@ -251,9 +251,6 @@ public class BuildBrushInstance
         // Update the transformed block based on the new rotation state
         BlockTransformed = _rotation.CurrentBlock;
 
-        // Update dimension with new block/rotation
-        UpdateDimensionBlock();
-
         // Raise block changed to update the renderer
         OnBlockChanged?.Invoke(this, _blockTransformed);
 
