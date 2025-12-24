@@ -805,7 +805,7 @@ public class BuildBrushInstance
         if (block is not null)
         {
             _dimension.SetBlock(block, _rotation?.Mode);
-            
+
             // Apply mesh angle rotation if applicable
             if (_rotation is not null && _rotation.HasRotatableEntity)
             {
@@ -850,14 +850,6 @@ public class BuildBrushInstance
                 // Block ID swap is already handled, apply mesh angle offset
                 _dimension.ApplyRotation((int)meshAngleDegrees, _blockTransformed);
                 break;
-        }
-
-        // Update entity yaw for visual rotation if using IRotatable
-        if (_rotation.HasRotatableEntity && _entity is not null)
-        {
-            float yawRadians = _rotation.CurrentMeshAngleRadians;
-            _entity.Pos.Yaw = yawRadians;
-            _entity.ServerPos.Yaw = yawRadians;
         }
     }
 
