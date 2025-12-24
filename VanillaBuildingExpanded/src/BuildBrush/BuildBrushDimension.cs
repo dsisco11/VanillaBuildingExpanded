@@ -229,7 +229,7 @@ public class BuildBrushDimension
         activeBoundsMax = null;
         RotationAngle = 0;
         RotationMode = EBuildBrushRotationMode.None;
-        MarkDirty("Clear");
+        MarkDirty(nameof(Clear));
     }
 
     /// <summary>
@@ -269,7 +269,7 @@ public class BuildBrushDimension
         if (_updateDepth == 0 && _isDirtyDuringUpdate)
         {
             _isDirtyDuringUpdate = false;
-            OnDirty?.Invoke(this, new DimensionDirtyEventArgs("BatchUpdate"));
+            OnDirty?.Invoke(this, new DimensionDirtyEventArgs(nameof(EndUpdate)));
         }
     }
 
@@ -403,7 +403,7 @@ public class BuildBrushDimension
         }
 
         dimension.Dirty = true;
-        MarkDirty("PlaceBlockInDimension");
+        MarkDirty(nameof(PlaceBlockInDimension));
     }
 
     /// <summary>
