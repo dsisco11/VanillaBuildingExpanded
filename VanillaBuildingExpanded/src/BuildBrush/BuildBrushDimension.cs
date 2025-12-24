@@ -473,8 +473,8 @@ public class BuildBrushDimension
                 break;
 
             case EBuildBrushRotationMode.VariantBased:
-                // Use the provided variant block
-                if (variantBlock is not null)
+                // Use the provided variant block (skip if already set to avoid redundant placement)
+                if (variantBlock is not null && variantBlock.BlockId != currentBlock?.BlockId)
                 {
                     currentBlock = variantBlock;
                     PlaceBlockInDimension();
@@ -488,11 +488,12 @@ public class BuildBrushDimension
 
             case EBuildBrushRotationMode.Hybrid:
                 // Apply both variant and IRotatable
-                if (variantBlock is not null)
+                bool variantChanged = variantBlock is not null && variantBlock.BlockId != currentBlock?.BlockId;
+                if (variantChanged)
                 {
                     currentBlock = variantBlock;
                 }
-                ApplyRotatableRotation(RotationAngle);
+                ApplyRotatableRotation(RotationAngle, variantChanged);
                 break;
         }
     }
@@ -501,7 +502,9 @@ public class BuildBrushDimension
     /// Applies rotation to IRotatable block entities.
     /// Clones the original tree and applies absolute rotation to avoid cumulative transforms.
     /// </summary>
-    private void ApplyRotatableRotation(int absoluteAngle)
+    /// <param name="absoluteAngle">The rotation angle in degrees.</param>
+    /// <param name="forceReplacement">If true, forces full block replacement (e.g., when variant changed).</param>
+    private void ApplyRotatableRotation(int absoluteAngle, bool forceReplacement = false)
     {
         if (blockEntityTree is null || currentBlock is null || internalBlockPos is null)
             return;
@@ -559,8 +562,22 @@ public class BuildBrushDimension
             }
         }
 
-        // Place block with rotated tree
-        PlaceBlockInDimension(rotatedTree);
+        // If variant changed, we need full replacement; otherwise update entity in-place
+        if (forceReplacement)
+        {
+            PlaceBlockInDimension(rotatedTree);
+        }
+        else
+        {
+            // Update existing block entity with rotated attributes (block was already placed by SetBlock)
+            var existingBe = dimension?.GetBlockEntity(internalBlockPos);
+            if (existingBe is not null)
+            {
+                existingBe.FromTreeAttributes(rotatedTree, world);
+            }
+            dimension!.Dirty = true;
+            MarkDirty(nameof(ApplyRotatableRotation));
+        }
     }
     #endregion
 
