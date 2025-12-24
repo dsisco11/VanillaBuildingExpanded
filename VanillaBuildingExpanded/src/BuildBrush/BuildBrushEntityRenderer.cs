@@ -73,6 +73,9 @@ public class BuildBrushEntityRenderer : EntityRenderer
     /// </summary>
     public void RebuildMesh()
     {
+        if (capi.World.Side != EnumAppSide.Client)
+            return;
+
         IMiniDimension? dimension = brushEntity.Dimension;
         BuildBrushDimension? brushDimension = BrushInstance?.Dimension;
 
@@ -111,8 +114,11 @@ public class BuildBrushEntityRenderer : EntityRenderer
         tessellationCts = new CancellationTokenSource();
         CancellationToken token = tessellationCts.Token;
 
-        MeshData? meshData = tessellator.Tessellate(dimension, min, max);
-        _upload_mesh(meshData);
+        capi.Event.EnqueueMainThreadTask(() =>
+        {
+            MeshData ? meshData = tessellator.Tessellate(dimension, min, max);
+            _upload_mesh(meshData);
+        }, $"{nameof(BuildBrushEntityRenderer)}.{nameof(RebuildMesh)}");
 
         //tessellator.TessellateAsync(dimension, min, max, token)
         //    .ContinueWith(task =>
@@ -137,8 +143,8 @@ public class BuildBrushEntityRenderer : EntityRenderer
             }
 
             // Marshal back to main thread for GPU upload
-            capi.Event.EnqueueMainThreadTask(() =>
-            {
+            //capi.Event.EnqueueMainThreadTask(() =>
+            //{
                 // Double-check we weren't cancelled while waiting
                 //if (token.IsCancellationRequested)
                 //{
@@ -151,7 +157,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
                 DisposeMesh();
                 meshRef = capi.Render.UploadMultiTextureMesh(meshData);
                 isTessellating = false;
-            }, "BuildBrushEntityRenderer.UploadMesh");
+            //}, $"{nameof(BuildBrushEntityRenderer)}.{nameof(RebuildMesh)}");
         }
     }
 
