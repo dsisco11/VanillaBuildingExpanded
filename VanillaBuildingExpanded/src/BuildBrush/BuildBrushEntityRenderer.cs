@@ -50,9 +50,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
         var brushInstance = BrushInstance;
         if (brushInstance is not null)
         {
-            brushInstance.OnBlockChanged += BrushInstance_OnBrushBlockChanged;
-            brushInstance.OnOrientationChanged += BrushInstance_OnOrientationChanged;
-
             // Subscribe to dimension dirty events
             if (brushInstance.Dimension is not null)
             {
@@ -63,25 +60,12 @@ public class BuildBrushEntityRenderer : EntityRenderer
         RebuildMesh();
     }
 
-    private void BrushInstance_OnOrientationChanged(BuildBrushInstance arg1, int arg2, BlockOrientationDefinition arg3)
-    {
-        //RebuildMesh();
-    }
-
     /// <summary>
     /// Called when the dimension is marked dirty and needs mesh rebuild.
     /// </summary>
     private void Dimension_OnDirty(object? sender, DimensionDirtyEventArgs e)
     {
         RebuildMesh();
-    }
-
-    /// <summary>
-    /// Called when the brush block changes.
-    /// </summary>
-    private void BrushInstance_OnBrushBlockChanged(BuildBrushInstance instance, Block? block)
-    {
-        //RebuildMesh();
     }
 
     /// <summary>
@@ -269,9 +253,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
         var brushInstance = BrushInstance;
         if (brushInstance is not null)
         {
-            brushInstance.OnBlockChanged -= BrushInstance_OnBrushBlockChanged;
-            brushInstance.OnOrientationChanged -= BrushInstance_OnOrientationChanged;
-
             // Unsubscribe from dimension dirty events
             if (brushInstance.Dimension is not null)
             {
