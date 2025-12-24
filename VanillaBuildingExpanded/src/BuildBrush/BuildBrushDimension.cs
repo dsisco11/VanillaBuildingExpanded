@@ -329,10 +329,12 @@ public class BuildBrushDimension
     /// <summary>
     /// Places the current block in the mini-dimension at the origin.
     /// </summary>
-    private void PlaceBlockInDimension()
+    private void PlaceBlockInDimension(ITreeAttribute? tree = null)
     {
         if (dimension is null || currentBlock is null)
             return;
+
+        tree ??= blockEntityTree;
 
         // Calculate position in mini-dimension space
         // Block is placed at origin (0, 0, 0) within the dimension
@@ -346,49 +348,19 @@ public class BuildBrushDimension
         UpdateActiveBounds(internalBlockPos);
 
         // If block has entity data, apply it
-        if (blockEntityTree is not null && !string.IsNullOrEmpty(currentBlock.EntityClass))
+        if (!string.IsNullOrEmpty(currentBlock.EntityClass))
         {
             // Spawn block entity and apply tree
             world.BlockAccessor.SpawnBlockEntity(currentBlock.EntityClass, internalBlockPos);
-            var be = dimension.GetBlockEntity(internalBlockPos);
-            be?.FromTreeAttributes(blockEntityTree, world);
+            if (tree is not null)
+            {
+                var be = dimension.GetBlockEntity(internalBlockPos);
+                be?.FromTreeAttributes(tree, world);
+            }
         }
 
         dimension.Dirty = true;
         MarkDirty("PlaceBlockInDimension");
-    }
-
-    /// <summary>
-    /// Places the current block in the mini-dimension with a specific tree attribute.
-    /// Used by rotation to apply a rotated tree without modifying the original.
-    /// </summary>
-    /// <param name="tree">The tree attributes to apply to the block entity.</param>
-    private void PlaceBlockInDimensionWithTree(ITreeAttribute tree)
-    {
-        if (dimension is null || currentBlock is null)
-            return;
-
-        // Calculate position in mini-dimension space
-        internalBlockPos = new BlockPos(0, 0, 0, Dimensions.MiniDimensions);
-        dimension.AdjustPosForSubDimension(internalBlockPos);
-
-        // Set the block
-        dimension.SetBlock(currentBlock.BlockId, internalBlockPos);
-
-        // Update active bounds to include this position
-        UpdateActiveBounds(internalBlockPos);
-
-        // If block has entity data, apply the provided tree
-        if (tree is not null && !string.IsNullOrEmpty(currentBlock.EntityClass))
-        {
-            // Spawn block entity and apply tree
-            world.BlockAccessor.SpawnBlockEntity(currentBlock.EntityClass, internalBlockPos);
-            var be = dimension.GetBlockEntity(internalBlockPos);
-            be?.FromTreeAttributes(tree, world);
-        }
-
-        dimension.Dirty = true;
-        MarkDirty("PlaceBlockInDimensionWithTree");
     }
 
     /// <summary>
@@ -545,7 +517,7 @@ public class BuildBrushDimension
         }
 
         // Place block with rotated tree
-        PlaceBlockInDimensionWithTree(rotatedTree);
+        PlaceBlockInDimension(rotatedTree);
     }
     #endregion
 
