@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,6 +17,12 @@ namespace VanillaBuildingExpanded.BuildHammer.Tessellation;
 public class MiniDimensionTessellator
 {
     private readonly ICoreClientAPI capi;
+
+    /// <summary>
+    /// Cache for "needs fallback mesh" decisions per block-entity type.
+    /// True means the BE uses a custom renderer and needs fallback mesh when OnTesselation skips default.
+    /// </summary>
+    private static readonly ConcurrentDictionary<Type, bool> NeedsFallbackCache = new();
 
     public MiniDimensionTessellator(ICoreClientAPI capi)
     {
@@ -109,6 +116,22 @@ public class MiniDimensionTessellator
                             // Note: This should be called from main thread for thread safety,
                             // but we're following the game's pattern where OnTesselation is called from tess thread
                             skipDefaultMesh = blockEntity.OnTesselation(offsetPool, capi.Tesselator);
+
+                            // If OnTesselation skipped the default mesh but this BE uses a custom renderer,
+                            // we need to add a fallback mesh since the renderer won't run in our preview
+                            if (skipDefaultMesh && NeedsFallbackMesh(blockEntity))
+                            {
+                                MeshData? fallbackMesh = GetBlockMesh(block);
+                                if (fallbackMesh is not null)
+                                {
+                                    meshPool.AddMeshDataWithOffset(fallbackMesh, offsetX, offsetY, offsetZ);
+                                    capi.Logger.Debug(
+                                        "[MiniDimensionTessellator] Added fallback mesh for {0} at ({1},{2},{3}) - uses custom renderer",
+                                        blockEntity.GetType().Name, x, y, z);
+                                }
+                                // Mark that we handled this with fallback, so we don't add default mesh again
+                                skipDefaultMesh = true;
+                            }
                         }
 
                         // Add default block mesh if not skipped by block entity
@@ -135,6 +158,39 @@ public class MiniDimensionTessellator
             capi.Logger.Error("MiniDimensionTessellator: Error during tessellation: {0}", ex);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Determines if a block entity needs a fallback mesh because it uses a custom renderer
+    /// that won't run in our preview context.
+    /// </summary>
+    /// <param name="blockEntity">The block entity to check.</param>
+    /// <returns>True if a fallback mesh should be added.</returns>
+    private static bool NeedsFallbackMesh(BlockEntity blockEntity)
+    {
+        var beType = blockEntity.GetType();
+
+        return NeedsFallbackCache.GetOrAdd(beType, type =>
+        {
+            // Strategy 1: Check if the BE type (or behaviors) has renderer-related fields
+            var renderInfo = BlockEntityRenderDetector.GetRenderSystemInfo(blockEntity);
+            if (renderInfo.UsesCustomRenderer)
+                return true;
+
+            // Strategy 2: Check if any known IRenderer implementations target this BE type
+            if (IRendererBlockEntityScanner.IsInitialized && IRendererBlockEntityScanner.HasKnownRenderer(blockEntity))
+                return true;
+
+            return false;
+        });
+    }
+
+    /// <summary>
+    /// Clears the fallback mesh cache. Call this if mod assemblies are reloaded.
+    /// </summary>
+    public static void ClearFallbackCache()
+    {
+        NeedsFallbackCache.Clear();
     }
 
     /// <summary>
