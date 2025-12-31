@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,12 +16,6 @@ namespace VanillaBuildingExpanded.BuildHammer.Tessellation;
 public class MiniDimensionTessellator
 {
     private readonly ICoreClientAPI capi;
-
-    /// <summary>
-    /// Cache for "needs fallback mesh" decisions per block-entity type.
-    /// True means the BE uses a custom renderer and needs fallback mesh when OnTesselation skips default.
-    /// </summary>
-    private static readonly ConcurrentDictionary<Type, bool> NeedsFallbackCache = new();
 
     public MiniDimensionTessellator(ICoreClientAPI capi)
     {
@@ -110,6 +103,7 @@ public class MiniDimensionTessellator
                         if (blockEntity is not null)
                         {
                             // Create an offset mesh pool that translates meshes to the correct position
+                            // and tracks how many vertices were added
                             var offsetPool = new OffsetMeshPoolWrapper(meshPool, offsetX, offsetY, offsetZ);
                             
                             // Call block entity tessellation
@@ -117,20 +111,19 @@ public class MiniDimensionTessellator
                             // but we're following the game's pattern where OnTesselation is called from tess thread
                             skipDefaultMesh = blockEntity.OnTesselation(offsetPool, capi.Tesselator);
 
-                            // If OnTesselation skipped the default mesh but this BE uses a custom renderer,
-                            // we need to add a fallback mesh since the renderer won't run in our preview
-                            if (skipDefaultMesh && NeedsFallbackMesh(blockEntity))
+                            // If OnTesselation skipped the default mesh but added zero vertices,
+                            // it likely relies on a custom IRenderer that won't run in our preview.
+                            // Add the fallback block mesh so the BE isn't invisible.
+                            if (skipDefaultMesh && offsetPool.VerticesAdded == 0)
                             {
                                 MeshData? fallbackMesh = GetBlockMesh(block);
                                 if (fallbackMesh is not null)
                                 {
                                     meshPool.AddMeshDataWithOffset(fallbackMesh, offsetX, offsetY, offsetZ);
                                     capi.Logger.Debug(
-                                        "[MiniDimensionTessellator] Added fallback mesh for {0} at ({1},{2},{3}) - uses custom renderer",
+                                        "[MiniDimensionTessellator] Added fallback mesh for {0} at ({1},{2},{3}) - OnTesselation skipped default but added no vertices",
                                         blockEntity.GetType().Name, x, y, z);
                                 }
-                                // Mark that we handled this with fallback, so we don't add default mesh again
-                                skipDefaultMesh = true;
                             }
                         }
 
@@ -161,39 +154,6 @@ public class MiniDimensionTessellator
     }
 
     /// <summary>
-    /// Determines if a block entity needs a fallback mesh because it uses a custom renderer
-    /// that won't run in our preview context.
-    /// </summary>
-    /// <param name="blockEntity">The block entity to check.</param>
-    /// <returns>True if a fallback mesh should be added.</returns>
-    private static bool NeedsFallbackMesh(BlockEntity blockEntity)
-    {
-        var beType = blockEntity.GetType();
-
-        return NeedsFallbackCache.GetOrAdd(beType, type =>
-        {
-            // Strategy 1: Check if the BE type (or behaviors) has renderer-related fields
-            var renderInfo = BlockEntityRenderDetector.GetRenderSystemInfo(blockEntity);
-            if (renderInfo.UsesCustomRenderer)
-                return true;
-
-            // Strategy 2: Check if any known IRenderer implementations target this BE type
-            if (IRendererBlockEntityScanner.IsInitialized && IRendererBlockEntityScanner.HasKnownRenderer(blockEntity))
-                return true;
-
-            return false;
-        });
-    }
-
-    /// <summary>
-    /// Clears the fallback mesh cache. Call this if mod assemblies are reloaded.
-    /// </summary>
-    public static void ClearFallbackCache()
-    {
-        NeedsFallbackCache.Clear();
-    }
-
-    /// <summary>
     /// Gets the mesh data for a block using the tessellator manager.
     /// </summary>
     private MeshData? GetBlockMesh(Block block)
@@ -220,13 +180,19 @@ public class MiniDimensionTessellator
     }
 
     /// <summary>
-    /// Wrapper that applies a position offset to all mesh data added to the pool.
+    /// Wrapper that applies a position offset to all mesh data added to the pool
+    /// and tracks the total vertices added.
     /// </summary>
     private class OffsetMeshPoolWrapper : ITerrainMeshPool
     {
         private readonly MiniDimensionMeshPool innerPool;
         private readonly float offsetX, offsetY, offsetZ;
         private readonly Matrixf translateMatrix = new();
+
+        /// <summary>
+        /// Total number of vertices added to this pool via AddMeshData calls.
+        /// </summary>
+        public int VerticesAdded { get; private set; }
 
         public OffsetMeshPoolWrapper(MiniDimensionMeshPool innerPool, float offsetX, float offsetY, float offsetZ)
         {
@@ -242,6 +208,10 @@ public class MiniDimensionTessellator
 
         public void AddMeshData(MeshData data, int lodLevel = 1)
         {
+            if (data is null || data.VerticesCount == 0)
+                return;
+
+            VerticesAdded += data.VerticesCount;
             innerPool.AddMeshDataWithOffset(data, offsetX, offsetY, offsetZ);
         }
 
@@ -249,6 +219,8 @@ public class MiniDimensionTessellator
         {
             if (data is null || data.VerticesCount == 0)
                 return;
+
+            VerticesAdded += data.VerticesCount;
 
             // Apply the provided transform, then our offset translation
             MeshData transformed = data.Clone();
