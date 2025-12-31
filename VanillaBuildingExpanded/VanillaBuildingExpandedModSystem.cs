@@ -44,11 +44,5 @@ public class VanillaBuildingExpandedModSystem : ModSystem
             harmony.PatchAll();
         }
     }
-
-    public override void AssetsLoaded(ICoreAPI api)
-    {
-        // Scan all loaded assemblies for IRenderer implementations that target BlockEntities
-        IRendererBlockEntityScanner.Initialize(api);
-    }
     #endregion
 }
