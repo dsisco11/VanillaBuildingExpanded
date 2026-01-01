@@ -127,7 +127,7 @@ public class BuildBrushInstanceTests
     #region Position Tests
 
     [Fact]
-    public void Position_WhenChanged_RaisesOnPositionChangedNew()
+    public void Position_WhenChanged_RaisesOnPositionChanged()
     {
         // Arrange
         var instance = CreateTestInstance();
@@ -136,7 +136,7 @@ public class BuildBrushInstanceTests
         instance.Position = initialPos;
 
         PositionChangedEventArgs? capturedArgs = null;
-        instance.OnPositionChangedNew += (sender, args) => capturedArgs = args;
+        instance.OnPositionChanged += (sender, args) => capturedArgs = args;
 
         // Act
         instance.Position = newPos;
@@ -161,7 +161,7 @@ public class BuildBrushInstanceTests
         var pos = new BlockPos(5, 10, 15);
 
         PositionChangedEventArgs? capturedArgs = null;
-        instance.OnPositionChangedNew += (sender, args) => capturedArgs = args;
+        instance.OnPositionChanged += (sender, args) => capturedArgs = args;
 
         // Act
         instance.Position = pos;
@@ -179,7 +179,7 @@ public class BuildBrushInstanceTests
     #region Snapping Tests
 
     [Fact]
-    public void Snapping_WhenChanged_RaisesOnSnappingModeChangedNew()
+    public void Snapping_WhenChanged_RaisesOnSnappingModeChanged()
     {
         // Arrange
         var instance = CreateTestInstance();
@@ -190,7 +190,7 @@ public class BuildBrushInstanceTests
         instance.Snapping = initialSnapping;
 
         SnappingModeChangedEventArgs? capturedArgs = null;
-        instance.OnSnappingModeChangedNew += (sender, args) => capturedArgs = args;
+        instance.OnSnappingModeChanged += (sender, args) => capturedArgs = args;
 
         // Act
         instance.Snapping = newSnapping;
@@ -210,7 +210,7 @@ public class BuildBrushInstanceTests
         instance.Snapping = snapping;
 
         int eventCount = 0;
-        instance.OnSnappingModeChangedNew += (sender, args) => eventCount++;
+        instance.OnSnappingModeChanged += (sender, args) => eventCount++;
 
         // Act
         instance.Snapping = snapping;
@@ -321,7 +321,7 @@ public class BuildBrushInstanceTests
 
         // Subscribe to orientation changed event
         OrientationIndexChangedEventArgs? capturedArgs = null;
-        instance.OnOrientationChangedNew += (sender, args) => capturedArgs = args;
+        instance.OnOrientationChanged += (sender, args) => capturedArgs = args;
 
         // Act - If rotation has multiple definitions, changing index should forward event
         if (rotation.CanRotate && rotation.Definitions.Length > 1)
@@ -338,74 +338,6 @@ public class BuildBrushInstanceTests
             // Block doesn't support rotation - skip test
             // (Most simple blocks won't have orientation definitions)
         }
-    }
-
-    #endregion
-
-    #region Legacy Event Compatibility Tests
-
-    [Fact]
-    public void Position_StillRaisesLegacyOnPositionChanged()
-    {
-        // Arrange
-        var instance = CreateTestInstance();
-        var pos = new BlockPos(10, 20, 30);
-
-        BlockPos? capturedPos = null;
-#pragma warning disable CS0618 // Type or member is obsolete
-        instance.OnPositionChanged += (sender, position) => capturedPos = position;
-#pragma warning restore CS0618
-
-        // Act
-        instance.Position = pos;
-
-        // Assert
-        Assert.NotNull(capturedPos);
-        Assert.Equal(pos.X, capturedPos.X);
-    }
-
-    [Fact]
-    public void Snapping_StillRaisesLegacyOnSnappingModeChanged()
-    {
-        // Arrange
-        var instance = CreateTestInstance();
-        var snapping = EBuildBrushSnapping.Horizontal;
-
-        EBuildBrushSnapping? capturedSnapping = null;
-#pragma warning disable CS0618 // Type or member is obsolete
-        instance.OnSnappingModeChanged += (sender, mode) => capturedSnapping = mode;
-#pragma warning restore CS0618
-
-        // Act
-        instance.Snapping = snapping;
-
-        // Assert
-        Assert.NotNull(capturedSnapping);
-        Assert.Equal(snapping, capturedSnapping);
-    }
-
-    [Fact]
-    public void BlockTransformed_StillRaisesLegacyOnBlockChanged()
-    {
-        // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
-
-        mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
-
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-
-        Block? capturedBlock = null;
-#pragma warning disable CS0618 // Type or member is obsolete
-        instance.OnBlockChanged += (sender, block) => capturedBlock = block;
-#pragma warning restore CS0618
-
-        // Act
-        instance.BlockId = 100;
-
-        // Assert
-        Assert.Same(testBlock, capturedBlock);
     }
 
     #endregion

@@ -76,32 +76,14 @@ public class BuildBrushInstance
     public event EventHandler<BlockChangedEventArgs>? OnBlockTransformedChanged;
 
     /// <summary>
-    /// Raised when the brush block changes (including rotation variants).
-    /// </summary>
-    [Obsolete("Use OnBlockTransformedChanged instead. Will be removed in future version.")]
-    public event Action<BuildBrushInstance, Block?>? OnBlockChanged;
-
-    /// <summary>
     /// Raised when the brush position changes.
     /// </summary>
-    public event EventHandler<PositionChangedEventArgs>? OnPositionChangedNew;
-
-    /// <summary>
-    /// Legacy position changed event.
-    /// </summary>
-    [Obsolete("Use OnPositionChangedNew instead. Will be removed in future version.")]
-    public event Action<BuildBrushInstance, BlockPos?>? OnPositionChanged;
+    public event EventHandler<PositionChangedEventArgs>? OnPositionChanged;
 
     /// <summary>
     /// Raised when the snapping mode changes.
     /// </summary>
-    public event EventHandler<SnappingModeChangedEventArgs>? OnSnappingModeChangedNew;
-
-    /// <summary>
-    /// Legacy snapping mode changed event.
-    /// </summary>
-    [Obsolete("Use OnSnappingModeChangedNew instead. Will be removed in future version.")]
-    public event Action<BuildBrushInstance, EBuildBrushSnapping>? OnSnappingModeChanged;
+    public event EventHandler<SnappingModeChangedEventArgs>? OnSnappingModeChanged;
 
     /// <summary>
     /// Raised when the rotation info is replaced (new block selected).
@@ -112,13 +94,7 @@ public class BuildBrushInstance
     /// Raised when orientation changes within the current rotation info.
     /// Forwards from BuildBrushOrientationInfo.OnOrientationChanged.
     /// </summary>
-    public event EventHandler<OrientationIndexChangedEventArgs>? OnOrientationChangedNew;
-
-    /// <summary>
-    /// Legacy orientation changed event.
-    /// </summary>
-    [Obsolete("Use OnOrientationChangedNew instead. Will be removed in future version.")]
-    public event Action<BuildBrushInstance, int, BlockOrientationDefinition>? OnOrientationChanged;
+    public event EventHandler<OrientationIndexChangedEventArgs>? OnOrientationChanged;
 
     /// <summary>
     /// Raised when the brush activation state changes.
@@ -249,13 +225,8 @@ public class BuildBrushInstance
                 DidOffset = true
             };
 
-            // Raise new position changed event with previous state
-            OnPositionChangedNew?.Invoke(this, new PositionChangedEventArgs(previousPosition, _position));
-
-            // Raise legacy position changed event
-#pragma warning disable CS0618 // Type or member is obsolete
-            OnPositionChanged?.Invoke(this, _position);
-#pragma warning restore CS0618
+            // Raise position changed event with previous state
+            OnPositionChanged?.Invoke(this, new PositionChangedEventArgs(previousPosition, _position));
         }
     }
 
@@ -292,11 +263,7 @@ public class BuildBrushInstance
                 _rotation?.ApplyOrientationAttributes(ItemStack!.Attributes, _sourceItemStack?.Attributes);
             }
 
-            // Note: OnOrientationChangedNew is raised via Rotation_OnOrientationChanged forwarder
-            // Raise legacy orientation changed event
-#pragma warning disable CS0618 // Type or member is obsolete
-            OnOrientationChanged?.Invoke(this, _rotation.CurrentIndex, _rotation.Current);
-#pragma warning restore CS0618
+            // Note: OnOrientationChanged is raised via Rotation_OnOrientationChanged forwarder
 
             // Update dimension with new block/rotation
             UpdateDimensionBlock();
@@ -385,13 +352,8 @@ public class BuildBrushInstance
             _snapping = value;
             IsDirty = true;
 
-            // Raise new snapping mode changed event with previous state
-            OnSnappingModeChangedNew?.Invoke(this, new SnappingModeChangedEventArgs(previousMode, value));
-
-            // Raise legacy event
-#pragma warning disable CS0618 // Type or member is obsolete
-            OnSnappingModeChanged?.Invoke(this, value);
-#pragma warning restore CS0618
+            // Raise snapping mode changed event with previous state
+            OnSnappingModeChanged?.Invoke(this, new SnappingModeChangedEventArgs(previousMode, value));
         }
     }
     #endregion
@@ -482,17 +444,12 @@ public class BuildBrushInstance
                 ItemStack = null;
             }
 
-            // Raise new block transformed changed event with previous state
+            // Raise block transformed changed event with previous state
             OnBlockTransformedChanged?.Invoke(this, new BlockChangedEventArgs(
                 previousBlock,
                 value,
                 isTransformedBlock: true
             ));
-
-            // Raise legacy block changed event
-#pragma warning disable CS0618 // Type or member is obsolete
-            OnBlockChanged?.Invoke(this, value);
-#pragma warning restore CS0618
 
             UpdateDimensionBlock();
         }
@@ -881,12 +838,12 @@ public class BuildBrushInstance
     /// <summary>
     /// Server-side handler for position changes to update entity position.
     /// </summary>
-    private void OnBrushPositionChanged_Server(BuildBrushInstance instance, BlockPos? position)
+    private void OnBrushPositionChanged_Server(object? sender, PositionChangedEventArgs e)
     {
-        if (_entity is null || position is null)
+        if (_entity is null || e.CurrentPosition is null)
             return;
 
-        var vec = position.ToVec3d();
+        var vec = e.CurrentPosition.ToVec3d();
         _entity.Pos.SetPos(vec);
         _entity.ServerPos.SetPos(vec);
     }
@@ -926,9 +883,7 @@ public class BuildBrushInstance
     public void DestroyDimension()
     {
         // Unsubscribe from server-side position events
-#pragma warning disable CS0618 // Type or member is obsolete
         OnPositionChanged -= OnBrushPositionChanged_Server;
-#pragma warning restore CS0618
 
         if (_entity is not null)
         {
@@ -966,7 +921,7 @@ public class BuildBrushInstance
     /// </summary>
     private void Rotation_OnOrientationChanged(object? sender, OrientationIndexChangedEventArgs e)
     {
-        OnOrientationChangedNew?.Invoke(this, e);
+        OnOrientationChanged?.Invoke(this, e);
     }
 
     /// <summary>

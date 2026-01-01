@@ -618,7 +618,7 @@ public class BuildBrushDimension
 
         // Subscribe to relevant events
         instance.OnBlockTransformedChanged += Instance_OnBlockTransformedChanged;
-        instance.OnOrientationChangedNew += Instance_OnOrientationChanged;
+        instance.OnOrientationChanged += Instance_OnOrientationChanged;
         instance.OnRotationInfoChanged += Instance_OnRotationInfoChanged;
     }
 
@@ -632,7 +632,7 @@ public class BuildBrushDimension
             return;
 
         _subscribedInstance.OnBlockTransformedChanged -= Instance_OnBlockTransformedChanged;
-        _subscribedInstance.OnOrientationChangedNew -= Instance_OnOrientationChanged;
+        _subscribedInstance.OnOrientationChanged -= Instance_OnOrientationChanged;
         _subscribedInstance.OnRotationInfoChanged -= Instance_OnRotationInfoChanged;
 
         _subscribedInstance = null;

@@ -147,12 +147,12 @@ public class BuildBrushEntity : EntityChunky
     /// <summary>
     /// Called when the brush position changes.
     /// </summary>
-    private void OnBrushPositionChanged(BuildBrushInstance instance, BlockPos? position)
+    private void OnBrushPositionChanged(object? sender, PositionChangedEventArgs e)
     {
         // Update entity position
-        if (position is not null)
+        if (e.CurrentPosition is not null)
         {
-            var vec = position.ToVec3d();
+            var vec = e.CurrentPosition.ToVec3d();
             Pos.SetPos(vec);
             ServerPos.SetPos(vec);
         }
