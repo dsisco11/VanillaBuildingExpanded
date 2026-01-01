@@ -66,16 +66,69 @@ public class BuildBrushInstance
 
     #region Events
     /// <summary>
+    /// Raised when the untransformed block changes (new block selected).
+    /// </summary>
+    public event EventHandler<BlockChangedEventArgs>? OnBlockUntransformedChanged;
+
+    /// <summary>
+    /// Raised when the transformed block changes (rotation applied).
+    /// </summary>
+    public event EventHandler<BlockChangedEventArgs>? OnBlockTransformedChanged;
+
+    /// <summary>
     /// Raised when the brush block changes (including rotation variants).
     /// </summary>
+    [Obsolete("Use OnBlockTransformedChanged instead. Will be removed in future version.")]
     public event Action<BuildBrushInstance, Block?>? OnBlockChanged;
 
     /// <summary>
     /// Raised when the brush position changes.
     /// </summary>
+    public event EventHandler<PositionChangedEventArgs>? OnPositionChangedNew;
+
+    /// <summary>
+    /// Legacy position changed event.
+    /// </summary>
+    [Obsolete("Use OnPositionChangedNew instead. Will be removed in future version.")]
     public event Action<BuildBrushInstance, BlockPos?>? OnPositionChanged;
+
+    /// <summary>
+    /// Raised when the snapping mode changes.
+    /// </summary>
+    public event EventHandler<SnappingModeChangedEventArgs>? OnSnappingModeChangedNew;
+
+    /// <summary>
+    /// Legacy snapping mode changed event.
+    /// </summary>
+    [Obsolete("Use OnSnappingModeChangedNew instead. Will be removed in future version.")]
     public event Action<BuildBrushInstance, EBuildBrushSnapping>? OnSnappingModeChanged;
+
+    /// <summary>
+    /// Raised when the rotation info is replaced (new block selected).
+    /// </summary>
+    public event EventHandler<RotationInfoChangedEventArgs>? OnRotationInfoChanged;
+
+    /// <summary>
+    /// Raised when orientation changes within the current rotation info.
+    /// Forwards from BuildBrushOrientationInfo.OnOrientationChanged.
+    /// </summary>
+    public event EventHandler<OrientationIndexChangedEventArgs>? OnOrientationChangedNew;
+
+    /// <summary>
+    /// Legacy orientation changed event.
+    /// </summary>
+    [Obsolete("Use OnOrientationChangedNew instead. Will be removed in future version.")]
     public event Action<BuildBrushInstance, int, BlockOrientationDefinition>? OnOrientationChanged;
+
+    /// <summary>
+    /// Raised when the brush activation state changes.
+    /// </summary>
+    public event EventHandler<BrushActivationChangedEventArgs>? OnActivationChanged;
+
+    /// <summary>
+    /// Raised when the dimension is created or destroyed.
+    /// </summary>
+    public event EventHandler<DimensionLifecycleEventArgs>? OnDimensionLifecycle;
 
     /// <summary>
     /// Raised when the dimension content changes and the mesh needs to be rebuilt.
@@ -100,8 +153,12 @@ public class BuildBrushInstance
             if (_isActive == value)
                 return;
 
+            bool wasActive = _isActive;
             _isActive = value;
             IsDirty = true;
+
+            // Raise activation changed event
+            OnActivationChanged?.Invoke(this, new BrushActivationChangedEventArgs(wasActive, value));
 
             // Manage dimension/entity lifecycle based on active state
             if (value)
@@ -182,6 +239,7 @@ public class BuildBrushInstance
             if (_position == value)
                 return;
 
+            BlockPos? previousPosition = _position?.Copy();
             _position = value;
             Selection = new()
             {
@@ -191,8 +249,13 @@ public class BuildBrushInstance
                 DidOffset = true
             };
 
-            // Raise position changed event
+            // Raise new position changed event with previous state
+            OnPositionChangedNew?.Invoke(this, new PositionChangedEventArgs(previousPosition, _position));
+
+            // Raise legacy position changed event
+#pragma warning disable CS0618 // Type or member is obsolete
             OnPositionChanged?.Invoke(this, _position);
+#pragma warning restore CS0618
         }
     }
 
@@ -216,6 +279,8 @@ public class BuildBrushInstance
             if (value == _rotation.CurrentIndex)
                 return;
 
+            // Setting CurrentIndex raises _rotation.OnOrientationChanged
+            // which we forward via Rotation_OnOrientationChanged
             _rotation.CurrentIndex = value;
 
             // Update the transformed block based on the new orientation state
@@ -227,8 +292,11 @@ public class BuildBrushInstance
                 _rotation?.ApplyOrientationAttributes(ItemStack!.Attributes, _sourceItemStack?.Attributes);
             }
 
-            // Raise orientation changed event
+            // Note: OnOrientationChangedNew is raised via Rotation_OnOrientationChanged forwarder
+            // Raise legacy orientation changed event
+#pragma warning disable CS0618 // Type or member is obsolete
             OnOrientationChanged?.Invoke(this, _rotation.CurrentIndex, _rotation.Current);
+#pragma warning restore CS0618
 
             // Update dimension with new block/rotation
             UpdateDimensionBlock();
@@ -313,9 +381,17 @@ public class BuildBrushInstance
             if (_snapping == value)
                 return;
 
+            EBuildBrushSnapping previousMode = _snapping;
             _snapping = value;
             IsDirty = true;
+
+            // Raise new snapping mode changed event with previous state
+            OnSnappingModeChangedNew?.Invoke(this, new SnappingModeChangedEventArgs(previousMode, value));
+
+            // Raise legacy event
+#pragma warning disable CS0618 // Type or member is obsolete
             OnSnappingModeChanged?.Invoke(this, value);
+#pragma warning restore CS0618
         }
     }
     #endregion
@@ -334,6 +410,15 @@ public class BuildBrushInstance
                 return;
             }
 
+            Block? previousBlock = _blockUntransformed;
+            BuildBrushOrientationInfo? previousRotation = _rotation;
+
+            // Unsubscribe from old rotation info events
+            if (_rotation is not null)
+            {
+                _rotation.OnOrientationChanged -= Rotation_OnOrientationChanged;
+            }
+
             _blockUntransformed = value;
 
             // Ensure resolver exists
@@ -344,6 +429,26 @@ public class BuildBrushInstance
             _rotation = value is not null
                 ? BuildBrushOrientationInfo.Create(value, _orientationResolver, _sourceItemStack)
                 : null;
+
+            // Subscribe to new rotation info events
+            if (_rotation is not null)
+            {
+                _rotation.OnOrientationChanged += Rotation_OnOrientationChanged;
+            }
+
+            // Raise rotation info changed event
+            OnRotationInfoChanged?.Invoke(this, new RotationInfoChangedEventArgs(
+                previousRotation,
+                _rotation,
+                value
+            ));
+
+            // Raise block untransformed changed event
+            OnBlockUntransformedChanged?.Invoke(this, new BlockChangedEventArgs(
+                previousBlock,
+                value,
+                isTransformedBlock: false
+            ));
 
             // Sync rotation index to match the block's current variant
             if (_rotation is not null && _blockId.HasValue)
@@ -365,6 +470,7 @@ public class BuildBrushInstance
                 return;
 
             //Logger.Audit($"[{nameof(BuildBrushInstance)}][set {nameof(BlockTransformed)}]: Setting transformed block to '{value}'.");
+            Block? previousBlock = _blockTransformed;
             _blockTransformed = value;
 
             if (value is not null)
@@ -376,8 +482,18 @@ public class BuildBrushInstance
                 ItemStack = null;
             }
 
-            // Notify listeners of block change
+            // Raise new block transformed changed event with previous state
+            OnBlockTransformedChanged?.Invoke(this, new BlockChangedEventArgs(
+                previousBlock,
+                value,
+                isTransformedBlock: true
+            ));
+
+            // Raise legacy block changed event
+#pragma warning disable CS0618 // Type or member is obsolete
             OnBlockChanged?.Invoke(this, value);
+#pragma warning restore CS0618
+
             UpdateDimensionBlock();
         }
     }
@@ -815,6 +931,16 @@ public class BuildBrushInstance
     private void Dimension_OnDirty(object? sender, DimensionDirtyEventArgs e)
     {
         OnDimensionDirty?.Invoke(this, e);
+    }
+
+    /// <summary>
+    /// Forwards rotation info orientation changes to instance subscribers.
+    /// This allows external systems to react to orientation changes without
+    /// directly subscribing to the rotation info (which may be replaced).
+    /// </summary>
+    private void Rotation_OnOrientationChanged(object? sender, OrientationIndexChangedEventArgs e)
+    {
+        OnOrientationChangedNew?.Invoke(this, e);
     }
 
     /// <summary>
