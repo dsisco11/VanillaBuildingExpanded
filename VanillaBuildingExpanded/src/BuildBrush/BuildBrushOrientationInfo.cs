@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 
@@ -19,6 +20,14 @@ public class BuildBrushOrientationInfo
     private int _currentIndex;
     #endregion
 
+    #region Events
+    /// <summary>
+    /// Raised when the orientation index changes.
+    /// Provides both previous and current state for proper change detection.
+    /// </summary>
+    public event EventHandler<OrientationIndexChangedEventArgs>? OnOrientationChanged;
+    #endregion
+
     #region Properties
     /// <summary>
     /// The rotation mode for this block (for classification/display purposes).
@@ -33,6 +42,7 @@ public class BuildBrushOrientationInfo
 
     /// <summary>
     /// The current index into the <see cref="Definitions"/> array.
+    /// Setting this property raises <see cref="OnOrientationChanged"/> if the value changes.
     /// </summary>
     public int CurrentIndex
     {
@@ -44,8 +54,33 @@ public class BuildBrushOrientationInfo
                 _currentIndex = 0;
                 return;
             }
+
             // Wrap around (handles negative values too)
-            _currentIndex = ((value % Definitions.Length) + Definitions.Length) % Definitions.Length;
+            int newIndex = ((value % Definitions.Length) + Definitions.Length) % Definitions.Length;
+
+            if (newIndex == _currentIndex)
+                return;
+
+            // Capture previous state BEFORE mutation
+            int previousIndex = _currentIndex;
+            BlockOrientationDefinition previousDef = Current;
+            Block? previousBlock = CurrentBlock;
+            float previousAngle = CurrentMeshAngleDegrees;
+
+            // Mutate
+            _currentIndex = newIndex;
+
+            // Raise event with previous and current state
+            OnOrientationChanged?.Invoke(this, new OrientationIndexChangedEventArgs(
+                previousIndex,
+                _currentIndex,
+                previousDef,
+                Current,
+                previousBlock,
+                CurrentBlock,
+                previousAngle,
+                CurrentMeshAngleDegrees
+            ));
         }
     }
 

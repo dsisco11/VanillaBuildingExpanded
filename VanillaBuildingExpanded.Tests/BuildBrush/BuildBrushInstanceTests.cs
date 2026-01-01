@@ -11,12 +11,4 @@ public class BuildBrushInstanceTests
 {
     // Phase 2 tests will be added here after BuildBrushInstance
     // is updated with new event types.
-    
-    [Fact]
-    public void Placeholder_TestProjectCompiles()
-    {
-        // This test verifies the test project is correctly configured.
-        // Will be replaced with real tests in Phase 2.
-        Assert.True(true);
-    }
 }
