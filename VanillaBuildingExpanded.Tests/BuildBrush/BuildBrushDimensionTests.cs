@@ -18,74 +18,14 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 /// </summary>
 public class BuildBrushDimensionTests
 {
-    #region Test Helpers
-
-    /// <summary>
-    /// Creates a real Block instance with the specified BlockId and a valid Code.
-    /// </summary>
-    private static Block CreateTestBlock(int blockId, string code = "game:testblock")
-    {
-        var block = new Block();
-        block.BlockId = blockId;
-        block.Code = new Vintagestory.API.Common.AssetLocation(code);
-        return block;
-    }
-
-    /// <summary>
-    /// Creates a mock IWorldAccessor.
-    /// </summary>
-    private static Mock<IWorldAccessor> CreateMockWorld()
-    {
-        var mockWorld = new Mock<IWorldAccessor>();
-        var mockLogger = new Mock<ILogger>();
-        mockWorld.Setup(w => w.Logger).Returns(mockLogger.Object);
-        mockWorld.Setup(w => w.Side).Returns(EnumAppSide.Client);
-        return mockWorld;
-    }
-
-    /// <summary>
-    /// Creates a mock IPlayer.
-    /// </summary>
-    private static Mock<IPlayer> CreateMockPlayer()
-    {
-        var mockPlayer = new Mock<IPlayer>();
-        var mockInventoryManager = new Mock<IPlayerInventoryManager>();
-        mockPlayer.Setup(p => p.InventoryManager).Returns(mockInventoryManager.Object);
-        mockPlayer.Setup(p => p.CurrentBlockSelection).Returns((BlockSelection?)null);
-        return mockPlayer;
-    }
-
-    /// <summary>
-    /// Creates a BuildBrushInstance for testing.
-    /// </summary>
-    private static BuildBrushInstance CreateTestInstance()
-    {
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        return new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-    }
-
-    /// <summary>
-    /// Creates a BuildBrushDimension for testing.
-    /// Note: The dimension won't be fully initialized without a server API,
-    /// but we can still test subscription behavior.
-    /// </summary>
-    private static BuildBrushDimension CreateTestDimension()
-    {
-        var mockWorld = CreateMockWorld();
-        return new BuildBrushDimension(mockWorld.Object);
-    }
-
-    #endregion
-
-    #region SubscribeTo Tests
+    #region Subscription Tests    #region SubscribeTo Tests
 
     [Fact]
     public void SubscribeTo_SetsSubscribedInstance()
     {
         // Arrange
-        var instance = CreateTestInstance();
-        var dimension = CreateTestDimension();
+        var instance = TestHelpers.CreateTestInstance();
+        var dimension = TestHelpers.CreateTestDimension();
 
         // Act
         dimension.SubscribeTo(instance);
@@ -98,8 +38,8 @@ public class BuildBrushDimensionTests
     public void SubscribeTo_CalledTwiceWithSameInstance_DoesNothing()
     {
         // Arrange
-        var instance = CreateTestInstance();
-        var dimension = CreateTestDimension();
+        var instance = TestHelpers.CreateTestInstance();
+        var dimension = TestHelpers.CreateTestDimension();
 
         // Act
         dimension.SubscribeTo(instance);
@@ -113,9 +53,9 @@ public class BuildBrushDimensionTests
     public void SubscribeTo_CalledWithDifferentInstance_UnsubscribesFromPrevious()
     {
         // Arrange
-        var instance1 = CreateTestInstance();
-        var instance2 = CreateTestInstance();
-        var dimension = CreateTestDimension();
+        var instance1 = TestHelpers.CreateTestInstance();
+        var instance2 = TestHelpers.CreateTestInstance();
+        var dimension = TestHelpers.CreateTestDimension();
 
         // Act
         dimension.SubscribeTo(instance1);
@@ -133,8 +73,8 @@ public class BuildBrushDimensionTests
     public void Unsubscribe_ClearsSubscribedInstance()
     {
         // Arrange
-        var instance = CreateTestInstance();
-        var dimension = CreateTestDimension();
+        var instance = TestHelpers.CreateTestInstance();
+        var dimension = TestHelpers.CreateTestDimension();
         dimension.SubscribeTo(instance);
 
         // Act
@@ -148,7 +88,7 @@ public class BuildBrushDimensionTests
     public void Unsubscribe_WhenNotSubscribed_DoesNotThrow()
     {
         // Arrange
-        var dimension = CreateTestDimension();
+        var dimension = TestHelpers.CreateTestDimension();
 
         // Act & Assert - should not throw
         var exception = Record.Exception(() => dimension.Unsubscribe());
@@ -159,13 +99,13 @@ public class BuildBrushDimensionTests
     public void Unsubscribe_StopsReceivingEvents()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var dimension = CreateTestDimension();
+        var dimension = TestHelpers.CreateTestDimension();
 
         int blockChangedCount = 0;
         dimension.OnDirty += (s, e) => blockChangedCount++;
@@ -191,8 +131,8 @@ public class BuildBrushDimensionTests
     public void Destroy_UnsubscribesFromInstance()
     {
         // Arrange
-        var instance = CreateTestInstance();
-        var dimension = CreateTestDimension();
+        var instance = TestHelpers.CreateTestInstance();
+        var dimension = TestHelpers.CreateTestDimension();
         dimension.SubscribeTo(instance);
 
         // Act
@@ -210,13 +150,13 @@ public class BuildBrushDimensionTests
     public void Instance_OnBlockTransformedChanged_UpdatesDimension()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var dimension = CreateTestDimension();
+        var dimension = TestHelpers.CreateTestDimension();
 
         // Track if dimension received the event
         bool eventReceived = false;
@@ -237,16 +177,16 @@ public class BuildBrushDimensionTests
     public void SubscribeTo_AutomaticResubscription_OnInstanceChange()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock1 = CreateTestBlock(100);
-        var testBlock2 = CreateTestBlock(200);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock1 = TestHelpers.CreateTestBlock(100);
+        var testBlock2 = TestHelpers.CreateTestBlock(200);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock1);
         mockWorld.Setup(w => w.GetBlock(200)).Returns(testBlock2);
 
         var instance1 = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
         var instance2 = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var dimension = CreateTestDimension();
+        var dimension = TestHelpers.CreateTestDimension();
 
         int eventCount = 0;
         dimension.OnDirty += (s, e) => eventCount++;
@@ -280,13 +220,13 @@ public class BuildBrushDimensionTests
     public void Instance_OnOrientationChanged_IsReceived()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var dimension = CreateTestDimension();
+        var dimension = TestHelpers.CreateTestDimension();
 
         // We need to verify the dimension's event handler is connected
         // Since we can't easily mock the internal handler, we verify

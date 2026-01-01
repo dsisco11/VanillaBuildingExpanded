@@ -3,6 +3,7 @@ using System;
 using Moq;
 
 using VanillaBuildingExpanded.BuildHammer;
+using VanillaBuildingExpanded.Tests.BuildBrush;
 
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
@@ -17,67 +18,19 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush.Tessellation;
 /// </summary>
 public class RotationModeTessellationTests
 {
-    #region Test Helpers
-
-    /// <summary>
-    /// Creates a mock IWorldAccessor.
-    /// </summary>
-    private static Mock<IWorldAccessor> CreateMockWorld()
-    {
-        var mockWorld = new Mock<IWorldAccessor>();
-        var mockLogger = new Mock<ILogger>();
-        mockWorld.Setup(w => w.Logger).Returns(mockLogger.Object);
-        mockWorld.Setup(w => w.Side).Returns(EnumAppSide.Client);
-        return mockWorld;
-    }
-
-    /// <summary>
-    /// Creates a mock IPlayer.
-    /// </summary>
-    private static Mock<IPlayer> CreateMockPlayer()
-    {
-        var mockPlayer = new Mock<IPlayer>();
-        var mockInventoryManager = new Mock<IPlayerInventoryManager>();
-        mockPlayer.Setup(p => p.InventoryManager).Returns(mockInventoryManager.Object);
-        mockPlayer.Setup(p => p.CurrentBlockSelection).Returns((BlockSelection?)null);
-        return mockPlayer;
-    }
-
-    /// <summary>
-    /// Creates a test Block with specified BlockId and Code.
-    /// </summary>
-    private static Block CreateTestBlock(int blockId, string code = "game:testblock")
-    {
-        var block = new Block();
-        block.BlockId = blockId;
-        block.Code = new AssetLocation(code);
-        return block;
-    }
-
-    /// <summary>
-    /// Creates a BuildBrushDimension for testing.
-    /// </summary>
-    private static BuildBrushDimension CreateTestDimension(Mock<IWorldAccessor>? mockWorld = null)
-    {
-        mockWorld ??= CreateMockWorld();
-        return new BuildBrushDimension(mockWorld.Object);
-    }
-
-    #endregion
-
     #region Rotation Mode: None
 
     [Fact]
     public void RotationModeNone_SetBlock_RaisesDirtyEvent()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100, "game:simpleblock");
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100, "game:simpleblock");
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var dimension = CreateTestDimension(mockWorld);
+        var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         dimension.SubscribeTo(instance);
 
@@ -97,9 +50,9 @@ public class RotationModeTessellationTests
     public void RotationModeNone_CanRotate_IsFalse()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100, "game:simpleblock");
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100, "game:simpleblock");
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
@@ -121,9 +74,9 @@ public class RotationModeTessellationTests
     public void RotationInfo_IsCreatedForEveryBlock()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
@@ -144,9 +97,9 @@ public class RotationModeTessellationTests
     public void RotationInfo_ModeIsSetCorrectly()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
@@ -173,9 +126,9 @@ public class RotationModeTessellationTests
     public void OrientationIndex_WhenBlockSupportsRotation_CanBeChanged()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
@@ -203,9 +156,9 @@ public class RotationModeTessellationTests
     public void OrientationIndex_WhenChanged_RaisesOrientationChangedEvent()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
@@ -234,9 +187,9 @@ public class RotationModeTessellationTests
     public void OrientationIndex_WhenChanged_UpdatesBlockTransformed()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
@@ -273,9 +226,9 @@ public class RotationModeTessellationTests
     public void OrientationChangedEventArgs_ContainsMeshAngle()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
@@ -301,9 +254,9 @@ public class RotationModeTessellationTests
     public void OrientationChangedEventArgs_VariantChanged_ReflectsMode()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
@@ -343,13 +296,13 @@ public class RotationModeTessellationTests
     public void DimensionSubscribed_ReceivesOrientationChanges()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var dimension = CreateTestDimension(mockWorld);
+        var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         dimension.SubscribeTo(instance);
         instance.BlockId = 100;
@@ -372,13 +325,13 @@ public class RotationModeTessellationTests
     public void DimensionSubscribed_ReceivesBlockTransformedOnRotation()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var dimension = CreateTestDimension(mockWorld);
+        var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         dimension.SubscribeTo(instance);
         instance.BlockId = 100;
@@ -409,9 +362,9 @@ public class RotationModeTessellationTests
     public void SettingSameOrientationIndex_DoesNotRaiseEvent()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
@@ -432,9 +385,9 @@ public class RotationModeTessellationTests
     public void ClearingBlock_ResetsRotationInfo()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
         mockWorld.Setup(w => w.GetBlock(0)).Returns((Block?)null);
 

@@ -18,62 +18,13 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 /// </summary>
 public class BuildBrushInstanceTests
 {
-    #region Test Helpers
-
-    /// <summary>
-    /// Creates a real Block instance with the specified BlockId and a valid Code.
-    /// </summary>
-    private static Block CreateTestBlock(int blockId, string code = "game:testblock")
-    {
-        var block = new Block();
-        block.BlockId = blockId;
-        block.Code = new Vintagestory.API.Common.AssetLocation(code);
-        return block;
-    }
-
-    /// <summary>
-    /// Creates a mock IWorldAccessor.
-    /// </summary>
-    private static Mock<IWorldAccessor> CreateMockWorld()
-    {
-        var mockWorld = new Mock<IWorldAccessor>();
-        var mockLogger = new Mock<ILogger>();
-        mockWorld.Setup(w => w.Logger).Returns(mockLogger.Object);
-        mockWorld.Setup(w => w.Side).Returns(EnumAppSide.Client);
-        return mockWorld;
-    }
-
-    /// <summary>
-    /// Creates a mock IPlayer.
-    /// </summary>
-    private static Mock<IPlayer> CreateMockPlayer()
-    {
-        var mockPlayer = new Mock<IPlayer>();
-        var mockInventoryManager = new Mock<IPlayerInventoryManager>();
-        mockPlayer.Setup(p => p.InventoryManager).Returns(mockInventoryManager.Object);
-        mockPlayer.Setup(p => p.CurrentBlockSelection).Returns((BlockSelection?)null);
-        return mockPlayer;
-    }
-
-    /// <summary>
-    /// Creates a BuildBrushInstance for testing.
-    /// </summary>
-    private static BuildBrushInstance CreateTestInstance()
-    {
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        return new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-    }
-
-    #endregion
-
     #region IsActive Tests
 
     [Fact]
     public void IsActive_WhenChanged_RaisesOnActivationChanged()
     {
         // Arrange
-        var instance = CreateTestInstance();
+        var instance = TestHelpers.CreateTestInstance();
 
         BrushActivationChangedEventArgs? capturedArgs = null;
         instance.OnActivationChanged += (sender, args) => capturedArgs = args;
@@ -91,7 +42,7 @@ public class BuildBrushInstanceTests
     public void IsActive_WhenChangedToSameValue_DoesNotRaiseEvent()
     {
         // Arrange
-        var instance = CreateTestInstance();
+        var instance = TestHelpers.CreateTestInstance();
 
         int eventCount = 0;
         instance.OnActivationChanged += (sender, args) => eventCount++;
@@ -107,7 +58,7 @@ public class BuildBrushInstanceTests
     public void IsActive_WhenDeactivated_RaisesWithCorrectPreviousState()
     {
         // Arrange
-        var instance = CreateTestInstance();
+        var instance = TestHelpers.CreateTestInstance();
         instance.IsActive = true;
 
         BrushActivationChangedEventArgs? capturedArgs = null;
@@ -130,7 +81,7 @@ public class BuildBrushInstanceTests
     public void Position_WhenChanged_RaisesOnPositionChanged()
     {
         // Arrange
-        var instance = CreateTestInstance();
+        var instance = TestHelpers.CreateTestInstance();
         var initialPos = new BlockPos(0, 0, 0);
         var newPos = new BlockPos(10, 20, 30);
         instance.Position = initialPos;
@@ -157,7 +108,7 @@ public class BuildBrushInstanceTests
     public void Position_EventArgsContainsCopiedPositions()
     {
         // Arrange
-        var instance = CreateTestInstance();
+        var instance = TestHelpers.CreateTestInstance();
         var pos = new BlockPos(5, 10, 15);
 
         PositionChangedEventArgs? capturedArgs = null;
@@ -182,7 +133,7 @@ public class BuildBrushInstanceTests
     public void Snapping_WhenChanged_RaisesOnSnappingModeChanged()
     {
         // Arrange
-        var instance = CreateTestInstance();
+        var instance = TestHelpers.CreateTestInstance();
         var initialSnapping = EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical;
         var newSnapping = EBuildBrushSnapping.None;
 
@@ -205,7 +156,7 @@ public class BuildBrushInstanceTests
     public void Snapping_WhenChangedToSameValue_DoesNotRaiseEvent()
     {
         // Arrange
-        var instance = CreateTestInstance();
+        var instance = TestHelpers.CreateTestInstance();
         var snapping = EBuildBrushSnapping.Horizontal;
         instance.Snapping = snapping;
 
@@ -227,9 +178,9 @@ public class BuildBrushInstanceTests
     public void BlockTransformed_RaisesOnBlockTransformedChanged_ViaBlockId()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
 
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
@@ -256,9 +207,9 @@ public class BuildBrushInstanceTests
     public void BlockUntransformed_RaisesOnBlockUntransformedChanged_ViaBlockId()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
 
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
@@ -281,9 +232,9 @@ public class BuildBrushInstanceTests
     public void BlockUntransformed_RaisesOnRotationInfoChanged_ViaBlockId()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
 
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
@@ -306,9 +257,9 @@ public class BuildBrushInstanceTests
     public void BlockUntransformed_SubscribesToRotationInfoEvents()
     {
         // Arrange
-        var mockWorld = CreateMockWorld();
-        var mockPlayer = CreateMockPlayer();
-        var testBlock = CreateTestBlock(100);
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var testBlock = TestHelpers.CreateTestBlock(100);
 
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
@@ -350,7 +301,7 @@ public class BuildBrushInstanceTests
     public void OnDimensionLifecycle_IsDefinedAndAccessible()
     {
         // Arrange
-        var instance = CreateTestInstance();
+        var instance = TestHelpers.CreateTestInstance();
 
         DimensionLifecycleEventArgs? capturedArgs = null;
         instance.OnDimensionLifecycle += (sender, args) => capturedArgs = args;

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Moq;
 
 using VanillaBuildingExpanded.BuildHammer.Tessellation;
+using VanillaBuildingExpanded.Tests.BuildBrush;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -20,69 +21,6 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush.Tessellation;
 /// </summary>
 public class MiniDimensionTessellatorTests
 {
-    #region Test Helpers
-
-    /// <summary>
-    /// Creates a mock ICoreClientAPI with necessary sub-mocks.
-    /// </summary>
-    private static Mock<ICoreClientAPI> CreateMockCapi()
-    {
-        var mockCapi = new Mock<ICoreClientAPI>();
-        var mockLogger = new Mock<ILogger>();
-        var mockTesselator = new Mock<ITesselatorAPI>();
-        var mockTesselatorManager = new Mock<ITesselatorManager>();
-
-        mockCapi.Setup(c => c.Logger).Returns(mockLogger.Object);
-        mockCapi.Setup(c => c.Tesselator).Returns(mockTesselator.Object);
-        mockCapi.Setup(c => c.TesselatorManager).Returns(mockTesselatorManager.Object);
-
-        return mockCapi;
-    }
-
-    /// <summary>
-    /// Creates a mock IMiniDimension.
-    /// </summary>
-    private static Mock<IMiniDimension> CreateMockDimension()
-    {
-        return new Mock<IMiniDimension>();
-    }
-
-    /// <summary>
-    /// Creates a test Block with specified BlockId and Code.
-    /// </summary>
-    private static Block CreateTestBlock(int blockId, string code = "game:testblock")
-    {
-        var block = new Block();
-        block.BlockId = blockId;
-        block.Code = new AssetLocation(code);
-        return block;
-    }
-
-    /// <summary>
-    /// Creates a simple MeshData instance for testing.
-    /// </summary>
-    private static MeshData CreateTestMeshData(int vertexCount = 4)
-    {
-        var mesh = new MeshData(vertexCount, vertexCount / 2 * 3); // Simple quad
-        mesh.xyz = new float[vertexCount * 3];
-        mesh.Uv = new float[vertexCount * 2];
-        mesh.Rgba = new byte[vertexCount * 4];
-        mesh.Indices = new int[vertexCount / 2 * 3];
-        mesh.VerticesCount = vertexCount;
-        mesh.IndicesCount = vertexCount / 2 * 3;
-        return mesh;
-    }
-
-    /// <summary>
-    /// Creates a BlockPos for mini-dimension space.
-    /// </summary>
-    private static BlockPos CreateMiniDimensionPos(int x, int y, int z)
-    {
-        return new BlockPos(x, y, z, Vintagestory.API.Config.Dimensions.MiniDimensions);
-    }
-
-    #endregion
-
     #region Constructor Tests
 
     [Fact]
@@ -96,7 +34,7 @@ public class MiniDimensionTessellatorTests
     public void Constructor_WithValidCapi_Succeeds()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
+        var mockCapi = TestHelpers.CreateMockCapi();
 
         // Act
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
@@ -113,10 +51,10 @@ public class MiniDimensionTessellatorTests
     public void Tessellate_WithNullDimension_ReturnsNull()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
+        var mockCapi = TestHelpers.CreateMockCapi();
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
-        var min = CreateMiniDimensionPos(0, 0, 0);
-        var max = CreateMiniDimensionPos(0, 0, 0);
+        var min = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
+        var max = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
 
         // Act
         var result = tessellator.Tessellate(null!, min, max);
@@ -129,15 +67,15 @@ public class MiniDimensionTessellatorTests
     public void Tessellate_WithEmptyBounds_ReturnsNull()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
-        var mockDimension = CreateMockDimension();
+        var mockCapi = TestHelpers.CreateMockCapi();
+        var mockDimension = TestHelpers.CreateMockDimension();
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
 
         // Setup dimension to return null/air for all positions
         mockDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>())).Returns((Block?)null);
 
-        var min = CreateMiniDimensionPos(0, 0, 0);
-        var max = CreateMiniDimensionPos(0, 0, 0);
+        var min = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
+        var max = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
 
         // Act
         var result = tessellator.Tessellate(mockDimension.Object, min, max);
@@ -150,16 +88,16 @@ public class MiniDimensionTessellatorTests
     public void Tessellate_WithAirBlocks_ReturnsNull()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
-        var mockDimension = CreateMockDimension();
+        var mockCapi = TestHelpers.CreateMockCapi();
+        var mockDimension = TestHelpers.CreateMockDimension();
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
 
         // Setup dimension to return air block (BlockId = 0)
-        var airBlock = CreateTestBlock(0, "game:air");
+        var airBlock = TestHelpers.CreateTestBlock(0, "game:air");
         mockDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>())).Returns(airBlock);
 
-        var min = CreateMiniDimensionPos(0, 0, 0);
-        var max = CreateMiniDimensionPos(0, 0, 0);
+        var min = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
+        var max = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
 
         // Act
         var result = tessellator.Tessellate(mockDimension.Object, min, max);
@@ -176,12 +114,12 @@ public class MiniDimensionTessellatorTests
     public void Tessellate_WithSingleBlock_ReturnsMeshFromTesselatorManager()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
-        var mockDimension = CreateMockDimension();
+        var mockCapi = TestHelpers.CreateMockCapi();
+        var mockDimension = TestHelpers.CreateMockDimension();
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
 
-        var testBlock = CreateTestBlock(100);
-        var testMesh = CreateTestMeshData(4);
+        var testBlock = TestHelpers.CreateTestBlock(100);
+        var testMesh = TestHelpers.CreateTestMeshData(4);
 
         // Setup dimension to return our test block at origin
         mockDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>())).Returns(testBlock);
@@ -190,8 +128,8 @@ public class MiniDimensionTessellatorTests
         // Setup tesselator manager to return our test mesh
         mockCapi.Setup(c => c.TesselatorManager.GetDefaultBlockMesh(testBlock)).Returns(testMesh);
 
-        var min = CreateMiniDimensionPos(0, 0, 0);
-        var max = CreateMiniDimensionPos(0, 0, 0);
+        var min = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
+        var max = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
 
         // Act
         var result = tessellator.Tessellate(mockDimension.Object, min, max);
@@ -205,13 +143,13 @@ public class MiniDimensionTessellatorTests
     public void Tessellate_WhenTesselatorManagerThrows_FallsBackToDirectTessellation()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
-        var mockDimension = CreateMockDimension();
+        var mockCapi = TestHelpers.CreateMockCapi();
+        var mockDimension = TestHelpers.CreateMockDimension();
         var mockTesselator = new Mock<ITesselatorAPI>();
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
 
-        var testBlock = CreateTestBlock(100);
-        var testMesh = CreateTestMeshData(4);
+        var testBlock = TestHelpers.CreateTestBlock(100);
+        var testMesh = TestHelpers.CreateTestMeshData(4);
 
         mockDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>())).Returns(testBlock);
         mockDimension.Setup(d => d.GetBlockEntity(It.IsAny<BlockPos>())).Returns((BlockEntity?)null);
@@ -224,8 +162,8 @@ public class MiniDimensionTessellatorTests
         mockCapi.Setup(c => c.Tesselator.TesselateBlock(testBlock, out It.Ref<MeshData>.IsAny))
             .Callback(new TesselateBlockCallback((Block b, out MeshData m) => m = testMesh));
 
-        var min = CreateMiniDimensionPos(0, 0, 0);
-        var max = CreateMiniDimensionPos(0, 0, 0);
+        var min = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
+        var max = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
 
         // Act
         var result = tessellator.Tessellate(mockDimension.Object, min, max);
@@ -245,12 +183,12 @@ public class MiniDimensionTessellatorTests
     public void Tessellate_WithMultipleBlocks_CombinesMeshes()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
-        var mockDimension = CreateMockDimension();
+        var mockCapi = TestHelpers.CreateMockCapi();
+        var mockDimension = TestHelpers.CreateMockDimension();
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
 
-        var testBlock = CreateTestBlock(100);
-        var testMesh = CreateTestMeshData(4);
+        var testBlock = TestHelpers.CreateTestBlock(100);
+        var testMesh = TestHelpers.CreateTestMeshData(4);
 
         // Setup dimension to return our test block at multiple positions
         mockDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>())).Returns(testBlock);
@@ -258,8 +196,8 @@ public class MiniDimensionTessellatorTests
         mockCapi.Setup(c => c.TesselatorManager.GetDefaultBlockMesh(testBlock)).Returns(testMesh);
 
         // 2x2x2 cube of blocks
-        var min = CreateMiniDimensionPos(0, 0, 0);
-        var max = CreateMiniDimensionPos(1, 1, 1);
+        var min = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
+        var max = TestHelpers.CreateMiniDimensionPos(1, 1, 1);
 
         // Act
         var result = tessellator.Tessellate(mockDimension.Object, min, max);
@@ -278,14 +216,14 @@ public class MiniDimensionTessellatorTests
     public void Tessellate_WithBlockEntity_CallsOnTesselation()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
-        var mockDimension = CreateMockDimension();
+        var mockCapi = TestHelpers.CreateMockCapi();
+        var mockDimension = TestHelpers.CreateMockDimension();
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
 
-        var testBlock = CreateTestBlock(100);
+        var testBlock = TestHelpers.CreateTestBlock(100);
         testBlock.EntityClass = "TestBlockEntity";
 
-        var testMesh = CreateTestMeshData(4);
+        var testMesh = TestHelpers.CreateTestMeshData(4);
 
         // Create a mock BlockEntity - Note: BlockEntity is a concrete class
         // We'll use a real instance and verify OnTesselation was called via the mesh pool
@@ -303,8 +241,8 @@ public class MiniDimensionTessellatorTests
         mockDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>())).Returns(testBlock);
         mockDimension.Setup(d => d.GetBlockEntity(It.IsAny<BlockPos>())).Returns(mockBlockEntity.Object);
 
-        var min = CreateMiniDimensionPos(0, 0, 0);
-        var max = CreateMiniDimensionPos(0, 0, 0);
+        var min = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
+        var max = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
 
         // Act
         var result = tessellator.Tessellate(mockDimension.Object, min, max);
@@ -318,14 +256,14 @@ public class MiniDimensionTessellatorTests
     public void Tessellate_WhenBlockEntitySkipsDefaultButAddsNoVertices_AddsFallbackMesh()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
-        var mockDimension = CreateMockDimension();
+        var mockCapi = TestHelpers.CreateMockCapi();
+        var mockDimension = TestHelpers.CreateMockDimension();
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
 
-        var testBlock = CreateTestBlock(100);
+        var testBlock = TestHelpers.CreateTestBlock(100);
         testBlock.EntityClass = "TestBlockEntity";
 
-        var fallbackMesh = CreateTestMeshData(4);
+        var fallbackMesh = TestHelpers.CreateTestMeshData(4);
 
         var mockBlockEntity = new Mock<BlockEntity>();
         mockBlockEntity.CallBase = true;
@@ -340,8 +278,8 @@ public class MiniDimensionTessellatorTests
         // Setup fallback mesh
         mockCapi.Setup(c => c.TesselatorManager.GetDefaultBlockMesh(testBlock)).Returns(fallbackMesh);
 
-        var min = CreateMiniDimensionPos(0, 0, 0);
-        var max = CreateMiniDimensionPos(0, 0, 0);
+        var min = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
+        var max = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
 
         // Act
         var result = tessellator.Tessellate(mockDimension.Object, min, max);
@@ -358,14 +296,14 @@ public class MiniDimensionTessellatorTests
     public void Tessellate_WhenBlockEntityReturnsFalse_AddsDefaultMesh()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
-        var mockDimension = CreateMockDimension();
+        var mockCapi = TestHelpers.CreateMockCapi();
+        var mockDimension = TestHelpers.CreateMockDimension();
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
 
-        var testBlock = CreateTestBlock(100);
+        var testBlock = TestHelpers.CreateTestBlock(100);
         testBlock.EntityClass = "TestBlockEntity";
 
-        var defaultMesh = CreateTestMeshData(4);
+        var defaultMesh = TestHelpers.CreateTestMeshData(4);
 
         var mockBlockEntity = new Mock<BlockEntity>();
         mockBlockEntity.CallBase = true;
@@ -378,8 +316,8 @@ public class MiniDimensionTessellatorTests
         mockDimension.Setup(d => d.GetBlockEntity(It.IsAny<BlockPos>())).Returns(mockBlockEntity.Object);
         mockCapi.Setup(c => c.TesselatorManager.GetDefaultBlockMesh(testBlock)).Returns(defaultMesh);
 
-        var min = CreateMiniDimensionPos(0, 0, 0);
-        var max = CreateMiniDimensionPos(0, 0, 0);
+        var min = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
+        var max = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
 
         // Act
         var result = tessellator.Tessellate(mockDimension.Object, min, max);
@@ -397,10 +335,10 @@ public class MiniDimensionTessellatorTests
     public async Task TessellateAsync_WithNullDimension_ReturnsNull()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
+        var mockCapi = TestHelpers.CreateMockCapi();
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
-        var min = CreateMiniDimensionPos(0, 0, 0);
-        var max = CreateMiniDimensionPos(0, 0, 0);
+        var min = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
+        var max = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
 
         // Act
         var result = await tessellator.TessellateAsync(null!, min, max);
@@ -413,20 +351,20 @@ public class MiniDimensionTessellatorTests
     public async Task TessellateAsync_WhenCancelled_ReturnsNullOrThrows()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
-        var mockDimension = CreateMockDimension();
+        var mockCapi = TestHelpers.CreateMockCapi();
+        var mockDimension = TestHelpers.CreateMockDimension();
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
 
-        var testBlock = CreateTestBlock(100);
-        var testMesh = CreateTestMeshData(4);
+        var testBlock = TestHelpers.CreateTestBlock(100);
+        var testMesh = TestHelpers.CreateTestMeshData(4);
 
         // Setup a large range that will take time to iterate
         mockDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>())).Returns(testBlock);
         mockDimension.Setup(d => d.GetBlockEntity(It.IsAny<BlockPos>())).Returns((BlockEntity?)null);
         mockCapi.Setup(c => c.TesselatorManager.GetDefaultBlockMesh(testBlock)).Returns(testMesh);
 
-        var min = CreateMiniDimensionPos(0, 0, 0);
-        var max = CreateMiniDimensionPos(100, 100, 100); // Large range
+        var min = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
+        var max = TestHelpers.CreateMiniDimensionPos(100, 100, 100); // Large range
 
         // Create a pre-cancelled token
         var cts = new CancellationTokenSource();
@@ -448,19 +386,19 @@ public class MiniDimensionTessellatorTests
     public async Task TessellateAsync_WithValidData_ReturnsMesh()
     {
         // Arrange
-        var mockCapi = CreateMockCapi();
-        var mockDimension = CreateMockDimension();
+        var mockCapi = TestHelpers.CreateMockCapi();
+        var mockDimension = TestHelpers.CreateMockDimension();
         var tessellator = new MiniDimensionTessellator(mockCapi.Object);
 
-        var testBlock = CreateTestBlock(100);
-        var testMesh = CreateTestMeshData(4);
+        var testBlock = TestHelpers.CreateTestBlock(100);
+        var testMesh = TestHelpers.CreateTestMeshData(4);
 
         mockDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>())).Returns(testBlock);
         mockDimension.Setup(d => d.GetBlockEntity(It.IsAny<BlockPos>())).Returns((BlockEntity?)null);
         mockCapi.Setup(c => c.TesselatorManager.GetDefaultBlockMesh(testBlock)).Returns(testMesh);
 
-        var min = CreateMiniDimensionPos(0, 0, 0);
-        var max = CreateMiniDimensionPos(0, 0, 0);
+        var min = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
+        var max = TestHelpers.CreateMiniDimensionPos(0, 0, 0);
 
         // Act
         var result = await tessellator.TessellateAsync(mockDimension.Object, min, max);
