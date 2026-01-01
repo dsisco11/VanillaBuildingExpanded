@@ -151,7 +151,7 @@ public class BuildBrushOrientationInfo
     #endregion
 
     #region Constructor
-    private BuildBrushOrientationInfo(
+    internal BuildBrushOrientationInfo(
         IWorldAccessor world,
         Block originalBlock,
         EBuildBrushRotationMode mode,
