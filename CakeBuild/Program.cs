@@ -5,6 +5,7 @@ using Cake.Common.IO;
 using Cake.Common.Tools.DotNet;
 using Cake.Common.Tools.DotNet.Clean;
 using Cake.Common.Tools.DotNet.Publish;
+using Cake.Common.Tools.DotNet.Test;
 using Cake.Core;
 using Cake.Frosting;
 using Cake.Json;
@@ -89,8 +90,24 @@ namespace CakeBuild
         }
     }
 
-    [TaskName("Package")]
+    [TaskName("Test")]
     [IsDependentOn(typeof(BuildTask))]
+    public sealed class TestTask : FrostingTask<BuildContext>
+    {
+        public override void Run(BuildContext context)
+        {
+            context.DotNetTest($"../{BuildContext.ProjectName}.Tests/{BuildContext.ProjectName}.Tests.csproj",
+                new DotNetTestSettings
+                {
+                    Configuration = context.BuildConfiguration,
+                    NoBuild = false,
+                    NoRestore = false
+                });
+        }
+    }
+
+    [TaskName("Package")]
+    [IsDependentOn(typeof(TestTask))]
     public sealed class PackageTask : FrostingTask<BuildContext>
     {
         public override void Run(BuildContext context)
