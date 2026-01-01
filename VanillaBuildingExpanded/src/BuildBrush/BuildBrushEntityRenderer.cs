@@ -25,6 +25,9 @@ public class BuildBrushEntityRenderer : EntityRenderer
     private CancellationTokenSource? tessellationCts;
     private volatile bool isTessellating;
 
+    // Track which brush instance we're subscribed to
+    private BuildBrushInstance? subscribedBrushInstance;
+
     #region Constants
     // Render colors
     private static readonly Vec4f ColorValid = ColorUtil.WhiteArgbVec;
@@ -46,24 +49,43 @@ public class BuildBrushEntityRenderer : EntityRenderer
     {
         base.OnEntityLoaded();
 
-        // Subscribe to block change events
-        var brushInstance = BrushInstance;
-        if (brushInstance is not null)
-        {
-            // Subscribe to dimension dirty events
-            if (brushInstance.Dimension is not null)
-            {
-                brushInstance.Dimension.OnDirty += Dimension_OnDirty;
-            }
-        }
+        // Subscribe to brush instance events (the instance exists before the dimension)
+        TrySubscribeToBrushInstance();
 
         RebuildMesh();
     }
 
     /// <summary>
-    /// Called when the dimension is marked dirty and needs mesh rebuild.
+    /// Attempts to subscribe to the brush instance's OnDimensionDirty event.
+    /// The brush instance forwards the dimension's dirty events, so we don't need to track dimension lifetime.
     /// </summary>
-    private void Dimension_OnDirty(object? sender, DimensionDirtyEventArgs e)
+    private void TrySubscribeToBrushInstance()
+    {
+        var brushInstance = BrushInstance;
+        
+        // Already subscribed to this instance
+        if (brushInstance is not null && brushInstance == subscribedBrushInstance)
+            return;
+
+        // Unsubscribe from old instance if any
+        if (subscribedBrushInstance is not null)
+        {
+            subscribedBrushInstance.OnDimensionDirty -= BrushInstance_OnDimensionDirty;
+            subscribedBrushInstance = null;
+        }
+
+        // Subscribe to new instance if available
+        if (brushInstance is not null)
+        {
+            brushInstance.OnDimensionDirty += BrushInstance_OnDimensionDirty;
+            subscribedBrushInstance = brushInstance;
+        }
+    }
+
+    /// <summary>
+    /// Called when the brush instance's dimension is marked dirty and needs mesh rebuild.
+    /// </summary>
+    private void BrushInstance_OnDimensionDirty(object? sender, DimensionDirtyEventArgs e)
     {
         RebuildMesh();
     }
@@ -75,6 +97,9 @@ public class BuildBrushEntityRenderer : EntityRenderer
     {
         if (capi.World.Side != EnumAppSide.Client)
             return;
+
+        // Ensure we're subscribed to brush instance events (handles late initialization)
+        TrySubscribeToBrushInstance();
 
         IMiniDimension? dimension = brushEntity.Dimension;
         BuildBrushDimension? brushDimension = BrushInstance?.Dimension;
@@ -255,15 +280,11 @@ public class BuildBrushEntityRenderer : EntityRenderer
         // Cancel any pending tessellation
         CancelPendingTessellation();
 
-        // Unsubscribe from events
-        var brushInstance = BrushInstance;
-        if (brushInstance is not null)
+        // Unsubscribe from brush instance events
+        if (subscribedBrushInstance is not null)
         {
-            // Unsubscribe from dimension dirty events
-            if (brushInstance.Dimension is not null)
-            {
-                brushInstance.Dimension.OnDirty -= Dimension_OnDirty;
-            }
+            subscribedBrushInstance.OnDimensionDirty -= BrushInstance_OnDimensionDirty;
+            subscribedBrushInstance = null;
         }
 
         DisposeMesh();

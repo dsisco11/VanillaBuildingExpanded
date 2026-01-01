@@ -76,6 +76,12 @@ public class BuildBrushInstance
     public event Action<BuildBrushInstance, BlockPos?>? OnPositionChanged;
     public event Action<BuildBrushInstance, EBuildBrushSnapping>? OnSnappingModeChanged;
     public event Action<BuildBrushInstance, int, BlockOrientationDefinition>? OnOrientationChanged;
+
+    /// <summary>
+    /// Raised when the dimension content changes and the mesh needs to be rebuilt.
+    /// This forwards the dimension's OnDirty event so subscribers don't need to track dimension lifetime.
+    /// </summary>
+    public event EventHandler<DimensionDirtyEventArgs>? OnDimensionDirty;
     #endregion
 
     #region Properties
@@ -245,14 +251,16 @@ public class BuildBrushInstance
         if (_rotation is null || !_rotation.CanRotate)
             return false;
 
-        // Cycle to next/previous rotation definition
-        _rotation.Rotate(direction);
+        OrientationIndex += (int)direction;
 
-        // Update the transformed block based on the new rotation state
-        BlockTransformed = _rotation.CurrentBlock;
+        //// Cycle to next/previous rotation definition
+        //_rotation.Rotate(direction);
 
-        // Raise block changed to update the renderer
-        OnBlockChanged?.Invoke(this, _blockTransformed);
+        //// Update the transformed block based on the new rotation state
+        //BlockTransformed = _rotation.CurrentBlock;
+
+        //// Raise block changed to update the renderer
+        //OnBlockChanged?.Invoke(this, _blockTransformed);
 
         return true;
     }
@@ -698,6 +706,9 @@ public class BuildBrushInstance
             return false;
         }
 
+        // Forward dimension dirty events
+        _dimension.OnDirty += Dimension_OnDirty;
+
         return true;
     }
 
@@ -769,6 +780,9 @@ public class BuildBrushInstance
         {
             _dimension = new BuildBrushDimension(World);
             _dimension.InitializeClientSide(entity.Dimension);
+
+            // Forward dimension dirty events
+            _dimension.OnDirty += Dimension_OnDirty;
         }
     }
 
@@ -786,8 +800,21 @@ public class BuildBrushInstance
             _entity = null;
         }
 
-        _dimension?.Destroy();
-        _dimension = null;
+        // Unsubscribe from dimension events before destroying
+        if (_dimension is not null)
+        {
+            _dimension.OnDirty -= Dimension_OnDirty;
+            _dimension.Destroy();
+            _dimension = null;
+        }
+    }
+
+    /// <summary>
+    /// Forwards dimension dirty events to subscribers of this instance.
+    /// </summary>
+    private void Dimension_OnDirty(object? sender, DimensionDirtyEventArgs e)
+    {
+        OnDimensionDirty?.Invoke(this, e);
     }
 
     /// <summary>
