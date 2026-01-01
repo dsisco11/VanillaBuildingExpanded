@@ -38,6 +38,11 @@ public class BuildBrushDimension
     private int dimensionId = -1;
 
     /// <summary>
+    /// The BuildBrushInstance this dimension is subscribed to (if any).
+    /// </summary>
+    private BuildBrushInstance? _subscribedInstance;
+
+    /// <summary>
     /// The current block placed in the dimension (may be rotated variant).
     /// </summary>
     private Block? currentBlock;
@@ -237,6 +242,9 @@ public class BuildBrushDimension
     /// </summary>
     public void Destroy()
     {
+        // Unsubscribe from any instance events
+        Unsubscribe();
+
         if (dimension is not null)
         {
             dimension.ClearChunks();
@@ -589,6 +597,128 @@ public class BuildBrushDimension
     public void SyncToPlayers(IPlayer[] players)
     {
         dimension?.CollectChunksForSending(players);
+    }
+    #endregion
+
+    #region Subscription Management
+    /// <summary>
+    /// Subscribes this dimension to events from a BuildBrushInstance.
+    /// Automatically unsubscribes from any previously subscribed instance.
+    /// </summary>
+    /// <param name="instance">The instance to subscribe to.</param>
+    public void SubscribeTo(BuildBrushInstance instance)
+    {
+        if (instance == _subscribedInstance)
+            return;
+
+        // Unsubscribe from previous instance
+        Unsubscribe();
+
+        _subscribedInstance = instance;
+
+        // Subscribe to relevant events
+        instance.OnBlockTransformedChanged += Instance_OnBlockTransformedChanged;
+        instance.OnOrientationChangedNew += Instance_OnOrientationChanged;
+        instance.OnRotationInfoChanged += Instance_OnRotationInfoChanged;
+    }
+
+    /// <summary>
+    /// Unsubscribes this dimension from all BuildBrushInstance events.
+    /// Safe to call even if not subscribed.
+    /// </summary>
+    public void Unsubscribe()
+    {
+        if (_subscribedInstance is null)
+            return;
+
+        _subscribedInstance.OnBlockTransformedChanged -= Instance_OnBlockTransformedChanged;
+        _subscribedInstance.OnOrientationChangedNew -= Instance_OnOrientationChanged;
+        _subscribedInstance.OnRotationInfoChanged -= Instance_OnRotationInfoChanged;
+
+        _subscribedInstance = null;
+    }
+
+    /// <summary>
+    /// Gets the currently subscribed BuildBrushInstance (if any).
+    /// </summary>
+    public BuildBrushInstance? SubscribedInstance => _subscribedInstance;
+    #endregion
+
+    #region Event Handlers
+    /// <summary>
+    /// Handles block transformed changes from the subscribed instance.
+    /// Updates the dimension's block when the transformed block changes.
+    /// </summary>
+    private void Instance_OnBlockTransformedChanged(object? sender, BlockChangedEventArgs e)
+    {
+        if (e.CurrentBlock is null)
+        {
+            Clear();
+            return;
+        }
+
+        // Get rotation mode from the instance's rotation info
+        var instance = sender as BuildBrushInstance;
+        EBuildBrushRotationMode mode = instance?.Rotation?.Mode ?? EBuildBrushRotationMode.None;
+
+        BeginUpdate();
+        try
+        {
+            // If this is just a variant change (same base block, different rotation variant),
+            // use SetVariantBlock. Otherwise, use SetBlock for a full reset.
+            if (originalBlock is not null && e.PreviousBlock is not null &&
+                originalBlock.BlockId != 0 && 
+                mode == EBuildBrushRotationMode.VariantBased)
+            {
+                SetVariantBlock(e.CurrentBlock);
+            }
+            else
+            {
+                SetBlock(e.CurrentBlock, mode);
+            }
+        }
+        finally
+        {
+            EndUpdate();
+        }
+    }
+
+    /// <summary>
+    /// Handles orientation changes from the subscribed instance.
+    /// Applies rotation based on the new orientation.
+    /// </summary>
+    private void Instance_OnOrientationChanged(object? sender, OrientationIndexChangedEventArgs e)
+    {
+        if (_subscribedInstance is null)
+            return;
+
+        // Get the rotation info from the instance
+        var rotation = _subscribedInstance.Rotation;
+        if (rotation is null)
+            return;
+
+        BeginUpdate();
+        try
+        {
+            // Apply the rotation using mesh angle and current transformed block
+            ApplyRotation((int)e.CurrentMeshAngleDegrees, _subscribedInstance.BlockTransformed);
+        }
+        finally
+        {
+            EndUpdate();
+        }
+    }
+
+    /// <summary>
+    /// Handles rotation info replacement from the subscribed instance.
+    /// This occurs when a new block is selected.
+    /// </summary>
+    private void Instance_OnRotationInfoChanged(object? sender, RotationInfoChangedEventArgs e)
+    {
+        // When rotation info changes, the block is also changing
+        // The block change will be handled by Instance_OnBlockTransformedChanged
+        // This handler is here for potential future use or for cases where
+        // we need to react specifically to rotation info changes
     }
     #endregion
 }
