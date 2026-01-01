@@ -13,7 +13,7 @@ namespace VanillaBuildingExpanded.BuildHammer.Tessellation;
 /// Provides tessellation services for mini-dimensions, producing combined mesh data
 /// from all blocks and block entities within specified bounds.
 /// </summary>
-public class MiniDimensionTessellator
+public class MiniDimensionTessellator : ITessellationService
 {
     private readonly ICoreClientAPI capi;
 
