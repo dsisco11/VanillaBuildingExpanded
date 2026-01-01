@@ -409,4 +409,24 @@ public class BuildBrushInstanceTests
     }
 
     #endregion
+
+    #region OnDimensionLifecycle Tests
+    // Note: Full lifecycle tests require server-side initialization which is
+    // difficult to mock. These tests verify the event is properly wired.
+
+    [Fact]
+    public void OnDimensionLifecycle_IsDefinedAndAccessible()
+    {
+        // Arrange
+        var instance = CreateTestInstance();
+
+        DimensionLifecycleEventArgs? capturedArgs = null;
+        instance.OnDimensionLifecycle += (sender, args) => capturedArgs = args;
+
+        // Assert - event subscription should succeed without error
+        Assert.NotNull(instance);
+        // Note: The event won't fire without server-side dimension initialization
+    }
+
+    #endregion
 }

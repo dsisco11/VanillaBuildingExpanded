@@ -822,8 +822,17 @@ public class BuildBrushInstance
             return false;
         }
 
+        // Subscribe dimension to this instance's events for automatic updates
+        _dimension.SubscribeTo(this);
+
         // Forward dimension dirty events
         _dimension.OnDirty += Dimension_OnDirty;
+
+        // Raise dimension lifecycle event
+        OnDimensionLifecycle?.Invoke(this, new DimensionLifecycleEventArgs(
+            isCreated: true,
+            _dimension
+        ));
 
         return true;
     }
@@ -897,8 +906,17 @@ public class BuildBrushInstance
             _dimension = new BuildBrushDimension(World);
             _dimension.InitializeClientSide(entity.Dimension);
 
+            // Subscribe dimension to this instance's events for automatic updates
+            _dimension.SubscribeTo(this);
+
             // Forward dimension dirty events
             _dimension.OnDirty += Dimension_OnDirty;
+
+            // Raise dimension lifecycle event
+            OnDimensionLifecycle?.Invoke(this, new DimensionLifecycleEventArgs(
+                isCreated: true,
+                _dimension
+            ));
         }
     }
 
@@ -908,7 +926,9 @@ public class BuildBrushInstance
     public void DestroyDimension()
     {
         // Unsubscribe from server-side position events
+#pragma warning disable CS0618 // Type or member is obsolete
         OnPositionChanged -= OnBrushPositionChanged_Server;
+#pragma warning restore CS0618
 
         if (_entity is not null)
         {
@@ -919,8 +939,14 @@ public class BuildBrushInstance
         // Unsubscribe from dimension events before destroying
         if (_dimension is not null)
         {
+            // Raise lifecycle event before destroying
+            OnDimensionLifecycle?.Invoke(this, new DimensionLifecycleEventArgs(
+                isCreated: false,
+                _dimension
+            ));
+
             _dimension.OnDirty -= Dimension_OnDirty;
-            _dimension.Destroy();
+            _dimension.Destroy(); // This calls Unsubscribe() internally
             _dimension = null;
         }
     }

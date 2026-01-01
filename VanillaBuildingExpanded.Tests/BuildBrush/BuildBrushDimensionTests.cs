@@ -288,8 +288,6 @@ public class BuildBrushDimensionTests
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
         var dimension = CreateTestDimension();
 
-        bool orientationHandlerCalled = false;
-
         // We need to verify the dimension's event handler is connected
         // Since we can't easily mock the internal handler, we verify
         // the subscription exists
