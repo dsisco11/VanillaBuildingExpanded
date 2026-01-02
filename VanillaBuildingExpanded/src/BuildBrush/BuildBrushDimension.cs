@@ -697,11 +697,22 @@ public class BuildBrushDimension
         if (rotation is null)
             return;
 
+        // For VariantBased rotation, the block change is already handled by
+        // Instance_OnBlockTransformedChanged. We only need to handle mesh angle
+        // changes here for Rotatable and Hybrid modes.
+        if (rotation.Mode == EBuildBrushRotationMode.VariantBased)
+        {
+            // Block change already handled by OnBlockTransformedChanged
+            return;
+        }
+
         BeginUpdate();
         try
         {
-            // Apply the rotation using mesh angle and current transformed block
-            ApplyRotation((int)e.CurrentMeshAngleDegrees, _subscribedInstance.BlockTransformed);
+            // Apply the rotation using mesh angle and current block from event args
+            // NOTE: Use e.CurrentBlock, not _subscribedInstance.BlockTransformed,
+            // because BlockTransformed may not be updated yet when this event fires
+            ApplyRotation((int)e.CurrentMeshAngleDegrees, e.CurrentBlock);
         }
         finally
         {

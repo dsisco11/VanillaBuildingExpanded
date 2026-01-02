@@ -241,4 +241,345 @@ public class BuildBrushDimensionTests
     }
 
     #endregion
+
+    #region ApplyRotation Tests - Hybrid Mode
+
+    /// <summary>
+    /// Helper to set RotationMode on dimension via reflection.
+    /// </summary>
+    private static void SetRotationMode(BuildBrushDimension dimension, EBuildBrushRotationMode mode)
+    {
+        var prop = typeof(BuildBrushDimension).GetProperty("RotationMode");
+        prop?.SetValue(dimension, mode);
+    }
+
+    /// <summary>
+    /// Helper to set originalBlock on dimension via reflection.
+    /// </summary>
+    private static void SetOriginalBlock(BuildBrushDimension dimension, Block block)
+    {
+        var field = typeof(BuildBrushDimension).GetField("originalBlock", BindingFlags.NonPublic | BindingFlags.Instance);
+        field?.SetValue(dimension, block);
+    }
+
+    /// <summary>
+    /// Helper to set currentBlock on dimension via reflection.
+    /// </summary>
+    private static void SetCurrentBlock(BuildBrushDimension dimension, Block block)
+    {
+        var field = typeof(BuildBrushDimension).GetField("currentBlock", BindingFlags.NonPublic | BindingFlags.Instance);
+        field?.SetValue(dimension, block);
+    }
+
+    /// <summary>
+    /// Helper to get currentBlock from dimension via reflection.
+    /// </summary>
+    private static Block? GetCurrentBlock(BuildBrushDimension dimension)
+    {
+        var field = typeof(BuildBrushDimension).GetField("currentBlock", BindingFlags.NonPublic | BindingFlags.Instance);
+        return field?.GetValue(dimension) as Block;
+    }
+
+    [Fact]
+    public void ApplyRotation_HybridMode_WhenVariantBlockDiffers_UpdatesCurrentBlock()
+    {
+        // Arrange
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var dimension = new BuildBrushDimension(mockWorld.Object);
+
+        var blockNorth = TestHelpers.CreateTestBlock(100, "game:hybrid-north");
+        var blockEast = TestHelpers.CreateTestBlock(101, "game:hybrid-east");
+        mockWorld.Setup(w => w.GetBlock(100)).Returns(blockNorth);
+        mockWorld.Setup(w => w.GetBlock(101)).Returns(blockEast);
+
+        // Initialize dimension with mock mini-dimension
+        var mockMiniDimension = new Mock<IMiniDimension>();
+        mockMiniDimension.Setup(d => d.subDimensionId).Returns(1);
+        dimension.InitializeClientSide(mockMiniDimension.Object);
+
+        // Set the dimension to Hybrid mode with blockNorth as original/current
+        SetRotationMode(dimension, EBuildBrushRotationMode.Hybrid);
+        SetOriginalBlock(dimension, blockNorth);
+        SetCurrentBlock(dimension, blockNorth);
+
+        // Act - Apply rotation with different variant block
+        dimension.ApplyRotation(90, blockEast);
+
+        // Assert - currentBlock should now be blockEast
+        var currentBlock = GetCurrentBlock(dimension);
+        Assert.Same(blockEast, currentBlock);
+    }
+
+    [Fact]
+    public void ApplyRotation_HybridMode_WhenVariantBlockSame_DoesNotReplaceBlock()
+    {
+        // Arrange
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var dimension = new BuildBrushDimension(mockWorld.Object);
+
+        var blockNorth = TestHelpers.CreateTestBlock(100, "game:hybrid-north");
+        mockWorld.Setup(w => w.GetBlock(100)).Returns(blockNorth);
+
+        // Initialize dimension with mock mini-dimension
+        var mockMiniDimension = new Mock<IMiniDimension>();
+        mockMiniDimension.Setup(d => d.subDimensionId).Returns(1);
+        dimension.InitializeClientSide(mockMiniDimension.Object);
+
+        // Set the dimension to Hybrid mode
+        SetRotationMode(dimension, EBuildBrushRotationMode.Hybrid);
+        SetOriginalBlock(dimension, blockNorth);
+        SetCurrentBlock(dimension, blockNorth);
+
+        // Act - Apply rotation with SAME variant block (different angle, same block)
+        dimension.ApplyRotation(90, blockNorth);
+
+        // Assert - currentBlock should still be blockNorth
+        var currentBlock = GetCurrentBlock(dimension);
+        Assert.Same(blockNorth, currentBlock);
+    }
+
+    [Fact]
+    public void ApplyRotation_VariantBasedMode_WhenVariantBlockDiffers_UpdatesCurrentBlock()
+    {
+        // Arrange
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var dimension = new BuildBrushDimension(mockWorld.Object);
+
+        var blockNorth = TestHelpers.CreateTestBlock(100, "game:variant-north");
+        var blockEast = TestHelpers.CreateTestBlock(101, "game:variant-east");
+        mockWorld.Setup(w => w.GetBlock(100)).Returns(blockNorth);
+        mockWorld.Setup(w => w.GetBlock(101)).Returns(blockEast);
+
+        // Initialize dimension with mock mini-dimension
+        var mockMiniDimension = new Mock<IMiniDimension>();
+        mockMiniDimension.Setup(d => d.subDimensionId).Returns(1);
+        dimension.InitializeClientSide(mockMiniDimension.Object);
+
+        // Set the dimension to VariantBased mode
+        SetRotationMode(dimension, EBuildBrushRotationMode.VariantBased);
+        SetOriginalBlock(dimension, blockNorth);
+        SetCurrentBlock(dimension, blockNorth);
+
+        // Act - Apply rotation with different variant block
+        dimension.ApplyRotation(0, blockEast);
+
+        // Assert - currentBlock should now be blockEast
+        var currentBlock = GetCurrentBlock(dimension);
+        Assert.Same(blockEast, currentBlock);
+    }
+
+    [Fact]
+    public void ApplyRotation_HybridMode_WhenNullVariantBlock_DoesNotCrash()
+    {
+        // Arrange
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var dimension = new BuildBrushDimension(mockWorld.Object);
+
+        var blockNorth = TestHelpers.CreateTestBlock(100, "game:hybrid-north");
+        mockWorld.Setup(w => w.GetBlock(100)).Returns(blockNorth);
+
+        // Initialize dimension with mock mini-dimension
+        var mockMiniDimension = new Mock<IMiniDimension>();
+        mockMiniDimension.Setup(d => d.subDimensionId).Returns(1);
+        dimension.InitializeClientSide(mockMiniDimension.Object);
+
+        // Set the dimension to Hybrid mode
+        SetRotationMode(dimension, EBuildBrushRotationMode.Hybrid);
+        SetOriginalBlock(dimension, blockNorth);
+        SetCurrentBlock(dimension, blockNorth);
+
+        // Act & Assert - Should not throw when variantBlock is null
+        var exception = Record.Exception(() => dimension.ApplyRotation(90, null));
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void ApplyRotation_NoneMode_DoesNotChangeBlock()
+    {
+        // Arrange
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var dimension = new BuildBrushDimension(mockWorld.Object);
+
+        var block = TestHelpers.CreateTestBlock(100, "game:static");
+        var otherBlock = TestHelpers.CreateTestBlock(101, "game:other");
+        mockWorld.Setup(w => w.GetBlock(100)).Returns(block);
+
+        // Initialize dimension with mock mini-dimension
+        var mockMiniDimension = new Mock<IMiniDimension>();
+        mockMiniDimension.Setup(d => d.subDimensionId).Returns(1);
+        dimension.InitializeClientSide(mockMiniDimension.Object);
+
+        // Set the dimension to None mode
+        SetRotationMode(dimension, EBuildBrushRotationMode.None);
+        SetOriginalBlock(dimension, block);
+        SetCurrentBlock(dimension, block);
+
+        // Act - Try to apply rotation with different block
+        dimension.ApplyRotation(90, otherBlock);
+
+        // Assert - currentBlock should NOT change for None mode
+        var currentBlock = GetCurrentBlock(dimension);
+        Assert.Same(block, currentBlock);
+    }
+
+    #endregion
+
+    #region Instance_OnOrientationChanged Handler Tests
+
+    [Fact]
+    public void Instance_OnOrientationChanged_HybridMode_PassesCorrectBlockAndAngle()
+    {
+        // Arrange
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+
+        var blockNorth = TestHelpers.CreateTestBlock(100, "game:hybrid-north");
+        var blockEast = TestHelpers.CreateTestBlock(101, "game:hybrid-east");
+        mockWorld.Setup(w => w.GetBlock(100)).Returns(blockNorth);
+        mockWorld.Setup(w => w.GetBlock(101)).Returns(blockEast);
+
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var dimension = new BuildBrushDimension(mockWorld.Object);
+
+        // Initialize dimension with mock mini-dimension
+        var mockMiniDimension = new Mock<IMiniDimension>();
+        mockMiniDimension.Setup(d => d.subDimensionId).Returns(1);
+        dimension.InitializeClientSide(mockMiniDimension.Object);
+
+        // Subscribe dimension to instance
+        dimension.SubscribeTo(instance);
+
+        // Create hybrid orientation definitions: 2 variants × 4 angles = 8 total
+        var definitions = ImmutableArray.Create(
+            new BlockOrientationDefinition(100, 0f),   // index 0: North, 0°
+            new BlockOrientationDefinition(100, 90f),  // index 1: North, 90°
+            new BlockOrientationDefinition(100, 180f), // index 2: North, 180°
+            new BlockOrientationDefinition(100, 270f), // index 3: North, 270°
+            new BlockOrientationDefinition(101, 0f),   // index 4: East, 0°
+            new BlockOrientationDefinition(101, 90f),  // index 5: East, 90°
+            new BlockOrientationDefinition(101, 180f), // index 6: East, 180°
+            new BlockOrientationDefinition(101, 270f)  // index 7: East, 270°
+        );
+
+        var rotation = new BuildBrushOrientationInfo(mockWorld.Object, blockNorth, EBuildBrushRotationMode.Hybrid, definitions);
+
+        // Inject rotation info into instance
+        var rotationField = typeof(BuildBrushInstance).GetField("_rotation", BindingFlags.NonPublic | BindingFlags.Instance);
+        var blockField = typeof(BuildBrushInstance).GetField("_blockUntransformed", BindingFlags.NonPublic | BindingFlags.Instance);
+        var blockTransformedField = typeof(BuildBrushInstance).GetField("_blockTransformed", BindingFlags.NonPublic | BindingFlags.Instance);
+        rotationField?.SetValue(instance, rotation);
+        blockField?.SetValue(instance, blockNorth);
+        blockTransformedField?.SetValue(instance, blockNorth);
+
+        // Wire up the rotation event handler
+        var handlerMethod = typeof(BuildBrushInstance).GetMethod("Rotation_OnOrientationChanged", BindingFlags.NonPublic | BindingFlags.Instance);
+        if (handlerMethod is not null)
+        {
+            var handler = (EventHandler<OrientationIndexChangedEventArgs>)Delegate.CreateDelegate(
+                typeof(EventHandler<OrientationIndexChangedEventArgs>), instance, handlerMethod);
+            rotation.OnOrientationChanged += handler;
+        }
+
+        // Capture events
+        var capturedEvents = new List<OrientationIndexChangedEventArgs>();
+        instance.OnOrientationChanged += (s, e) => capturedEvents.Add(e);
+
+        // Act - Cycle through orientations: 0 → 1 → 2 → 3 → 4 (crosses variant boundary)
+        for (int i = 0; i < 4; i++)
+        {
+            instance.CycleOrientation(EModeCycleDirection.Forward);
+        }
+
+        // Assert
+        Assert.Equal(4, capturedEvents.Count);
+
+        // First 3 events should have same block (North), increasing angles
+        Assert.Equal(100, capturedEvents[0].CurrentBlock?.BlockId);
+        Assert.Equal(90f, capturedEvents[0].CurrentMeshAngleDegrees);
+        Assert.False(capturedEvents[0].VariantChanged);
+
+        Assert.Equal(100, capturedEvents[1].CurrentBlock?.BlockId);
+        Assert.Equal(180f, capturedEvents[1].CurrentMeshAngleDegrees);
+        Assert.False(capturedEvents[1].VariantChanged);
+
+        Assert.Equal(100, capturedEvents[2].CurrentBlock?.BlockId);
+        Assert.Equal(270f, capturedEvents[2].CurrentMeshAngleDegrees);
+        Assert.False(capturedEvents[2].VariantChanged);
+
+        // 4th event should cross to East variant with angle reset to 0°
+        Assert.Equal(101, capturedEvents[3].CurrentBlock?.BlockId);
+        Assert.Equal(0f, capturedEvents[3].CurrentMeshAngleDegrees);
+        Assert.True(capturedEvents[3].VariantChanged);
+    }
+
+    [Fact]
+    public void Instance_OnOrientationChanged_HybridMode_BlockTransformedUpdatedBeforeEvent()
+    {
+        // Arrange
+        var mockWorld = TestHelpers.CreateMockWorld();
+        var mockPlayer = TestHelpers.CreateMockPlayer();
+
+        var blockNorth = TestHelpers.CreateTestBlock(100, "game:hybrid-north");
+        var blockEast = TestHelpers.CreateTestBlock(101, "game:hybrid-east");
+        mockWorld.Setup(w => w.GetBlock(100)).Returns(blockNorth);
+        mockWorld.Setup(w => w.GetBlock(101)).Returns(blockEast);
+
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var dimension = new BuildBrushDimension(mockWorld.Object);
+
+        // Initialize dimension with mock mini-dimension
+        var mockMiniDimension = new Mock<IMiniDimension>();
+        mockMiniDimension.Setup(d => d.subDimensionId).Returns(1);
+        dimension.InitializeClientSide(mockMiniDimension.Object);
+
+        dimension.SubscribeTo(instance);
+
+        // Create hybrid orientation: 2 variants × 2 angles = 4 total
+        var definitions = ImmutableArray.Create(
+            new BlockOrientationDefinition(100, 0f),   // North, 0°
+            new BlockOrientationDefinition(100, 180f), // North, 180°
+            new BlockOrientationDefinition(101, 0f),   // East, 0°
+            new BlockOrientationDefinition(101, 180f)  // East, 180°
+        );
+
+        var rotation = new BuildBrushOrientationInfo(mockWorld.Object, blockNorth, EBuildBrushRotationMode.Hybrid, definitions);
+
+        // Inject rotation info
+        var rotationField = typeof(BuildBrushInstance).GetField("_rotation", BindingFlags.NonPublic | BindingFlags.Instance);
+        var blockField = typeof(BuildBrushInstance).GetField("_blockUntransformed", BindingFlags.NonPublic | BindingFlags.Instance);
+        var blockTransformedField = typeof(BuildBrushInstance).GetField("_blockTransformed", BindingFlags.NonPublic | BindingFlags.Instance);
+        rotationField?.SetValue(instance, rotation);
+        blockField?.SetValue(instance, blockNorth);
+        blockTransformedField?.SetValue(instance, blockNorth);
+
+        // Wire up rotation event
+        var handlerMethod = typeof(BuildBrushInstance).GetMethod("Rotation_OnOrientationChanged", BindingFlags.NonPublic | BindingFlags.Instance);
+        if (handlerMethod is not null)
+        {
+            var handler = (EventHandler<OrientationIndexChangedEventArgs>)Delegate.CreateDelegate(
+                typeof(EventHandler<OrientationIndexChangedEventArgs>), instance, handlerMethod);
+            rotation.OnOrientationChanged += handler;
+        }
+
+        // Capture BlockTransformed at the moment of each event
+        var blockTransformedAtEvent = new List<Block?>();
+        var eventArgsCurrentBlock = new List<Block?>();
+        instance.OnOrientationChanged += (s, e) =>
+        {
+            blockTransformedAtEvent.Add(instance.BlockTransformed);
+            eventArgsCurrentBlock.Add(e.CurrentBlock);
+        };
+
+        // Act - Cycle to index 2 (East variant)
+        instance.CycleOrientation(EModeCycleDirection.Forward); // 0 → 1
+        instance.CycleOrientation(EModeCycleDirection.Forward); // 1 → 2 (variant change)
+
+        // Assert - EventArgs.CurrentBlock should always have the correct NEW block
+        // even if instance.BlockTransformed is updated after the event fires
+        Assert.Equal(2, eventArgsCurrentBlock.Count);
+        Assert.Same(blockNorth, eventArgsCurrentBlock[0]); // Still North at 180°
+        Assert.Same(blockEast, eventArgsCurrentBlock[1]);  // Changed to East at 0°
+    }
+
+    #endregion
 }

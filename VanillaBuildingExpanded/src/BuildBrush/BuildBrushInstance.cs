@@ -251,10 +251,14 @@ public class BuildBrushInstance
                 return;
 
             // Setting CurrentIndex raises _rotation.OnOrientationChanged
-            // which we forward via Rotation_OnOrientationChanged
+            // which we forward via Rotation_OnOrientationChanged.
             _rotation.CurrentIndex = value;
 
-            // Update the transformed block based on the new orientation state
+            // Update the transformed block based on the new orientation state.
+            // BlockTransformed setter will:
+            // 1. Update ItemStack
+            // 2. Raise OnBlockTransformedChanged event
+            // 3. Call UpdateDimensionBlock()
             BlockTransformed = _rotation.CurrentBlock;
 
             if (ItemStack is not null)
@@ -264,9 +268,7 @@ public class BuildBrushInstance
             }
 
             // Note: OnOrientationChanged is raised via Rotation_OnOrientationChanged forwarder
-
-            // Update dimension with new block/rotation
-            UpdateDimensionBlock();
+            // Note: UpdateDimensionBlock() is called by BlockTransformed setter, no need to call again
         }
     }
 
