@@ -420,6 +420,13 @@ public class BuildBrushInstance
 
             // Update transformed block to current rotation state
             BlockTransformed = _rotation?.CurrentBlock;
+
+            // Apply initial orientation attributes to ItemStack (meshAngle, type, etc.)
+            // This ensures the ItemStack is properly initialized even at orientation index 0
+            if (ItemStack is not null && _rotation is not null)
+            {
+                _rotation.ApplyOrientationAttributes(ItemStack.Attributes, _sourceItemStack?.Attributes);
+            }
         }
     }
 
