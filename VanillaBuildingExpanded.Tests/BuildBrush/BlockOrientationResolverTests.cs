@@ -317,6 +317,59 @@ public class BlockOrientationResolverTests
 
     #endregion
 
+    #region GetRotationMode Tests - Guard Tests
+
+    [Fact]
+    public void GetRotationMode_SingleVariantWithMultipleAngles_ReturnsRotatable_NotHybrid()
+    {
+        // Arrange - Block with rotatable entity but only one variant (no orientation variants)
+        var mockWorld = CreateMockWorld();
+        var block = CreateRotatableBlockWithInterval(100, "game:rotatableonly", "RotatableEntity", "45deg");
+        SetupRotatableEntity(mockWorld, "RotatableEntity");
+        var resolver = new BlockOrientationResolver(mockWorld.Object);
+
+        // Act
+        var mode = resolver.GetRotationMode(block);
+
+        // Assert - Should be Rotatable, NOT Hybrid (no variant keys)
+        Assert.Equal(EBuildBrushRotationMode.Rotatable, mode);
+    }
+
+    [Fact]
+    public void GetRotationMode_MultipleVariantsWithNoRotatableEntity_ReturnsVariantBased_NotHybrid()
+    {
+        // Arrange - Block with orientation variant but no rotatable entity
+        var mockWorld = CreateMockWorld();
+        var block = CreateVariantBlock(100, "game:variantonly", "rot", "north");
+        // NOT setting up rotatable entity - no EntityClass
+        var resolver = new BlockOrientationResolver(mockWorld.Object);
+
+        // Act
+        var mode = resolver.GetRotationMode(block);
+
+        // Assert - Should be VariantBased, NOT Hybrid (no IRotatable)
+        Assert.Equal(EBuildBrushRotationMode.VariantBased, mode);
+    }
+
+    [Fact]
+    public void GetRotationMode_MultipleVariantsWithNonRotatableEntity_ReturnsVariantBased_NotHybrid()
+    {
+        // Arrange - Block with orientation variant AND entity class, but entity doesn't implement IRotatable
+        var mockWorld = CreateMockWorld();
+        var block = CreateVariantBlock(100, "game:variantonly", "rot", "north");
+        block.EntityClass = "NonRotatableEntity";
+        SetupNonRotatableEntity(mockWorld, "NonRotatableEntity");
+        var resolver = new BlockOrientationResolver(mockWorld.Object);
+
+        // Act
+        var mode = resolver.GetRotationMode(block);
+
+        // Assert - Should be VariantBased, NOT Hybrid (entity doesn't implement IRotatable)
+        Assert.Equal(EBuildBrushRotationMode.VariantBased, mode);
+    }
+
+    #endregion
+
     #region GetOrientations Tests - None Mode
 
     [Fact]

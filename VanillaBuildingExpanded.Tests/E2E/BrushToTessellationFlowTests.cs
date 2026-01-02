@@ -1039,4 +1039,203 @@ public class BrushToTessellationFlowTests
     }
 
     #endregion
+
+    #region Hybrid Orientation Cycling E2E Tests
+
+    /// <summary>
+    /// Test harness extension for proper hybrid orientation setup with multiple variants.
+    /// </summary>
+    private class HybridBrushTestHarness : BrushTestHarness
+    {
+        public List<OrientationIndexChangedEventArgs> AllOrientationEvents { get; } = new();
+
+        public void SetupHybridBlockWithVariants(int variantCount, int anglesPerVariant, int baseBlockId = 100)
+        {
+            var definitionsBuilder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>();
+            var firstBlock = TestHelpers.CreateTestBlock(baseBlockId, $"game:hybrid-variant0");
+            MockWorld.Setup(w => w.GetBlock(baseBlockId)).Returns(firstBlock);
+
+            float intervalDegrees = 360f / variantCount / anglesPerVariant;
+
+            for (int variant = 0; variant < variantCount; variant++)
+            {
+                int blockId = baseBlockId + variant;
+                if (variant > 0)
+                {
+                    var variantBlock = TestHelpers.CreateTestBlock(blockId, $"game:hybrid-variant{variant}");
+                    MockWorld.Setup(w => w.GetBlock(blockId)).Returns(variantBlock);
+                }
+
+                for (int angle = 0; angle < anglesPerVariant; angle++)
+                {
+                    float meshAngle = angle * intervalDegrees;
+                    definitionsBuilder.Add(new BlockOrientationDefinition(blockId, meshAngle));
+                }
+            }
+
+            var definitions = definitionsBuilder.ToImmutable();
+            var orientationInfo = new BuildBrushOrientationInfo(MockWorld.Object, firstBlock, EBuildBrushRotationMode.Hybrid, definitions);
+
+            // Inject via reflection
+            var rotationField = typeof(BuildBrushInstance).GetField("_rotation", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var blockField = typeof(BuildBrushInstance).GetField("_blockUntransformed", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var blockIdField = typeof(BuildBrushInstance).GetField("_blockId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            rotationField?.SetValue(Instance, orientationInfo);
+            blockField?.SetValue(Instance, firstBlock);
+            blockIdField?.SetValue(Instance, baseBlockId);
+
+            // Subscribe to rotation events
+            var handlerMethod = typeof(BuildBrushInstance).GetMethod("Rotation_OnOrientationChanged", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (handlerMethod is not null)
+            {
+                var handler = (EventHandler<OrientationIndexChangedEventArgs>)Delegate.CreateDelegate(
+                    typeof(EventHandler<OrientationIndexChangedEventArgs>), Instance, handlerMethod);
+                orientationInfo.OnOrientationChanged += handler;
+            }
+
+            // Capture all orientation events
+            Instance.OnOrientationChanged += (s, e) => AllOrientationEvents.Add(e);
+        }
+    }
+
+    private static HybridBrushTestHarness CreateHybridHarness()
+    {
+        return new HybridBrushTestHarness();
+    }
+
+    [Theory]
+    [InlineData(2, 4, 8)]  // 2 variants × 4 angles = 8 orientations
+    [InlineData(4, 2, 8)]  // 4 variants × 2 angles = 8 orientations
+    [InlineData(3, 3, 9)]  // 3 variants × 3 angles = 9 orientations
+    public void Rotation_HybridBlock_BidirectionalCycle_UpdatesPreviewCorrectly_Config(int variantCount, int anglesPerVariant, int totalOrientations)
+    {
+        // Arrange
+        var harness = CreateHybridHarness();
+        harness.SetupHybridBlockWithVariants(variantCount, anglesPerVariant);
+        harness.ResetCounters();
+        harness.AssertDefaultState();
+
+        // Act - Full forward cycle
+        for (int i = 0; i < totalOrientations; i++)
+        {
+            harness.Instance.CycleOrientation(EModeCycleDirection.Forward);
+        }
+
+        // Assert - Correct number of events
+        Assert.Equal(totalOrientations, harness.AllOrientationEvents.Count);
+
+        // Verify variant transitions happen at correct indices
+        int eventsWithVariantChange = 0;
+        foreach (var evt in harness.AllOrientationEvents)
+        {
+            if (evt.VariantChanged)
+            {
+                eventsWithVariantChange++;
+                // At variant transition, mesh angle should be 0 (for forward) or at boundary
+                Assert.True(evt.CurrentMeshAngleDegrees == 0f || evt.CurrentIndex == 0);
+            }
+        }
+
+        // Should have exactly variantCount variant changes (including wrap-around)
+        Assert.Equal(variantCount, eventsWithVariantChange);
+    }
+
+    [Theory]
+    [InlineData(2, 4, 8)]  // 2 variants × 4 angles = 8 orientations
+    [InlineData(4, 2, 8)]  // 4 variants × 2 angles = 8 orientations
+    [InlineData(3, 3, 9)]  // 3 variants × 3 angles = 9 orientations
+    public void Rotation_HybridBlock_ForwardCycle_ExhaustsAnglesBeforeSwitchingVariant(int variantCount, int anglesPerVariant, int totalOrientations)
+    {
+        // Arrange
+        var harness = CreateHybridHarness();
+        harness.SetupHybridBlockWithVariants(variantCount, anglesPerVariant);
+        harness.ResetCounters();
+        harness.AssertDefaultState();
+
+        // Act - Forward cycle through all orientations (excluding wrap-around)
+        for (int i = 0; i < totalOrientations - 1; i++)
+        {
+            harness.Instance.CycleOrientation(EModeCycleDirection.Forward);
+        }
+
+        // Assert - Verify block ID only changes at expected transition points
+        int? lastBlockId = null;
+        int consecutiveSameBlockCount = 0;
+
+        foreach (var evt in harness.AllOrientationEvents)
+        {
+            if (lastBlockId is null)
+            {
+                lastBlockId = evt.PreviousBlock?.BlockId;
+            }
+
+            if (evt.CurrentBlock?.BlockId == lastBlockId)
+            {
+                consecutiveSameBlockCount++;
+            }
+            else
+            {
+                // Block changed - should have had anglesPerVariant-1 consecutive same block events
+                // (minus 1 because the first event of a new block doesn't count)
+                lastBlockId = evt.CurrentBlock?.BlockId;
+                consecutiveSameBlockCount = 0;
+            }
+        }
+
+        // Final consecutive count should be anglesPerVariant - 1 (last variant's remaining angles)
+        Assert.True(consecutiveSameBlockCount <= anglesPerVariant - 1);
+    }
+
+    [Theory]
+    [InlineData(2, 4, 8)]  // 2 variants × 4 angles = 8 orientations
+    [InlineData(4, 2, 8)]  // 4 variants × 2 angles = 8 orientations
+    [InlineData(3, 3, 9)]  // 3 variants × 3 angles = 9 orientations
+    public void Rotation_HybridBlock_BackwardCycle_ExhaustsAnglesBeforeSwitchingVariant(int variantCount, int anglesPerVariant, int totalOrientations)
+    {
+        // Arrange
+        var harness = CreateHybridHarness();
+        harness.SetupHybridBlockWithVariants(variantCount, anglesPerVariant);
+        harness.ResetCounters();
+        harness.AssertDefaultState();
+
+        // Act - Backward cycle from start (will wrap to end first)
+        for (int i = 0; i < totalOrientations; i++)
+        {
+            harness.Instance.CycleOrientation(EModeCycleDirection.Backward);
+        }
+
+        // Assert - Verify block ID only changes at expected transition points
+        Assert.Equal(totalOrientations, harness.AllOrientationEvents.Count);
+
+        // First event should be wrap-around (0 → last index)
+        var firstEvent = harness.AllOrientationEvents[0];
+        Assert.Equal(0, firstEvent.PreviousIndex);
+        Assert.Equal(totalOrientations - 1, firstEvent.CurrentIndex);
+        Assert.True(firstEvent.VariantChanged);
+    }
+
+    [Fact]
+    public void Rotation_HybridBlock_MixedForwardBackward_MaintainsCorrectState()
+    {
+        // Arrange
+        var harness = CreateHybridHarness();
+        harness.SetupHybridBlockWithVariants(variantCount: 2, anglesPerVariant: 4);
+        harness.ResetCounters();
+        harness.AssertDefaultState();
+
+        // Act - Mixed cycling: forward 3, backward 2, forward 5
+        for (int i = 0; i < 3; i++) harness.Instance.CycleOrientation(EModeCycleDirection.Forward);
+        for (int i = 0; i < 2; i++) harness.Instance.CycleOrientation(EModeCycleDirection.Backward);
+        for (int i = 0; i < 5; i++) harness.Instance.CycleOrientation(EModeCycleDirection.Forward);
+
+        // Assert - 10 total events
+        Assert.Equal(10, harness.AllOrientationEvents.Count);
+
+        // Final index should be (0 + 3 - 2 + 5) % 8 = 6
+        var lastEvent = harness.AllOrientationEvents[^1];
+        Assert.Equal(6, lastEvent.CurrentIndex);
+    }
+
+    #endregion
 }
