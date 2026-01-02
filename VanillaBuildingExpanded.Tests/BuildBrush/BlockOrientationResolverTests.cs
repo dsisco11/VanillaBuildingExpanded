@@ -555,6 +555,56 @@ public class BlockOrientationResolverTests
         Assert.Equal(270f, orientations[3].MeshAngleDegrees);
     }
 
+    [Fact]
+    public void GetOrientations_RotatableBlock_22_5DegNot45_ReturnsEightDefinitions_Skipping45Multiples()
+    {
+        // Arrange
+        var mockWorld = CreateMockWorld();
+        var block = CreateRotatableBlockWithInterval(100, "game:specialblock", "SpecialEntity", "22.5degnot45deg");
+        SetupBlockLookup(mockWorld, block);
+        SetupRotatableEntity(mockWorld, "SpecialEntity");
+        var resolver = new BlockOrientationResolver(mockWorld.Object);
+
+        // Act
+        var orientations = resolver.GetOrientations(100);
+
+        // Assert - Should have 8 orientations (22.5° steps but skipping 45° multiples)
+        Assert.Equal(8, orientations.Length);
+
+        // Expected angles: 22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5
+        // (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315° are skipped)
+        float[] expectedAngles = [22.5f, 67.5f, 112.5f, 157.5f, 202.5f, 247.5f, 292.5f, 337.5f];
+
+        for (int i = 0; i < 8; i++)
+        {
+            Assert.Equal(100, orientations[i].BlockId);
+            Assert.Equal(expectedAngles[i], orientations[i].MeshAngleDegrees);
+        }
+    }
+
+    [Fact]
+    public void GetOrientations_RotatableBlock_22_5DegNot45_DoesNotContain45DegMultiples()
+    {
+        // Arrange
+        var mockWorld = CreateMockWorld();
+        var block = CreateRotatableBlockWithInterval(100, "game:specialblock", "SpecialEntity", "22.5degnot45deg");
+        SetupBlockLookup(mockWorld, block);
+        SetupRotatableEntity(mockWorld, "SpecialEntity");
+        var resolver = new BlockOrientationResolver(mockWorld.Object);
+
+        // Act
+        var orientations = resolver.GetOrientations(100);
+
+        // Assert - Should NOT contain any 45° multiples
+        float[] skippedAngles = [0f, 45f, 90f, 135f, 180f, 225f, 270f, 315f];
+        var actualAngles = orientations.Select(o => o.MeshAngleDegrees).ToArray();
+
+        foreach (float skipped in skippedAngles)
+        {
+            Assert.DoesNotContain(skipped, actualAngles);
+        }
+    }
+
     #endregion
 
     #region GetOrientations Tests - Hybrid Mode
