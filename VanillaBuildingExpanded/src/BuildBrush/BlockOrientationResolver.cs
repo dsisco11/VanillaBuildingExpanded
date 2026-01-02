@@ -171,21 +171,27 @@ public class BlockOrientationResolver
     /// <param name="itemStack">Optional ItemStack to resolve type-specific properties.</param>
     private ImmutableArray<BlockOrientationDefinition> ComputeRotatableRotations(Block block, ItemStack? itemStack = null)
     {
-        float intervalDegrees = ResolveRotationIntervalDegrees(block, itemStack);
-        if (intervalDegrees <= 0f)
+        ERotatableInterval interval = ResolveRotatableInterval(block, itemStack);
+        if (interval == ERotatableInterval.None)
         {
             // Default to 90° if no interval specified
-            intervalDegrees = 90f;
+            interval = ERotatableInterval.Deg90;
         }
 
-        int stepCount = (int)(360f / intervalDegrees);
-        if (stepCount <= 0)
-            stepCount = 1;
+        float intervalDegrees = interval.ToDegrees();
+        int totalSteps = (int)(360f / intervalDegrees);
+        if (totalSteps <= 0)
+            totalSteps = 1;
 
-        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(stepCount);
-        for (int i = 0; i < stepCount; i++)
+        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(interval.GetStepCount());
+        for (int i = 0; i < totalSteps; i++)
         {
             float angle = i * intervalDegrees;
+
+            // Skip angles that should be omitted (e.g., 45° multiples for Deg22_5Not45)
+            if (interval.ShouldSkipAngle(angle))
+                continue;
+
             builder.Add(new BlockOrientationDefinition(block.BlockId, angle));
         }
         return builder.MoveToImmutable();
@@ -203,30 +209,37 @@ public class BlockOrientationResolver
         if (variants.Length == 0)
             return ComputeRotatableRotations(block, itemStack);
 
-        float intervalDegrees = ResolveRotationIntervalDegrees(block, itemStack);
-        if (intervalDegrees <= 0f)
+        ERotatableInterval interval = ResolveRotatableInterval(block, itemStack);
+        if (interval == ERotatableInterval.None)
         {
             // No mesh-angle interval, fall back to variant-only
             return ComputeVariantRotations(block);
         }
 
+        float intervalDegrees = interval.ToDegrees();
+
         // Each variant "owns" a slice of 360°
         float sliceDegrees = 360f / variants.Length;
 
         // Calculate how many mesh-angle steps fit within each slice
-        int stepsPerVariant = (int)(sliceDegrees / intervalDegrees);
-        if (stepsPerVariant <= 0)
-            stepsPerVariant = 1;
+        int totalStepsPerVariant = (int)(sliceDegrees / intervalDegrees);
+        if (totalStepsPerVariant <= 0)
+            totalStepsPerVariant = 1;
 
-        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(variants.Length * stepsPerVariant);
+        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(variants.Length * totalStepsPerVariant);
 
         for (int v = 0; v < variants.Length; v++)
         {
             int variantBlockId = variants[v].BlockId;
 
-            for (int s = 0; s < stepsPerVariant; s++)
+            for (int s = 0; s < totalStepsPerVariant; s++)
             {
                 float meshAngle = s * intervalDegrees;
+
+                // Skip angles that should be omitted (e.g., 45° multiples for Deg22_5Not45)
+                if (interval.ShouldSkipAngle(meshAngle))
+                    continue;
+
                 builder.Add(new BlockOrientationDefinition(variantBlockId, meshAngle));
             }
         }
@@ -342,14 +355,14 @@ public class BlockOrientationResolver
     }
 
     /// <summary>
-    /// Resolves the rotation interval in degrees from block attributes.
+    /// Resolves the rotation interval from block attributes.
     /// </summary>
     /// <param name="block">The block to get rotation interval for.</param>
     /// <param name="itemStack">Optional ItemStack to resolve type from (for typed containers).</param>
-    private static float ResolveRotationIntervalDegrees(Block block, ItemStack? itemStack = null)
+    private static ERotatableInterval ResolveRotatableInterval(Block block, ItemStack? itemStack = null)
     {
         if (block?.Attributes is null)
-            return 0f;
+            return ERotatableInterval.None;
 
         string? type = ResolveBlockType(block, itemStack);
 
@@ -375,17 +388,7 @@ public class BlockOrientationResolver
                 intervalString = block.Attributes["properties"]?["*"]?["rotatatableInterval"]?.AsString();
         }
 
-        if (string.IsNullOrEmpty(intervalString))
-            return 0f;
-
-        return intervalString switch
-        {
-            "22.5deg" => 22.5f,
-            "22.5degnot45deg" => 22.5f,
-            "45deg" => 45f,
-            "90deg" => 90f,
-            _ => 0f
-        };
+        return ERotatableIntervalExtensions.Parse(intervalString);
     }
     #endregion
 }
