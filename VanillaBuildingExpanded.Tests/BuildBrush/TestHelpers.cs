@@ -4,7 +4,9 @@ using VanillaBuildingExpanded.BuildHammer;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
 using Vintagestory.API.MathTools;
+using Vintagestory.API.Server;
 
 namespace VanillaBuildingExpanded.Tests.BuildBrush;
 
@@ -17,7 +19,8 @@ public static class TestHelpers
     #region World and Player Mocks
 
     /// <summary>
-    /// Creates a mock IWorldAccessor configured for client-side testing.
+    /// Creates a mock IWorldAccessor configured for testing.
+    /// Includes callback registration tracking.
     /// </summary>
     public static Mock<IWorldAccessor> CreateMockWorld(EnumAppSide side = EnumAppSide.Client)
     {
@@ -25,6 +28,22 @@ public static class TestHelpers
         var mockLogger = new Mock<ILogger>();
         mockWorld.Setup(w => w.Logger).Returns(mockLogger.Object);
         mockWorld.Setup(w => w.Side).Returns(side);
+
+        // Setup callback registration tracking
+        var callbackIds = new Dictionary<long, Action<float>>();
+        long nextCallbackId = 1;
+
+        mockWorld.Setup(w => w.RegisterCallback(It.IsAny<Action<float>>(), It.IsAny<int>()))
+            .Returns((Action<float> callback, int delay) =>
+            {
+                var id = nextCallbackId++;
+                callbackIds[id] = callback;
+                return id;
+            });
+
+        mockWorld.Setup(w => w.UnregisterCallback(It.IsAny<long>()))
+            .Callback((long id) => callbackIds.Remove(id));
+
         return mockWorld;
     }
 
@@ -68,6 +87,113 @@ public static class TestHelpers
     public static Mock<IMiniDimension> CreateMockDimension()
     {
         return new Mock<IMiniDimension>();
+    }
+
+    #endregion
+
+    #region Server API Mocks
+
+    /// <summary>
+    /// Creates a mock ICoreServerAPI with common sub-mocks configured.
+    /// Includes entity registry, server interface, and spawn tracking.
+    /// </summary>
+    public static Mock<ICoreServerAPI> CreateMockSapi()
+    {
+        var mockSapi = new Mock<ICoreServerAPI>();
+        var mockLogger = new Mock<ILogger>();
+        var mockServer = new Mock<IServerAPI>();
+        var mockClassRegistry = new Mock<IClassRegistryAPI>();
+        var mockWorld = new Mock<IServerWorldAccessor>();
+
+        mockSapi.Setup(s => s.Logger).Returns(mockLogger.Object);
+        mockSapi.Setup(s => s.Server).Returns(mockServer.Object);
+        mockSapi.Setup(s => s.ClassRegistry).Returns(mockClassRegistry.Object);
+        mockSapi.Setup(s => s.World).Returns(mockWorld.Object);
+        mockSapi.Setup(s => s.Side).Returns(EnumAppSide.Server);
+
+        return mockSapi;
+    }
+
+    /// <summary>
+    /// Creates a mock IWorldAccessor configured for server-side with ICoreServerAPI accessible via Api property.
+    /// </summary>
+    public static Mock<IWorldAccessor> CreateMockServerWorld(Mock<ICoreServerAPI>? mockSapi = null)
+    {
+        mockSapi ??= CreateMockSapi();
+        var mockWorld = new Mock<IWorldAccessor>();
+        var mockLogger = new Mock<ILogger>();
+        var mockBlockAccessor = new Mock<IBlockAccessor>();
+
+        mockWorld.Setup(w => w.Logger).Returns(mockLogger.Object);
+        mockWorld.Setup(w => w.Side).Returns(EnumAppSide.Server);
+        mockWorld.Setup(w => w.Api).Returns(mockSapi.Object);
+        mockWorld.Setup(w => w.BlockAccessor).Returns(mockBlockAccessor.Object);
+
+        // Setup callback registration tracking
+        var callbackIds = new Dictionary<long, Action<float>>();
+        long nextCallbackId = 1;
+
+        mockWorld.Setup(w => w.RegisterCallback(It.IsAny<Action<float>>(), It.IsAny<int>()))
+            .Returns((Action<float> callback, int delay) =>
+            {
+                var id = nextCallbackId++;
+                callbackIds[id] = callback;
+                return id;
+            });
+
+        mockWorld.Setup(w => w.UnregisterCallback(It.IsAny<long>()))
+            .Callback((long id) => callbackIds.Remove(id));
+
+        return mockWorld;
+    }
+
+    /// <summary>
+    /// Configures the mock server API to return a mock entity when CreateEntity is called.
+    /// </summary>
+    public static Mock<Entity> SetupEntityCreation(Mock<ICoreServerAPI> mockSapi, string entityClass)
+    {
+        var mockEntity = new Mock<Entity>();
+        mockSapi.Setup(s => s.World.ClassRegistry.CreateEntity(entityClass))
+            .Returns(mockEntity.Object);
+        return mockEntity;
+    }
+
+    /// <summary>
+    /// Configures the mock world to track SpawnEntity calls.
+    /// Returns a list that captures all spawned entities.
+    /// </summary>
+    public static List<Entity> SetupSpawnEntityTracking(Mock<IWorldAccessor> mockWorld)
+    {
+        var spawnedEntities = new List<Entity>();
+        mockWorld.Setup(w => w.SpawnEntity(It.IsAny<Entity>()))
+            .Callback((Entity e) => spawnedEntities.Add(e));
+        return spawnedEntities;
+    }
+
+    /// <summary>
+    /// Configures the mock block accessor to create mini dimensions.
+    /// </summary>
+    public static Mock<IMiniDimension> SetupMiniDimensionCreation(Mock<IWorldAccessor> mockWorld)
+    {
+        var mockDimension = CreateMockDimension();
+        var mockBlockAccessor = new Mock<IBlockAccessor>();
+
+        mockBlockAccessor.Setup(ba => ba.CreateMiniDimension(It.IsAny<Vec3d>()))
+            .Returns(mockDimension.Object);
+
+        mockWorld.Setup(w => w.BlockAccessor).Returns(mockBlockAccessor.Object);
+
+        return mockDimension;
+    }
+
+    /// <summary>
+    /// Configures the mock server to handle mini dimension loading.
+    /// Returns the dimension ID that will be assigned.
+    /// </summary>
+    public static void SetupMiniDimensionLoading(Mock<ICoreServerAPI> mockSapi, int dimensionId = 1)
+    {
+        mockSapi.Setup(s => s.Server.LoadMiniDimension(It.IsAny<IMiniDimension>()))
+            .Returns(dimensionId);
     }
 
     #endregion
