@@ -218,7 +218,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
             return;
 
         BuildBrushInstance? brush = BrushInstance;
-        if (brush is null)
+        if (brush is null || brush.IsDisabled)
             return;
 
         if (meshRef is null)
