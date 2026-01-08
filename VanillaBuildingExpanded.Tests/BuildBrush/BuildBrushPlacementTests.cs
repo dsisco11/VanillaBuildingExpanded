@@ -124,12 +124,12 @@ public class BuildBrushPlacementTests
         {
             BlockId = blockId,
             Code = new AssetLocation(code),
-            EntityClass = entityClass
+            EntityClass = entityClass,
+            Attributes = new JsonObject(new Newtonsoft.Json.Linq.JObject
+            {
+                ["rotatatableInterval"] = interval
+            })
         };
-        block.Attributes = new JsonObject(new Newtonsoft.Json.Linq.JObject
-        {
-            ["rotatatableInterval"] = interval
-        });
         return block;
     }
 
@@ -224,8 +224,10 @@ public class BuildBrushPlacementTests
         SetupBlockLookup(mockWorld, block);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        instance.BlockId = 100;
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
+        {
+            BlockId = 100
+        };
 
         // Verify rotation is detected
         Assert.NotNull(instance.Rotation);
@@ -239,7 +241,7 @@ public class BuildBrushPlacementTests
 
             Assert.NotNull(instance.ItemStack);
             float expectedRadians = expectedAngles[i] * GameMath.DEG2RAD;
-            float actualRadians = instance.ItemStack.Attributes.GetFloat("meshAngle", -999f);
+            float actualRadians = instance.ItemStack.Attributes.GetFloat(instance?.Rotation?.RotationAttribute, -999f);
 
             Assert.Equal(expectedRadians, actualRadians, precision: 4);
         }
@@ -263,8 +265,10 @@ public class BuildBrushPlacementTests
         SetupVariantSearch(mockWorld, variants);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        instance.BlockId = 100;
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
+        {
+            BlockId = 100
+        };
 
         // Verify rotation is detected
         Assert.NotNull(instance.Rotation);
@@ -276,7 +280,7 @@ public class BuildBrushPlacementTests
         // Assert - ItemStack should have correct meshAngle
         Assert.NotNull(instance.ItemStack);
         float expectedRadians = expectedMeshAngleDegrees * GameMath.DEG2RAD;
-        float actualRadians = instance.ItemStack.Attributes.GetFloat("meshAngle", -999f);
+        float actualRadians = instance.ItemStack.Attributes.GetFloat(instance?.Rotation?.RotationAttribute, -999f);
 
         Assert.Equal(expectedRadians, actualRadians, precision: 4);
     }
@@ -300,8 +304,10 @@ public class BuildBrushPlacementTests
         SetupBlockLookup(mockWorld, variants);
         SetupVariantSearch(mockWorld, variants);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        instance.BlockId = startBlockId;
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
+        {
+            BlockId = startBlockId
+        };
 
         // Verify rotation is detected
         Assert.NotNull(instance.Rotation);
@@ -336,8 +342,10 @@ public class BuildBrushPlacementTests
         SetupVariantSearch(mockWorld, variants);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        instance.BlockId = 100;
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
+        {
+            BlockId = 100
+        };
 
         // Verify rotation is detected
         Assert.NotNull(instance.Rotation);

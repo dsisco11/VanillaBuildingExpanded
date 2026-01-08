@@ -101,6 +101,8 @@ public class BuildBrushOrientationInfo
     /// </summary>
     public float CurrentMeshAngleDegrees => Current.MeshAngleDegrees;
 
+    public string? RotationAttribute => Current.RotationAttribute;
+
     /// <summary>
     /// The current mesh angle in radians.
     /// </summary>
@@ -247,81 +249,11 @@ public class BuildBrushOrientationInfo
         // Set meshAngle for IRotatable blocks
         if (HasRotatableEntity)
         {
-            targetAttributes.SetFloat("meshAngle", CurrentMeshAngleRadians);
-        }
-    }
-
-    /// <summary>
-    /// Applies orientation to an existing block entity in-place using IRotatable.OnTransformed.
-    /// This resets the BE to the original state first, then applies the absolute rotation.
-    /// This matches how WorldEdit/schematics apply rotations.
-    /// </summary>
-    /// <param name="blockEntity">The block entity to update.</param>
-    /// <param name="originalTree">The original (un-rotated) tree attributes to start from.</param>
-    /// <param name="absoluteAngleDegrees">The absolute rotation angle in degrees (0, 90, 180, 270).</param>
-    /// <param name="sourceAttributes">Optional source attributes to copy type from.</param>
-    /// <returns>True if rotation was applied, false if the block entity doesn't support rotation.</returns>
-    public bool ApplyOrientationToBlockEntity(BlockEntity blockEntity, ITreeAttribute? originalTree, int absoluteAngleDegrees, ITreeAttribute? sourceAttributes = null)
-    {
-        if (blockEntity is null)
-            return false;
-
-        // Find IRotatable on entity or behaviors
-        IRotatable? rotatable = blockEntity as IRotatable;
-        if (rotatable is null)
-        {
-            foreach (var behavior in blockEntity.Behaviors)
-            {
-                if (behavior is IRotatable r)
-                {
-                    rotatable = r;
-                    break;
-                }
-            }
-        }
-
-        if (rotatable is null)
-            return false;
-
-        // Start from original tree state (clone it to avoid modifying the original)
-        ITreeAttribute tree;
-        if (originalTree is not null)
-        {
-            tree = originalTree.Clone();
-        }
-        else
-        {
-            // Fallback: get current tree from BE (not ideal but better than nothing)
-            tree = new TreeAttribute();
-            blockEntity.ToTreeAttributes(tree);
-        }
-
-        // Copy type attribute from source (for typed containers)
-        string? type = sourceAttributes?.GetString("type");
-        if (!string.IsNullOrEmpty(type))
-        {
-            tree.SetString("type", type);
-        }
-
-        // Apply absolute rotation from original state via OnTransformed
-        // This is how WorldEdit/schematics work - always from original with absolute angle
-        if (absoluteAngleDegrees != 0)
-        {
-            rotatable.OnTransformed(
-                _world,
-                tree,
-                absoluteAngleDegrees,
-                new Dictionary<int, AssetLocation>(), // oldBlockIdMapping - not needed for live rotation
-                new Dictionary<int, AssetLocation>(), // oldItemIdMapping - not needed for live rotation
-                null // flipAxis - no flip, only rotation
+            BlockOrientationResolver.TrySetMeshRotation(
+                targetAttributes,
+                CurrentMeshAngleDegrees
             );
         }
-
-        // Write back to BE
-        blockEntity.FromTreeAttributes(tree, _world);
-        blockEntity.MarkDirty(true);
-
-        return true;
     }
     #endregion
 }

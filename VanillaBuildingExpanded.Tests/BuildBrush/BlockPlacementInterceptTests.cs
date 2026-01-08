@@ -70,12 +70,12 @@ public class BlockPlacementInterceptTests
         {
             BlockId = blockId,
             Code = new AssetLocation(code),
-            EntityClass = entityClass
+            EntityClass = entityClass,
+            Attributes = new JsonObject(new Newtonsoft.Json.Linq.JObject
+            {
+                ["rotatatableInterval"] = interval
+            })
         };
-        block.Attributes = new JsonObject(new Newtonsoft.Json.Linq.JObject
-        {
-            ["rotatatableInterval"] = interval
-        });
         return block;
     }
 
@@ -157,9 +157,11 @@ public class BlockPlacementInterceptTests
         SetupBlockLookup(mockWorld, block);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        instance.BlockId = 100;
-        instance.OrientationIndex = orientationIndex;
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
+        {
+            BlockId = 100,
+            OrientationIndex = orientationIndex
+        };
 
         // Act - Get the ItemStack that SHOULD be passed to DoPlaceBlock
         var expectedItemStack = instance.ItemStack;
@@ -167,7 +169,7 @@ public class BlockPlacementInterceptTests
         // Assert - The ItemStack should have meshAngle set correctly
         Assert.NotNull(expectedItemStack);
         float expectedRadians = expectedAngleDegrees * GameMath.DEG2RAD;
-        float actualRadians = expectedItemStack.Attributes.GetFloat("meshAngle", -999f);
+        float actualRadians = expectedItemStack.Attributes.GetFloat(instance?.Rotation?.RotationAttribute, -999f);
 
         Assert.Equal(expectedRadians, actualRadians, precision: 4);
     }
@@ -187,9 +189,11 @@ public class BlockPlacementInterceptTests
         SetupBlockLookup(mockWorld, variants);
         SetupVariantSearch(mockWorld, variants);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        instance.BlockId = 100;
-        instance.OrientationIndex = orientationIndex;
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
+        {
+            BlockId = 100,
+            OrientationIndex = orientationIndex
+        };
 
         // Act - Get the block that SHOULD be placed
         var expectedBlock = instance.BlockTransformed;
@@ -214,9 +218,11 @@ public class BlockPlacementInterceptTests
         SetupBlockLookup(mockWorld, variants);
         SetupVariantSearch(mockWorld, variants);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        instance.BlockId = 100;
-        instance.OrientationIndex = orientationIndex;
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
+        {
+            BlockId = 100,
+            OrientationIndex = orientationIndex
+        };
 
         // Assert - ItemStack.Block should match BlockTransformed
         Assert.NotNull(instance.ItemStack);
@@ -247,20 +253,22 @@ public class BlockPlacementInterceptTests
         SetupBlockLookup(mockWorld, block);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        instance.BlockId = 100;
-        instance.OrientationIndex = 1; // 90 degrees
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
+        {
+            BlockId = 100,
+            OrientationIndex = 1 // 90 degrees
+        };
 
         // Simulate the hotbar itemstack (what the harmony hook passes)
         var hotbarItemStack = new ItemStack(block);
         // Note: hotbarItemStack does NOT have meshAngle set - this is the bug!
 
         // Assert - The hotbar itemstack does NOT have meshAngle
-        float hotbarMeshAngle = hotbarItemStack.Attributes.GetFloat("meshAngle", -999f);
+        float hotbarMeshAngle = hotbarItemStack.Attributes.GetFloat(instance?.Rotation?.RotationAttribute, -999f);
         Assert.Equal(-999f, hotbarMeshAngle); // Not set!
 
         // But brush.ItemStack DOES have meshAngle
-        float brushMeshAngle = instance.ItemStack!.Attributes.GetFloat("meshAngle", -999f);
+        float brushMeshAngle = instance.ItemStack!.Attributes.GetFloat(instance?.Rotation?.RotationAttribute, -999f);
         float expectedRadians = 90f * GameMath.DEG2RAD;
         Assert.Equal(expectedRadians, brushMeshAngle, precision: 4);
 
@@ -285,9 +293,11 @@ public class BlockPlacementInterceptTests
         SetupBlockLookup(mockWorld, variants);
         SetupVariantSearch(mockWorld, variants);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        instance.BlockId = 100; // Original block (rot=0)
-        instance.OrientationIndex = 2; // Rotate to 180 degrees (block ID 102)
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
+        {
+            BlockId = 100, // Original block (rot=0)
+            OrientationIndex = 2 // Rotate to 180 degrees (block ID 102)
+        };
 
         // Simulate the hotbar itemstack (what the harmony hook passes)
         var hotbarItemStack = new ItemStack(variants[0]); // Block ID 100
@@ -323,9 +333,11 @@ public class BlockPlacementInterceptTests
         SetupBlockLookup(mockWorld, block);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        instance.BlockId = 100;
-        instance.OrientationIndex = orientationIndex;
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
+        {
+            BlockId = 100,
+            OrientationIndex = orientationIndex
+        };
 
         // Assert - brush.ItemStack should be fully prepared for DoPlaceBlock
         var brushItemStack = instance.ItemStack;
@@ -336,7 +348,7 @@ public class BlockPlacementInterceptTests
 
         // 2. Should have meshAngle set
         float expectedRadians = expectedAngleDegrees * GameMath.DEG2RAD;
-        float actualRadians = brushItemStack.Attributes.GetFloat("meshAngle", -999f);
+        float actualRadians = brushItemStack.Attributes.GetFloat(instance?.Rotation?.RotationAttribute, -999f);
         Assert.Equal(expectedRadians, actualRadians, precision: 4);
 
         // 3. Should match BlockTransformed
@@ -357,15 +369,17 @@ public class BlockPlacementInterceptTests
         SetupBlockLookup(mockWorld, block);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        instance.BlockId = 100;
+        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
+        {
+            BlockId = 100
+        };
         // Don't change OrientationIndex - test the initial state (index 0)
 
         // Assert - Even at initial orientation, meshAngle should be set (to 0 radians)
         var brushItemStack = instance.ItemStack;
         Assert.NotNull(brushItemStack);
 
-        float actualRadians = brushItemStack.Attributes.GetFloat("meshAngle", -999f);
+        float actualRadians = brushItemStack.Attributes.GetFloat(instance?.Rotation?.RotationAttribute, -999f);
         Assert.Equal(0f, actualRadians, precision: 4); // 0 degrees = 0 radians
     }
 

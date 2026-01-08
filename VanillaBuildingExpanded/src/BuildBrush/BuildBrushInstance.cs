@@ -470,12 +470,11 @@ public class BuildBrushInstance
         private set
         {
             _itemStack = value;
-            // TODO: just update the stack inside the dummyslot, dont ctor a new one...
-            DummySlot = value is not null ? new DummySlot(value) : (ItemSlot?)null;
+            DummySlot.Itemstack = value;
         }
     }
 
-    public ItemSlot? DummySlot { get; private set; } = null;
+    public ItemSlot DummySlot { get; private set; } = new DummySlot();
 
     #endregion
 
@@ -593,27 +592,6 @@ public class BuildBrushInstance
     }
 
     /// <summary>
-    /// Checks if the block's entity class implements <see cref="IRotatable"/>.
-    /// </summary>
-    /// <param name="block">The block to check.</param>
-    /// <returns>True if the block entity implements IRotatable; otherwise, false.</returns>
-    private bool IsBlockEntityRotatable(in Block? block)
-    {
-        if (block is null || string.IsNullOrEmpty(block.EntityClass))
-        {
-            return false;
-        }
-
-        Type? entityType = World.Api.ClassRegistry.GetBlockEntity(block.EntityClass);
-        if (entityType is null)
-        {
-            return false;
-        }
-
-        return typeof(IRotatable).IsAssignableFrom(entityType);
-    }
-
-    /// <summary>
     /// Resolves the block position based on the given snapping mode.
     /// </summary>
     /// <param name="blockSelection"></param>
@@ -671,8 +649,8 @@ public class BuildBrushInstance
         BlockSelection newSelection = blockSelection.Clone();
         newSelection.DidOffset = true;
         newSelection.SetPos(Position.X, Position.Y, Position.Z);
-        this.IsValidPlacement = _blockTransformed.CanPlaceBlock(World, Player, newSelection, ref failureCode);
-        return this.IsValidPlacement;
+        IsValidPlacement = _blockTransformed.CanPlaceBlock(World, Player, newSelection, ref failureCode);
+        return IsValidPlacement;
     }
     #endregion
 
@@ -720,8 +698,7 @@ public class BuildBrushInstance
             return;
         }
 
-        ICoreClientAPI? client = World.Api as ICoreClientAPI;
-        if (client is null)
+        if (World.Api is not ICoreClientAPI client)
         {
             return;
         }
@@ -978,28 +955,7 @@ public class BuildBrushInstance
 
         // Get the mesh angle in degrees from the current definition
         float meshAngleDegrees = _rotation.CurrentMeshAngleDegrees;
-
-        switch (_rotation.Mode)
-        {
-            case EBuildBrushRotationMode.None:
-                // No rotation possible
-                break;
-
-            case EBuildBrushRotationMode.VariantBased:
-                // Variant rotation is handled by block ID swap, no mesh angle needed
-                _dimension.ApplyRotation(0, _blockTransformed);
-                break;
-
-            case EBuildBrushRotationMode.Rotatable:
-                // Apply mesh angle rotation
-                _dimension.ApplyRotation((int)meshAngleDegrees);
-                break;
-
-            case EBuildBrushRotationMode.Hybrid:
-                // Block ID swap is already handled, apply mesh angle offset
-                _dimension.ApplyRotation((int)meshAngleDegrees, _blockTransformed);
-                break;
-        }
+        _dimension.ApplyRotation((int)meshAngleDegrees, _blockTransformed);
     }
 
     /// <summary>

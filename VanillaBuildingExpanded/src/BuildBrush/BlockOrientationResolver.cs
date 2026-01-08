@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 using Vintagestory.API.Common;
+using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.BuildHammer;
@@ -14,6 +17,15 @@ namespace VanillaBuildingExpanded.BuildHammer;
 /// </summary>
 public class BlockOrientationResolver
 {
+    #region Records
+    /// <summary>
+    /// Configuration for a rotation attribute.
+    /// </summary>
+    /// <param name="AttributeName">The name of the attribute in the tree.</param>
+    /// <param name="IsDegrees">Whether the attribute stores degrees (true) or radians (false).</param>
+    private readonly record struct RotationAttributeConfig(string AttributeName, bool IsDegrees);
+    #endregion
+
     #region Constants
     /// <summary>
     /// Valid variant keys that indicate a block supports orientation variants.
@@ -26,6 +38,23 @@ public class BlockOrientationResolver
         "v",
         "side",
     ];
+    
+    /// <summary>
+    /// Known rotation attribute names used by different block entity types.
+    /// Order matters - we check in this order and use the first match.
+    /// </summary>
+    private static readonly FrozenDictionary<string, RotationAttributeConfig> KnownMeshRotationAttributes =
+        new Dictionary<string, RotationAttributeConfig>
+        {
+            // Standard meshAngle (radians) - chests, crates, buckets, molds, ground storage, plant containers, etc.
+            ["meshAngle"] = new("meshAngle", IsDegrees: false),
+            // meshAngleRad - BEBehaviorMaterialFromAttributes, BEBehaviorShapeMaterialFromAttributes
+            ["meshAngleRad"] = new("meshAngleRad", IsDegrees: false),
+            // rotateYRad - BEBehaviorDoor, BEBeeHiveKiln
+            ["rotateYRad"] = new("rotateYRad", IsDegrees: false),
+            // rotDeg - BEBehaviorTrapDoor (stores degrees, not radians!)
+            ["rotDeg"] = new("rotDeg", IsDegrees: true),
+        }.ToFrozenDictionary();
     #endregion
 
     #region Fields
@@ -142,7 +171,8 @@ public class BlockOrientationResolver
             EBuildBrushRotationMode.None => [new BlockOrientationDefinition(block.BlockId, 0f)],
             EBuildBrushRotationMode.VariantBased => ComputeVariantRotations(block),
             EBuildBrushRotationMode.Rotatable => ComputeRotatableRotations(block, itemStack),
-            EBuildBrushRotationMode.Hybrid => ComputeHybridRotations(block, itemStack),
+            EBuildBrushRotationMode.Hybrid => ComputeRotatableRotations(block, itemStack),
+            //EBuildBrushRotationMode.Hybrid => ComputeHybridRotations(block, itemStack),
             _ => [new BlockOrientationDefinition(block.BlockId, 0f)]
         };
     }
@@ -183,18 +213,19 @@ public class BlockOrientationResolver
         if (totalSteps <= 0)
             totalSteps = 1;
 
+        string? rotationAttributeName = ResolveRotationAttributeName(block);
         var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(interval.GetStepCount());
         for (int i = 0; i < totalSteps; i++)
         {
             float angle = i * intervalDegrees;
 
             // Skip angles that should be omitted (e.g., 45° multiples for Deg22_5Not45)
-            if (interval.ShouldSkipAngle(angle))
+            if (i > 0 && interval.ShouldSkipAngle(angle))
                 continue;
 
-            builder.Add(new BlockOrientationDefinition(block.BlockId, angle));
+            builder.Add(new BlockOrientationDefinition(block.BlockId, angle, rotationAttributeName));
         }
-        return builder.MoveToImmutable();
+        return builder.DrainToImmutable();
     }
 
     /// <summary>
@@ -226,6 +257,7 @@ public class BlockOrientationResolver
         if (totalStepsPerVariant <= 0)
             totalStepsPerVariant = 1;
 
+        string? rotationAttributeName = ResolveRotationAttributeName(block);
         var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(variants.Length * totalStepsPerVariant);
 
         for (int v = 0; v < variants.Length; v++)
@@ -237,16 +269,120 @@ public class BlockOrientationResolver
                 float meshAngle = s * intervalDegrees;
 
                 // Skip angles that should be omitted (e.g., 45° multiples for Deg22_5Not45)
-                if (interval.ShouldSkipAngle(meshAngle))
+                // But never skip 0° - it's the base angle for each variant's block ID changeover
+                if (s > 0 && interval.ShouldSkipAngle(meshAngle))
                     continue;
 
-                builder.Add(new BlockOrientationDefinition(variantBlockId, meshAngle));
+                builder.Add(new BlockOrientationDefinition(variantBlockId, meshAngle, rotationAttributeName));
             }
         }
 
         return builder.Count > 0
-            ? builder.ToImmutable()
+            ? builder.DrainToImmutable()
             : [new BlockOrientationDefinition(block.BlockId, 0f)];
+    }
+    #endregion
+
+    #region  TryGetRotationInterface
+
+    /// <summary>
+    /// Tries to get the IRotatable interface from a block entity or its behaviors.
+    /// </summary>
+    /// <returns> The IRotatable interface if found; otherwise, null. </returns>
+    public static bool TryGetRotationInterface(BlockEntity? blockEntity, [NotNullWhen(true)] out IRotatable? rotatable)
+    {
+        if (blockEntity is null)
+        {
+            rotatable = null;
+            return false;
+        }
+            
+        // Check if the block entity itself implements IRotatable
+        if (blockEntity is IRotatable r)
+        {
+            rotatable = r;
+            return true;
+        }
+        // Check behaviors for IRotatable
+        foreach (var behavior in blockEntity.Behaviors)
+        {
+            if (behavior is IRotatable br)
+            {
+                rotatable = br;
+                return true;
+            }
+        }
+
+        rotatable = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Tries to get the IRotatable interface from a block entity or its behaviors.
+    /// </summary>
+    /// <returns> The IRotatable interface if found; otherwise, null. </returns>
+    public bool TryGetRotationInterface(Block? block, [NotNullWhen(true)] out IRotatable? rotatable)
+    {
+        if (string.IsNullOrEmpty(block?.EntityClass))
+        {
+            rotatable = null;
+            return false;
+        }
+
+        BlockEntity? tempEntity = null;
+        try
+        {
+            Type? entityType = World.Api.ClassRegistry.GetBlockEntity(block.EntityClass);
+            if (entityType is null)
+            {
+                rotatable = null;
+                return false;
+            }
+
+            if (!typeof(IRotatable).IsAssignableFrom(entityType))
+            {
+                rotatable = null;
+                return false;
+            }
+
+            // Check behaviors for IRotatable
+            //World.Api.ClassRegistry.GetBlockEntityBehaviorClass(???)
+            tempEntity = World.Api.ClassRegistry.CreateBlockEntity(block.EntityClass);
+            if (tempEntity is null)
+            {
+                rotatable = null;
+                return false;
+            }
+
+            if (tempEntity is IRotatable r)
+            {
+                rotatable = r;
+                return true;
+            }
+
+            foreach (var behavior in tempEntity.Behaviors)
+            {
+                if (behavior is IRotatable rot)
+                {
+                    rotatable = rot;
+                    return true;
+                }
+            }
+
+            rotatable = null;
+            return false;
+        }
+        catch
+        {
+            rotatable = null;
+            return false;
+        }
+        finally 
+        {
+            // TODO: figure out if destroying the entity is actually needed, logically yes but...
+            // destroy temp entity
+            tempEntity?.OnBlockRemoved();
+        }
     }
     #endregion
 
@@ -257,7 +393,7 @@ public class BlockOrientationResolver
     private EBuildBrushRotationMode DetectRotationMode(Block block)
     {
         bool hasVariantRotation = HasVariantBasedRotation(block);
-        bool hasRotatableEntity = HasRotatableBlockEntity(block);
+        bool hasRotatableEntity = TryGetRotationInterface(block, out _);
 
         return (hasVariantRotation, hasRotatableEntity) switch
         {
@@ -268,34 +404,64 @@ public class BlockOrientationResolver
         };
     }
 
+    private string? ResolveRotationAttributeName(Block? block)
+    {
+        if (block is null)
+            return null;
+
+        // First try block attributes, rare but possible
+        foreach (var attributeName in KnownMeshRotationAttributes.Keys)
+        {
+            if (block.Attributes is not null && block.Attributes.KeyExists(attributeName))
+            {
+                return attributeName;
+            }
+        }
+
+        // Next, try block entity class
+        if (string.IsNullOrEmpty(block.EntityClass))
+            return null;
+
+        if (!TryGetRotationInterface(block, out IRotatable? rotatable))
+            return null;
+
+        // Create a temporary tree to query the rotation attribute
+        TreeAttribute tempTree = new();
+        // Apply rotation to temp tree
+        rotatable.OnTransformed(
+            null,
+            tempTree,
+            0,
+            [],
+            [],
+            null
+        );
+        // Find rotation attribute name within temp tree
+        return ResolveRotationAttributeName(tempTree);
+    }
+
+    /// <summary>
+    /// Resolves the rotation attribute name from a tree attribute.
+    /// </summary>
+    /// <returns>  The name of the rotation attribute if found; otherwise, null.  </returns>
+    public static string? ResolveRotationAttributeName(ITreeAttribute tree)
+    {
+        foreach (var attributeName in KnownMeshRotationAttributes.Keys)
+        {
+            if (tree.HasAttribute(attributeName))
+            {
+                return attributeName;
+            }
+        }
+        return null;
+    }
+
     /// <summary>
     /// Checks if the block has orientation variants.
     /// </summary>
     private static bool HasVariantBasedRotation(Block block)
     {
         return block.Variant.Keys.Any(k => ValidOrientationVariantKeys.Contains(k));
-    }
-
-    /// <summary>
-    /// Checks if the block has an IRotatable block entity.
-    /// </summary>
-    private bool HasRotatableBlockEntity(Block block)
-    {
-        if (string.IsNullOrEmpty(block.EntityClass))
-            return false;
-
-        try
-        {
-            Type? entityType = World.Api.ClassRegistry.GetBlockEntity(block.EntityClass);
-            if (entityType is null)
-                return false;
-
-            return typeof(IRotatable).IsAssignableFrom(entityType);
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     /// <summary>
@@ -389,6 +555,81 @@ public class BlockOrientationResolver
         }
 
         return ERotatableIntervalExtensions.Parse(intervalString);
+    }
+    #endregion
+
+    #region Mesh Rotation
+    /// <summary>
+    /// Attempts to set the rotation value in the tree attribute using known attribute names.
+    /// </summary>
+    /// <param name="tree">The tree attribute to modify.</param>
+    /// <param name="rotationRadians">The rotation in radians.</param>
+    /// <returns>True if an attribute was found and set; otherwise, false.</returns>
+    public static bool TrySetMeshRotation(ITreeAttribute tree, float rotationRadians)
+    {
+        // Try each known attribute name and set if it exists in the tree
+        string? attributeName = ResolveRotationAttributeName(tree);
+        if (attributeName is not null && KnownMeshRotationAttributes.TryGetValue(attributeName, out var config))
+        {
+            float valueToSet = config.IsDegrees
+                ? rotationRadians * GameMath.RAD2DEG
+                : rotationRadians;
+            tree.SetFloat(attributeName, valueToSet);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Applies rotation to an existing block entity in-place using IRotatable.OnTransformed.
+    /// This resets the BE to the original state first, then applies the absolute rotation.
+    /// This matches how WorldEdit/schematics apply rotations.
+    /// </summary>
+    /// <param name="blockEntity">The block entity to update.</param>
+    /// <param name="absoluteAngleDegrees">The absolute rotation angle in degrees (0, 90, 180, 270).</param>
+    /// <param name="sourceAttributes">Optional source attributes to copy type from.</param>
+    /// <returns>True if rotation was applied, false if the block entity doesn't support rotation.</returns>
+    public static bool TrySetEntityRotation(IWorldAccessor? world, BlockEntity? blockEntity, int absoluteAngleDegrees, ITreeAttribute? sourceAttributes = null)
+    {
+        if (blockEntity is null)
+            return false;
+
+        // Find IRotatable on entity or behaviors
+        if (!TryGetRotationInterface(blockEntity, out IRotatable? rotatable))
+            return false;
+
+        // Start from original tree state (clone it to avoid modifying the original)
+        TreeAttribute tree = new();
+        blockEntity.ToTreeAttributes(tree);
+
+        // Copy type attribute from source (for typed containers)
+        // TODO: attempt removal of this if not needed
+        string? type = sourceAttributes?.GetString("type");
+        if (!string.IsNullOrEmpty(type))
+        {
+            tree.SetString("type", type);
+        }
+        // Set meshAngle to 0 to reset any prior rotation
+        //BlockOrientationResolver.TrySetEntityRotation(tree, 0f);
+
+        // NOTE [1/6/26]: The OnTransform method actually DOES seem to expect a relative rotation angle, not absolute.
+        
+        // Apply absolute rotation from original state via OnTransformed
+        // This is how WorldEdit/schematics work - always from original with absolute angle
+        rotatable.OnTransformed(
+            world,
+            tree,
+            absoluteAngleDegrees,
+            [], // oldBlockIdMapping - not needed for live rotation
+            [], // oldItemIdMapping - not needed for live rotation
+            null // flipAxis - no flip, only rotation
+        );
+
+        // Write back to BE
+        blockEntity.FromTreeAttributes(tree, world);
+        blockEntity.MarkDirty(true);
+
+        return true;
     }
     #endregion
 }
