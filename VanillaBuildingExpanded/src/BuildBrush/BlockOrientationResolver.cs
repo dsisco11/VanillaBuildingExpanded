@@ -581,7 +581,9 @@ public class BlockOrientationResolver
     }
 
     /// <summary>
-    /// Computes the shortest-path rotation delta between two angles.
+    /// Computes the shortest-path rotation delta for IRotatable.OnTransformed.
+    /// OnTransformed SUBTRACTS the delta from the current angle, so to go from
+    /// previousAngle to targetAngle, we compute: previousAngle - targetAngle.
     /// Handles wrap-around at 0°/360° boundary correctly.
     /// </summary>
     /// <param name="targetAngle">The target angle in degrees.</param>
@@ -589,9 +591,11 @@ public class BlockOrientationResolver
     /// <returns>The shortest rotation delta in degrees (-180 to 180).</returns>
     public static int ComputeShortestRotationDelta(float targetAngle, float previousAngle)
     {
-        // Formula: ((target - previous + 540) % 360) - 180
-        // This gives the shortest path rotation, handling wrap-around
-        int delta = (((int)targetAngle - (int)previousAngle + 540) % 360) - 180;
+        // OnTransformed subtracts the delta: newAngle = currentAngle - delta
+        // To achieve targetAngle from previousAngle: targetAngle = previousAngle - delta
+        // So: delta = previousAngle - targetAngle
+        // Formula with wrap-around: ((previous - target + 540) % 360) - 180
+        int delta = (((int)previousAngle - (int)targetAngle + 540) % 360) - 180;
         return delta;
     }
 
