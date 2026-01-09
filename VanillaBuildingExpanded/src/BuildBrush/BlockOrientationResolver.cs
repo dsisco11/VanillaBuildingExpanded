@@ -196,6 +196,7 @@ public class BlockOrientationResolver
 
     /// <summary>
     /// Computes orientations for IRotatable blocks (same block ID, different mesh angles).
+    /// Uses predefined lookup tables for valid angles.
     /// </summary>
     /// <param name="block">The block to compute rotations for.</param>
     /// <param name="itemStack">Optional ItemStack to resolve type-specific properties.</param>
@@ -208,29 +209,28 @@ public class BlockOrientationResolver
             interval = ERotatableInterval.Deg90;
         }
 
-        float intervalDegrees = interval.ToDegrees();
-        int totalSteps = (int)(360f / intervalDegrees);
-        if (totalSteps <= 0)
-            totalSteps = 1;
+        // Use predefined lookup table for valid angles
+        var validAngles = interval.GetValidAngles();
+        if (validAngles.IsDefaultOrEmpty)
+        {
+            return [new BlockOrientationDefinition(block.BlockId, 0f)];
+        }
 
         string? rotationAttributeName = ResolveRotationAttributeName(block);
-        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(interval.GetStepCount());
-        for (int i = 0; i < totalSteps; i++)
+        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(validAngles.Length);
+        
+        foreach (float angle in validAngles)
         {
-            float angle = i * intervalDegrees;
-
-            // Skip angles that should be omitted (e.g., 45° multiples for Deg22_5Not45)
-            if (interval.ShouldSkipAngle(angle))
-                continue;
-
             builder.Add(new BlockOrientationDefinition(block.BlockId, angle, rotationAttributeName));
         }
-        return builder.DrainToImmutable();
+        
+        return builder.MoveToImmutable();
     }
 
     /// <summary>
     /// Computes orientations for hybrid blocks.
     /// Each variant gets mesh-angle sub-steps within its "slice" of 360°.
+    /// Uses predefined lookup tables for valid angles.
     /// </summary>
     /// <param name="block">The block to compute rotations for.</param>
     /// <param name="itemStack">Optional ItemStack to resolve type-specific properties.</param>
@@ -247,33 +247,34 @@ public class BlockOrientationResolver
             return ComputeVariantRotations(block);
         }
 
-        float intervalDegrees = interval.ToDegrees();
+        // Use predefined lookup table for valid angles
+        var validAngles = interval.GetValidAngles();
+        if (validAngles.IsDefaultOrEmpty)
+        {
+            return ComputeVariantRotations(block);
+        }
 
         // Each variant "owns" a slice of 360°
         float sliceDegrees = 360f / variants.Length;
 
-        // Calculate how many mesh-angle steps fit within each slice
-        int totalStepsPerVariant = (int)(sliceDegrees / intervalDegrees);
-        if (totalStepsPerVariant <= 0)
-            totalStepsPerVariant = 1;
-
         string? rotationAttributeName = ResolveRotationAttributeName(block);
-        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(variants.Length * totalStepsPerVariant);
+        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>();
 
         for (int v = 0; v < variants.Length; v++)
         {
             int variantBlockId = variants[v].BlockId;
+            float sliceStart = v * sliceDegrees;
+            float sliceEnd = sliceStart + sliceDegrees;
 
-            for (int s = 0; s < totalStepsPerVariant; s++)
+            // Add angles from the lookup table that fall within this variant's slice
+            foreach (float angle in validAngles)
             {
-                float meshAngle = s * intervalDegrees;
-
-                // Skip angles that should be omitted (e.g., 45° multiples for Deg22_5Not45)
-                // But never skip 0° - it's the base angle for each variant's block ID changeover
-                if (s > 0 && interval.ShouldSkipAngle(meshAngle))
-                    continue;
-
-                builder.Add(new BlockOrientationDefinition(variantBlockId, meshAngle, rotationAttributeName));
+                if (angle >= sliceStart && angle < sliceEnd)
+                {
+                    // Mesh angle is relative to the slice start (0° for first angle in each slice)
+                    float meshAngle = angle - sliceStart;
+                    builder.Add(new BlockOrientationDefinition(variantBlockId, meshAngle, rotationAttributeName));
+                }
             }
         }
 
