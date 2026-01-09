@@ -11,7 +11,12 @@
                 "Debug",
                 "${workspaceFolder}/VanillaBuildingExpanded/VanillaBuildingExpanded.csproj"
             ],
-            "problemMatcher": "$msCompile"
+            "problemMatcher": "$msCompile",
+            "presentation": {
+                "panel": "new",
+                "close": true,
+                "showReuseMessage": false
+            },
         },
         {
             "label": "package",
@@ -22,7 +27,12 @@
                 "--project",
                 "${workspaceFolder}/CakeBuild/CakeBuild.csproj"
             ],
-            "problemMatcher": "$msCompile"
+            "problemMatcher": "$msCompile",
+            "presentation": {
+                "panel": "new",
+                "close": true,
+                "showReuseMessage": false
+            },
         },
         {
             "label": "build (Cake)",
@@ -34,7 +44,32 @@
                 "Debug",
                 "${workspaceFolder}/CakeBuild/CakeBuild.csproj"
             ],
-            "problemMatcher": "$msCompile"
+            "problemMatcher": "$msCompile",
+            "presentation": {
+                "panel": "new",
+                "close": true,
+                "showReuseMessage": false
+            },
+        },
+        {
+            "label": "Test",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "test",
+                "-c",
+                "Debug",
+                "${workspaceFolder}/VanillaBuildingExpanded.Tests/VanillaBuildingExpanded.Tests.csproj",
+                "-v",
+                "normal"
+            ],
+            "problemMatcher": "$msCompile",
+            "presentation": {
+                "panel": "new",
+                "close": true,
+                "showReuseMessage": false
+            },
+            "group": "test"
         }
     ]
 }
