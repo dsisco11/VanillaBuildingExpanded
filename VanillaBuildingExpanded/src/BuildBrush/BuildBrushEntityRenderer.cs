@@ -4,6 +4,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
+using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 
 using VanillaBuildingExpanded.BuildHammer.Tessellation;
@@ -20,6 +21,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
     private readonly Matrixf modelMat = new();
     private readonly BuildBrushEntity brushEntity;
     private readonly MiniDimensionTessellator tessellator;
+    private readonly Vec4f RgbaGlowClear = new(1, 1, 1, 0);
 
     // Async tessellation state
     private CancellationTokenSource? tessellationCts;
@@ -269,7 +271,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
 
         // Reset shader state
         shader.ExtraGlow = 0;
-        shader.RgbaGlowIn = ColorUtil.WhiteArgbVec;
+        shader.RgbaGlowIn = RgbaGlowClear;
         shader.RgbaLightIn = ColorUtil.WhiteArgbVec;
         shader.DamageEffect = 0f;
         shader.Stop();
