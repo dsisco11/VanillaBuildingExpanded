@@ -413,9 +413,10 @@ public class BuildBrushDimension
     /// <summary>
     /// Applies rotation to the block in the dimension.
     /// </summary>
-    /// <param name="angle">The rotation angle in degrees (0, 90, 180, 270).</param>
+    /// <param name="angle">The target rotation angle in degrees (0, 90, 180, 270).</param>
+    /// <param name="previousAppliedAngle">The previously applied rotation angle in degrees.</param>
     /// <param name="variantBlock">For variant-based rotation, the rotated variant. For IRotatable, pass null.</param>
-    public void ApplyRotation(int angle, Block? variantBlock = null)
+    public void ApplyRotation(int angle, float previousAppliedAngle, Block? variantBlock = null)
     {
         if (dimension is null || !IsInitialized || originalBlock is null)
             return;
@@ -441,7 +442,7 @@ public class BuildBrushDimension
 
             case EBuildBrushRotationMode.Rotatable:
                 // Apply rotation via IRotatable
-                ApplyRotatableRotation(RotationAngle);
+                ApplyRotatableRotation(RotationAngle, previousAppliedAngle);
                 break;
 
             case EBuildBrushRotationMode.Hybrid:
@@ -450,18 +451,19 @@ public class BuildBrushDimension
                 {
                     currentBlock = variantBlock;
                 }
-                ApplyRotatableRotation(RotationAngle, variantChanged);
+                ApplyRotatableRotation(RotationAngle, previousAppliedAngle, variantChanged);
                 break;
         }
     }
 
     /// <summary>
     /// Applies rotation to IRotatable block entities.
-    /// Passes the absolute angle to OnTransformed which handles the rotation internally.
+    /// Passes a delta rotation computed from the target and previously applied angles.
     /// </summary>
-    /// <param name="absoluteAngle">The rotation angle in degrees.</param>
+    /// <param name="targetAngle">The target rotation angle in degrees.</param>
+    /// <param name="previousAppliedAngle">The previously applied rotation angle in degrees.</param>
     /// <param name="forceReplacement">If true, forces full block replacement (e.g., when variant changed).</param>
-    private void ApplyRotatableRotation(int absoluteAngle, bool forceReplacement = false)
+    private void ApplyRotatableRotation(int targetAngle, float previousAppliedAngle, bool forceReplacement = false)
     {
         if (dimension is null || currentBlock is null || internalBlockPos is null)
             return;
@@ -480,7 +482,7 @@ public class BuildBrushDimension
         if (existingBe is null)
             return;
 
-        if (!BlockOrientationResolver.TrySetEntityRotation(world, existingBe, absoluteAngle))
+        if (!BlockOrientationResolver.TrySetEntityRotation(world, existingBe, targetAngle, previousAppliedAngle))
         {
             world.Logger.Error("Failed to apply rotatable rotation to block entity at {0} in BuildBrushDimension.", internalBlockPos);
         }
@@ -635,7 +637,8 @@ public class BuildBrushDimension
             // Apply the rotation using mesh angle and current block from event args
             // NOTE: Use e.CurrentBlock, not _subscribedInstance.BlockTransformed,
             // because BlockTransformed may not be updated yet when this event fires
-            ApplyRotation((int)e.CurrentMeshAngleDegrees, e.CurrentBlock);
+            // Pass the previously applied angle for delta computation
+            ApplyRotation((int)e.CurrentMeshAngleDegrees, e.PreviousAppliedMeshAngleDegrees, e.CurrentBlock);
         }
         finally
         {

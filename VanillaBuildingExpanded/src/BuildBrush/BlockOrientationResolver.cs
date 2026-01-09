@@ -581,15 +581,36 @@ public class BlockOrientationResolver
     }
 
     /// <summary>
-    /// Applies rotation to an existing block entity in-place using IRotatable.OnTransformed.
-    /// This resets the BE to the original state first, then applies the absolute rotation.
-    /// This matches how WorldEdit/schematics apply rotations.
+    /// Computes the shortest-path rotation delta between two angles.
+    /// Handles wrap-around at 0°/360° boundary correctly.
     /// </summary>
+    /// <param name="targetAngle">The target angle in degrees.</param>
+    /// <param name="previousAngle">The previous angle in degrees.</param>
+    /// <returns>The shortest rotation delta in degrees (-180 to 180).</returns>
+    public static int ComputeShortestRotationDelta(float targetAngle, float previousAngle)
+    {
+        // Formula: ((target - previous + 540) % 360) - 180
+        // This gives the shortest path rotation, handling wrap-around
+        int delta = (((int)targetAngle - (int)previousAngle + 540) % 360) - 180;
+        return delta;
+    }
+
+    /// <summary>
+    /// Applies rotation to an existing block entity in-place using IRotatable.OnTransformed.
+    /// Computes and passes a relative/delta rotation angle, which is what OnTransformed expects.
+    /// </summary>
+    /// <param name="world">The world accessor.</param>
     /// <param name="blockEntity">The block entity to update.</param>
-    /// <param name="absoluteAngleDegrees">The absolute rotation angle in degrees (0, 90, 180, 270).</param>
+    /// <param name="targetAngleDegrees">The target rotation angle in degrees (0, 90, 180, 270).</param>
+    /// <param name="previousAppliedAngleDegrees">The previously applied rotation angle in degrees.</param>
     /// <param name="sourceAttributes">Optional source attributes to copy type from.</param>
     /// <returns>True if rotation was applied, false if the block entity doesn't support rotation.</returns>
-    public static bool TrySetEntityRotation(IWorldAccessor? world, BlockEntity? blockEntity, int absoluteAngleDegrees, ITreeAttribute? sourceAttributes = null)
+    public static bool TrySetEntityRotation(
+        IWorldAccessor? world, 
+        BlockEntity? blockEntity, 
+        int targetAngleDegrees, 
+        float previousAppliedAngleDegrees,
+        ITreeAttribute? sourceAttributes = null)
     {
         if (blockEntity is null)
             return false;
@@ -598,28 +619,25 @@ public class BlockOrientationResolver
         if (!TryGetRotationInterface(blockEntity, out IRotatable? rotatable))
             return false;
 
-        // Start from original tree state (clone it to avoid modifying the original)
+        // Get current tree state from the block entity
         TreeAttribute tree = new();
         blockEntity.ToTreeAttributes(tree);
 
         // Copy type attribute from source (for typed containers)
-        // TODO: attempt removal of this if not needed
         string? type = sourceAttributes?.GetString("type");
         if (!string.IsNullOrEmpty(type))
         {
             tree.SetString("type", type);
         }
-        // Set meshAngle to 0 to reset any prior rotation
-        //BlockOrientationResolver.TrySetEntityRotation(tree, 0f);
 
-        // NOTE [1/6/26]: The OnTransform method actually DOES seem to expect a relative rotation angle, not absolute.
+        // Compute the relative/delta rotation (OnTransformed expects relative angles)
+        int deltaAngle = ComputeShortestRotationDelta(targetAngleDegrees, previousAppliedAngleDegrees);
         
-        // Apply absolute rotation from original state via OnTransformed
-        // This is how WorldEdit/schematics work - always from original with absolute angle
+        // Apply delta rotation via OnTransformed
         rotatable.OnTransformed(
             world,
             tree,
-            absoluteAngleDegrees,
+            deltaAngle,
             [], // oldBlockIdMapping - not needed for live rotation
             [], // oldItemIdMapping - not needed for live rotation
             null // flipAxis - no flip, only rotation

@@ -947,6 +947,7 @@ public class BuildBrushInstance
     /// <summary>
     /// Applies the current rotation based on rotation mode.
     /// Uses the mesh angle from the current rotation definition.
+    /// This is called during initial setup, so previousAppliedAngle is 0.
     /// </summary>
     private void ApplyRotation()
     {
@@ -955,7 +956,8 @@ public class BuildBrushInstance
 
         // Get the mesh angle in degrees from the current definition
         float meshAngleDegrees = _rotation.CurrentMeshAngleDegrees;
-        _dimension.ApplyRotation((int)meshAngleDegrees, _blockTransformed);
+        // Initial setup - no previous rotation applied yet (starting from 0)
+        _dimension.ApplyRotation((int)meshAngleDegrees, previousAppliedAngle: 0f, _blockTransformed);
     }
 
     /// <summary>

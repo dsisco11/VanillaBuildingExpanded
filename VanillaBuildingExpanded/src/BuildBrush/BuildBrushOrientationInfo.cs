@@ -18,6 +18,11 @@ public class BuildBrushOrientationInfo
     private readonly IWorldAccessor _world;
     private readonly Block _originalBlock;
     private int _currentIndex;
+    /// <summary>
+    /// Tracks the last rotation angle that was applied to the block entity.
+    /// Used to compute delta rotations for IRotatable.OnTransformed which expects relative angles.
+    /// </summary>
+    private float _previouslyAppliedMeshAngle;
     #endregion
 
     #region Events
@@ -65,7 +70,8 @@ public class BuildBrushOrientationInfo
             int previousIndex = _currentIndex;
             BlockOrientationDefinition previousDef = Current;
             Block? previousBlock = CurrentBlock;
-            float previousAngle = CurrentMeshAngleDegrees;
+            float previousDefinitionAngle = CurrentMeshAngleDegrees;
+            float previousAppliedAngle = _previouslyAppliedMeshAngle;
 
             // Mutate
             _currentIndex = newIndex;
@@ -78,9 +84,13 @@ public class BuildBrushOrientationInfo
                 Current,
                 previousBlock,
                 CurrentBlock,
-                previousAngle,
-                CurrentMeshAngleDegrees
+                previousDefinitionAngle,
+                CurrentMeshAngleDegrees,
+                previousAppliedAngle
             ));
+
+            // Update tracking after event is raised
+            _previouslyAppliedMeshAngle = CurrentMeshAngleDegrees;
         }
     }
 

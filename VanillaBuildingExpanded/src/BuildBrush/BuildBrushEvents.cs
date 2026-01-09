@@ -55,14 +55,20 @@ public class OrientationIndexChangedEventArgs : BuildBrushStateChangedEventArgs
     public Block? CurrentBlock { get; }
 
     /// <summary>
-    /// The mesh angle in degrees before the change.
+    /// The mesh angle in degrees from the previous definition (before the index change).
     /// </summary>
-    public float PreviousMeshAngleDegrees { get; }
+    public float PreviousDefinitionMeshAngleDegrees { get; }
 
     /// <summary>
     /// The mesh angle in degrees after the change.
     /// </summary>
     public float CurrentMeshAngleDegrees { get; }
+
+    /// <summary>
+    /// The mesh angle that was previously applied to the block entity.
+    /// Used to compute delta rotations for IRotatable.OnTransformed which expects relative angles.
+    /// </summary>
+    public float PreviousAppliedMeshAngleDegrees { get; }
 
     /// <summary>
     /// Whether the block variant changed (different BlockId).
@@ -72,7 +78,7 @@ public class OrientationIndexChangedEventArgs : BuildBrushStateChangedEventArgs
     /// <summary>
     /// Whether only the mesh angle changed (same BlockId, different angle).
     /// </summary>
-    public bool MeshAngleOnlyChanged => !VariantChanged && PreviousMeshAngleDegrees != CurrentMeshAngleDegrees;
+    public bool MeshAngleOnlyChanged => !VariantChanged && PreviousDefinitionMeshAngleDegrees != CurrentMeshAngleDegrees;
 
     public OrientationIndexChangedEventArgs(
         int previousIndex,
@@ -81,8 +87,9 @@ public class OrientationIndexChangedEventArgs : BuildBrushStateChangedEventArgs
         BlockOrientationDefinition currentDefinition,
         Block? previousBlock,
         Block? currentBlock,
-        float previousMeshAngleDegrees,
-        float currentMeshAngleDegrees)
+        float previousDefinitionMeshAngleDegrees,
+        float currentMeshAngleDegrees,
+        float previousAppliedMeshAngleDegrees)
     {
         PreviousIndex = previousIndex;
         CurrentIndex = currentIndex;
@@ -90,8 +97,9 @@ public class OrientationIndexChangedEventArgs : BuildBrushStateChangedEventArgs
         CurrentDefinition = currentDefinition;
         PreviousBlock = previousBlock;
         CurrentBlock = currentBlock;
-        PreviousMeshAngleDegrees = previousMeshAngleDegrees;
+        PreviousDefinitionMeshAngleDegrees = previousDefinitionMeshAngleDegrees;
         CurrentMeshAngleDegrees = currentMeshAngleDegrees;
+        PreviousAppliedMeshAngleDegrees = previousAppliedMeshAngleDegrees;
     }
 }
 
