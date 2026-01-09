@@ -303,7 +303,7 @@ public class BuildBrushDimensionTests
         SetCurrentBlock(dimension, blockNorth);
 
         // Act - Apply rotation with different variant block
-        dimension.ApplyRotation(90, blockEast);
+        dimension.ApplyRotation(90, previousAppliedAngle: 0f, blockEast);
 
         // Assert - currentBlock should now be blockEast
         var currentBlock = GetCurrentBlock(dimension);
@@ -331,7 +331,7 @@ public class BuildBrushDimensionTests
         SetCurrentBlock(dimension, blockNorth);
 
         // Act - Apply rotation with SAME variant block (different angle, same block)
-        dimension.ApplyRotation(90, blockNorth);
+        dimension.ApplyRotation(90, previousAppliedAngle: 0f, blockNorth);
 
         // Assert - currentBlock should still be blockNorth
         var currentBlock = GetCurrentBlock(dimension);
@@ -361,7 +361,7 @@ public class BuildBrushDimensionTests
         SetCurrentBlock(dimension, blockNorth);
 
         // Act - Apply rotation with different variant block
-        dimension.ApplyRotation(0, blockEast);
+        dimension.ApplyRotation(0, previousAppliedAngle: 0f, blockEast);
 
         // Assert - currentBlock should now be blockEast
         var currentBlock = GetCurrentBlock(dimension);
@@ -389,7 +389,7 @@ public class BuildBrushDimensionTests
         SetCurrentBlock(dimension, blockNorth);
 
         // Act & Assert - Should not throw when variantBlock is null
-        var exception = Record.Exception(() => dimension.ApplyRotation(90, null));
+        var exception = Record.Exception(() => dimension.ApplyRotation(90, previousAppliedAngle: 0f, null));
         Assert.Null(exception);
     }
 
@@ -415,7 +415,7 @@ public class BuildBrushDimensionTests
         SetCurrentBlock(dimension, block);
 
         // Act - Try to apply rotation with different block
-        dimension.ApplyRotation(90, otherBlock);
+        dimension.ApplyRotation(90, previousAppliedAngle: 0f, otherBlock);
 
         // Assert - currentBlock should NOT change for None mode
         var currentBlock = GetCurrentBlock(dimension);

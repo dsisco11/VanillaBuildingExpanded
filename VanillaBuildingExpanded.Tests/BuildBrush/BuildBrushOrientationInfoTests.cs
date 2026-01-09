@@ -170,7 +170,7 @@ public class BuildBrushOrientationInfoTests
 
         // Assert
         Assert.NotNull(capturedArgs);
-        Assert.Equal(0f, capturedArgs.PreviousMeshAngleDegrees);
+        Assert.Equal(0f, capturedArgs.PreviousDefinitionMeshAngleDegrees);
         Assert.Equal(180f, capturedArgs.CurrentMeshAngleDegrees);
     }
 
