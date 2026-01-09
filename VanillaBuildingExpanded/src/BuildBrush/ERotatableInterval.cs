@@ -22,7 +22,8 @@ public enum ERotatableInterval
     Deg22_5,
 
     /// <summary>
-    /// 22.5 degree rotation steps, but skipping 45° multiples (only 22.5°, 67.5°, 112.5°, etc.).
+    /// 22.5 degree rotation steps, but skipping the diagonal 45° orientations
+    /// (45°, 135°, 225°, 315°).
     /// Results in 12 orientations instead of 16.
     /// </summary>
     Deg22_5Not45,
@@ -64,12 +65,12 @@ public static class ERotatableIntervalExtensions
     ];
 
     /// <summary>
-    /// Valid rotation angles for 22.5° interval skipping 45° multiples (12 orientations).
-    /// Excludes: 0°, 90°, 180°, 270° (the cardinal directions handled by variants).
+    /// Valid rotation angles for 22.5° interval skipping the diagonal 45° orientations (12 orientations).
+    /// Includes all values from <see cref="Angles22_5Deg"/> except: 45°, 135°, 225°, 315°.
     /// </summary>
     public static readonly ImmutableArray<float> Angles22_5DegNot45 = [
-        22.5f, 45f, 67.5f, 112.5f, 135f, 157.5f,
-        202.5f, 225f, 247.5f, 292.5f, 315f, 337.5f
+        0f, 22.5f, 67.5f, 90f, 112.5f, 157.5f,
+        180f, 202.5f, 247.5f, 270f, 292.5f, 337.5f
     ];
 
     /// <summary>
@@ -143,10 +144,13 @@ public static class ERotatableIntervalExtensions
 
     /// <summary>
     /// Checks if a given angle should be skipped for this interval.
-    /// For <see cref="ERotatableInterval.Deg22_5Not45"/>, angles that are multiples of 90° are skipped.
+    /// Only applies to <see cref="ERotatableInterval.Deg22_5Not45"/>; other intervals never skip.
     /// </summary>
     public static bool ShouldSkipAngle(this ERotatableInterval interval, float angleDegrees)
     {
+        if (interval != ERotatableInterval.Deg22_5Not45)
+            return false;
+
         return !interval.IsValidAngle(angleDegrees);
     }
 

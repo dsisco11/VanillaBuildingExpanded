@@ -57,7 +57,7 @@ public class ERotatableIntervalTests
     [Theory]
     [InlineData(ERotatableInterval.None, 0)]
     [InlineData(ERotatableInterval.Deg22_5, 16)]
-    [InlineData(ERotatableInterval.Deg22_5Not45, 8)]
+    [InlineData(ERotatableInterval.Deg22_5Not45, 12)]
     [InlineData(ERotatableInterval.Deg45, 8)]
     [InlineData(ERotatableInterval.Deg90, 4)]
     public void GetStepCount_ReturnsCorrectCount(ERotatableInterval interval, int expected)
@@ -71,30 +71,30 @@ public class ERotatableIntervalTests
     #region ShouldSkipAngle Tests - Deg22_5Not45
 
     [Theory]
-    [InlineData(0f)]
     [InlineData(45f)]
-    [InlineData(90f)]
     [InlineData(135f)]
-    [InlineData(180f)]
     [InlineData(225f)]
-    [InlineData(270f)]
     [InlineData(315f)]
-    public void ShouldSkipAngle_Deg22_5Not45_MultiplesOf45_ReturnsTrue(float angle)
+    public void ShouldSkipAngle_Deg22_5Not45_Diagonal45Angles_ReturnsTrue(float angle)
     {
         var result = ERotatableInterval.Deg22_5Not45.ShouldSkipAngle(angle);
         Assert.True(result, $"Expected angle {angle}° to be skipped for Deg22_5Not45");
     }
 
     [Theory]
+    [InlineData(0f)]
     [InlineData(22.5f)]
     [InlineData(67.5f)]
+    [InlineData(90f)]
     [InlineData(112.5f)]
     [InlineData(157.5f)]
+    [InlineData(180f)]
     [InlineData(202.5f)]
     [InlineData(247.5f)]
+    [InlineData(270f)]
     [InlineData(292.5f)]
     [InlineData(337.5f)]
-    public void ShouldSkipAngle_Deg22_5Not45_NonMultiplesOf45_ReturnsFalse(float angle)
+    public void ShouldSkipAngle_Deg22_5Not45_NonDiagonalAngles_ReturnsFalse(float angle)
     {
         var result = ERotatableInterval.Deg22_5Not45.ShouldSkipAngle(angle);
         Assert.False(result, $"Expected angle {angle}° to NOT be skipped for Deg22_5Not45");
@@ -126,11 +126,11 @@ public class ERotatableIntervalTests
     #region ShouldSkipAngle Edge Cases
 
     [Theory]
-    [InlineData(0.001f, true)]      // Very close to 0°
+    [InlineData(0.001f, false)]     // Very close to 0°
     [InlineData(44.999f, true)]     // Very close to 45°
-    [InlineData(89.999f, true)]     // Very close to 90°
-    [InlineData(22.499f, false)]    // Just below 22.5° (not a 45° multiple)
-    [InlineData(22.501f, false)]    // Just above 22.5° (not a 45° multiple)
+    [InlineData(89.999f, false)]    // Very close to 90°
+    [InlineData(22.499f, false)]    // Just below 22.5°
+    [InlineData(22.501f, false)]    // Just above 22.5°
     public void ShouldSkipAngle_Deg22_5Not45_EdgeCases_HandlesFloatingPointCorrectly(float angle, bool expectedSkip)
     {
         var result = ERotatableInterval.Deg22_5Not45.ShouldSkipAngle(angle);
