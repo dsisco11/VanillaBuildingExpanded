@@ -83,7 +83,7 @@ public static class ERotatableIntervalExtensions
     public static int GetStepCount(this ERotatableInterval interval) => interval switch
     {
         ERotatableInterval.Deg22_5 => 16,       // 360 / 22.5 = 16
-        ERotatableInterval.Deg22_5Not45 => 8,   // 16 steps minus 8 that are multiples of 45°
+        ERotatableInterval.Deg22_5Not45 => 12,   // 16 steps minus 4 that are aligned to 45° axis angles
         ERotatableInterval.Deg45 => 8,          // 360 / 45 = 8
         ERotatableInterval.Deg90 => 4,          // 360 / 90 = 4
         _ => 0,

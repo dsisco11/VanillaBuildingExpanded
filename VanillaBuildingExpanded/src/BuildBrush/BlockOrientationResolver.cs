@@ -220,7 +220,7 @@ public class BlockOrientationResolver
             float angle = i * intervalDegrees;
 
             // Skip angles that should be omitted (e.g., 45° multiples for Deg22_5Not45)
-            if (i > 0 && interval.ShouldSkipAngle(angle))
+            if (interval.ShouldSkipAngle(angle))
                 continue;
 
             builder.Add(new BlockOrientationDefinition(block.BlockId, angle, rotationAttributeName));
