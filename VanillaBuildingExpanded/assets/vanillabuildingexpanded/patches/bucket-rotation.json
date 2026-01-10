@@ -1,0 +1,8 @@
+[
+	{
+		"op": "add",
+		"path": "/attributes/rotatatableInterval",
+		"value": "22.5deg",
+		"file": "game:blocktypes/wood/bucket"
+	}
+]
