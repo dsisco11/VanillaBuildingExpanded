@@ -55,6 +55,18 @@ public class BlockOrientationResolver
             // rotDeg - BEBehaviorTrapDoor (stores degrees, not radians!)
             ["rotDeg"] = new("rotDeg", IsDegrees: true),
         }.ToFrozenDictionary();
+
+    /// <summary>
+    /// Returns whether a known mesh rotation attribute stores degrees (true) or radians (false).
+    /// Unknown attributes default to radians.
+    /// </summary>
+    public static bool IsMeshRotationAttributeDegrees(string? attributeName)
+    {
+        if (string.IsNullOrWhiteSpace(attributeName))
+            return false;
+
+        return KnownMeshRotationAttributes.TryGetValue(attributeName, out var config) && config.IsDegrees;
+    }
     #endregion
 
     #region Fields
@@ -171,8 +183,7 @@ public class BlockOrientationResolver
             EBuildBrushRotationMode.None => [new BlockOrientationDefinition(block.BlockId, 0f)],
             EBuildBrushRotationMode.VariantBased => ComputeVariantRotations(block),
             EBuildBrushRotationMode.Rotatable => ComputeRotatableRotations(block, itemStack),
-            EBuildBrushRotationMode.Hybrid => ComputeRotatableRotations(block, itemStack),
-            //EBuildBrushRotationMode.Hybrid => ComputeHybridRotations(block, itemStack),
+            EBuildBrushRotationMode.Hybrid => ComputeHybridRotations(block, itemStack),
             _ => [new BlockOrientationDefinition(block.BlockId, 0f)]
         };
     }
@@ -205,8 +216,8 @@ public class BlockOrientationResolver
         ERotatableInterval interval = ResolveRotatableInterval(block, itemStack);
         if (interval == ERotatableInterval.None)
         {
-            // Default to 90° if no interval specified
-            interval = ERotatableInterval.Deg90;
+            // No interval configured => not rotatable
+            return [new BlockOrientationDefinition(block.BlockId, 0f)];
         }
 
         // Use predefined lookup table for valid angles
@@ -243,7 +254,7 @@ public class BlockOrientationResolver
         ERotatableInterval interval = ResolveRotatableInterval(block, itemStack);
         if (interval == ERotatableInterval.None)
         {
-            // No mesh-angle interval, fall back to variant-only
+            // No mesh-angle interval => fall back to variant-only
             return ComputeVariantRotations(block);
         }
 

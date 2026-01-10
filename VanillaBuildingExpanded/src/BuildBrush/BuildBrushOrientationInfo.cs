@@ -374,7 +374,9 @@ public class BuildBrushOrientationInfo
         var attrName = orientation.RotationAttribute;
         if (!string.IsNullOrEmpty(attrName))
         {
-            tree.SetFloat(attrName, orientation.MeshAngleDegrees);
+            bool isDegrees = BlockOrientationResolver.IsMeshRotationAttributeDegrees(attrName);
+            float value = isDegrees ? orientation.MeshAngleDegrees : orientation.MeshAngleDegrees * GameMath.DEG2RAD;
+            tree.SetFloat(attrName, value);
             return true;
         }
 

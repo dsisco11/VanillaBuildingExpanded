@@ -541,6 +541,7 @@ public class BuildBrushDimension
         _subscribedInstance = instance;
 
         // Subscribe to relevant events
+        instance.OnBlockTransformedChanged += Instance_OnBlockTransformedChanged;
         instance.OnOrientationChanged += Instance_OnOrientationChanged;
         instance.OnRotationInfoChanged += Instance_OnRotationInfoChanged;
     }
@@ -554,6 +555,7 @@ public class BuildBrushDimension
         if (_subscribedInstance is null)
             return;
 
+        _subscribedInstance.OnBlockTransformedChanged -= Instance_OnBlockTransformedChanged;
         _subscribedInstance.OnOrientationChanged -= Instance_OnOrientationChanged;
         _subscribedInstance.OnRotationInfoChanged -= Instance_OnRotationInfoChanged;
 
@@ -593,9 +595,85 @@ public class BuildBrushDimension
         BeginUpdate();
         try
         {
+            // If the variant changed (or nothing has been placed yet), ensure the correct block is placed
+            // before we try to apply any rotatable rotation.
+            if (e.VariantChanged || originalBlock is null)
+            {
+                Block? block = world.GetBlock(e.CurrentDefinition.BlockId);
+                if (block is not null)
+                {
+                    if (originalBlock is null)
+                    {
+                        SetBlock(block, previousBlock: null, rotation.Mode);
+                    }
+                    else
+                    {
+                        SetVariantBlock(block);
+                    }
+                }
+            }
+
             // Apply the rotation using event args and orientation info
             // Note: sender is the BuildBrushInstance (via Rotation_OnOrientationChanged forwarder)
             ApplyRotation(e, rotation);
+        }
+        finally
+        {
+            EndUpdate();
+        }
+    }
+
+    /// <summary>
+    /// Handles transformed block changes from the subscribed instance.
+    /// Used for VariantBased rotation (variant swaps) and for general block selection changes
+    /// when the dimension is driven purely by instance events (e.g. unit tests).
+    /// </summary>
+    private void Instance_OnBlockTransformedChanged(object? sender, BlockChangedEventArgs e)
+    {
+        if (_subscribedInstance is null)
+            return;
+
+        // Only handle when initialized
+        if (dimension is null || !IsInitialized)
+            return;
+
+        var rotationMode = _subscribedInstance.Rotation?.Mode ?? EBuildBrushRotationMode.None;
+
+        BeginUpdate();
+        try
+        {
+            if (e.CurrentBlock is null)
+            {
+                Clear();
+                return;
+            }
+
+            // For Rotatable/Hybrid, orientation handling (including variant placement) is done in Instance_OnOrientationChanged.
+            // Only ensure an initial block exists.
+            if (rotationMode is EBuildBrushRotationMode.Rotatable or EBuildBrushRotationMode.Hybrid)
+            {
+                if (originalBlock is null)
+                {
+                    SetBlock(e.CurrentBlock, e.PreviousBlock, rotationMode);
+                }
+
+                return;
+            }
+
+            if (originalBlock is null)
+            {
+                SetBlock(e.CurrentBlock, e.PreviousBlock, rotationMode);
+                return;
+            }
+
+            if (rotationMode == EBuildBrushRotationMode.VariantBased)
+            {
+                SetVariantBlock(e.CurrentBlock);
+                return;
+            }
+
+            // None mode and any other mode fall back to full SetBlock.
+            SetBlock(e.CurrentBlock, e.PreviousBlock, rotationMode);
         }
         finally
         {

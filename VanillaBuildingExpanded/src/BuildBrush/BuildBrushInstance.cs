@@ -937,7 +937,7 @@ public class BuildBrushInstance
     /// Updates the block in the dimension based on current rotation state.
     /// Uses BeginUpdate/EndUpdate to batch multiple dirty events into a single mesh rebuild.
     /// </summary>
-    private void UpdateDimensionBlock()
+    private void UpdateDimensionBlock(Block? previousBlock = null)
     {
         if (_dimension is null || !_dimension.IsInitialized)
             return;
