@@ -284,7 +284,7 @@ public class BlockOrientationResolver
     }
     #endregion
 
-    #region  TryGetRotationInterface
+    #region TryGetRotationInterface
 
     /// <summary>
     /// Tries to get the IRotatable interface from a block entity or its behaviors.
@@ -395,6 +395,10 @@ public class BlockOrientationResolver
     {
         bool hasVariantRotation = HasVariantBasedRotation(block);
         bool hasRotatableEntity = TryGetRotationInterface(block, out _);
+        ERotatableInterval interval = ResolveRotatableInterval(block);
+
+        if (interval == ERotatableInterval.None)
+            hasRotatableEntity = false;
 
         return (hasVariantRotation, hasRotatableEntity) switch
         {
