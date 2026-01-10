@@ -1133,7 +1133,7 @@ public class BrushToTessellationFlowTests
             {
                 eventsWithVariantChange++;
                 // At variant transition, mesh angle should be 0 (for forward) or at boundary
-                Assert.True(evt.CurrentMeshAngleDegrees == 0f || evt.CurrentIndex == 0);
+                Assert.True(evt.CurrentDefinition.MeshAngleDegrees == 0f || evt.CurrentIndex == 0);
             }
         }
 
@@ -1167,10 +1167,10 @@ public class BrushToTessellationFlowTests
         {
             if (lastBlockId is null)
             {
-                lastBlockId = evt.PreviousBlock?.BlockId;
+                lastBlockId = evt.PreviousDefinition.BlockId;
             }
 
-            if (evt.CurrentBlock?.BlockId == lastBlockId)
+            if (evt.CurrentDefinition.BlockId == lastBlockId)
             {
                 consecutiveSameBlockCount++;
             }
@@ -1178,7 +1178,7 @@ public class BrushToTessellationFlowTests
             {
                 // Block changed - should have had anglesPerVariant-1 consecutive same block events
                 // (minus 1 because the first event of a new block doesn't count)
-                lastBlockId = evt.CurrentBlock?.BlockId;
+                lastBlockId = evt.CurrentDefinition.BlockId;
                 consecutiveSameBlockCount = 0;
             }
         }

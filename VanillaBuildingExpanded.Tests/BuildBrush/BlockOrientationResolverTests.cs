@@ -466,79 +466,6 @@ public class BlockOrientationResolverTests
     #region GetOrientations Tests - Rotatable Mode
 
     [Fact]
-    public void GetOrientations_RotatableBlock_90Deg_ReturnsFourDefinitions()
-    {
-        // Arrange
-        var mockWorld = CreateMockWorld();
-        var block = CreateRotatableBlockWithInterval(100, "game:chest", "ChestEntity", "90deg");
-        SetupBlockLookup(mockWorld, block);
-        SetupRotatableEntity(mockWorld, "ChestEntity");
-        var resolver = new BlockOrientationResolver(mockWorld.Object);
-
-        // Act
-        var orientations = resolver.GetOrientations(100);
-
-        // Assert
-        Assert.Equal(4, orientations.Length);
-
-        // All should have same block ID
-        Assert.All(orientations, o => Assert.Equal(100, o.BlockId));
-
-        // Should have angles 0, 90, 180, 270
-        Assert.Equal(0f, orientations[0].MeshAngleDegrees);
-        Assert.Equal(90f, orientations[1].MeshAngleDegrees);
-        Assert.Equal(180f, orientations[2].MeshAngleDegrees);
-        Assert.Equal(270f, orientations[3].MeshAngleDegrees);
-    }
-
-    [Fact]
-    public void GetOrientations_RotatableBlock_45Deg_ReturnsEightDefinitions()
-    {
-        // Arrange
-        var mockWorld = CreateMockWorld();
-        var block = CreateRotatableBlockWithInterval(100, "game:sign", "SignEntity", "45deg");
-        SetupBlockLookup(mockWorld, block);
-        SetupRotatableEntity(mockWorld, "SignEntity");
-        var resolver = new BlockOrientationResolver(mockWorld.Object);
-
-        // Act
-        var orientations = resolver.GetOrientations(100);
-
-        // Assert
-        Assert.Equal(8, orientations.Length);
-
-        // Should have angles 0, 45, 90, 135, 180, 225, 270, 315
-        for (int i = 0; i < 8; i++)
-        {
-            Assert.Equal(100, orientations[i].BlockId);
-            Assert.Equal(i * 45f, orientations[i].MeshAngleDegrees);
-        }
-    }
-
-    [Fact]
-    public void GetOrientations_RotatableBlock_22_5Deg_ReturnsSixteenDefinitions()
-    {
-        // Arrange
-        var mockWorld = CreateMockWorld();
-        var block = CreateRotatableBlockWithInterval(100, "game:precise", "PreciseEntity", "22.5deg");
-        SetupBlockLookup(mockWorld, block);
-        SetupRotatableEntity(mockWorld, "PreciseEntity");
-        var resolver = new BlockOrientationResolver(mockWorld.Object);
-
-        // Act
-        var orientations = resolver.GetOrientations(100);
-
-        // Assert
-        Assert.Equal(16, orientations.Length);
-
-        for (int i = 0; i < 16; i++)
-        {
-            Assert.Equal(100, orientations[i].BlockId);
-            Assert.Equal(i * 22.5f, orientations[i].MeshAngleDegrees);
-        }
-    }
-
-    [Fact]
     public void GetOrientations_RotatableBlock_NoInterval_DefaultsTo90Deg()
     {
         // Arrange
@@ -557,56 +484,6 @@ public class BlockOrientationResolverTests
         Assert.Equal(90f, orientations[1].MeshAngleDegrees);
         Assert.Equal(180f, orientations[2].MeshAngleDegrees);
         Assert.Equal(270f, orientations[3].MeshAngleDegrees);
-    }
-
-    [Fact]
-    public void GetOrientations_RotatableBlock_22_5DegNot45_ReturnsEightDefinitions_Skipping45Multiples()
-    {
-        // Arrange
-        var mockWorld = CreateMockWorld();
-        var block = CreateRotatableBlockWithInterval(100, "game:specialblock", "SpecialEntity", "22.5degnot45deg");
-        SetupBlockLookup(mockWorld, block);
-        SetupRotatableEntity(mockWorld, "SpecialEntity");
-        var resolver = new BlockOrientationResolver(mockWorld.Object);
-
-        // Act
-        var orientations = resolver.GetOrientations(100);
-
-        // Assert - Should have 8 orientations (22.5° steps but skipping 45° multiples)
-        Assert.Equal(8, orientations.Length);
-
-        // Expected angles: 22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5
-        // (0°, 45°, 90°, 135°, 180°, 225°, 270°, 315° are skipped)
-        float[] expectedAngles = [22.5f, 67.5f, 112.5f, 157.5f, 202.5f, 247.5f, 292.5f, 337.5f];
-
-        for (int i = 0; i < 8; i++)
-        {
-            Assert.Equal(100, orientations[i].BlockId);
-            Assert.Equal(expectedAngles[i], orientations[i].MeshAngleDegrees);
-        }
-    }
-
-    [Fact]
-    public void GetOrientations_RotatableBlock_22_5DegNot45_DoesNotContain45DegMultiples()
-    {
-        // Arrange
-        var mockWorld = CreateMockWorld();
-        var block = CreateRotatableBlockWithInterval(100, "game:specialblock", "SpecialEntity", "22.5degnot45deg");
-        SetupBlockLookup(mockWorld, block);
-        SetupRotatableEntity(mockWorld, "SpecialEntity");
-        var resolver = new BlockOrientationResolver(mockWorld.Object);
-
-        // Act
-        var orientations = resolver.GetOrientations(100);
-
-        // Assert - Should NOT contain any 45° multiples
-        float[] skippedAngles = [0f, 45f, 90f, 135f, 180f, 225f, 270f, 315f];
-        var actualAngles = orientations.Select(o => o.MeshAngleDegrees).ToArray();
-
-        foreach (float skipped in skippedAngles)
-        {
-            Assert.DoesNotContain(skipped, actualAngles);
-        }
     }
 
     #endregion

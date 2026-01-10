@@ -363,12 +363,12 @@ public class TessellationIntegrationTests
         // First 4 rotations should stay on variant 100
         for (int i = 0; i < 4; i++)
         {
-            Assert.Equal(100, capturedEvents[i].PreviousBlock?.BlockId);
+            Assert.Equal(100, capturedEvents[i].PreviousDefinition.BlockId);
         }
 
         // Index 4 should transition to variant 101
         Assert.Equal(4, capturedEvents[3].CurrentIndex);
-        Assert.Equal(101, capturedEvents[3].CurrentBlock?.BlockId);
+        Assert.Equal(101, capturedEvents[3].CurrentDefinition.BlockId);
         Assert.True(capturedEvents[3].VariantChanged);
     }
 
@@ -430,8 +430,8 @@ public class TessellationIntegrationTests
         Assert.Single(capturedEvents);
         Assert.Equal(0, capturedEvents[0].PreviousIndex);
         Assert.Equal(7, capturedEvents[0].CurrentIndex);
-        Assert.Equal(101, capturedEvents[0].CurrentBlock?.BlockId);
-        Assert.Equal(270f, capturedEvents[0].CurrentMeshAngleDegrees);
+        Assert.Equal(101, capturedEvents[0].CurrentDefinition.BlockId);
+        Assert.Equal(270f, capturedEvents[0].CurrentDefinition.MeshAngleDegrees);
         Assert.True(capturedEvents[0].VariantChanged);
     }
 

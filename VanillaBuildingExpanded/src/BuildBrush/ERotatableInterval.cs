@@ -73,19 +73,6 @@ public static class ERotatableIntervalExtensions
         180f, 202.5f, 247.5f, 270f, 292.5f, 337.5f
     ];
 
-    /// <summary>
-    /// Lookup table mapping each interval to its valid rotation angles.
-    /// </summary>
-    private static readonly FrozenDictionary<ERotatableInterval, ImmutableArray<float>> AngleLookup =
-        new Dictionary<ERotatableInterval, ImmutableArray<float>>
-        {
-            [ERotatableInterval.None] = [],
-            [ERotatableInterval.Deg90] = Angles90Deg,
-            [ERotatableInterval.Deg45] = Angles45Deg,
-            [ERotatableInterval.Deg22_5] = Angles22_5Deg,
-            [ERotatableInterval.Deg22_5Not45] = Angles22_5DegNot45,
-        }.ToFrozenDictionary();
-
     #endregion
 
     /// <summary>
@@ -95,7 +82,14 @@ public static class ERotatableIntervalExtensions
     /// <returns>Immutable array of valid angles in degrees.</returns>
     public static ImmutableArray<float> GetValidAngles(this ERotatableInterval interval)
     {
-        return AngleLookup.TryGetValue(interval, out var angles) ? angles : [];
+        return interval switch 
+        {
+            ERotatableInterval.Deg22_5 => Angles22_5Deg,
+            ERotatableInterval.Deg22_5Not45 => Angles22_5DegNot45,
+            ERotatableInterval.Deg45 => Angles45Deg,
+            ERotatableInterval.Deg90 => Angles90Deg,
+            _ => [],
+        };
     }
 
     /// <summary>

@@ -69,9 +69,6 @@ public class BuildBrushOrientationInfo
             // Capture previous state BEFORE mutation
             int previousIndex = _currentIndex;
             BlockOrientationDefinition previousDef = Current;
-            Block? previousBlock = CurrentBlock;
-            float previousDefinitionAngle = CurrentMeshAngleDegrees;
-            float previousAppliedAngle = _previouslyAppliedMeshAngle;
 
             // Mutate
             _currentIndex = newIndex;
@@ -81,12 +78,7 @@ public class BuildBrushOrientationInfo
                 previousIndex,
                 _currentIndex,
                 previousDef,
-                Current,
-                previousBlock,
-                CurrentBlock,
-                previousDefinitionAngle,
-                CurrentMeshAngleDegrees,
-                previousAppliedAngle
+                Current
             ));
 
             // Update tracking after event is raised
@@ -239,31 +231,146 @@ public class BuildBrushOrientationInfo
     }
 
     /// <summary>
-    /// Applies current orientation state to a tree attribute.
-    /// Sets type (from source) and meshAngle (from current rotation) for proper rendering.
+    /// Applies orientation to a block entity using IRotatable.OnTransformed.
+    /// Computes delta rotation from previous definition and applies it to the entity.
     /// </summary>
-    /// <param name="targetAttributes">The tree attributes to apply orientation to.</param>
+    /// <param name="blockEntity">The block entity to rotate.</param>
+    /// <param name="previousDefinition">The previous orientation definition (for delta computation).</param>
+    /// <param name="currentDefinition">The current/target orientation definition to apply.</param>
     /// <param name="sourceAttributes">Optional source attributes to copy type from.</param>
-    public void ApplyOrientationAttributes(ITreeAttribute targetAttributes, ITreeAttribute? sourceAttributes = null)
+    /// <returns>True if rotation was applied, false if the block entity doesn't support rotation.</returns>
+    public bool ApplyToBlockEntity(
+        BlockEntity blockEntity,
+        in BlockOrientationDefinition previousDefinition,
+        in BlockOrientationDefinition currentDefinition,
+        ITreeAttribute? sourceAttributes = null)
     {
-        if (targetAttributes is null)
-            return;
+        if (blockEntity is null)
+            return false;
 
-        // Copy type attribute from source (for typed containers like crates/chests)
+        // Find IRotatable on entity or behaviors
+        if (!BlockOrientationResolver.TryGetRotationInterface(blockEntity, out IRotatable? rotatable))
+            return false;
+
+        // Get current tree state from the block entity
+        TreeAttribute tree = new();
+        blockEntity.ToTreeAttributes(tree);
+
+        // Copy type attribute from source (for typed containers)
         string? type = sourceAttributes?.GetString("type");
         if (!string.IsNullOrEmpty(type))
         {
-            targetAttributes.SetString("type", type);
+            tree.SetString("type", type);
+        }
+
+        // Compute the relative/delta rotation (OnTransformed expects relative angles)
+        int deltaAngle = ComputeShortestRotationDelta(
+            currentDefinition.MeshAngleDegrees,
+            previousDefinition.MeshAngleDegrees
+        );
+
+        // Apply delta rotation via OnTransformed
+        rotatable.OnTransformed(
+            _world,
+            tree,
+            deltaAngle,
+            [], // oldBlockIdMapping - not needed for live rotation
+            [], // oldItemIdMapping - not needed for live rotation
+            null // flipAxis - no flip, only rotation
+        );
+
+        // Write back to BE
+        blockEntity.FromTreeAttributes(tree, _world);
+        blockEntity.MarkDirty(true);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Prepares an ItemStack for placement with orientation applied.
+    /// Clones the target stack and applies orientation attributes.
+    /// </summary>
+    /// <param name="target">The ItemStack to prepare (will be cloned).</param>
+    /// <param name="currentDefinition">The current orientation definition to apply.</param>
+    /// <param name="source">Optional source ItemStack to copy attributes from.</param>
+    /// <returns>A new ItemStack with orientation applied.</returns>
+    public ItemStack PrepareItemStackForPlacement(
+        ItemStack target,
+        in BlockOrientationDefinition currentDefinition,
+        ItemStack? source = null)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+
+        // Clone the target stack to avoid mutating the original
+        ItemStack prepared = target.Clone();
+
+        // Ensure attributes exist
+        if (prepared.Attributes is null)
+        {
+            prepared.Attributes = new TreeAttribute();
+        }
+
+        // Copy type attribute from source (for typed containers like crates/chests)
+        string? type = source?.Attributes?.GetString("type");
+        if (!string.IsNullOrEmpty(type))
+        {
+            prepared.Attributes.SetString("type", type);
         }
 
         // Set meshAngle for IRotatable blocks
         if (HasRotatableEntity)
         {
-            BlockOrientationResolver.TrySetMeshRotation(
-                targetAttributes,
-                CurrentMeshAngleDegrees
+            TrySetMeshRotation(
+                prepared.Attributes,
+                currentDefinition
             );
         }
+
+        return prepared;
     }
+    
+
+    #region Mesh Rotation
+    /// <summary>
+    /// Attempts to set the rotation value in the tree attribute using known attribute names.
+    /// </summary>
+    /// <param name="tree">The tree attribute to modify.</param>
+    /// <param name="rotationRadians">The rotation in radians.</param>
+    /// <returns>True if an attribute was found and set; otherwise, false.</returns>
+    private static bool TrySetMeshRotation(ITreeAttribute? tree, in BlockOrientationDefinition orientation)
+    {
+        if (tree is null)
+            return false;
+
+        // get attribute name from definition
+        var attrName = orientation.RotationAttribute;
+        if (!string.IsNullOrEmpty(attrName))
+        {
+            tree.SetFloat(attrName, orientation.MeshAngleDegrees);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Computes the shortest-path rotation delta for IRotatable.OnTransformed.
+    /// OnTransformed SUBTRACTS the delta from the current angle, so to go from
+    /// previousAngle to targetAngle, we compute: previousAngle - targetAngle.
+    /// Handles wrap-around at 0°/360° boundary correctly.
+    /// </summary>
+    /// <param name="targetAngle">The target angle in degrees.</param>
+    /// <param name="previousAngle">The previous angle in degrees.</param>
+    /// <returns>The shortest rotation delta in degrees (-180 to 180).</returns>
+    private static int ComputeShortestRotationDelta(float targetAngle, float previousAngle)
+    {
+        // OnTransformed subtracts the delta: newAngle = currentAngle - delta
+        // To achieve targetAngle from previousAngle: targetAngle = previousAngle - delta
+        // So: delta = previousAngle - targetAngle
+        // Formula with wrap-around: ((previous - target + 540) % 360) - 180
+        int delta = (((int)previousAngle - (int)targetAngle + 540) % 360) - 180;
+        return delta;
+    }
+    #endregion
     #endregion
 }

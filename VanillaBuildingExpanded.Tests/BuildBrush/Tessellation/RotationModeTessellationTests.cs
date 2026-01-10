@@ -246,7 +246,7 @@ public class RotationModeTessellationTests
             // Assert
             Assert.NotNull(capturedArgs);
             // MeshAngle should be a valid angle (0, 90, 180, 270 typically)
-            Assert.True(capturedArgs.CurrentMeshAngleDegrees >= 0);
+            Assert.True(capturedArgs.CurrentDefinition.MeshAngleDegrees >= 0);
         }
     }
 

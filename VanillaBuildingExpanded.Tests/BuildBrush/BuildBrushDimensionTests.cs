@@ -302,8 +302,18 @@ public class BuildBrushDimensionTests
         SetOriginalBlock(dimension, blockNorth);
         SetCurrentBlock(dimension, blockNorth);
 
+        // Create mock event args for rotation (variant change)
+        var previousDef = new BlockOrientationDefinition(100, 0f);
+        var currentDef = new BlockOrientationDefinition(101, 90f);
+        var eventArgs = new OrientationIndexChangedEventArgs(0, 1, previousDef, currentDef);
+        
+        // Create mock orientation info
+        var definitions = System.Collections.Immutable.ImmutableArray.Create(previousDef, currentDef);
+        var orientationInfo = new BuildBrushOrientationInfo(mockWorld.Object, blockNorth, EBuildBrushRotationMode.Hybrid, definitions);
+        orientationInfo.CurrentIndex = 1; // Set to the new index
+
         // Act - Apply rotation with different variant block
-        dimension.ApplyRotation(90, previousAppliedAngle: 0f, blockEast);
+        dimension.ApplyRotation(eventArgs, orientationInfo);
 
         // Assert - currentBlock should now be blockEast
         var currentBlock = GetCurrentBlock(dimension);
@@ -330,8 +340,18 @@ public class BuildBrushDimensionTests
         SetOriginalBlock(dimension, blockNorth);
         SetCurrentBlock(dimension, blockNorth);
 
+        // Create mock event args for rotation (same variant, different angle)
+        var previousDef = new BlockOrientationDefinition(100, 0f);
+        var currentDef = new BlockOrientationDefinition(100, 90f);
+        var eventArgs = new OrientationIndexChangedEventArgs(0, 1, previousDef, currentDef);
+        
+        // Create mock orientation info
+        var definitions = System.Collections.Immutable.ImmutableArray.Create(previousDef, currentDef);
+        var orientationInfo = new BuildBrushOrientationInfo(mockWorld.Object, blockNorth, EBuildBrushRotationMode.Hybrid, definitions);
+        orientationInfo.CurrentIndex = 1;
+
         // Act - Apply rotation with SAME variant block (different angle, same block)
-        dimension.ApplyRotation(90, previousAppliedAngle: 0f, blockNorth);
+        dimension.ApplyRotation(eventArgs, orientationInfo);
 
         // Assert - currentBlock should still be blockNorth
         var currentBlock = GetCurrentBlock(dimension);
@@ -360,8 +380,18 @@ public class BuildBrushDimensionTests
         SetOriginalBlock(dimension, blockNorth);
         SetCurrentBlock(dimension, blockNorth);
 
+        // Create mock event args for rotation (variant change)
+        var previousDef = new BlockOrientationDefinition(100, 0f);
+        var currentDef = new BlockOrientationDefinition(101, 0f);
+        var eventArgs = new OrientationIndexChangedEventArgs(0, 1, previousDef, currentDef);
+        
+        // Create mock orientation info
+        var definitions = System.Collections.Immutable.ImmutableArray.Create(previousDef, currentDef);
+        var orientationInfo = new BuildBrushOrientationInfo(mockWorld.Object, blockNorth, EBuildBrushRotationMode.VariantBased, definitions);
+        orientationInfo.CurrentIndex = 1;
+
         // Act - Apply rotation with different variant block
-        dimension.ApplyRotation(0, previousAppliedAngle: 0f, blockEast);
+        dimension.ApplyRotation(eventArgs, orientationInfo);
 
         // Assert - currentBlock should now be blockEast
         var currentBlock = GetCurrentBlock(dimension);
@@ -388,8 +418,18 @@ public class BuildBrushDimensionTests
         SetOriginalBlock(dimension, blockNorth);
         SetCurrentBlock(dimension, blockNorth);
 
-        // Act & Assert - Should not throw when variantBlock is null
-        var exception = Record.Exception(() => dimension.ApplyRotation(90, previousAppliedAngle: 0f, null));
+        // Create mock event args for rotation (angle change only)
+        var previousDef = new BlockOrientationDefinition(100, 0f);
+        var currentDef = new BlockOrientationDefinition(100, 90f);
+        var eventArgs = new OrientationIndexChangedEventArgs(0, 1, previousDef, currentDef);
+        
+        // Create mock orientation info
+        var definitions = System.Collections.Immutable.ImmutableArray.Create(previousDef, currentDef);
+        var orientationInfo = new BuildBrushOrientationInfo(mockWorld.Object, blockNorth, EBuildBrushRotationMode.Hybrid, definitions);
+        orientationInfo.CurrentIndex = 1;
+
+        // Act & Assert - Should not throw even with null CurrentBlock in orientation info
+        var exception = Record.Exception(() => dimension.ApplyRotation(eventArgs, orientationInfo));
         Assert.Null(exception);
     }
 
@@ -414,8 +454,18 @@ public class BuildBrushDimensionTests
         SetOriginalBlock(dimension, block);
         SetCurrentBlock(dimension, block);
 
+        // Create mock event args for rotation (attempted change)
+        var previousDef = new BlockOrientationDefinition(100, 0f);
+        var currentDef = new BlockOrientationDefinition(101, 90f);
+        var eventArgs = new OrientationIndexChangedEventArgs(0, 1, previousDef, currentDef);
+        
+        // Create mock orientation info
+        var definitions = System.Collections.Immutable.ImmutableArray.Create(previousDef, currentDef);
+        var orientationInfo = new BuildBrushOrientationInfo(mockWorld.Object, block, EBuildBrushRotationMode.None, definitions);
+        orientationInfo.CurrentIndex = 1;
+
         // Act - Try to apply rotation with different block
-        dimension.ApplyRotation(90, previousAppliedAngle: 0f, otherBlock);
+        dimension.ApplyRotation(eventArgs, orientationInfo);
 
         // Assert - currentBlock should NOT change for None mode
         var currentBlock = GetCurrentBlock(dimension);
@@ -494,21 +544,21 @@ public class BuildBrushDimensionTests
         Assert.Equal(4, capturedEvents.Count);
 
         // First 3 events should have same block (North), increasing angles
-        Assert.Equal(100, capturedEvents[0].CurrentBlock?.BlockId);
-        Assert.Equal(90f, capturedEvents[0].CurrentMeshAngleDegrees);
+        Assert.Equal(100, capturedEvents[0].CurrentDefinition.BlockId);
+        Assert.Equal(90f, capturedEvents[0].CurrentDefinition.MeshAngleDegrees);
         Assert.False(capturedEvents[0].VariantChanged);
 
-        Assert.Equal(100, capturedEvents[1].CurrentBlock?.BlockId);
-        Assert.Equal(180f, capturedEvents[1].CurrentMeshAngleDegrees);
+        Assert.Equal(100, capturedEvents[1].CurrentDefinition.BlockId);
+        Assert.Equal(180f, capturedEvents[1].CurrentDefinition.MeshAngleDegrees);
         Assert.False(capturedEvents[1].VariantChanged);
 
-        Assert.Equal(100, capturedEvents[2].CurrentBlock?.BlockId);
-        Assert.Equal(270f, capturedEvents[2].CurrentMeshAngleDegrees);
+        Assert.Equal(100, capturedEvents[2].CurrentDefinition.BlockId);
+        Assert.Equal(270f, capturedEvents[2].CurrentDefinition.MeshAngleDegrees);
         Assert.False(capturedEvents[2].VariantChanged);
 
         // 4th event should cross to East variant with angle reset to 0°
-        Assert.Equal(101, capturedEvents[3].CurrentBlock?.BlockId);
-        Assert.Equal(0f, capturedEvents[3].CurrentMeshAngleDegrees);
+        Assert.Equal(101, capturedEvents[3].CurrentDefinition.BlockId);
+        Assert.Equal(0f, capturedEvents[3].CurrentDefinition.MeshAngleDegrees);
         Assert.True(capturedEvents[3].VariantChanged);
     }
 
@@ -563,22 +613,22 @@ public class BuildBrushDimensionTests
 
         // Capture BlockTransformed at the moment of each event
         var blockTransformedAtEvent = new List<Block?>();
-        var eventArgsCurrentBlock = new List<Block?>();
+        var eventArgsCurrentBlockId = new List<int>();
         instance.OnOrientationChanged += (s, e) =>
         {
             blockTransformedAtEvent.Add(instance.BlockTransformed);
-            eventArgsCurrentBlock.Add(e.CurrentBlock);
+            eventArgsCurrentBlockId.Add(e.CurrentDefinition.BlockId);
         };
 
         // Act - Cycle to index 2 (East variant)
         instance.CycleOrientation(EModeCycleDirection.Forward); // 0 → 1
         instance.CycleOrientation(EModeCycleDirection.Forward); // 1 → 2 (variant change)
 
-        // Assert - EventArgs.CurrentBlock should always have the correct NEW block
+        // Assert - EventArgs.CurrentDefinition.BlockId should always have the correct NEW block ID
         // even if instance.BlockTransformed is updated after the event fires
-        Assert.Equal(2, eventArgsCurrentBlock.Count);
-        Assert.Same(blockNorth, eventArgsCurrentBlock[0]); // Still North at 180°
-        Assert.Same(blockEast, eventArgsCurrentBlock[1]);  // Changed to East at 0°
+        Assert.Equal(2, eventArgsCurrentBlockId.Count);
+        Assert.Equal(100, eventArgsCurrentBlockId[0]); // Still North at 180°
+        Assert.Equal(101, eventArgsCurrentBlockId[1]);  // Changed to East at 0°
     }
 
     #endregion

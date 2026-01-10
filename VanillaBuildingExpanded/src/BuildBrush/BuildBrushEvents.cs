@@ -45,61 +45,25 @@ public class OrientationIndexChangedEventArgs : BuildBrushStateChangedEventArgs
     public BlockOrientationDefinition CurrentDefinition { get; }
 
     /// <summary>
-    /// The block before the change (may be same as current for mesh-angle-only rotations).
-    /// </summary>
-    public Block? PreviousBlock { get; }
-
-    /// <summary>
-    /// The block after the change.
-    /// </summary>
-    public Block? CurrentBlock { get; }
-
-    /// <summary>
-    /// The mesh angle in degrees from the previous definition (before the index change).
-    /// </summary>
-    public float PreviousDefinitionMeshAngleDegrees { get; }
-
-    /// <summary>
-    /// The mesh angle in degrees after the change.
-    /// </summary>
-    public float CurrentMeshAngleDegrees { get; }
-
-    /// <summary>
-    /// The mesh angle that was previously applied to the block entity.
-    /// Used to compute delta rotations for IRotatable.OnTransformed which expects relative angles.
-    /// </summary>
-    public float PreviousAppliedMeshAngleDegrees { get; }
-
-    /// <summary>
     /// Whether the block variant changed (different BlockId).
     /// </summary>
-    public bool VariantChanged => PreviousBlock?.BlockId != CurrentBlock?.BlockId;
+    public bool VariantChanged => PreviousDefinition.BlockId != CurrentDefinition.BlockId;
 
     /// <summary>
     /// Whether only the mesh angle changed (same BlockId, different angle).
     /// </summary>
-    public bool MeshAngleOnlyChanged => !VariantChanged && PreviousDefinitionMeshAngleDegrees != CurrentMeshAngleDegrees;
+    public bool MeshAngleOnlyChanged => !VariantChanged && PreviousDefinition.MeshAngleDegrees != CurrentDefinition.MeshAngleDegrees;
 
     public OrientationIndexChangedEventArgs(
         int previousIndex,
         int currentIndex,
         BlockOrientationDefinition previousDefinition,
-        BlockOrientationDefinition currentDefinition,
-        Block? previousBlock,
-        Block? currentBlock,
-        float previousDefinitionMeshAngleDegrees,
-        float currentMeshAngleDegrees,
-        float previousAppliedMeshAngleDegrees)
+        BlockOrientationDefinition currentDefinition)
     {
         PreviousIndex = previousIndex;
         CurrentIndex = currentIndex;
         PreviousDefinition = previousDefinition;
         CurrentDefinition = currentDefinition;
-        PreviousBlock = previousBlock;
-        CurrentBlock = currentBlock;
-        PreviousDefinitionMeshAngleDegrees = previousDefinitionMeshAngleDegrees;
-        CurrentMeshAngleDegrees = currentMeshAngleDegrees;
-        PreviousAppliedMeshAngleDegrees = previousAppliedMeshAngleDegrees;
     }
 }
 

@@ -293,8 +293,8 @@ public class HybridOrientationCyclingTests
         Assert.NotNull(capturedArgs);
         Assert.Equal(config.TotalOrientations - 1, capturedArgs.PreviousIndex);
         Assert.Equal(0, capturedArgs.CurrentIndex);
-        Assert.Equal(0f, capturedArgs.CurrentMeshAngleDegrees);
-        Assert.Equal(100, capturedArgs.CurrentBlock?.BlockId); // First variant
+        Assert.Equal(0f, capturedArgs.CurrentDefinition.MeshAngleDegrees);
+        Assert.Equal(100, capturedArgs.CurrentDefinition.BlockId); // First variant
         Assert.True(capturedArgs.VariantChanged);
     }
 
@@ -327,8 +327,8 @@ public class HybridOrientationCyclingTests
         int anglesPerVariant = config.TotalOrientations / config.VariantCount;
         float lastAngle = (anglesPerVariant - 1) * config.IntervalDegrees;
 
-        Assert.Equal(lastVariantBlockId, capturedArgs.CurrentBlock?.BlockId);
-        Assert.Equal(lastAngle, capturedArgs.CurrentMeshAngleDegrees);
+        Assert.Equal(lastVariantBlockId, capturedArgs.CurrentDefinition.BlockId);
+        Assert.Equal(lastAngle, capturedArgs.CurrentDefinition.MeshAngleDegrees);
         Assert.True(capturedArgs.VariantChanged);
     }
 
@@ -360,7 +360,7 @@ public class HybridOrientationCyclingTests
         {
             var evt = capturedEvents.Find(e => e.CurrentIndex == transitionIndex);
             Assert.NotNull(evt);
-            Assert.Equal(0f, evt.CurrentMeshAngleDegrees);
+            Assert.Equal(0f, evt.CurrentDefinition.MeshAngleDegrees);
         }
     }
 
@@ -394,7 +394,7 @@ public class HybridOrientationCyclingTests
         {
             var evt = capturedEvents.Find(e => e.CurrentIndex == transitionIndex);
             Assert.NotNull(evt);
-            Assert.Equal(lastAngleOfVariant, evt.CurrentMeshAngleDegrees);
+            Assert.Equal(lastAngleOfVariant, evt.CurrentDefinition.MeshAngleDegrees);
         }
     }
 

@@ -141,8 +141,8 @@ public class BuildBrushOrientationInfoTests
 
         // Assert
         Assert.NotNull(capturedArgs);
-        Assert.Same(block1, capturedArgs.PreviousBlock);
-        Assert.Same(block2, capturedArgs.CurrentBlock);
+        Assert.Equal(block1.BlockId, capturedArgs.PreviousDefinition.BlockId);
+        Assert.Equal(block2.BlockId, capturedArgs.CurrentDefinition.BlockId);
     }
 
     [Fact]
@@ -170,8 +170,8 @@ public class BuildBrushOrientationInfoTests
 
         // Assert
         Assert.NotNull(capturedArgs);
-        Assert.Equal(0f, capturedArgs.PreviousDefinitionMeshAngleDegrees);
-        Assert.Equal(180f, capturedArgs.CurrentMeshAngleDegrees);
+        Assert.Equal(0f, capturedArgs.PreviousDefinition.MeshAngleDegrees);
+        Assert.Equal(180f, capturedArgs.CurrentDefinition.MeshAngleDegrees);
     }
 
     [Fact]
@@ -201,7 +201,7 @@ public class BuildBrushOrientationInfoTests
         Assert.NotNull(capturedArgs);
         Assert.Equal(0, capturedArgs.PreviousIndex);
         Assert.Equal(3, capturedArgs.CurrentIndex); // -1 wraps to last index
-        Assert.Equal(270f, capturedArgs.CurrentMeshAngleDegrees);
+        Assert.Equal(270f, capturedArgs.CurrentDefinition.MeshAngleDegrees);
     }
 
     [Fact]
@@ -231,7 +231,7 @@ public class BuildBrushOrientationInfoTests
         Assert.NotNull(capturedArgs);
         Assert.Equal(0, capturedArgs.PreviousIndex);
         Assert.Equal(1, capturedArgs.CurrentIndex); // 5 % 4 = 1
-        Assert.Equal(90f, capturedArgs.CurrentMeshAngleDegrees);
+        Assert.Equal(90f, capturedArgs.CurrentDefinition.MeshAngleDegrees);
     }
 
     #endregion
@@ -329,8 +329,8 @@ public class BuildBrushOrientationInfoTests
         Assert.NotNull(capturedArgs);
         Assert.Equal(0, capturedArgs.PreviousIndex);
         Assert.Equal(2, capturedArgs.CurrentIndex);
-        Assert.Same(block1, capturedArgs.PreviousBlock);
-        Assert.Same(block3, capturedArgs.CurrentBlock);
+        Assert.Equal(100, capturedArgs.PreviousDefinition.BlockId);
+        Assert.Equal(102, capturedArgs.CurrentDefinition.BlockId);
     }
 
     [Fact]

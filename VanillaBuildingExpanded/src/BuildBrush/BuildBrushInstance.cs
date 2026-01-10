@@ -263,8 +263,8 @@ public class BuildBrushInstance
 
             if (ItemStack is not null)
             {
-                // Apply orientation attributes (type, meshAngle) for proper rendering
-                _rotation?.ApplyOrientationAttributes(ItemStack!.Attributes, _sourceItemStack?.Attributes);
+                // Prepare ItemStack with orientation attributes (type, meshAngle) for proper rendering
+                ItemStack = _rotation.PrepareItemStackForPlacement(ItemStack, _rotation.Current, _sourceItemStack);
             }
 
             // Note: OnOrientationChanged is raised via Rotation_OnOrientationChanged forwarder
@@ -427,7 +427,7 @@ public class BuildBrushInstance
             // This ensures the ItemStack is properly initialized even at orientation index 0
             if (ItemStack is not null && _rotation is not null)
             {
-                _rotation.ApplyOrientationAttributes(ItemStack.Attributes, _sourceItemStack?.Attributes);
+                ItemStack = _rotation.PrepareItemStackForPlacement(ItemStack, _rotation.Current, _sourceItemStack);
             }
         }
     }
@@ -946,18 +946,23 @@ public class BuildBrushInstance
 
     /// <summary>
     /// Applies the current rotation based on rotation mode.
-    /// Uses the mesh angle from the current rotation definition.
-    /// This is called during initial setup, so previousAppliedAngle is 0.
+    /// Uses the current definition and creates an event args for initial setup.
     /// </summary>
     private void ApplyRotation()
     {
         if (_dimension is null || !_dimension.IsInitialized || _rotation is null)
             return;
 
-        // Get the mesh angle in degrees from the current definition
-        float meshAngleDegrees = _rotation.CurrentMeshAngleDegrees;
-        // Initial setup - no previous rotation applied yet (starting from 0)
-        _dimension.ApplyRotation((int)meshAngleDegrees, previousAppliedAngle: 0f, _blockTransformed);
+        // Create event args for initial rotation (from 0 degrees)
+        var initialDef = new BlockOrientationDefinition(_rotation.Current.BlockId, 0f);
+        var eventArgs = new OrientationIndexChangedEventArgs(
+            0,
+            _rotation.CurrentIndex,
+            initialDef,
+            _rotation.Current
+        );
+
+        _dimension.ApplyRotation(eventArgs, _rotation);
     }
 
     /// <summary>
