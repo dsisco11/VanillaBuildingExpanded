@@ -231,6 +231,34 @@ public class BuildBrushOrientationInfo
     }
 
     /// <summary>
+    /// Forces an <see cref="OnOrientationChanged"/> notification without changing the index.
+    /// Useful when rotation definitions are replaced (e.g., selecting a new block) and listeners
+    /// must re-apply orientation-dependent state even if the index remains the same.
+    /// </summary>
+    /// <param name="previousDefinition">The previous orientation definition (for delta computation).</param>
+    /// <param name="currentDefinition">The current/target orientation definition to apply.</param>
+    /// <param name="previousIndex">Optional previous index. Defaults to current index.</param>
+    public void NotifyOrientationChanged(
+        in BlockOrientationDefinition previousDefinition,
+        in BlockOrientationDefinition currentDefinition,
+        int? previousIndex = null)
+    {
+        if (Definitions.IsDefaultOrEmpty)
+            return;
+
+        int prevIndex = previousIndex ?? _currentIndex;
+
+        OnOrientationChanged?.Invoke(this, new OrientationIndexChangedEventArgs(
+            prevIndex,
+            _currentIndex,
+            previousDefinition,
+            currentDefinition
+        ));
+
+        _previouslyAppliedMeshAngle = currentDefinition.MeshAngleDegrees;
+    }
+
+    /// <summary>
     /// Applies orientation to a block entity using IRotatable.OnTransformed.
     /// Computes delta rotation from previous definition and applies it to the entity.
     /// </summary>

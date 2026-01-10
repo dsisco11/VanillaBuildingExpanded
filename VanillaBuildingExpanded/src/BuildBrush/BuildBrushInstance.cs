@@ -32,7 +32,7 @@ public class BuildBrushInstance
     public IPlayer Player { get; internal set; }
     public IWorldAccessor World { get; internal set; }
     private int? _blockId = null;
-    private BlockPos _position = new(0, 0, 0);
+    private BlockPos? _position;
     private Block? _blockUntransformed = null;
     private Block? _blockTransformed = null;
     private ItemStack? _itemStack = null;
@@ -207,7 +207,7 @@ public class BuildBrushInstance
     /// <summary>
     /// The fully resolved position of the build cursor.
     /// </summary>
-    public BlockPos Position
+    public BlockPos? Position
     {
         get => _position;
         set
@@ -429,6 +429,23 @@ public class BuildBrushInstance
             {
                 ItemStack = _rotation.PrepareItemStackForPlacement(ItemStack, _rotation.Current, _sourceItemStack);
             }
+
+            // Selecting a new block replaces rotation definitions but may not change the index,
+            // so no orientation event would fire. Force a refresh event after the preview block
+            // has been placed (BlockTransformed setter already ran) so BE rotation can apply.
+            if (_rotation is not null && previousRotation != _rotation)
+            {
+                var currentDef = _rotation.Current;
+                _rotation.NotifyOrientationChanged(currentDef, currentDef, _rotation.CurrentIndex);
+
+                Logger.Debug(
+                    "[BuildBrushDbg][{0}]: Forced NotifyOrientationChanged. idx={1} blockId={2} angleDeg={3}",
+                    nameof(BlockUntransformed),
+                    _rotation.CurrentIndex,
+                    currentDef.BlockId,
+                    currentDef.MeshAngleDegrees
+                );
+            }
         }
     }
 
@@ -460,7 +477,13 @@ public class BuildBrushInstance
                 isTransformedBlock: true
             ));
 
-            UpdateDimensionBlock();
+            Logger.Debug(
+                "[BuildBrushDbg][{0}]: Before UpdateDimensionBlock. dimInit={1} dimBe={2}",
+                nameof(BlockTransformed),
+                _dimension?.IsInitialized ?? false,
+                _dimension?.GetBlockEntity()?.GetType().Name ?? "<null>"
+            );
+            UpdateDimensionBlock(previousBlock);
         }
     }
 
@@ -925,7 +948,15 @@ public class BuildBrushInstance
             Block? block = _blockTransformed ?? _blockUntransformed;
             if (block is not null)
             {
-                _dimension.SetBlock(block, _rotation?.Mode);
+                _dimension.SetBlock(block, previousBlock, _rotation?.Mode);
+
+                Logger.Debug(
+                    "[BuildBrushDbg][{0}]: After SetBlock. block={1}({2}) dimBeAfterSet={3}",
+                    nameof(UpdateDimensionBlock),
+                    block.Code,
+                    block.BlockId,
+                    _dimension.GetBlockEntity()?.GetType().Name ?? "<null>"
+                );
 
                 // Apply mesh angle rotation if applicable
                 if (_rotation is not null && _rotation.HasRotatableEntity)
