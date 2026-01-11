@@ -58,7 +58,7 @@
             },
         },
         {
-            "label": "Test",
+            "label": "test",
             "command": "dotnet",
             "type": "process",
             "args": [
@@ -71,13 +71,16 @@
             ],
             "problemMatcher": "$msCompile",
             "presentation": {
-                "panel": "shared",
+                "panel": "dedicated",
                 "reveal": "never",
                 "focus": false,
-                "close": false,
+                "close": true,
                 "showReuseMessage": false
             },
-            "group": "test"
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            }
         }
     ]
 }
