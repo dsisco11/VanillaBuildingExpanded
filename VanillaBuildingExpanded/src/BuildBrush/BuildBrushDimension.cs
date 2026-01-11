@@ -304,18 +304,30 @@ public class BuildBrushDimension
     /// Sets the block to be displayed in the dimension.
     /// </summary>
     /// <param name="block">The block to display.</param>
-    /// <param name="previousBlock">The previous block (if any) to check if replacement is needed.</param>
     /// <param name="rotationMode">The rotation mode for this block (optional, auto-detects if not provided).</param>
-    public void SetBlock(Block block, Block? previousBlock = null, EBuildBrushRotationMode? rotationMode = null)
+    public void SetBlock(Block block, EBuildBrushRotationMode? rotationMode = null)
     {
         if (dimension is null || !IsInitialized)
             return;
 
         ArgumentNullException.ThrowIfNull(block);
-        // Early-out: if the block ID hasn't changed, skip replacement
-        // The block entity will be preserved and rotation handled separately
-        if (previousBlock is not null && previousBlock.BlockId == block.BlockId)
+
+        // Early-out: if the block ID hasn't changed, skip replacement.
+        // We deliberately do the check here (against the current state) so callers don't need to pass
+        // any "previous block" argument.
+        Block? existingBaseBlock = originalBlock;
+        if (existingBaseBlock is null && internalBlockPos is not null)
         {
+            existingBaseBlock = dimension.GetBlock(internalBlockPos);
+        }
+
+        if (existingBaseBlock is not null && existingBaseBlock.BlockId == block.BlockId)
+        {
+            // Still allow rotation mode to be updated when the selection stays the same.
+            if (rotationMode.HasValue)
+            {
+                RotationMode = rotationMode.Value;
+            }
             return;
         }
 
@@ -439,7 +451,21 @@ public class BuildBrushDimension
         RotationAngle = ((int)currentDef.MeshAngleDegrees % 360 + 360) % 360;
         
         bool variantChanged = eventArgs.VariantChanged;
-        Block? variantBlock = variantChanged ? orientationInfo.CurrentBlock : null;
+        Block? variantBlock = null;
+        if (variantChanged)
+        {
+            variantBlock = world.GetBlock(currentDef.BlockId);
+            if (variantBlock is null || variantBlock.BlockId == 0 || variantBlock.IsMissing)
+            {
+                world.Logger.Error(
+                    "[{0}]: Invalid orientation definition block id {1} (mode={2}). Cannot resolve block for preview rotation.",
+                    nameof(BuildBrushDimension),
+                    currentDef.BlockId,
+                    RotationMode
+                );
+                return;
+            }
+        }
 
         switch (RotationMode)
         {
@@ -451,23 +477,46 @@ public class BuildBrushDimension
                 // Use the provided variant block (skip if already set to avoid redundant placement)
                 if (variantChanged && variantBlock is not null)
                 {
-                    currentBlock = variantBlock;
-                    PlaceBlockInDimension();
+                    if (currentBlock is null || currentBlock.BlockId != variantBlock.BlockId)
+                    {
+                        currentBlock = variantBlock;
+                        PlaceBlockInDimension();
+                    }
                 }
                 break;
 
             case EBuildBrushRotationMode.Rotatable:
+                // Some test scenarios (and any misconfigured definitions) may change the block-id even in
+                // rotatable mode. Ensure the correct block is placed so the preview updates and we get a dirty event
+                // even when no IRotatable block entity exists.
+                if (variantChanged && variantBlock is not null)
+                {
+                    currentBlock = variantBlock;
+                    PlaceBlockInDimension();
+                    // Block was replaced; no further rotation to apply for this step.
+                    break;
+                }
+
                 // Apply rotation via IRotatable
                 ApplyRotatableRotation(orientationInfo, previousDef, currentDef);
                 break;
 
             case EBuildBrushRotationMode.Hybrid:
-                // Apply both variant and IRotatable
+                // Apply both variant and IRotatable.
+                // Always update the placed block when the block-id changes, even if there is no block entity.
                 if (variantChanged && variantBlock is not null)
                 {
                     currentBlock = variantBlock;
+
+                    // If there is no rotatable BE, we still need to replace the preview block.
+                    if (string.IsNullOrEmpty(currentBlock.EntityClass))
+                    {
+                        PlaceBlockInDimension();
+                        break;
+                    }
                 }
-                ApplyRotatableRotation(orientationInfo, previousDef, currentDef, variantChanged);
+
+                ApplyRotatableRotation(orientationInfo, previousDef, currentDef, forceReplacement: variantChanged);
                 break;
         }
     }
@@ -541,7 +590,6 @@ public class BuildBrushDimension
         _subscribedInstance = instance;
 
         // Subscribe to relevant events
-        instance.OnBlockTransformedChanged += Instance_OnBlockTransformedChanged;
         instance.OnOrientationChanged += Instance_OnOrientationChanged;
         instance.OnRotationInfoChanged += Instance_OnRotationInfoChanged;
     }
@@ -555,7 +603,6 @@ public class BuildBrushDimension
         if (_subscribedInstance is null)
             return;
 
-        _subscribedInstance.OnBlockTransformedChanged -= Instance_OnBlockTransformedChanged;
         _subscribedInstance.OnOrientationChanged -= Instance_OnOrientationChanged;
         _subscribedInstance.OnRotationInfoChanged -= Instance_OnRotationInfoChanged;
 
@@ -583,97 +630,27 @@ public class BuildBrushDimension
         if (rotation is null)
             return;
 
-        // For VariantBased rotation, the block change is already handled by
-        // Instance_OnBlockTransformedChanged. We only need to handle mesh angle
-        // changes here for Rotatable and Hybrid modes.
-        if (rotation.Mode == EBuildBrushRotationMode.VariantBased)
-        {
-            // Block change already handled by OnBlockTransformedChanged
-            return;
-        }
-
         BeginUpdate();
         try
         {
-            // If the variant changed (or nothing has been placed yet), ensure the correct block is placed
-            // before we try to apply any rotatable rotation.
-            if (e.VariantChanged || originalBlock is null)
+            // OrientationDefinition is the authority for what block-id should be placed.
+            Block? baseBlock = world.GetBlock(e.CurrentDefinition.BlockId);
+            if (baseBlock is null || baseBlock.BlockId == 0 || baseBlock.IsMissing)
             {
-                Block? block = world.GetBlock(e.CurrentDefinition.BlockId);
-                if (block is not null)
-                {
-                    if (originalBlock is null)
-                    {
-                        SetBlock(block, previousBlock: null, rotation.Mode);
-                    }
-                    else
-                    {
-                        SetVariantBlock(block);
-                    }
-                }
+                world.Logger.Error(
+                    "[{0}]: Invalid orientation definition block id {1} (mode={2}). Cannot update preview block.",
+                    nameof(BuildBrushDimension),
+                    e.CurrentDefinition.BlockId,
+                    rotation.Mode
+                );
+                return;
             }
 
-            // Apply the rotation using event args and orientation info
-            // Note: sender is the BuildBrushInstance (via Rotation_OnOrientationChanged forwarder)
+            SetBlock(baseBlock, rotation.Mode);
+
+            // Apply the rotation using event args and orientation info.
+            // This handles VariantBased variant swaps as well as Rotatable/Hybrid mesh-angle rotation.
             ApplyRotation(e, rotation);
-        }
-        finally
-        {
-            EndUpdate();
-        }
-    }
-
-    /// <summary>
-    /// Handles transformed block changes from the subscribed instance.
-    /// Used for VariantBased rotation (variant swaps) and for general block selection changes
-    /// when the dimension is driven purely by instance events (e.g. unit tests).
-    /// </summary>
-    private void Instance_OnBlockTransformedChanged(object? sender, BlockChangedEventArgs e)
-    {
-        if (_subscribedInstance is null)
-            return;
-
-        // Only handle when initialized
-        if (dimension is null || !IsInitialized)
-            return;
-
-        var rotationMode = _subscribedInstance.Rotation?.Mode ?? EBuildBrushRotationMode.None;
-
-        BeginUpdate();
-        try
-        {
-            if (e.CurrentBlock is null)
-            {
-                Clear();
-                return;
-            }
-
-            // For Rotatable/Hybrid, orientation handling (including variant placement) is done in Instance_OnOrientationChanged.
-            // Only ensure an initial block exists.
-            if (rotationMode is EBuildBrushRotationMode.Rotatable or EBuildBrushRotationMode.Hybrid)
-            {
-                if (originalBlock is null)
-                {
-                    SetBlock(e.CurrentBlock, e.PreviousBlock, rotationMode);
-                }
-
-                return;
-            }
-
-            if (originalBlock is null)
-            {
-                SetBlock(e.CurrentBlock, e.PreviousBlock, rotationMode);
-                return;
-            }
-
-            if (rotationMode == EBuildBrushRotationMode.VariantBased)
-            {
-                SetVariantBlock(e.CurrentBlock);
-                return;
-            }
-
-            // None mode and any other mode fall back to full SetBlock.
-            SetBlock(e.CurrentBlock, e.PreviousBlock, rotationMode);
         }
         finally
         {
@@ -687,10 +664,13 @@ public class BuildBrushDimension
     /// </summary>
     private void Instance_OnRotationInfoChanged(object? sender, RotationInfoChangedEventArgs e)
     {
-        // When rotation info changes, the block is also changing
-        // The block change will be handled by Instance_OnBlockTransformedChanged
-        // This handler is here for potential future use or for cases where
-        // we need to react specifically to rotation info changes
+        // When rotation info is cleared (block removed/invalid), no orientation event will fire.
+        // Clear the preview dimension so downstream systems rebuild.
+        if (e.CurrentRotation is null || e.SourceBlock is null)
+        {
+            Clear();
+            return;
+        }
     }
     #endregion
 }

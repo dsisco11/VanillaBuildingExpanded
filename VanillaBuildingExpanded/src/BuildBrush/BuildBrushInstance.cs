@@ -415,9 +415,12 @@ public class BuildBrushInstance
             ));
 
             // Sync rotation index to match the block's current variant
+            bool rotationIndexChanged = false;
             if (_rotation is not null && _blockId.HasValue)
             {
+                int prevIndex = _rotation.CurrentIndex;
                 _rotation.TrySetIndexForBlockId(_blockId.Value);
+                rotationIndexChanged = _rotation.CurrentIndex != prevIndex;
             }
 
             // Update transformed block to current rotation state
@@ -433,7 +436,7 @@ public class BuildBrushInstance
             // Selecting a new block replaces rotation definitions but may not change the index,
             // so no orientation event would fire. Force a refresh event after the preview block
             // has been placed (BlockTransformed setter already ran) so BE rotation can apply.
-            if (_rotation is not null && previousRotation != _rotation)
+            if (_rotation is not null && previousRotation != _rotation && !rotationIndexChanged)
             {
                 var currentDef = _rotation.Current;
                 _rotation.NotifyOrientationChanged(currentDef, currentDef, _rotation.CurrentIndex);
@@ -948,7 +951,7 @@ public class BuildBrushInstance
             Block? block = _blockTransformed ?? _blockUntransformed;
             if (block is not null)
             {
-                _dimension.SetBlock(block, previousBlock, _rotation?.Mode);
+                        _dimension.SetBlock(block, _rotation?.Mode);
 
                 Logger.Debug(
                     "[BuildBrushDbg][{0}]: After SetBlock. block={1}({2}) dimBeAfterSet={3}",
