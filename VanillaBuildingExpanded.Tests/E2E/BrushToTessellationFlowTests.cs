@@ -91,7 +91,7 @@ public class BrushToTessellationFlowTests
             };
 
             // Track events
-            Instance.OnBlockTransformedChanged += (s, e) =>
+            Instance.OnPlacementBlockChanged += (s, e) =>
             {
                 BlockTransformedChangedCount++;
                 LastBlockTransformedArgs = e;
@@ -673,7 +673,7 @@ public class BrushToTessellationFlowTests
         bool rotationInfoChanged = false;
 
         harness.Instance.OnBlockUntransformedChanged += (s, e) => blockUntransformedChanged = true;
-        harness.Instance.OnBlockTransformedChanged += (s, e) => blockTransformedChanged = true;
+        harness.Instance.OnPlacementBlockChanged += (s, e) => blockTransformedChanged = true;
         harness.Instance.OnRotationInfoChanged += (s, e) => rotationInfoChanged = true;
         harness.AssertDefaultState();
 
@@ -682,7 +682,7 @@ public class BrushToTessellationFlowTests
 
         // Assert - Full chain fires
         Assert.True(blockUntransformedChanged, "OnBlockUntransformedChanged should fire");
-        Assert.True(blockTransformedChanged, "OnBlockTransformedChanged should fire");
+        Assert.True(blockTransformedChanged, "OnPlacementBlockChanged should fire");
         Assert.True(rotationInfoChanged, "OnRotationInfoChanged should fire");
     }
 
@@ -697,7 +697,7 @@ public class BrushToTessellationFlowTests
 
         harness.Instance.OnBlockUntransformedChanged += (s, e) => eventOrder.Add("BlockUntransformed");
         harness.Instance.OnRotationInfoChanged += (s, e) => eventOrder.Add("RotationInfo");
-        harness.Instance.OnBlockTransformedChanged += (s, e) => eventOrder.Add("BlockTransformed");
+        harness.Instance.OnPlacementBlockChanged += (s, e) => eventOrder.Add("PlacementBlock");
         harness.AssertDefaultState();
 
         // Act
@@ -706,11 +706,11 @@ public class BrushToTessellationFlowTests
         // Assert - Events fire in actual implementation order:
         // 1. RotationInfo (rotation info created for new block)
         // 2. BlockUntransformed (base block set)
-        // 3. BlockTransformed (final transformed block)
+        // 3. PlacementBlock (final placement block)
         Assert.Equal(3, eventOrder.Count);
         Assert.Equal("RotationInfo", eventOrder[0]);
         Assert.Equal("BlockUntransformed", eventOrder[1]);
-        Assert.Equal("BlockTransformed", eventOrder[2]);
+        Assert.Equal("PlacementBlock", eventOrder[2]);
     }
 
     #endregion

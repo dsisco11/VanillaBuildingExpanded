@@ -172,7 +172,7 @@ public class BuildBrushInstanceTests
 
     #endregion
 
-    #region BlockTransformed Tests
+    #region Placement Block Tests
 
     [Fact]
     public void BlockTransformed_RaisesOnBlockTransformedChanged_ViaBlockId()
@@ -187,9 +187,9 @@ public class BuildBrushInstanceTests
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
 
         BlockChangedEventArgs? capturedArgs = null;
-        instance.OnBlockTransformedChanged += (sender, args) => capturedArgs = args;
+        instance.OnPlacementBlockChanged += (sender, args) => capturedArgs = args;
 
-        // Act - setting BlockId triggers BlockUntransformed which triggers BlockTransformed
+        // Act - setting BlockId triggers BlockUntransformed which triggers placement block update
         instance.BlockId = 100;
 
         // Assert
@@ -562,9 +562,9 @@ public class BuildBrushInstanceTests
         var rotation = instance.Rotation;
         if (rotation is not null && rotation.CanRotate && rotation.OrientationCount > 1)
         {
-            Block? previousTransformed = instance.BlockTransformed;
+            Block? previousTransformed = instance.CurrentPlacementBlock;
             int eventCount = 0;
-            instance.OnBlockTransformedChanged += (_, _) => eventCount++;
+            instance.OnPlacementBlockChanged += (_, _) => eventCount++;
 
             instance.OrientationIndex = 1;
 
@@ -1052,7 +1052,7 @@ public class BuildBrushInstanceTests
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
-    public void OnBlockTransformedChanged_ContainsIsTransformedBlockTrue(EnumAppSide side)
+    public void OnPlacementBlockChanged_ContainsIsTransformedBlockTrue(EnumAppSide side)
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
@@ -1063,7 +1063,7 @@ public class BuildBrushInstanceTests
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
 
         BlockChangedEventArgs? capturedArgs = null;
-        instance.OnBlockTransformedChanged += (sender, args) => capturedArgs = args;
+        instance.OnPlacementBlockChanged += (sender, args) => capturedArgs = args;
 
         // Act
         instance.BlockId = 100;

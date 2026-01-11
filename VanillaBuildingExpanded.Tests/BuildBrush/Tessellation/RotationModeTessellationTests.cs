@@ -35,7 +35,7 @@ public class RotationModeTessellationTests
         dimension.SubscribeTo(instance);
 
         bool blockTransformedChanged = false;
-        instance.OnBlockTransformedChanged += (s, e) => blockTransformedChanged = true;
+        instance.OnPlacementBlockChanged += (s, e) => blockTransformedChanged = true;
 
         // Act
         instance.BlockId = 100;
@@ -181,10 +181,10 @@ public class RotationModeTessellationTests
 
     #endregion
 
-    #region Block Transformed Updates
+    #region Placement Block Updates
 
     [Fact]
-    public void OrientationIndex_WhenChanged_UpdatesBlockTransformed()
+    public void OrientationIndex_WhenChanged_UpdatesPlacementBlock()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
@@ -195,10 +195,10 @@ public class RotationModeTessellationTests
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
 
         BlockChangedEventArgs? lastBlockTransformedEvent = null;
-        instance.OnBlockTransformedChanged += (s, e) => lastBlockTransformedEvent = e;
+        instance.OnPlacementBlockChanged += (s, e) => lastBlockTransformedEvent = e;
 
         instance.BlockId = 100;
-        var initialBlock = instance.BlockTransformed;
+        var initialBlock = instance.CurrentPlacementBlock;
 
         // Act & Assert
         var rotation = instance.Rotation;
@@ -337,7 +337,7 @@ public class RotationModeTessellationTests
         instance.BlockId = 100;
 
         int blockTransformedCount = 0;
-        instance.OnBlockTransformedChanged += (s, e) => blockTransformedCount++;
+        instance.OnPlacementBlockChanged += (s, e) => blockTransformedCount++;
 
         // Reset counter after initial block set
         blockTransformedCount = 0;
@@ -401,7 +401,7 @@ public class RotationModeTessellationTests
 
         // Assert
         Assert.Null(instance.BlockUntransformed);
-        Assert.Null(instance.BlockTransformed);
+        Assert.Null(instance.CurrentPlacementBlock);
     }
 
     #endregion

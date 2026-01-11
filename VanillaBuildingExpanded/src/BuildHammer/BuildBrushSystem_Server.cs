@@ -74,12 +74,13 @@ public class BuildBrushSystem_Server : ModSystem
         if (brush is null || brush.IsDisabled)
             return false;
 
-        // We should be able to place the block, if we dont have a transformed block then we will still return true to act as though we placed it (to prevent normal placement and unexpected behavior)
-        if (brush.BlockTransformed is not null)
+        // We should be able to place the block; if we don't have a placement block then we still return true
+        // to act as though we placed it (to prevent normal placement and unexpected behavior)
+        if (brush.CurrentPlacementBlock is not null)
         {
             // Use brush.ItemStack instead of the hotbar itemstack - brush.ItemStack has the correct
             // meshAngle attribute set for IRotatable blocks and the correct block for variant rotation
-            brush.BlockTransformed.DoPlaceBlock(world, byPlayer, blockSel, brush.ItemStack);
+            brush.CurrentPlacementBlock.DoPlaceBlock(world, byPlayer, blockSel, brush.ItemStack);
             world.BlockAccessor.MarkBlockModified(blockSel.Position);
             world.BlockAccessor.TriggerNeighbourBlockUpdate(blockSel.Position);
             brush.OnBlockPlaced();

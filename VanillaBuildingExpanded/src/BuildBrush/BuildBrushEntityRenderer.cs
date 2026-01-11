@@ -117,7 +117,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
         Block? block = dimension.GetBlock(originPos);
         if (block is null || block.BlockId == 0)
         {
-            block = brushEntity?.BrushInstance?.BlockTransformed;
+            block = brushEntity?.BrushInstance?.CurrentPlacementBlock;
         }
 
         if (block is null || block.BlockId == 0)

@@ -19,12 +19,12 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 /// 1. Player right-clicks to place a block
 /// 2. Harmony patch intercepts Block.TryPlaceBlock
 /// 3. BuildBrushSystem_Server.TryPlaceBrushBlock is called
-/// 4. TryPlaceBrushBlock calls brush.BlockTransformed.DoPlaceBlock with an ItemStack
+/// 4. TryPlaceBrushBlock calls brush.CurrentPlacementBlock.DoPlaceBlock with an ItemStack
 /// 
 /// EXPECTED BEHAVIOR:
 /// - For IRotatable blocks, the ItemStack passed to DoPlaceBlock MUST have
 ///   the correct meshAngle attribute set (in radians)
-/// - For variant blocks, BlockTransformed MUST be the correct variant block
+/// - For variant blocks, CurrentPlacementBlock MUST be the correct variant block
 /// 
 /// KNOWN BUG:
 /// - TryPlaceBrushBlock currently passes the original itemstack from the harmony hook
@@ -176,7 +176,7 @@ public class BlockPlacementInterceptTests
 
     /// <summary>
     /// Documents the EXPECTED behavior: When placing a variant block with rotation,
-    /// the BlockTransformed should be the correct variant.
+    /// the CurrentPlacementBlock should be the correct variant.
     /// </summary>
     [Theory]
     [MemberData(nameof(RotationAngleData))]
@@ -196,7 +196,7 @@ public class BlockPlacementInterceptTests
         };
 
         // Act - Get the block that SHOULD be placed
-        var expectedBlock = instance.BlockTransformed;
+        var expectedBlock = instance.CurrentPlacementBlock;
 
         // Assert - Should be the correct variant
         Assert.NotNull(expectedBlock);
@@ -204,7 +204,7 @@ public class BlockPlacementInterceptTests
     }
 
     /// <summary>
-    /// Documents the EXPECTED behavior: The ItemStack.Block should match BlockTransformed
+    /// Documents the EXPECTED behavior: The ItemStack.Block should match CurrentPlacementBlock
     /// to ensure consistency.
     /// </summary>
     [Theory]
@@ -224,10 +224,10 @@ public class BlockPlacementInterceptTests
             OrientationIndex = orientationIndex
         };
 
-        // Assert - ItemStack.Block should match BlockTransformed
+        // Assert - ItemStack.Block should match CurrentPlacementBlock
         Assert.NotNull(instance.ItemStack);
-        Assert.NotNull(instance.BlockTransformed);
-        Assert.Equal(instance.BlockTransformed.BlockId, instance.ItemStack.Block?.BlockId);
+        Assert.NotNull(instance.CurrentPlacementBlock);
+        Assert.Equal(instance.CurrentPlacementBlock.BlockId, instance.ItemStack.Block?.BlockId);
     }
 
     #endregion
@@ -274,9 +274,9 @@ public class BlockPlacementInterceptTests
 
         // THE BUG: TryPlaceBrushBlock passes hotbarItemStack instead of brush.ItemStack
         // THE FIX: Change line 80 in BuildBrushSystem_Server.cs from:
-        //   brush.BlockTransformed.DoPlaceBlock(world, byPlayer, blockSel, itemstack);
+        //   brush.CurrentPlacementBlock.DoPlaceBlock(world, byPlayer, blockSel, itemstack);
         // To:
-        //   brush.BlockTransformed.DoPlaceBlock(world, byPlayer, blockSel, brush.ItemStack);
+        //   brush.CurrentPlacementBlock.DoPlaceBlock(world, byPlayer, blockSel, brush.ItemStack);
     }
 
     /// <summary>
@@ -307,10 +307,10 @@ public class BlockPlacementInterceptTests
 
         // But brush.ItemStack has the CORRECT block (rotated variant)
         Assert.Equal(102, instance.ItemStack!.Block?.BlockId);
-        Assert.Equal(102, instance.BlockTransformed!.BlockId);
+        Assert.Equal(102, instance.CurrentPlacementBlock!.BlockId);
 
         // THE BUG: TryPlaceBrushBlock passes hotbarItemStack (block 100)
-        // but calls DoPlaceBlock on BlockTransformed (block 102)
+        // but calls DoPlaceBlock on CurrentPlacementBlock (block 102)
         // This creates an inconsistency that may cause issues.
     }
 
@@ -351,8 +351,8 @@ public class BlockPlacementInterceptTests
         float actualRadians = brushItemStack.Attributes.GetFloat(instance?.Rotation?.RotationAttribute, -999f);
         Assert.Equal(expectedRadians, actualRadians, precision: 4);
 
-        // 3. Should match BlockTransformed
-        Assert.Equal(instance.BlockTransformed?.BlockId, brushItemStack.Block?.BlockId);
+        // 3. Should match CurrentPlacementBlock
+        Assert.Equal(instance.CurrentPlacementBlock?.BlockId, brushItemStack.Block?.BlockId);
     }
 
     /// <summary>

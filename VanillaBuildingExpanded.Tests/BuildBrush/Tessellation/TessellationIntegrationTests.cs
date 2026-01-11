@@ -33,7 +33,7 @@ public class TessellationIntegrationTests
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         bool blockTransformedEventReceived = false;
-        instance.OnBlockTransformedChanged += (sender, args) => blockTransformedEventReceived = true;
+        instance.OnPlacementBlockChanged += (sender, args) => blockTransformedEventReceived = true;
 
         dimension.SubscribeTo(instance);
 
@@ -81,7 +81,7 @@ public class TessellationIntegrationTests
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         int eventCount = 0;
-        instance.OnBlockTransformedChanged += (sender, args) => eventCount++;
+        instance.OnPlacementBlockChanged += (sender, args) => eventCount++;
 
         dimension.SubscribeTo(instance);
 
@@ -282,7 +282,7 @@ public class TessellationIntegrationTests
         bool rotationInfoChanged = false;
 
         instance.OnBlockUntransformedChanged += (s, e) => blockUntransformedChanged = true;
-        instance.OnBlockTransformedChanged += (s, e) => blockTransformedChanged = true;
+        instance.OnPlacementBlockChanged += (s, e) => blockTransformedChanged = true;
         instance.OnRotationInfoChanged += (s, e) => rotationInfoChanged = true;
 
         dimension.SubscribeTo(instance);

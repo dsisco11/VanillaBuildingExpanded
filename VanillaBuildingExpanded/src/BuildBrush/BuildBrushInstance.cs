@@ -34,10 +34,10 @@ public class BuildBrushInstance
     private int? _blockId = null;
     private BlockPos? _position;
     private Block? _blockUntransformed = null;
-    private Block? _blockTransformed = null;
     private ItemStack? _itemStack = null;
     /// <summary> The original ItemStack held by the player when selecting the block. </summary>
     private ItemStack? _sourceItemStack = null;
+    private int? _currentPlacementBlockId;
     private EBuildBrushSnapping _snapping = BrushSnappingModes[0];
     private BrushSnappingState lastCheckedSnappingState = new();
     private bool _isValidPlacementBlock = true;
@@ -71,9 +71,9 @@ public class BuildBrushInstance
     public event EventHandler<BlockChangedEventArgs>? OnBlockUntransformedChanged;
 
     /// <summary>
-    /// Raised when the transformed block changes (rotation applied).
+    /// Raised when the placement block changes (i.e., the block-id used for placing changes).
     /// </summary>
-    public event EventHandler<BlockChangedEventArgs>? OnBlockTransformedChanged;
+    public event EventHandler<BlockChangedEventArgs>? OnPlacementBlockChanged;
 
     /// <summary>
     /// Raised when the brush position changes.
@@ -205,6 +205,11 @@ public class BuildBrushInstance
     public float RotationAngleDegrees => _rotation?.CurrentMeshAngleDegrees ?? 0f;
 
     /// <summary>
+    /// The block that will actually be used for placement (authoritative: rotation definition block-id).
+    /// </summary>
+    public Block? CurrentPlacementBlock => ResolveCurrentPlacementBlock();
+
+    /// <summary>
     /// The fully resolved position of the build cursor.
     /// </summary>
     public BlockPos? Position
@@ -254,21 +259,8 @@ public class BuildBrushInstance
             // which we forward via Rotation_OnOrientationChanged.
             _rotation.CurrentIndex = value;
 
-            // Update the transformed block based on the new orientation state.
-            // BlockTransformed setter will:
-            // 1. Update ItemStack
-            // 2. Raise OnBlockTransformedChanged event
-            // 3. Call UpdateDimensionBlock()
-            BlockTransformed = _rotation.CurrentBlock;
-
-            if (ItemStack is not null)
-            {
-                // Prepare ItemStack with orientation attributes (type, meshAngle) for proper rendering
-                ItemStack = _rotation.PrepareItemStackForPlacement(ItemStack, _rotation.Current, _sourceItemStack);
-            }
-
-            // Note: OnOrientationChanged is raised via Rotation_OnOrientationChanged forwarder
-            // Note: UpdateDimensionBlock() is called by BlockTransformed setter, no need to call again
+            // Update ItemStack and notify placement-block change if the underlying block-id changed.
+            RebuildPlacementItemStackAndNotify();
         }
     }
 
@@ -293,11 +285,7 @@ public class BuildBrushInstance
         //// Cycle to next/previous rotation definition
         //_rotation.Rotate(direction);
 
-        //// Update the transformed block based on the new rotation state
-        //BlockTransformed = _rotation.CurrentBlock;
-
-        //// Raise block changed to update the renderer
-        //OnBlockChanged?.Invoke(this, _blockTransformed);
+        //// (legacy comments removed: placement block is now computed)
 
         return true;
     }
@@ -423,19 +411,12 @@ public class BuildBrushInstance
                 rotationIndexChanged = _rotation.CurrentIndex != prevIndex;
             }
 
-            // Update transformed block to current rotation state
-            BlockTransformed = _rotation?.CurrentBlock;
-
-            // Apply initial orientation attributes to ItemStack (meshAngle, type, etc.)
-            // This ensures the ItemStack is properly initialized even at orientation index 0
-            if (ItemStack is not null && _rotation is not null)
-            {
-                ItemStack = _rotation.PrepareItemStackForPlacement(ItemStack, _rotation.Current, _sourceItemStack);
-            }
+            // Update ItemStack and notify placement-block change.
+            RebuildPlacementItemStackAndNotify();
 
             // Selecting a new block replaces rotation definitions but may not change the index,
-            // so no orientation event would fire. Force a refresh event after the preview block
-            // has been placed (BlockTransformed setter already ran) so BE rotation can apply.
+            // so no orientation event would fire. Force a refresh event so the preview dimension
+            // (and any other subscribers) updates for the new selection.
             if (_rotation is not null && previousRotation != _rotation && !rotationIndexChanged)
             {
                 var currentDef = _rotation.Current;
@@ -452,41 +433,61 @@ public class BuildBrushInstance
         }
     }
 
-    public Block? BlockTransformed
+    private Block? ResolveCurrentPlacementBlock()
     {
-        get => _blockTransformed!;
-        private set
+        if (_rotation is null)
+            return null;
+
+        int blockId = _rotation.Current.BlockId;
+        if (blockId <= 0)
+            return null;
+
+        Block block = World.GetBlock(blockId);
+        if (block is null || block.BlockId == 0 || block.IsMissing)
+            return null;
+
+        return block;
+    }
+
+    private void RebuildPlacementItemStackAndNotify()
+    {
+        Block? newBlock = CurrentPlacementBlock;
+        int? newId = newBlock?.BlockId;
+        if (newId is 0 || newBlock?.IsMissing == true)
         {
-            if (_blockTransformed == value)
-                return;
+            newBlock = null;
+            newId = null;
+        }
 
-            //Logger.Audit($"[{nameof(BuildBrushInstance)}][set {nameof(BlockTransformed)}]: Setting transformed block to '{value}'.");
-            Block? previousBlock = _blockTransformed;
-            _blockTransformed = value;
+        int? prevId = _currentPlacementBlockId;
+        Block? prevBlock = prevId.HasValue ? World.GetBlock(prevId.Value) : null;
 
-            if (value is not null)
+        _currentPlacementBlockId = newId;
+
+        if (newBlock is null)
+        {
+            ItemStack = null;
+        }
+        else
+        {
+            if (ItemStack?.Block?.Id != newId)
             {
-                ItemStack = new ItemStack(value);
-            }
-            else
-            {
-                ItemStack = null;
+                ItemStack = new ItemStack(newBlock);
             }
 
-            // Raise block transformed changed event with previous state
-            OnBlockTransformedChanged?.Invoke(this, new BlockChangedEventArgs(
-                previousBlock,
-                value,
+            if (ItemStack is not null && _rotation is not null)
+            {
+                ItemStack = _rotation.PrepareItemStackForPlacement(ItemStack, _rotation.Current, _sourceItemStack);
+            }
+        }
+
+        if (prevId != newId)
+        {
+            OnPlacementBlockChanged?.Invoke(this, new BlockChangedEventArgs(
+                prevBlock,
+                newBlock,
                 isTransformedBlock: true
             ));
-
-            Logger.Debug(
-                "[BuildBrushDbg][{0}]: Before UpdateDimensionBlock. dimInit={1} dimBe={2}",
-                nameof(BlockTransformed),
-                _dimension?.IsInitialized ?? false,
-                _dimension?.GetBlockEntity()?.GetType().Name ?? "<null>"
-            );
-            UpdateDimensionBlock(previousBlock);
         }
     }
 
@@ -667,7 +668,8 @@ public class BuildBrushInstance
 
     public bool TryUpdatePlacementValidity(in BlockSelection blockSelection)
     {
-        if (_blockTransformed is null || Position is null)
+        Block? placingBlock = CurrentPlacementBlock;
+        if (placingBlock is null || Position is null)
         {
             return false;
         }
@@ -675,7 +677,7 @@ public class BuildBrushInstance
         BlockSelection newSelection = blockSelection.Clone();
         newSelection.DidOffset = true;
         newSelection.SetPos(Position.X, Position.Y, Position.Z);
-        IsValidPlacement = _blockTransformed.CanPlaceBlock(World, Player, newSelection, ref failureCode);
+        IsValidPlacement = placingBlock.CanPlaceBlock(World, Player, newSelection, ref failureCode);
         return IsValidPlacement;
     }
     #endregion
@@ -749,7 +751,8 @@ public class BuildBrushInstance
         if (InitializeDimension())
         {
             SpawnEntity();
-            UpdateDimensionBlock();
+            RebuildPlacementItemStackAndNotify();
+            ForcePreviewRefresh();
         }
         else
         {
@@ -936,67 +939,19 @@ public class BuildBrushInstance
         OnOrientationChanged?.Invoke(this, e);
     }
 
-    /// <summary>
-    /// Updates the block in the dimension based on current rotation state.
-    /// Uses BeginUpdate/EndUpdate to batch multiple dirty events into a single mesh rebuild.
-    /// </summary>
-    private void UpdateDimensionBlock(Block? previousBlock = null)
+    private void ForcePreviewRefresh()
     {
         if (_dimension is null || !_dimension.IsInitialized)
             return;
 
-        _dimension.BeginUpdate();
-        try
+        if (_rotation is null)
         {
-            Block? block = _blockTransformed ?? _blockUntransformed;
-            if (block is not null)
-            {
-                        _dimension.SetBlock(block, _rotation?.Mode);
-
-                Logger.Debug(
-                    "[BuildBrushDbg][{0}]: After SetBlock. block={1}({2}) dimBeAfterSet={3}",
-                    nameof(UpdateDimensionBlock),
-                    block.Code,
-                    block.BlockId,
-                    _dimension.GetBlockEntity()?.GetType().Name ?? "<null>"
-                );
-
-                // Apply mesh angle rotation if applicable
-                if (_rotation is not null && _rotation.HasRotatableEntity)
-                {
-                    ApplyRotation();
-                }
-            }
-            else
-            {
-                _dimension.Clear();
-            }
-        }
-        finally
-        {
-            _dimension.EndUpdate();
-        }
-    }
-
-    /// <summary>
-    /// Applies the current rotation based on rotation mode.
-    /// Uses the current definition and creates an event args for initial setup.
-    /// </summary>
-    private void ApplyRotation()
-    {
-        if (_dimension is null || !_dimension.IsInitialized || _rotation is null)
+            _dimension.Clear();
             return;
+        }
 
-        // Create event args for initial rotation (from 0 degrees)
-        var initialDef = new BlockOrientationDefinition(_rotation.Current.BlockId, 0f);
-        var eventArgs = new OrientationIndexChangedEventArgs(
-            0,
-            _rotation.CurrentIndex,
-            initialDef,
-            _rotation.Current
-        );
-
-        _dimension.ApplyRotation(eventArgs, _rotation);
+        var def = _rotation.Current;
+        _rotation.NotifyOrientationChanged(def, def, _rotation.CurrentIndex);
     }
 
     /// <summary>

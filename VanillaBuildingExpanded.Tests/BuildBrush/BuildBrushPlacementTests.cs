@@ -15,12 +15,12 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 /// <summary>
 /// Integration tests for block placement logic in the BuildBrush system.
 /// Verifies that BuildBrushInstance correctly populates ItemStack attributes
-/// and BlockTransformed when orientation changes.
+/// and CurrentPlacementBlock when orientation changes.
 /// 
 /// These tests focus on the integration between BuildBrushInstance and
 /// BuildBrushOrientationInfo, specifically testing that:
 /// 1. ItemStack.Attributes["meshAngle"] is set correctly for IRotatable blocks
-/// 2. BlockTransformed has the correct variant block ID
+/// 2. CurrentPlacementBlock has the correct variant block ID
 /// 
 /// Note: Unit tests for BlockOrientationResolver and BuildBrushOrientationInfo
 /// are in their respective test files.
@@ -287,10 +287,10 @@ public class BuildBrushPlacementTests
 
     #endregion
 
-    #region BuildBrushInstance BlockTransformed Tests
+    #region BuildBrushInstance Placement Block Tests
 
     /// <summary>
-    /// Verifies that BuildBrushInstance.BlockTransformed has the correct block ID
+    /// Verifies that BuildBrushInstance.CurrentPlacementBlock has the correct block ID
     /// after setting OrientationIndex for variant-based blocks.
     /// </summary>
     [Theory]
@@ -314,18 +314,18 @@ public class BuildBrushPlacementTests
         Assert.True(instance.Rotation.CanRotate);
         Assert.Equal(variantValues.Length, instance.OrientationCount);
 
-        // Act & Assert - verify each orientation produces correct BlockTransformed
+        // Act & Assert - verify each orientation produces correct CurrentPlacementBlock
         for (int i = 0; i < variantValues.Length; i++)
         {
             instance.OrientationIndex = i;
 
-            Assert.NotNull(instance.BlockTransformed);
-            Assert.Equal(startBlockId + i, instance.BlockTransformed.BlockId);
+            Assert.NotNull(instance.CurrentPlacementBlock);
+            Assert.Equal(startBlockId + i, instance.CurrentPlacementBlock.BlockId);
         }
     }
 
     /// <summary>
-    /// Verifies that BuildBrushInstance.BlockTransformed has the correct block ID
+    /// Verifies that BuildBrushInstance.CurrentPlacementBlock has the correct block ID
     /// after setting OrientationIndex for hybrid blocks.
     /// </summary>
     [Theory]
@@ -354,9 +354,9 @@ public class BuildBrushPlacementTests
         // Act
         instance.OrientationIndex = testOrientationIndex;
 
-        // Assert - BlockTransformed should be the correct variant
-        Assert.NotNull(instance.BlockTransformed);
-        Assert.Equal(100 + expectedVariantIndex, instance.BlockTransformed.BlockId);
+        // Assert - CurrentPlacementBlock should be the correct variant
+        Assert.NotNull(instance.CurrentPlacementBlock);
+        Assert.Equal(100 + expectedVariantIndex, instance.CurrentPlacementBlock.BlockId);
     }
 
     #endregion

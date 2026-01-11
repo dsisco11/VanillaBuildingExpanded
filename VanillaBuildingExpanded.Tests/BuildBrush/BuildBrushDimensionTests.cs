@@ -164,7 +164,7 @@ public class BuildBrushDimensionTests
 
         dimension.SubscribeTo(instance);
 
-        // Act - setting BlockId triggers OnBlockTransformedChanged
+        // Act - setting BlockId triggers OnPlacementBlockChanged
         instance.BlockId = 100;
 
         // Assert - event was received by dimension
@@ -611,12 +611,12 @@ public class BuildBrushDimensionTests
             rotation.OnOrientationChanged += handler;
         }
 
-        // Capture BlockTransformed at the moment of each event
+        // Capture CurrentPlacementBlock at the moment of each event
         var blockTransformedAtEvent = new List<Block?>();
         var eventArgsCurrentBlockId = new List<int>();
         instance.OnOrientationChanged += (s, e) =>
         {
-            blockTransformedAtEvent.Add(instance.BlockTransformed);
+            blockTransformedAtEvent.Add(instance.CurrentPlacementBlock);
             eventArgsCurrentBlockId.Add(e.CurrentDefinition.BlockId);
         };
 
@@ -625,7 +625,7 @@ public class BuildBrushDimensionTests
         instance.CycleOrientation(EModeCycleDirection.Forward); // 1 → 2 (variant change)
 
         // Assert - EventArgs.CurrentDefinition.BlockId should always have the correct NEW block ID
-        // even if instance.BlockTransformed is updated after the event fires
+        // even if instance.CurrentPlacementBlock is updated after the event fires
         Assert.Equal(2, eventArgsCurrentBlockId.Count);
         Assert.Equal(100, eventArgsCurrentBlockId[0]); // Still North at 180°
         Assert.Equal(101, eventArgsCurrentBlockId[1]);  // Changed to East at 0°
