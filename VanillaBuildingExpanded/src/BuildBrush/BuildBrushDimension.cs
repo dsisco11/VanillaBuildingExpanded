@@ -377,10 +377,14 @@ public class BuildBrushDimension
         // If block has entity data, spawn the block entity
         if (!string.IsNullOrEmpty(currentBlock.EntityClass))
         {
-            dimension.SpawnBlockEntity(currentBlock.EntityClass, internalBlockPos);
+            var existingBe = dimension.GetBlockEntity(internalBlockPos);
+            if (existingBe is null)
+            {
+                dimension.SpawnBlockEntity(currentBlock.EntityClass, internalBlockPos);
+            }
         }
 
-        dimension.Dirty = true;
+        // dimension.Dirty = true;
         MarkDirty(nameof(PlaceBlockInDimension));
     }
 

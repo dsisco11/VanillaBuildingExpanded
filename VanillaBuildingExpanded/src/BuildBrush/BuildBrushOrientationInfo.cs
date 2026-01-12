@@ -315,6 +315,69 @@ public class BuildBrushOrientationInfo
     }
 
     /// <summary>
+    /// Applies the target orientation to a block entity that was just placed.
+    /// This is intended to correct cases where vanilla placement logic overwrites
+    /// mesh rotation based on player facing, even when the brush has a specific
+    /// target rotation.
+    /// </summary>
+    /// <remarks>
+    /// Prefers using <see cref="IRotatable.OnTransformed"/> when available (so any
+    /// entity-specific rotation logic runs), but falls back to directly setting the
+    /// known rotation attribute in the tree.
+    /// </remarks>
+    public bool ApplyToPlacedBlockEntity(BlockEntity blockEntity, in BlockOrientationDefinition targetDefinition, ItemStack? sourceItemStack = null)
+    {
+        if (blockEntity is null)
+            return false;
+
+        // Extract current state from the block entity
+        TreeAttribute tree = new();
+        blockEntity.ToTreeAttributes(tree);
+
+        // Copy type attribute from source (for typed containers)
+        string? type = sourceItemStack?.Attributes?.GetString("type");
+        if (!string.IsNullOrEmpty(type))
+        {
+            tree.SetString("type", type);
+        }
+
+        string? attrName = targetDefinition.RotationAttribute;
+        if (string.IsNullOrEmpty(attrName))
+        {
+            return false;
+        }
+
+        bool isDegrees = BlockOrientationResolver.IsMeshRotationAttributeDegrees(attrName);
+        float currentValue = tree.GetFloat(attrName, 0f);
+        float currentAngleDeg = isDegrees ? currentValue : currentValue * GameMath.RAD2DEG;
+
+        // Prefer using the existing ApplyToBlockEntity path so any BE-specific rotation logic runs.
+        // ApplyToBlockEntity expects a previous definition to compute a delta, so we synthesize one
+        // from the currently placed BE rotation.
+        if (BlockOrientationResolver.TryGetRotationInterface(blockEntity, out IRotatable? rotatable) && rotatable is not null)
+        {
+            var previousDefinition = new BlockOrientationDefinition(
+                targetDefinition.BlockId,
+                currentAngleDeg,
+                targetDefinition.RotationAttribute
+            );
+
+            return ApplyToBlockEntity(
+                blockEntity,
+                previousDefinition,
+                targetDefinition,
+                sourceItemStack?.Attributes
+            );
+        }
+
+        // Fallback: set the target angle directly (useful for preview blocks or non-IRotatable BEs).
+        TrySetMeshRotation(tree, targetDefinition);
+        blockEntity.FromTreeAttributes(tree, _world);
+        blockEntity.MarkDirty(true);
+        return true;
+    }
+
+    /// <summary>
     /// Prepares an ItemStack for placement with orientation applied.
     /// Clones the target stack and applies orientation attributes.
     /// </summary>

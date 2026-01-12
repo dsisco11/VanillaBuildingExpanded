@@ -125,22 +125,6 @@ public class BlockOrientationResolver
     }
 
     /// <summary>
-    /// Gets the rotation mode for a block (for display/classification purposes).
-    /// </summary>
-    public EBuildBrushRotationMode GetRotationMode(Block block)
-    {
-        if (block is null)
-            return EBuildBrushRotationMode.None;
-
-        if (_modeCache.TryGetValue(block.Code, out var cached))
-            return cached;
-
-        var mode = DetectRotationMode(block);
-        _modeCache[block.Code] = mode;
-        return mode;
-    }
-
-    /// <summary>
     /// Finds the index in the orientation array that matches a specific block ID.
     /// Useful for syncing state when the brush block changes.
     /// </summary>
@@ -166,6 +150,23 @@ public class BlockOrientationResolver
         _modeCache.Clear();
         _variantCache.Clear();
     }
+
+    /// <summary>
+    /// Gets the rotation mode for a block (for display/classification purposes).
+    /// </summary>
+    public EBuildBrushRotationMode GetRotationMode(Block block)
+    {
+        if (block is null)
+            return EBuildBrushRotationMode.None;
+
+        if (_modeCache.TryGetValue(block.Code, out var cached))
+            return cached;
+
+        var mode = DetectRotationMode(block);
+        _modeCache[block.Code] = mode;
+        return mode;
+    }
+
     #endregion
 
     #region Computation
@@ -413,7 +414,8 @@ public class BlockOrientationResolver
 
         return (hasVariantRotation, hasRotatableEntity) switch
         {
-            (true, true) => EBuildBrushRotationMode.Hybrid,
+            // (true, true) => EBuildBrushRotationMode.Hybrid, // NOTE: Hybrid mode disabled for now since its flawed (setting the block-id variant doesnt actually have a non-default rotation, so it just zeroes out the rotation).
+            (true, true) => EBuildBrushRotationMode.Rotatable,
             (true, false) => EBuildBrushRotationMode.VariantBased,
             (false, true) => EBuildBrushRotationMode.Rotatable,
             (false, false) => EBuildBrushRotationMode.None,

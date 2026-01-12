@@ -450,6 +450,18 @@ public class BuildBrushSystem_Client : ModSystem
         {
             Block oldBlock = World.BlockAccessor.GetBlock(brushPos);
             block.DoPlaceBlock(World, Player, blockSelection, stackToPlace);
+
+            // Keep client-side prediction consistent with brush rotation.
+            // Vanilla placement may set rotation from player facing; enforce brush target rotation.
+            if (brush.Rotation is not null && brush.Rotation.HasRotatableEntity)
+            {
+                var placedBe = World.BlockAccessor.GetBlockEntity(brushPos);
+                if (placedBe is not null)
+                {
+                    brush.Rotation.ApplyToPlacedBlockEntity(placedBe, brush.Rotation.Current, stackToPlace);
+                }
+            }
+
             api.Network.SendPacketClient(ClientPackets.BlockInteraction(blockSelection, 1, 0));
             World.BlockAccessor.MarkBlockModified(brushPos);
             World.BlockAccessor.TriggerNeighbourBlockUpdate(brushPos);

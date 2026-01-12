@@ -81,6 +81,18 @@ public class BuildBrushSystem_Server : ModSystem
             // Use brush.ItemStack instead of the hotbar itemstack - brush.ItemStack has the correct
             // meshAngle attribute set for IRotatable blocks and the correct block for variant rotation
             brush.CurrentPlacementBlock.DoPlaceBlock(world, byPlayer, blockSel, brush.ItemStack);
+
+            // Some vanilla placement logic overwrites rotatable mesh angles based on player facing.
+            // Enforce the brush's target rotation on the placed block entity.
+            if (brush.Rotation is not null && brush.Rotation.HasRotatableEntity)
+            {
+                var placedBe = world.BlockAccessor.GetBlockEntity(blockSel.Position);
+                if (placedBe is not null)
+                {
+                    brush.Rotation.ApplyToPlacedBlockEntity(placedBe, brush.Rotation.Current, brush.ItemStack);
+                }
+            }
+
             world.BlockAccessor.MarkBlockModified(blockSel.Position);
             world.BlockAccessor.TriggerNeighbourBlockUpdate(blockSel.Position);
             brush.OnBlockPlaced();
