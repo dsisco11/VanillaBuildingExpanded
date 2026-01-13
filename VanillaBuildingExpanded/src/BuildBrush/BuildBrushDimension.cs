@@ -503,24 +503,6 @@ public class BuildBrushDimension
                 // Apply rotation via IRotatable
                 ApplyRotatableRotation(orientationInfo, previousDef, currentDef);
                 break;
-
-            case EBuildBrushRotationMode.Hybrid:
-                // Apply both variant and IRotatable.
-                // Always update the placed block when the block-id changes, even if there is no block entity.
-                if (variantChanged && variantBlock is not null)
-                {
-                    currentBlock = variantBlock;
-
-                    // If there is no rotatable BE, we still need to replace the preview block.
-                    if (string.IsNullOrEmpty(currentBlock.EntityClass))
-                    {
-                        PlaceBlockInDimension();
-                        break;
-                    }
-                }
-
-                ApplyRotatableRotation(orientationInfo, previousDef, currentDef, forceReplacement: variantChanged);
-                break;
         }
     }
 
@@ -652,7 +634,7 @@ public class BuildBrushDimension
             SetBlock(baseBlock, rotation.Mode);
 
             // Apply the rotation using event args and orientation info.
-            // This handles VariantBased variant swaps as well as Rotatable/Hybrid mesh-angle rotation.
+            // This handles VariantBased variant swaps as well as Rotatable mesh-angle rotation.
             ApplyRotation(e, rotation);
         }
         finally

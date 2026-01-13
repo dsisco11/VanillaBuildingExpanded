@@ -109,12 +109,11 @@ public class RotationModeTessellationTests
 
         // Assert
         Assert.NotNull(instance.Rotation);
-        // Mode will be one of: None, VariantBased, Rotatable, Hybrid
+        // Mode will be one of: None, VariantBased, Rotatable
         Assert.True(
             instance.Rotation.Mode == EBuildBrushRotationMode.None ||
             instance.Rotation.Mode == EBuildBrushRotationMode.VariantBased ||
-            instance.Rotation.Mode == EBuildBrushRotationMode.Rotatable ||
-            instance.Rotation.Mode == EBuildBrushRotationMode.Hybrid
+            instance.Rotation.Mode == EBuildBrushRotationMode.Rotatable
         );
     }
 
@@ -210,8 +209,7 @@ public class RotationModeTessellationTests
             instance.OrientationIndex = 1;
 
             // For VariantBased rotation, the transformed block should change
-            if (rotation.Mode == EBuildBrushRotationMode.VariantBased ||
-                rotation.Mode == EBuildBrushRotationMode.Hybrid)
+            if (rotation.Mode == EBuildBrushRotationMode.VariantBased)
             {
                 Assert.NotNull(lastBlockTransformedEvent);
             }
@@ -274,8 +272,7 @@ public class RotationModeTessellationTests
             // Assert
             Assert.NotNull(capturedArgs);
 
-            if (rotation.Mode == EBuildBrushRotationMode.VariantBased ||
-                rotation.Mode == EBuildBrushRotationMode.Hybrid)
+            if (rotation.Mode == EBuildBrushRotationMode.VariantBased)
             {
                 // VariantChanged should be true for variant-based modes
                 // (when the block ID changes between orientations)
@@ -345,7 +342,7 @@ public class RotationModeTessellationTests
         // Act
         var rotation = instance.Rotation;
         if (rotation is not null && rotation.CanRotate && rotation.Definitions.Length > 1 &&
-            (rotation.Mode == EBuildBrushRotationMode.VariantBased || rotation.Mode == EBuildBrushRotationMode.Hybrid))
+            rotation.Mode == EBuildBrushRotationMode.VariantBased)
         {
             instance.OrientationIndex = 1;
 

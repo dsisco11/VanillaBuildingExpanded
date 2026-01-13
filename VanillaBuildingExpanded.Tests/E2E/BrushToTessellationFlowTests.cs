@@ -10,6 +10,7 @@ using VanillaBuildingExpanded.Tests.BuildBrush;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
+using Vintagestory.API.Datastructures;
 
 using Xunit;
 
@@ -35,6 +36,7 @@ public class BrushToTessellationFlowTests
         public Mock<ICoreClientAPI> MockCapi { get; }
         public Mock<ITesselatorManager> MockTesselatorManager { get; }
         public Mock<ITessellationService> MockTessellationService { get; }
+        public Mock<IMiniDimension> MockMiniDimension { get; }
 
         public BuildBrushInstance Instance { get; }
         public BuildBrushDimension Dimension { get; }
@@ -67,9 +69,39 @@ public class BrushToTessellationFlowTests
 
             // Initialize the dimension with a mock IMiniDimension so it's considered "initialized"
             // Without this, SetBlock/MarkDirty won't fire OnDirty events
-            var mockMiniDimension = new Mock<IMiniDimension>();
-            mockMiniDimension.Setup(d => d.subDimensionId).Returns(1);
-            Dimension.InitializeClientSide(mockMiniDimension.Object);
+            MockMiniDimension = new Mock<IMiniDimension>();
+            MockMiniDimension.Setup(d => d.subDimensionId).Returns(1);
+
+            int placedBlockId = 0;
+            BlockEntity? placedBlockEntity = null;
+
+            MockMiniDimension
+                .Setup(d => d.AdjustPosForSubDimension(It.IsAny<BlockPos>()))
+                .Callback<BlockPos>(_ => { });
+
+            MockMiniDimension
+                .Setup(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>()))
+                .Callback<int, BlockPos>((blockId, _) => placedBlockId = blockId);
+
+            MockMiniDimension
+                .Setup(d => d.GetBlock(It.IsAny<BlockPos>()))
+                .Returns(() => placedBlockId == 0 ? null! : MockWorld.Object.GetBlock(placedBlockId));
+
+            MockMiniDimension
+                .Setup(d => d.GetBlockEntity(It.IsAny<BlockPos>()))
+                .Returns(() =>
+                {
+                    // In these tests we only ever place a single preview block at the origin.
+                    // If a block has been placed, ensure a rotatable BE exists so rotatable mode can apply mesh-angle changes.
+                    if (placedBlockId != 0 && placedBlockEntity is null)
+                    {
+                        placedBlockEntity = new TestRotatableBlockEntity();
+                    }
+
+                    return placedBlockEntity;
+                });
+
+            Dimension.InitializeClientSide(MockMiniDimension.Object);
 
             // Wire up dimension subscription (dimension subscribes to instance events)
             Dimension.SubscribeTo(Instance);
@@ -168,26 +200,32 @@ public class BrushToTessellationFlowTests
             // Register the block and its variants in the world
             MockWorld.Setup(w => w.GetBlock(block.BlockId)).Returns(block);
 
+            if (mode == EBuildBrushRotationMode.Rotatable)
+            {
+                // Ensure the preview dimension spawns a BE so rotatable mesh-angle changes mark the dimension dirty.
+                block.EntityClass = "TestRotatable";
+            }
+
             // Create definitions based on mode
             var definitionsBuilder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(orientationCount);
             for (int i = 0; i < orientationCount; i++)
             {
-                int variantBlockId = block.BlockId + i;
-                float meshAngle = mode switch
-                {
-                    EBuildBrushRotationMode.Rotatable => i * (360f / orientationCount),
-                    EBuildBrushRotationMode.Hybrid => i * (360f / orientationCount),
-                    _ => 0f // VariantBased and None use 0° mesh angle
-                };
+                int definitionBlockId = mode == EBuildBrushRotationMode.Rotatable
+                    ? block.BlockId
+                    : block.BlockId + i;
+
+                float meshAngle = mode == EBuildBrushRotationMode.Rotatable
+                    ? i * (360f / orientationCount)
+                    : 0f; // VariantBased and None use 0° mesh angle
 
                 // Register variant blocks
-                if (i > 0)
+                if (definitionBlockId != block.BlockId)
                 {
-                    var variantBlock = TestHelpers.CreateTestBlock(variantBlockId, $"{block.Code}-variant{i}");
-                    MockWorld.Setup(w => w.GetBlock(variantBlockId)).Returns(variantBlock);
+                    var variantBlock = TestHelpers.CreateTestBlock(definitionBlockId, $"{block.Code}-variant{i}");
+                    MockWorld.Setup(w => w.GetBlock(definitionBlockId)).Returns(variantBlock);
                 }
 
-                definitionsBuilder.Add(new BlockOrientationDefinition(variantBlockId, meshAngle));
+                definitionsBuilder.Add(new BlockOrientationDefinition(definitionBlockId, meshAngle));
             }
 
             var definitions = definitionsBuilder.MoveToImmutable();
@@ -249,6 +287,35 @@ public class BrushToTessellationFlowTests
                     typeof(EventHandler<OrientationIndexChangedEventArgs>), instance, newEventHandlerMethod);
                 orientationInfo.OnOrientationChanged += newHandler;
             }
+        }
+
+        private sealed class TestRotatableBlockEntity : BlockEntity, IRotatable
+        {
+            private float _meshAngleRadians;
+
+            public void OnTransformed(
+                IWorldAccessor worldAccessor,
+                ITreeAttribute tree,
+                int degreeRotation,
+                System.Collections.Generic.Dictionary<int, AssetLocation> oldBlockIdMapping,
+                System.Collections.Generic.Dictionary<int, AssetLocation> oldItemIdMapping,
+                EnumAxis? flipAxis)
+            {
+                // For tests, any tree mutation is sufficient to simulate a successful rotation.
+                _meshAngleRadians = degreeRotation * GameMath.DEG2RAD;
+                tree.SetFloat("meshAngle", _meshAngleRadians);
+            }
+
+            public override void ToTreeAttributes(ITreeAttribute tree)
+            {
+                tree.SetFloat("meshAngle", _meshAngleRadians);
+            }
+
+            public override void FromTreeAttributes(ITreeAttribute tree, IWorldAccessor worldAccessor)
+            {
+                _meshAngleRadians = tree.GetFloat("meshAngle", _meshAngleRadians);
+            }
+
         }
     }
 
@@ -464,72 +531,6 @@ public class BrushToTessellationFlowTests
         Assert.Equal(4, harness.OrientationChangedCount);
         Assert.Equal(4, harness.DimensionDirtyCount);
         Assert.Equal(4, harness.TessellationCallCount);
-    }
-
-    #endregion
-
-    #region Orientation Change Flow Tests - Hybrid Mode
-
-    [Fact]
-    public void Hybrid_OrientationChange_RaisesOrientationChanged()
-    {
-        // Arrange
-        var harness = CreateHarness();
-        var block = TestHelpers.CreateTestBlock(100, "game:hybridblock");
-        harness.SetupBlockWithRotation(block, EBuildBrushRotationMode.Hybrid, orientationCount: 8);
-        harness.ResetCounters();
-        harness.AssertDefaultState();
-
-        // Act
-        harness.Instance.OrientationIndex = 1;
-
-        // Assert
-        Assert.Equal(1, harness.OrientationChangedCount);
-        Assert.NotNull(harness.LastOrientationArgs);
-        Assert.Equal(0, harness.LastOrientationArgs.PreviousIndex);
-        Assert.Equal(1, harness.LastOrientationArgs.CurrentIndex);
-    }
-
-    [Fact]
-    public void Hybrid_OrientationChange_TriggersTessellation()
-    {
-        // Arrange
-        var harness = CreateHarness();
-        var block = TestHelpers.CreateTestBlock(100, "game:hybridblock");
-        harness.SetupBlockWithRotation(block, EBuildBrushRotationMode.Hybrid, orientationCount: 8);
-        harness.ResetCounters();
-        harness.AssertDefaultState();
-
-        // Act
-        harness.Instance.OrientationIndex = 1;
-
-        // Assert
-        Assert.Equal(1, harness.OrientationChangedCount);
-        Assert.Equal(1, harness.DimensionDirtyCount);
-        Assert.Equal(1, harness.TessellationCallCount);
-    }
-
-    [Fact]
-    public void Hybrid_MultipleOrientationChanges_EachTriggersTessellation()
-    {
-        // Arrange
-        var harness = CreateHarness();
-        var block = TestHelpers.CreateTestBlock(100, "game:hybridblock");
-        harness.SetupBlockWithRotation(block, EBuildBrushRotationMode.Hybrid, orientationCount: 8);
-        harness.ResetCounters();
-        harness.AssertDefaultState();
-
-        // Act - Cycle through orientations
-        harness.Instance.OrientationIndex = 1;
-        harness.Instance.OrientationIndex = 3;
-        harness.Instance.OrientationIndex = 5;
-        harness.Instance.OrientationIndex = 7;
-        harness.Instance.OrientationIndex = 0;
-
-        // Assert
-        Assert.Equal(5, harness.OrientationChangedCount);
-        Assert.Equal(5, harness.DimensionDirtyCount);
-        Assert.Equal(5, harness.TessellationCallCount);
     }
 
     #endregion
@@ -769,24 +770,6 @@ public class BrushToTessellationFlowTests
         Assert.Equal(4, rotation.OrientationCount);
     }
 
-    [Fact]
-    public void RotationModeHybrid_HasCorrectProperties()
-    {
-        // Arrange
-        var harness = CreateHarness();
-        var block = TestHelpers.CreateTestBlock(100, "game:hybridblock");
-        harness.SetupBlockWithRotation(block, EBuildBrushRotationMode.Hybrid, orientationCount: 8);
-
-        // Assert
-        var rotation = harness.Instance.Rotation;
-        Assert.NotNull(rotation);
-        Assert.Equal(EBuildBrushRotationMode.Hybrid, rotation.Mode);
-        Assert.True(rotation.CanRotate);
-        Assert.True(rotation.HasVariants);
-        Assert.True(rotation.HasRotatableEntity);
-        Assert.Equal(8, rotation.OrientationCount);
-    }
-
     #endregion
 
     #region Edge Cases
@@ -953,29 +936,6 @@ public class BrushToTessellationFlowTests
     }
 
     [Fact]
-    public void Hybrid_EightOrientationChanges_TriggerEightTessellations()
-    {
-        // Arrange
-        var harness = CreateHarness();
-        var block = TestHelpers.CreateTestBlock(100, "game:hybridblock");
-        harness.SetupBlockWithRotation(block, EBuildBrushRotationMode.Hybrid, orientationCount: 8);
-        harness.ResetCounters();
-        harness.AssertDefaultState();
-
-        // Act - Cycle through all 8 orientations
-        for (int i = 1; i < 8; i++)
-        {
-            harness.Instance.OrientationIndex = i;
-        }
-        harness.Instance.OrientationIndex = 0;
-
-        // Assert - Exactly 8 of each
-        Assert.Equal(8, harness.OrientationChangedCount);
-        Assert.Equal(8, harness.DimensionDirtyCount);
-        Assert.Equal(8, harness.TessellationCallCount);
-    }
-
-    [Fact]
     public void None_ZeroOrientationChanges_ZeroTessellations()
     {
         // Arrange
@@ -1036,205 +996,6 @@ public class BrushToTessellationFlowTests
         Assert.NotNull(capturedDimension);
         Assert.NotNull(capturedMin);
         Assert.NotNull(capturedMax);
-    }
-
-    #endregion
-
-    #region Hybrid Orientation Cycling E2E Tests
-
-    /// <summary>
-    /// Test harness extension for proper hybrid orientation setup with multiple variants.
-    /// </summary>
-    private class HybridBrushTestHarness : BrushTestHarness
-    {
-        public List<OrientationIndexChangedEventArgs> AllOrientationEvents { get; } = new();
-
-        public void SetupHybridBlockWithVariants(int variantCount, int anglesPerVariant, int baseBlockId = 100)
-        {
-            var definitionsBuilder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>();
-            var firstBlock = TestHelpers.CreateTestBlock(baseBlockId, $"game:hybrid-variant0");
-            MockWorld.Setup(w => w.GetBlock(baseBlockId)).Returns(firstBlock);
-
-            float intervalDegrees = 360f / variantCount / anglesPerVariant;
-
-            for (int variant = 0; variant < variantCount; variant++)
-            {
-                int blockId = baseBlockId + variant;
-                if (variant > 0)
-                {
-                    var variantBlock = TestHelpers.CreateTestBlock(blockId, $"game:hybrid-variant{variant}");
-                    MockWorld.Setup(w => w.GetBlock(blockId)).Returns(variantBlock);
-                }
-
-                for (int angle = 0; angle < anglesPerVariant; angle++)
-                {
-                    float meshAngle = angle * intervalDegrees;
-                    definitionsBuilder.Add(new BlockOrientationDefinition(blockId, meshAngle));
-                }
-            }
-
-            var definitions = definitionsBuilder.ToImmutable();
-            var orientationInfo = new BuildBrushOrientationInfo(MockWorld.Object, firstBlock, EBuildBrushRotationMode.Hybrid, definitions);
-
-            // Inject via reflection
-            var rotationField = typeof(BuildBrushInstance).GetField("_rotation", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var blockField = typeof(BuildBrushInstance).GetField("_blockUntransformed", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var blockIdField = typeof(BuildBrushInstance).GetField("_blockId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-            rotationField?.SetValue(Instance, orientationInfo);
-            blockField?.SetValue(Instance, firstBlock);
-            blockIdField?.SetValue(Instance, baseBlockId);
-
-            // Subscribe to rotation events
-            var handlerMethod = typeof(BuildBrushInstance).GetMethod("Rotation_OnOrientationChanged", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (handlerMethod is not null)
-            {
-                var handler = (EventHandler<OrientationIndexChangedEventArgs>)Delegate.CreateDelegate(
-                    typeof(EventHandler<OrientationIndexChangedEventArgs>), Instance, handlerMethod);
-                orientationInfo.OnOrientationChanged += handler;
-            }
-
-            // Capture all orientation events
-            Instance.OnOrientationChanged += (s, e) => AllOrientationEvents.Add(e);
-        }
-    }
-
-    private static HybridBrushTestHarness CreateHybridHarness()
-    {
-        return new HybridBrushTestHarness();
-    }
-
-    [Theory]
-    [InlineData(2, 4, 8)]  // 2 variants × 4 angles = 8 orientations
-    [InlineData(4, 2, 8)]  // 4 variants × 2 angles = 8 orientations
-    [InlineData(3, 3, 9)]  // 3 variants × 3 angles = 9 orientations
-    public void Rotation_HybridBlock_BidirectionalCycle_UpdatesPreviewCorrectly_Config(int variantCount, int anglesPerVariant, int totalOrientations)
-    {
-        // Arrange
-        var harness = CreateHybridHarness();
-        harness.SetupHybridBlockWithVariants(variantCount, anglesPerVariant);
-        harness.ResetCounters();
-        harness.AssertDefaultState();
-
-        // Act - Full forward cycle
-        for (int i = 0; i < totalOrientations; i++)
-        {
-            harness.Instance.CycleOrientation(EModeCycleDirection.Forward);
-        }
-
-        // Assert - Correct number of events
-        Assert.Equal(totalOrientations, harness.AllOrientationEvents.Count);
-
-        // Verify variant transitions happen at correct indices
-        int eventsWithVariantChange = 0;
-        foreach (var evt in harness.AllOrientationEvents)
-        {
-            if (evt.VariantChanged)
-            {
-                eventsWithVariantChange++;
-                // At variant transition, mesh angle should be 0 (for forward) or at boundary
-                Assert.True(evt.CurrentDefinition.MeshAngleDegrees == 0f || evt.CurrentIndex == 0);
-            }
-        }
-
-        // Should have exactly variantCount variant changes (including wrap-around)
-        Assert.Equal(variantCount, eventsWithVariantChange);
-    }
-
-    [Theory]
-    [InlineData(2, 4, 8)]  // 2 variants × 4 angles = 8 orientations
-    [InlineData(4, 2, 8)]  // 4 variants × 2 angles = 8 orientations
-    [InlineData(3, 3, 9)]  // 3 variants × 3 angles = 9 orientations
-    public void Rotation_HybridBlock_ForwardCycle_ExhaustsAnglesBeforeSwitchingVariant(int variantCount, int anglesPerVariant, int totalOrientations)
-    {
-        // Arrange
-        var harness = CreateHybridHarness();
-        harness.SetupHybridBlockWithVariants(variantCount, anglesPerVariant);
-        harness.ResetCounters();
-        harness.AssertDefaultState();
-
-        // Act - Forward cycle through all orientations (excluding wrap-around)
-        for (int i = 0; i < totalOrientations - 1; i++)
-        {
-            harness.Instance.CycleOrientation(EModeCycleDirection.Forward);
-        }
-
-        // Assert - Verify block ID only changes at expected transition points
-        int? lastBlockId = null;
-        int consecutiveSameBlockCount = 0;
-
-        foreach (var evt in harness.AllOrientationEvents)
-        {
-            if (lastBlockId is null)
-            {
-                lastBlockId = evt.PreviousDefinition.BlockId;
-            }
-
-            if (evt.CurrentDefinition.BlockId == lastBlockId)
-            {
-                consecutiveSameBlockCount++;
-            }
-            else
-            {
-                // Block changed - should have had anglesPerVariant-1 consecutive same block events
-                // (minus 1 because the first event of a new block doesn't count)
-                lastBlockId = evt.CurrentDefinition.BlockId;
-                consecutiveSameBlockCount = 0;
-            }
-        }
-
-        // Final consecutive count should be anglesPerVariant - 1 (last variant's remaining angles)
-        Assert.True(consecutiveSameBlockCount <= anglesPerVariant - 1);
-    }
-
-    [Theory]
-    [InlineData(2, 4, 8)]  // 2 variants × 4 angles = 8 orientations
-    [InlineData(4, 2, 8)]  // 4 variants × 2 angles = 8 orientations
-    [InlineData(3, 3, 9)]  // 3 variants × 3 angles = 9 orientations
-    public void Rotation_HybridBlock_BackwardCycle_ExhaustsAnglesBeforeSwitchingVariant(int variantCount, int anglesPerVariant, int totalOrientations)
-    {
-        // Arrange
-        var harness = CreateHybridHarness();
-        harness.SetupHybridBlockWithVariants(variantCount, anglesPerVariant);
-        harness.ResetCounters();
-        harness.AssertDefaultState();
-
-        // Act - Backward cycle from start (will wrap to end first)
-        for (int i = 0; i < totalOrientations; i++)
-        {
-            harness.Instance.CycleOrientation(EModeCycleDirection.Backward);
-        }
-
-        // Assert - Verify block ID only changes at expected transition points
-        Assert.Equal(totalOrientations, harness.AllOrientationEvents.Count);
-
-        // First event should be wrap-around (0 → last index)
-        var firstEvent = harness.AllOrientationEvents[0];
-        Assert.Equal(0, firstEvent.PreviousIndex);
-        Assert.Equal(totalOrientations - 1, firstEvent.CurrentIndex);
-        Assert.True(firstEvent.VariantChanged);
-    }
-
-    [Fact]
-    public void Rotation_HybridBlock_MixedForwardBackward_MaintainsCorrectState()
-    {
-        // Arrange
-        var harness = CreateHybridHarness();
-        harness.SetupHybridBlockWithVariants(variantCount: 2, anglesPerVariant: 4);
-        harness.ResetCounters();
-        harness.AssertDefaultState();
-
-        // Act - Mixed cycling: forward 3, backward 2, forward 5
-        for (int i = 0; i < 3; i++) harness.Instance.CycleOrientation(EModeCycleDirection.Forward);
-        for (int i = 0; i < 2; i++) harness.Instance.CycleOrientation(EModeCycleDirection.Backward);
-        for (int i = 0; i < 5; i++) harness.Instance.CycleOrientation(EModeCycleDirection.Forward);
-
-        // Assert - 10 total events
-        Assert.Equal(10, harness.AllOrientationEvents.Count);
-
-        // Final index should be (0 + 3 - 2 + 5) % 8 = 6
-        var lastEvent = harness.AllOrientationEvents[^1];
-        Assert.Equal(6, lastEvent.CurrentIndex);
     }
 
     #endregion

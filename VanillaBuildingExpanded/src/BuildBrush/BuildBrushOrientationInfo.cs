@@ -116,14 +116,14 @@ public class BuildBrushOrientationInfo
     public bool CanRotate => Mode != EBuildBrushRotationMode.None && !Definitions.IsDefaultOrEmpty && Definitions.Length > 1;
 
     /// <summary>
-    /// Whether this block uses variant-based rotation (including hybrid).
+    /// Whether this block uses variant-based rotation.
     /// </summary>
-    public bool HasVariants => Mode is EBuildBrushRotationMode.VariantBased or EBuildBrushRotationMode.Hybrid;
+    public bool HasVariants => Mode is EBuildBrushRotationMode.VariantBased;
 
     /// <summary>
-    /// Whether this block has an IRotatable block entity (including hybrid).
+    /// Whether this block has an IRotatable block entity.
     /// </summary>
-    public bool HasRotatableEntity => Mode is EBuildBrushRotationMode.Rotatable or EBuildBrushRotationMode.Hybrid;
+    public bool HasRotatableEntity => Mode is EBuildBrushRotationMode.Rotatable;
 
     /// <summary>
     /// Gets the mesh angle increment in degrees between orientation steps.
@@ -136,7 +136,7 @@ public class BuildBrushOrientationInfo
             if (Definitions.IsDefaultOrEmpty || Definitions.Length <= 1)
                 return 0f;
 
-            // For IRotatable/Hybrid modes, compute the increment from definitions
+            // For IRotatable mode, compute the increment from definitions
             if (HasRotatableEntity && Definitions.Length >= 2)
             {
                 // Use the difference between first two definitions as the step

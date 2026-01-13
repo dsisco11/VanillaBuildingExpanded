@@ -445,15 +445,15 @@ public class BuildBrushOrientationInfoTests
     }
 
     [Fact]
-    public void EventArgs_HybridRotation_CorrectlyIdentifiesVariantChange()
+    public void EventArgs_VariantChange_CorrectlyIdentifiesVariantChange()
     {
-        // Arrange - Hybrid rotation with different blocks and angles
+        // Arrange - different blocks and angles
         var blockNorth = CreateTestBlock(100);
         var blockEast = CreateTestBlock(101);
         var blocks = new Dictionary<int, Block> { { 100, blockNorth }, { 101, blockEast } };
         var world = CreateMockWorld(blocks);
 
-        // Hybrid: 2 variants × 2 angles = 4 total orientations
+        // 2 blocks × 2 angles = 4 total orientations
         var definitions = ImmutableArray.Create(
             new BlockOrientationDefinition(100, 0f),   // North, 0°
             new BlockOrientationDefinition(100, 90f),  // North, 90°
@@ -461,7 +461,7 @@ public class BuildBrushOrientationInfoTests
             new BlockOrientationDefinition(101, 90f)   // East, 90°
         );
 
-        var info = CreateOrientationInfo(world, blockNorth, EBuildBrushRotationMode.Hybrid, definitions);
+        var info = CreateOrientationInfo(world, blockNorth, EBuildBrushRotationMode.VariantBased, definitions);
 
         var capturedEvents = new List<OrientationIndexChangedEventArgs>();
         info.OnOrientationChanged += (sender, args) => capturedEvents.Add(args);

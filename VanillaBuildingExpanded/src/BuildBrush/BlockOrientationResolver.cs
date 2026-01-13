@@ -184,7 +184,6 @@ public class BlockOrientationResolver
             EBuildBrushRotationMode.None => [new BlockOrientationDefinition(block.BlockId, 0f)],
             EBuildBrushRotationMode.VariantBased => ComputeVariantRotations(block),
             EBuildBrushRotationMode.Rotatable => ComputeRotatableRotations(block, itemStack),
-            EBuildBrushRotationMode.Hybrid => ComputeHybridRotations(block, itemStack),
             _ => [new BlockOrientationDefinition(block.BlockId, 0f)]
         };
     }
@@ -239,61 +238,6 @@ public class BlockOrientationResolver
         return builder.MoveToImmutable();
     }
 
-    /// <summary>
-    /// Computes orientations for hybrid blocks.
-    /// Each variant gets mesh-angle sub-steps within its "slice" of 360°.
-    /// Uses predefined lookup tables for valid angles.
-    /// </summary>
-    /// <param name="block">The block to compute rotations for.</param>
-    /// <param name="itemStack">Optional ItemStack to resolve type-specific properties.</param>
-    private ImmutableArray<BlockOrientationDefinition> ComputeHybridRotations(Block block, ItemStack? itemStack = null)
-    {
-        Block[] variants = GetOrientationVariants(block);
-        if (variants.Length == 0)
-            return ComputeRotatableRotations(block, itemStack);
-
-        ERotatableInterval interval = ResolveRotatableInterval(block, itemStack);
-        if (interval == ERotatableInterval.None)
-        {
-            // No mesh-angle interval => fall back to variant-only
-            return ComputeVariantRotations(block);
-        }
-
-        // Use predefined lookup table for valid angles
-        var validAngles = interval.GetValidAngles();
-        if (validAngles.IsDefaultOrEmpty)
-        {
-            return ComputeVariantRotations(block);
-        }
-
-        // Each variant "owns" a slice of 360°
-        float sliceDegrees = 360f / variants.Length;
-
-        string? rotationAttributeName = ResolveRotationAttributeName(block);
-        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>();
-
-        for (int v = 0; v < variants.Length; v++)
-        {
-            int variantBlockId = variants[v].BlockId;
-            float sliceStart = v * sliceDegrees;
-            float sliceEnd = sliceStart + sliceDegrees;
-
-            // Add angles from the lookup table that fall within this variant's slice
-            foreach (float angle in validAngles)
-            {
-                if (angle >= sliceStart && angle < sliceEnd)
-                {
-                    // Mesh angle is relative to the slice start (0° for first angle in each slice)
-                    float meshAngle = angle - sliceStart;
-                    builder.Add(new BlockOrientationDefinition(variantBlockId, meshAngle, rotationAttributeName));
-                }
-            }
-        }
-
-        return builder.Count > 0
-            ? builder.DrainToImmutable()
-            : [new BlockOrientationDefinition(block.BlockId, 0f)];
-    }
     #endregion
 
     #region TryGetRotationInterface
@@ -414,7 +358,8 @@ public class BlockOrientationResolver
 
         return (hasVariantRotation, hasRotatableEntity) switch
         {
-            // (true, true) => EBuildBrushRotationMode.Hybrid, // NOTE: Hybrid mode disabled for now since its flawed (setting the block-id variant doesnt actually have a non-default rotation, so it just zeroes out the rotation).
+            // If a block has both variant-based rotation and an IRotatable entity, prefer Rotatable.
+            // (This keeps rotation consistent and avoids relying on variant-only block-id swaps for mesh rotation.)
             (true, true) => EBuildBrushRotationMode.Rotatable,
             (true, false) => EBuildBrushRotationMode.VariantBased,
             (false, true) => EBuildBrushRotationMode.Rotatable,

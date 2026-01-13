@@ -51,40 +51,6 @@ public class BuildBrushPlacementTests
         ["orientation", new[] { "up", "down", "horizontal" }, 300],
     ];
 
-    /// <summary>
-    /// Hybrid rotation test data combining variants and mesh angles.
-    /// Format: (variantCount, intervalString, testOrientationIndex, expectedVariantIndex, expectedMeshAngleDegrees)
-    /// </summary>
-    public static IEnumerable<object[]> HybridRotationData =>
-    [
-        // 4 variants × 90° interval = 1 step per variant = 4 total orientations
-        [4, "90deg", 0, 0, 0f],
-        [4, "90deg", 1, 1, 0f],
-        [4, "90deg", 2, 2, 0f],
-        [4, "90deg", 3, 3, 0f],
-        // 4 variants × 45° interval = 2 steps per variant = 8 total orientations
-        [4, "45deg", 0, 0, 0f],
-        [4, "45deg", 1, 0, 45f],
-        [4, "45deg", 2, 1, 0f],
-        [4, "45deg", 3, 1, 45f],
-        [4, "45deg", 4, 2, 0f],
-        [4, "45deg", 5, 2, 45f],
-        // 4 variants × 22.5° interval = 4 steps per variant = 16 total orientations
-        [4, "22.5deg", 0, 0, 0f],
-        [4, "22.5deg", 1, 0, 22.5f],
-        [4, "22.5deg", 2, 0, 45f],
-        [4, "22.5deg", 3, 0, 67.5f],
-        [4, "22.5deg", 4, 1, 0f],
-        [4, "22.5deg", 8, 2, 0f],
-        [4, "22.5deg", 12, 3, 0f],
-        // 2 variants × 45° interval = 4 steps per variant = 8 total orientations
-        [2, "45deg", 0, 0, 0f],
-        [2, "45deg", 1, 0, 45f],
-        [2, "45deg", 2, 0, 90f],
-        [2, "45deg", 3, 0, 135f],
-        [2, "45deg", 4, 1, 0f],
-    ];
-
     #endregion
 
     #region Test Helpers
@@ -248,19 +214,19 @@ public class BuildBrushPlacementTests
     }
 
     /// <summary>
-    /// Verifies that after setting OrientationIndex on BuildBrushInstance for a hybrid block,
-    /// the ItemStack.Attributes["meshAngle"] contains the correct value in radians.
+    /// Verifies that when a block has both variants and an IRotatable entity, it is treated as Rotatable:
+    /// orientation changes update meshAngle (radians) and do not depend on variant swapping.
     /// </summary>
     [Theory]
-    [MemberData(nameof(HybridRotationData))]
-    public void BuildBrushInstance_HybridBlock_ItemStackHasMeshAngle(
-        int variantCount, string intervalString, int testOrientationIndex,
-        int expectedVariantIndex, float expectedMeshAngleDegrees)
+    [MemberData(nameof(RotationIntervalData))]
+    public void BuildBrushInstance_VariantPlusRotatableBlock_ItemStackHasMeshAngle(string intervalString, float _, int expectedStepCount, float[] expectedAngles)
     {
         // Arrange
         var mockWorld = CreateMockWorld();
         var mockPlayer = TestHelpers.CreateMockPlayer();
-        var variants = CreateHybridVariantBlocks("game:hybridblock", "rot", variantCount, 100, "TestRotatable", intervalString);
+
+        // Create multiple variants, all with rotatable interval configured
+        var variants = CreateHybridVariantBlocks("game:variantplusrotatable", "rot", variantCount: 4, startBlockId: 100, entityClass: "TestRotatable", interval: intervalString);
         SetupBlockLookup(mockWorld, variants);
         SetupVariantSearch(mockWorld, variants);
         SetupRotatableEntity(mockWorld, "TestRotatable");
@@ -270,19 +236,22 @@ public class BuildBrushPlacementTests
             BlockId = 100
         };
 
-        // Verify rotation is detected
         Assert.NotNull(instance.Rotation);
         Assert.True(instance.Rotation.CanRotate);
+        Assert.Equal(EBuildBrushRotationMode.Rotatable, instance.Rotation.Mode);
+        Assert.Equal(expectedStepCount, instance.OrientationCount);
 
-        // Act
-        instance.OrientationIndex = testOrientationIndex;
+        // Act & Assert
+        for (int i = 0; i < expectedStepCount; i++)
+        {
+            instance.OrientationIndex = i;
 
-        // Assert - ItemStack should have correct meshAngle
-        Assert.NotNull(instance.ItemStack);
-        float expectedRadians = expectedMeshAngleDegrees * GameMath.DEG2RAD;
-        float actualRadians = instance.ItemStack.Attributes.GetFloat(instance?.Rotation?.RotationAttribute, -999f);
+            Assert.NotNull(instance.ItemStack);
+            float expectedRadians = expectedAngles[i] * GameMath.DEG2RAD;
+            float actualRadians = instance.ItemStack.Attributes.GetFloat(instance?.Rotation?.RotationAttribute, -999f);
 
-        Assert.Equal(expectedRadians, actualRadians, precision: 4);
+            Assert.Equal(expectedRadians, actualRadians, precision: 4);
+        }
     }
 
     #endregion
@@ -325,19 +294,24 @@ public class BuildBrushPlacementTests
     }
 
     /// <summary>
-    /// Verifies that BuildBrushInstance.CurrentPlacementBlock has the correct block ID
-    /// after setting OrientationIndex for hybrid blocks.
+    /// Verifies that when a block has both variants and an IRotatable entity, it is treated as Rotatable:
+    /// CurrentPlacementBlock should remain the base block-id while meshAngle changes.
     /// </summary>
     [Theory]
-    [MemberData(nameof(HybridRotationData))]
-    public void BuildBrushInstance_HybridBlock_BlockTransformedHasCorrectId(
-        int variantCount, string intervalString, int testOrientationIndex,
-        int expectedVariantIndex, float expectedMeshAngleDegrees)
+    [MemberData(nameof(RotationIntervalData))]
+    public void BuildBrushInstance_VariantPlusRotatableBlock_CurrentPlacementBlockStaysSameId(string intervalString, float intervalDegrees, int expectedStepCount, float[] expectedAngles)
     {
         // Arrange
+        Assert.Equal(expectedStepCount, expectedAngles.Length);
+        if (expectedAngles.Length > 1)
+        {
+            Assert.Equal(intervalDegrees, expectedAngles[1] - expectedAngles[0], precision: 4);
+        }
+
         var mockWorld = CreateMockWorld();
         var mockPlayer = TestHelpers.CreateMockPlayer();
-        var variants = CreateHybridVariantBlocks("game:hybridblock", "rot", variantCount, 100, "TestRotatable", intervalString);
+
+        var variants = CreateHybridVariantBlocks("game:variantplusrotatable", "rot", variantCount: 4, startBlockId: 100, entityClass: "TestRotatable", interval: intervalString);
         SetupBlockLookup(mockWorld, variants);
         SetupVariantSearch(mockWorld, variants);
         SetupRotatableEntity(mockWorld, "TestRotatable");
@@ -347,16 +321,16 @@ public class BuildBrushPlacementTests
             BlockId = 100
         };
 
-        // Verify rotation is detected
         Assert.NotNull(instance.Rotation);
-        Assert.True(instance.Rotation.CanRotate);
+        Assert.Equal(EBuildBrushRotationMode.Rotatable, instance.Rotation.Mode);
 
-        // Act
-        instance.OrientationIndex = testOrientationIndex;
-
-        // Assert - CurrentPlacementBlock should be the correct variant
-        Assert.NotNull(instance.CurrentPlacementBlock);
-        Assert.Equal(100 + expectedVariantIndex, instance.CurrentPlacementBlock.BlockId);
+        // Act & Assert
+        for (int i = 0; i < expectedStepCount; i++)
+        {
+            instance.OrientationIndex = i;
+            Assert.NotNull(instance.CurrentPlacementBlock);
+            Assert.Equal(100, instance.CurrentPlacementBlock.BlockId);
+        }
     }
 
     #endregion

@@ -20,11 +20,5 @@ public enum EBuildBrushRotationMode
     /// Block entity implements IRotatable interface.
     /// Rotation is applied via <see cref="Vintagestory.API.Common.IRotatable.OnTransformed"/>.
     /// </summary>
-    Rotatable,
-
-    /// <summary>
-    /// Block has both variant-based rotation AND an IRotatable block entity.
-    /// Both mechanisms are applied when rotating.
-    /// </summary>
-    Hybrid
+    Rotatable
 }

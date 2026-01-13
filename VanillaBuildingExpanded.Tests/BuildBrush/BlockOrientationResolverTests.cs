@@ -17,7 +17,7 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 /// <summary>
 /// Unit tests for <see cref="BlockOrientationResolver"/>.
 /// Verifies correct rotation mode detection and orientation definition computation
-/// for all rotation modes: None, VariantBased, Rotatable, and Hybrid.
+/// for all rotation modes: None, VariantBased, and Rotatable.
 /// </summary>
 public class BlockOrientationResolverTests
 {
@@ -96,7 +96,8 @@ public class BlockOrientationResolverTests
     }
 
     /// <summary>
-    /// Creates a hybrid block (both variants and IRotatable).
+    /// Creates a block that has both variant-based rotation and an IRotatable entity.
+    /// Blocks in this state are treated as <see cref="EBuildBrushRotationMode.Rotatable"/>.
     /// </summary>
     private static Block CreateHybridBlock(int blockId, string code, string variantKey, string variantValue, string entityClass, string interval)
     {
@@ -301,10 +302,10 @@ public class BlockOrientationResolverTests
 
     #endregion
 
-    #region GetRotationMode Tests - Hybrid
+    #region GetRotationMode Tests - Variant + Rotatable
 
     [Fact]
-    public void GetRotationMode_BlockWithBothVariantAndRotatable_ReturnsHybrid()
+    public void GetRotationMode_BlockWithBothVariantAndRotatable_ReturnsRotatable()
     {
         // Arrange
         var mockWorld = CreateMockWorld();
@@ -316,7 +317,7 @@ public class BlockOrientationResolverTests
         var mode = resolver.GetRotationMode(block);
 
         // Assert
-        Assert.Equal(EBuildBrushRotationMode.Hybrid, mode);
+        Assert.Equal(EBuildBrushRotationMode.Rotatable, mode);
     }
 
     #endregion
@@ -486,66 +487,57 @@ public class BlockOrientationResolverTests
 
     #endregion
 
-    #region GetOrientations Tests - Hybrid Mode
+    #region GetOrientations Tests - Variant + Rotatable (treated as Rotatable)
 
     [Fact]
-    public void GetOrientations_HybridBlock_UsesMeshAnglesOnly()
+    public void GetOrientations_VariantPlusRotatable_TreatedAsRotatable_UsesMeshAnglesOnly()
     {
         // Arrange
         var mockWorld = CreateMockWorld();
 
-        // Hybrid block with 90° interval - currently uses rotatable rotations (ignores variants)
         var blockNorth = CreateHybridBlock(100, "game:fancy-north", "rot", "north", "RotatableEntity", "90deg");
-        var blockEast = CreateHybridBlock(101, "game:fancy-east", "rot", "east", "RotatableEntity", "90deg");
-        var blockSouth = CreateHybridBlock(102, "game:fancy-south", "rot", "south", "RotatableEntity", "90deg");
-        var blockWest = CreateHybridBlock(103, "game:fancy-west", "rot", "west", "RotatableEntity", "90deg");
 
-        SetupBlockLookup(mockWorld, blockNorth, blockEast, blockSouth, blockWest);
-        SetupVariantSearch(mockWorld, [blockNorth, blockEast, blockSouth, blockWest]);
+        SetupBlockLookup(mockWorld, blockNorth);
         SetupRotatableEntity(mockWorld, "RotatableEntity");
         var resolver = new BlockOrientationResolver(mockWorld.Object);
 
         // Act
         var orientations = resolver.GetOrientations(100);
 
-        // Assert - Hybrid uses variant slices with mesh-angle substeps
+        // Assert - treated as Rotatable: same block id, stepped mesh angles
         Assert.Equal(4, orientations.Length);
 
         Assert.Equal(100, orientations[0].BlockId);
         Assert.Equal(0f, orientations[0].MeshAngleDegrees);
 
-        Assert.Equal(101, orientations[1].BlockId);
-        Assert.Equal(0f, orientations[1].MeshAngleDegrees);
+        Assert.Equal(100, orientations[1].BlockId);
+        Assert.Equal(90f, orientations[1].MeshAngleDegrees);
 
-        Assert.Equal(102, orientations[2].BlockId);
-        Assert.Equal(0f, orientations[2].MeshAngleDegrees);
+        Assert.Equal(100, orientations[2].BlockId);
+        Assert.Equal(180f, orientations[2].MeshAngleDegrees);
 
-        Assert.Equal(103, orientations[3].BlockId);
-        Assert.Equal(0f, orientations[3].MeshAngleDegrees);
+        Assert.Equal(100, orientations[3].BlockId);
+        Assert.Equal(270f, orientations[3].MeshAngleDegrees);
     }
 
     [Fact]
-    public void GetOrientations_HybridBlock_45DegInterval_Returns8Steps()
+    public void GetOrientations_VariantPlusRotatable_TreatedAsRotatable_45DegInterval_Returns8Steps()
     {
         // Arrange
         var mockWorld = CreateMockWorld();
 
-        // Hybrid block with 45° interval - currently uses rotatable rotations
         var blockUp = CreateHybridBlock(100, "game:ladder-up", "v", "up", "RotatableEntity", "45deg");
-        var blockDown = CreateHybridBlock(101, "game:ladder-down", "v", "down", "RotatableEntity", "45deg");
 
-        SetupBlockLookup(mockWorld, blockUp, blockDown);
-        SetupVariantSearch(mockWorld, [blockUp, blockDown]);
+        SetupBlockLookup(mockWorld, blockUp);
         SetupRotatableEntity(mockWorld, "RotatableEntity");
         var resolver = new BlockOrientationResolver(mockWorld.Object);
 
         // Act
         var orientations = resolver.GetOrientations(100);
 
-        // Assert - 2 variants × 45° = 8 total orientations (4 per variant)
+        // Assert - treated as Rotatable: 8 steps at 45° intervals
         Assert.Equal(8, orientations.Length);
 
-        // First variant slice (0-180)
         Assert.Equal(100, orientations[0].BlockId);
         Assert.Equal(0f, orientations[0].MeshAngleDegrees);
         Assert.Equal(100, orientations[1].BlockId);
@@ -555,19 +547,18 @@ public class BlockOrientationResolverTests
         Assert.Equal(100, orientations[3].BlockId);
         Assert.Equal(135f, orientations[3].MeshAngleDegrees);
 
-        // Second variant slice (180-360), mesh angles reset relative to slice start
-        Assert.Equal(101, orientations[4].BlockId);
-        Assert.Equal(0f, orientations[4].MeshAngleDegrees);
-        Assert.Equal(101, orientations[5].BlockId);
-        Assert.Equal(45f, orientations[5].MeshAngleDegrees);
-        Assert.Equal(101, orientations[6].BlockId);
-        Assert.Equal(90f, orientations[6].MeshAngleDegrees);
-        Assert.Equal(101, orientations[7].BlockId);
-        Assert.Equal(135f, orientations[7].MeshAngleDegrees);
+        Assert.Equal(100, orientations[4].BlockId);
+        Assert.Equal(180f, orientations[4].MeshAngleDegrees);
+        Assert.Equal(100, orientations[5].BlockId);
+        Assert.Equal(225f, orientations[5].MeshAngleDegrees);
+        Assert.Equal(100, orientations[6].BlockId);
+        Assert.Equal(270f, orientations[6].MeshAngleDegrees);
+        Assert.Equal(100, orientations[7].BlockId);
+        Assert.Equal(315f, orientations[7].MeshAngleDegrees);
     }
 
     [Fact]
-    public void GetOrientations_HybridBlock_NoInterval_FallsBackToVariantOnly()
+    public void GetOrientations_VariantPlusRotatable_NoInterval_TreatedAsVariantBased_FallsBackToVariantOnly()
     {
         // Arrange
         var mockWorld = CreateMockWorld();
@@ -586,7 +577,7 @@ public class BlockOrientationResolverTests
         // Act
         var orientations = resolver.GetOrientations(100);
 
-        // Assert - No interval configured => not hybrid; fall back to variant-only
+        // Assert - No interval configured => not rotatable; fall back to variant-only
         Assert.Equal(2, orientations.Length);
         Assert.Equal(100, orientations[0].BlockId);
         Assert.Equal(0f, orientations[0].MeshAngleDegrees);
