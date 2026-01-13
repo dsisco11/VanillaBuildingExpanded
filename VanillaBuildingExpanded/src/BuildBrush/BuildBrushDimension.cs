@@ -384,7 +384,6 @@ public class BuildBrushDimension
             }
         }
 
-        // dimension.Dirty = true;
         MarkDirty(nameof(PlaceBlockInDimension));
     }
 
