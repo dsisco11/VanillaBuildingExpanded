@@ -71,7 +71,7 @@
             ],
             "problemMatcher": "$msCompile",
             "presentation": {
-                "panel": "dedicated",
+                "panel": "new",
                 "reveal": "never",
                 "focus": false,
                 "close": true,
