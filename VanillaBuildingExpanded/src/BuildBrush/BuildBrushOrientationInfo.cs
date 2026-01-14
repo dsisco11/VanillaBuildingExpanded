@@ -43,7 +43,7 @@ public class BuildBrushOrientationInfo
     /// All valid orientation definitions for this block.
     /// Precomputed array that can be cycled through.
     /// </summary>
-    public ImmutableArray<BlockOrientationDefinition> Definitions { get; }
+    public ImmutableArray<BlockOrientation> Definitions { get; }
 
     /// <summary>
     /// The current index into the <see cref="Definitions"/> array.
@@ -68,7 +68,7 @@ public class BuildBrushOrientationInfo
 
             // Capture previous state BEFORE mutation
             int previousIndex = _currentIndex;
-            BlockOrientationDefinition previousDef = Current;
+            BlockOrientation previousDef = Current;
 
             // Mutate
             _currentIndex = newIndex;
@@ -89,9 +89,9 @@ public class BuildBrushOrientationInfo
     /// <summary>
     /// The current orientation definition (block-id + mesh-angle).
     /// </summary>
-    public BlockOrientationDefinition Current => !Definitions.IsDefaultOrEmpty
+    public BlockOrientation Current => !Definitions.IsDefaultOrEmpty
         ? Definitions[_currentIndex]
-        : new BlockOrientationDefinition(_originalBlock?.BlockId ?? 0, 0f);
+        : new BlockOrientation(_originalBlock?.BlockId ?? 0, 0f);
 
     /// <summary>
     /// The block corresponding to the current rotation state.
@@ -162,7 +162,7 @@ public class BuildBrushOrientationInfo
         IWorldAccessor world,
         Block originalBlock,
         EBuildBrushRotationMode mode,
-        ImmutableArray<BlockOrientationDefinition> definitions)
+        ImmutableArray<BlockOrientation> definitions)
     {
         _world = world;
         _originalBlock = originalBlock;
@@ -186,7 +186,7 @@ public class BuildBrushOrientationInfo
             return CreateEmpty(resolver?.World);
 
         EBuildBrushRotationMode mode = resolver.GetRotationMode(block);
-        ImmutableArray<BlockOrientationDefinition> definitions = resolver.GetOrientations(block.BlockId, itemStack);
+        ImmutableArray<BlockOrientation> definitions = resolver.GetOrientations(block.BlockId, itemStack);
 
         return new BuildBrushOrientationInfo(resolver.World, block, mode, definitions);
     }
@@ -200,7 +200,7 @@ public class BuildBrushOrientationInfo
             world!,
             null!,
             EBuildBrushRotationMode.None,
-            ImmutableArray<BlockOrientationDefinition>.Empty);
+            ImmutableArray<BlockOrientation>.Empty);
     }
     #endregion
 
@@ -210,7 +210,7 @@ public class BuildBrushOrientationInfo
     /// </summary>
     /// <param name="direction">Direction to cycle (Forward = +1, Backward = -1).</param>
     /// <returns>The new current orientation definition.</returns>
-    public BlockOrientationDefinition Rotate(EModeCycleDirection direction = EModeCycleDirection.Forward)
+    public BlockOrientation Rotate(EModeCycleDirection direction = EModeCycleDirection.Forward)
     {
         CurrentIndex += (int)direction;
         return Current;
@@ -242,8 +242,8 @@ public class BuildBrushOrientationInfo
     /// <param name="currentDefinition">The current/target orientation definition to apply.</param>
     /// <param name="previousIndex">Optional previous index. Defaults to current index.</param>
     public void NotifyOrientationChanged(
-        in BlockOrientationDefinition previousDefinition,
-        in BlockOrientationDefinition currentDefinition,
+        in BlockOrientation previousDefinition,
+        in BlockOrientation currentDefinition,
         int? previousIndex = null)
     {
         if (Definitions.IsDefaultOrEmpty)
@@ -272,8 +272,8 @@ public class BuildBrushOrientationInfo
     /// <returns>True if rotation was applied, false if the block entity doesn't support rotation.</returns>
     public bool ApplyToBlockEntity(
         BlockEntity blockEntity,
-        in BlockOrientationDefinition previousDefinition,
-        in BlockOrientationDefinition currentDefinition,
+        in BlockOrientation previousDefinition,
+        in BlockOrientation currentDefinition,
         ITreeAttribute? sourceAttributes = null)
     {
         if (blockEntity is null)
@@ -328,7 +328,7 @@ public class BuildBrushOrientationInfo
     /// entity-specific rotation logic runs), but falls back to directly setting the
     /// known rotation attribute in the tree.
     /// </remarks>
-    public bool ApplyToPlacedBlockEntity(BlockEntity blockEntity, in BlockOrientationDefinition targetDefinition, ItemStack? sourceItemStack = null)
+    public bool ApplyToPlacedBlockEntity(BlockEntity blockEntity, in BlockOrientation targetDefinition, ItemStack? sourceItemStack = null)
     {
         if (blockEntity is null)
             return false;
@@ -359,7 +359,7 @@ public class BuildBrushOrientationInfo
         // from the currently placed BE rotation.
         if (BlockOrientationResolver.TryGetRotationInterface(blockEntity, out IRotatable? rotatable) && rotatable is not null)
         {
-            var previousDefinition = new BlockOrientationDefinition(
+            var previousDefinition = new BlockOrientation(
                 targetDefinition.BlockId,
                 currentAngleDeg,
                 targetDefinition.RotationAttribute
@@ -390,7 +390,7 @@ public class BuildBrushOrientationInfo
     /// <returns>A new ItemStack with orientation applied.</returns>
     public ItemStack PrepareItemStackForPlacement(
         ItemStack target,
-        in BlockOrientationDefinition currentDefinition,
+        in BlockOrientation currentDefinition,
         ItemStack? source = null)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -431,7 +431,7 @@ public class BuildBrushOrientationInfo
     /// <param name="tree">The tree attribute to modify.</param>
     /// <param name="rotationRadians">The rotation in radians.</param>
     /// <returns>True if an attribute was found and set; otherwise, false.</returns>
-    private static bool TrySetMeshRotation(ITreeAttribute? tree, in BlockOrientationDefinition orientation)
+    private static bool TrySetMeshRotation(ITreeAttribute? tree, in BlockOrientation orientation)
     {
         if (tree is null)
             return false;

@@ -17,7 +17,7 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 /// </summary>
 public class RotatableOrientationCyclingTests
 {
-    private static (Dictionary<int, Block> blocks, ImmutableArray<BlockOrientationDefinition> definitions) CreateRotatableSetup(
+    private static (Dictionary<int, Block> blocks, ImmutableArray<BlockOrientation> definitions) CreateRotatableSetup(
         int baseBlockId,
         float intervalDegrees,
         int stepCount)
@@ -27,10 +27,10 @@ public class RotatableOrientationCyclingTests
             [baseBlockId] = new Block { BlockId = baseBlockId }
         };
 
-        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(stepCount);
+        var builder = ImmutableArray.CreateBuilder<BlockOrientation>(stepCount);
         for (int i = 0; i < stepCount; i++)
         {
-            builder.Add(new BlockOrientationDefinition(baseBlockId, i * intervalDegrees));
+            builder.Add(new BlockOrientation(baseBlockId, i * intervalDegrees));
         }
 
         return (blocks, builder.MoveToImmutable());

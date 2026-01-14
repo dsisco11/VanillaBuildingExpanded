@@ -37,12 +37,12 @@ public class OrientationIndexChangedEventArgs : BuildBrushStateChangedEventArgs
     /// <summary>
     /// The orientation definition before the change.
     /// </summary>
-    public BlockOrientationDefinition PreviousDefinition { get; }
+    public BlockOrientation PreviousDefinition { get; }
 
     /// <summary>
     /// The orientation definition after the change.
     /// </summary>
-    public BlockOrientationDefinition CurrentDefinition { get; }
+    public BlockOrientation CurrentDefinition { get; }
 
     /// <summary>
     /// Whether the block variant changed (different BlockId).
@@ -57,8 +57,8 @@ public class OrientationIndexChangedEventArgs : BuildBrushStateChangedEventArgs
     public OrientationIndexChangedEventArgs(
         int previousIndex,
         int currentIndex,
-        BlockOrientationDefinition previousDefinition,
-        BlockOrientationDefinition currentDefinition)
+        BlockOrientation previousDefinition,
+        BlockOrientation currentDefinition)
     {
         PreviousIndex = previousIndex;
         CurrentIndex = currentIndex;

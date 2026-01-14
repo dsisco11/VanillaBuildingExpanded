@@ -26,13 +26,13 @@ public class BuildBrushOrientationInfoTests
         IWorldAccessor world,
         Block originalBlock,
         EBuildBrushRotationMode mode,
-        ImmutableArray<BlockOrientationDefinition> definitions)
+        ImmutableArray<BlockOrientation> definitions)
     {
         // Use reflection to access private constructor
         var ctor = typeof(BuildBrushOrientationInfo).GetConstructor(
             BindingFlags.NonPublic | BindingFlags.Instance,
             null,
-            [typeof(IWorldAccessor), typeof(Block), typeof(EBuildBrushRotationMode), typeof(ImmutableArray<BlockOrientationDefinition>)],
+            [typeof(IWorldAccessor), typeof(Block), typeof(EBuildBrushRotationMode), typeof(ImmutableArray<BlockOrientation>)],
             null);
 
         return (BuildBrushOrientationInfo)ctor!.Invoke([world, originalBlock, mode, definitions]);
@@ -74,8 +74,8 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(101, 90f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(101, 90f)
         );
 
         var info = CreateOrientationInfo(world, block1, EBuildBrushRotationMode.VariantBased, definitions);
@@ -101,8 +101,8 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(101, 90f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(101, 90f)
         );
 
         var info = CreateOrientationInfo(world, block, EBuildBrushRotationMode.VariantBased, definitions);
@@ -127,8 +127,8 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(101, 90f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(101, 90f)
         );
 
         var info = CreateOrientationInfo(world, block1, EBuildBrushRotationMode.VariantBased, definitions);
@@ -154,10 +154,10 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(100, 90f),
-            new BlockOrientationDefinition(100, 180f),
-            new BlockOrientationDefinition(100, 270f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(100, 90f),
+            new BlockOrientation(100, 180f),
+            new BlockOrientation(100, 270f)
         );
 
         var info = CreateOrientationInfo(world, block, EBuildBrushRotationMode.Rotatable, definitions);
@@ -183,10 +183,10 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(100, 90f),
-            new BlockOrientationDefinition(100, 180f),
-            new BlockOrientationDefinition(100, 270f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(100, 90f),
+            new BlockOrientation(100, 180f),
+            new BlockOrientation(100, 270f)
         );
 
         var info = CreateOrientationInfo(world, block, EBuildBrushRotationMode.Rotatable, definitions);
@@ -213,10 +213,10 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(100, 90f),
-            new BlockOrientationDefinition(100, 180f),
-            new BlockOrientationDefinition(100, 270f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(100, 90f),
+            new BlockOrientation(100, 180f),
+            new BlockOrientation(100, 270f)
         );
 
         var info = CreateOrientationInfo(world, block, EBuildBrushRotationMode.Rotatable, definitions);
@@ -247,10 +247,10 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(100, 90f),
-            new BlockOrientationDefinition(100, 180f),
-            new BlockOrientationDefinition(100, 270f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(100, 90f),
+            new BlockOrientation(100, 180f),
+            new BlockOrientation(100, 270f)
         );
 
         var info = CreateOrientationInfo(world, block, EBuildBrushRotationMode.Rotatable, definitions);
@@ -276,10 +276,10 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(100, 90f),
-            new BlockOrientationDefinition(100, 180f),
-            new BlockOrientationDefinition(100, 270f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(100, 90f),
+            new BlockOrientation(100, 180f),
+            new BlockOrientation(100, 270f)
         );
 
         var info = CreateOrientationInfo(world, block, EBuildBrushRotationMode.Rotatable, definitions);
@@ -311,9 +311,9 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(101, 0f),
-            new BlockOrientationDefinition(102, 0f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(101, 0f),
+            new BlockOrientation(102, 0f)
         );
 
         var info = CreateOrientationInfo(world, block1, EBuildBrushRotationMode.VariantBased, definitions);
@@ -342,8 +342,8 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(101, 0f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(101, 0f)
         );
 
         var info = CreateOrientationInfo(world, block, EBuildBrushRotationMode.VariantBased, definitions);
@@ -368,8 +368,8 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(101, 0f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(101, 0f)
         );
 
         var info = CreateOrientationInfo(world, block, EBuildBrushRotationMode.VariantBased, definitions);
@@ -399,8 +399,8 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(101, 0f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(101, 0f)
         );
 
         var info = CreateOrientationInfo(world, block1, EBuildBrushRotationMode.VariantBased, definitions);
@@ -426,8 +426,8 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(100, 90f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(100, 90f)
         );
 
         var info = CreateOrientationInfo(world, block, EBuildBrushRotationMode.Rotatable, definitions);
@@ -455,10 +455,10 @@ public class BuildBrushOrientationInfoTests
 
         // 2 blocks × 2 angles = 4 total orientations
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),   // North, 0°
-            new BlockOrientationDefinition(100, 90f),  // North, 90°
-            new BlockOrientationDefinition(101, 0f),   // East, 0°
-            new BlockOrientationDefinition(101, 90f)   // East, 90°
+            new BlockOrientation(100, 0f),   // North, 0°
+            new BlockOrientation(100, 90f),  // North, 90°
+            new BlockOrientation(101, 0f),   // East, 0°
+            new BlockOrientation(101, 90f)   // East, 90°
         );
 
         var info = CreateOrientationInfo(world, blockNorth, EBuildBrushRotationMode.VariantBased, definitions);
@@ -499,7 +499,7 @@ public class BuildBrushOrientationInfoTests
         var blocks = new Dictionary<int, Block> { { 100, block } };
         var world = CreateMockWorld(blocks);
 
-        var info = CreateOrientationInfo(world, block, EBuildBrushRotationMode.None, ImmutableArray<BlockOrientationDefinition>.Empty);
+        var info = CreateOrientationInfo(world, block, EBuildBrushRotationMode.None, ImmutableArray<BlockOrientation>.Empty);
 
         int eventCount = 0;
         info.OnOrientationChanged += (sender, args) => eventCount++;
@@ -521,7 +521,7 @@ public class BuildBrushOrientationInfoTests
         var world = CreateMockWorld(blocks);
 
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f)
+            new BlockOrientation(100, 0f)
         );
 
         var info = CreateOrientationInfo(world, block, EBuildBrushRotationMode.None, definitions);

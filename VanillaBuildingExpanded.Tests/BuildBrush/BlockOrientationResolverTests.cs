@@ -594,10 +594,10 @@ public class BlockOrientationResolverTests
     {
         // Arrange
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(101, 90f),
-            new BlockOrientationDefinition(102, 180f),
-            new BlockOrientationDefinition(103, 270f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(101, 90f),
+            new BlockOrientation(102, 180f),
+            new BlockOrientation(103, 270f)
         );
 
         // Act & Assert
@@ -612,8 +612,8 @@ public class BlockOrientationResolverTests
     {
         // Arrange
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(101, 90f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(101, 90f)
         );
 
         // Act
@@ -627,7 +627,7 @@ public class BlockOrientationResolverTests
     public void FindIndexForBlockId_EmptyDefinitions_ReturnsZero()
     {
         // Arrange
-        var definitions = ImmutableArray<BlockOrientationDefinition>.Empty;
+        var definitions = ImmutableArray<BlockOrientation>.Empty;
 
         // Act
         var index = BlockOrientationResolver.FindIndexForBlockId(definitions, 100);

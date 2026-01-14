@@ -303,8 +303,8 @@ public class BuildBrushDimensionTests
         SetCurrentBlock(dimension, blockNorth);
 
         // Create mock event args for rotation (variant change)
-        var previousDef = new BlockOrientationDefinition(100, 0f);
-        var currentDef = new BlockOrientationDefinition(101, 90f);
+        var previousDef = new BlockOrientation(100, 0f);
+        var currentDef = new BlockOrientation(101, 90f);
         var eventArgs = new OrientationIndexChangedEventArgs(0, 1, previousDef, currentDef);
         
         // Create mock orientation info
@@ -341,8 +341,8 @@ public class BuildBrushDimensionTests
         SetCurrentBlock(dimension, blockNorth);
 
         // Create mock event args for rotation (same variant, different angle)
-        var previousDef = new BlockOrientationDefinition(100, 0f);
-        var currentDef = new BlockOrientationDefinition(100, 90f);
+        var previousDef = new BlockOrientation(100, 0f);
+        var currentDef = new BlockOrientation(100, 90f);
         var eventArgs = new OrientationIndexChangedEventArgs(0, 1, previousDef, currentDef);
         
         // Create mock orientation info
@@ -381,8 +381,8 @@ public class BuildBrushDimensionTests
         SetCurrentBlock(dimension, blockNorth);
 
         // Create mock event args for rotation (variant change)
-        var previousDef = new BlockOrientationDefinition(100, 0f);
-        var currentDef = new BlockOrientationDefinition(101, 0f);
+        var previousDef = new BlockOrientation(100, 0f);
+        var currentDef = new BlockOrientation(101, 0f);
         var eventArgs = new OrientationIndexChangedEventArgs(0, 1, previousDef, currentDef);
         
         // Create mock orientation info
@@ -419,8 +419,8 @@ public class BuildBrushDimensionTests
         SetCurrentBlock(dimension, blockNorth);
 
         // Create mock event args for rotation (angle change only)
-        var previousDef = new BlockOrientationDefinition(100, 0f);
-        var currentDef = new BlockOrientationDefinition(100, 90f);
+        var previousDef = new BlockOrientation(100, 0f);
+        var currentDef = new BlockOrientation(100, 90f);
         var eventArgs = new OrientationIndexChangedEventArgs(0, 1, previousDef, currentDef);
         
         // Create mock orientation info
@@ -455,8 +455,8 @@ public class BuildBrushDimensionTests
         SetCurrentBlock(dimension, block);
 
         // Create mock event args for rotation (attempted change)
-        var previousDef = new BlockOrientationDefinition(100, 0f);
-        var currentDef = new BlockOrientationDefinition(101, 90f);
+        var previousDef = new BlockOrientation(100, 0f);
+        var currentDef = new BlockOrientation(101, 90f);
         var eventArgs = new OrientationIndexChangedEventArgs(0, 1, previousDef, currentDef);
         
         // Create mock orientation info
@@ -499,10 +499,10 @@ public class BuildBrushDimensionTests
 
         // Create a rotatable orientation: same block-id, different angles
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(100, 90f),
-            new BlockOrientationDefinition(100, 180f),
-            new BlockOrientationDefinition(100, 270f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(100, 90f),
+            new BlockOrientation(100, 180f),
+            new BlockOrientation(100, 270f)
         );
 
         var rotation = new BuildBrushOrientationInfo(mockWorld.Object, block, EBuildBrushRotationMode.Rotatable, definitions);
@@ -574,8 +574,8 @@ public class BuildBrushDimensionTests
 
         // Create a variant-only orientation: two distinct block ids
         var definitions = ImmutableArray.Create(
-            new BlockOrientationDefinition(100, 0f),
-            new BlockOrientationDefinition(101, 0f)
+            new BlockOrientation(100, 0f),
+            new BlockOrientation(101, 0f)
         );
 
         var rotation = new BuildBrushOrientationInfo(mockWorld.Object, blockNorth, EBuildBrushRotationMode.VariantBased, definitions);

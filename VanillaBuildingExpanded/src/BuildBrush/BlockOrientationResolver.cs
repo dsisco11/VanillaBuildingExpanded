@@ -13,7 +13,7 @@ namespace VanillaBuildingExpanded.BuildHammer;
 
 /// <summary>
 /// Resolves and caches all valid orientation states for blocks.
-/// Precomputes <see cref="BlockOrientationDefinition"/> arrays for efficient orientation cycling.
+/// Precomputes <see cref="BlockOrientation"/> arrays for efficient orientation cycling.
 /// </summary>
 public class BlockOrientationResolver
 {
@@ -78,7 +78,7 @@ public class BlockOrientationResolver
     /// <summary>
     /// Cache of orientation definitions keyed by untransformed block ID.
     /// </summary>
-    private readonly Dictionary<int, ImmutableArray<BlockOrientationDefinition>> _orientationCache = [];
+    private readonly Dictionary<int, ImmutableArray<BlockOrientation>> _orientationCache = [];
 
     /// <summary>
     /// Cache of orientation modes keyed by block code (for classification).
@@ -106,7 +106,7 @@ public class BlockOrientationResolver
     /// <param name="untransformedBlockId">The block ID to get orientations for.</param>
     /// <param name="itemStack">Optional ItemStack to resolve type-specific properties (e.g., for typed containers).</param>
     /// <returns>Array of all valid orientation states for the block.</returns>
-    public ImmutableArray<BlockOrientationDefinition> GetOrientations(int untransformedBlockId, ItemStack? itemStack = null)
+    public ImmutableArray<BlockOrientation> GetOrientations(int untransformedBlockId, ItemStack? itemStack = null)
     {
         if (_orientationCache.TryGetValue(untransformedBlockId, out var cached))
             return cached;
@@ -114,7 +114,7 @@ public class BlockOrientationResolver
         Block? block = World.GetBlock(untransformedBlockId);
         if (block is null)
         {
-            var fallback = ImmutableArray.Create(new BlockOrientationDefinition(untransformedBlockId, 0f));
+            var fallback = ImmutableArray.Create(new BlockOrientation(untransformedBlockId, 0f));
             _orientationCache[untransformedBlockId] = fallback;
             return fallback;
         }
@@ -131,7 +131,7 @@ public class BlockOrientationResolver
     /// <param name="definitions">The orientation definitions array.</param>
     /// <param name="blockId">The block ID to find.</param>
     /// <returns>The index of the matching definition, or 0 if not found.</returns>
-    public static int FindIndexForBlockId(ImmutableArray<BlockOrientationDefinition> definitions, int blockId)
+    public static int FindIndexForBlockId(ImmutableArray<BlockOrientation> definitions, int blockId)
     {
         for (int i = 0; i < definitions.Length; i++)
         {
@@ -175,32 +175,32 @@ public class BlockOrientationResolver
     /// </summary>
     /// <param name="block">The block to compute orientations for.</param>
     /// <param name="itemStack">Optional ItemStack to resolve type-specific properties.</param>
-    private ImmutableArray<BlockOrientationDefinition> ComputeOrientations(Block block, ItemStack? itemStack = null)
+    private ImmutableArray<BlockOrientation> ComputeOrientations(Block block, ItemStack? itemStack = null)
     {
         EBuildBrushRotationMode mode = GetRotationMode(block);
 
         return mode switch
         {
-            EBuildBrushRotationMode.None => [new BlockOrientationDefinition(block.BlockId, 0f)],
+            EBuildBrushRotationMode.None => [new BlockOrientation(block.BlockId, 0f)],
             EBuildBrushRotationMode.VariantBased => ComputeVariantRotations(block),
             EBuildBrushRotationMode.Rotatable => ComputeRotatableRotations(block, itemStack),
-            _ => [new BlockOrientationDefinition(block.BlockId, 0f)]
+            _ => [new BlockOrientation(block.BlockId, 0f)]
         };
     }
 
     /// <summary>
     /// Computes orientations for variant-based blocks (one definition per variant, 0° mesh angle).
     /// </summary>
-    private ImmutableArray<BlockOrientationDefinition> ComputeVariantRotations(Block block)
+    private ImmutableArray<BlockOrientation> ComputeVariantRotations(Block block)
     {
         Block[] variants = GetOrientationVariants(block);
         if (variants.Length == 0)
-            return [new BlockOrientationDefinition(block.BlockId, 0f)];
+            return [new BlockOrientation(block.BlockId, 0f)];
 
-        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(variants.Length);
+        var builder = ImmutableArray.CreateBuilder<BlockOrientation>(variants.Length);
         for (int i = 0; i < variants.Length; i++)
         {
-            builder.Add(new BlockOrientationDefinition(variants[i].BlockId, 0f));
+            builder.Add(new BlockOrientation(variants[i].BlockId, 0f));
         }
         return builder.MoveToImmutable();
     }
@@ -211,28 +211,28 @@ public class BlockOrientationResolver
     /// </summary>
     /// <param name="block">The block to compute rotations for.</param>
     /// <param name="itemStack">Optional ItemStack to resolve type-specific properties.</param>
-    private ImmutableArray<BlockOrientationDefinition> ComputeRotatableRotations(Block block, ItemStack? itemStack = null)
+    private ImmutableArray<BlockOrientation> ComputeRotatableRotations(Block block, ItemStack? itemStack = null)
     {
         ERotatableInterval interval = ResolveRotatableInterval(block, itemStack);
         if (interval == ERotatableInterval.None)
         {
             // No interval configured => not rotatable
-            return [new BlockOrientationDefinition(block.BlockId, 0f)];
+            return [new BlockOrientation(block.BlockId, 0f)];
         }
 
         // Use predefined lookup table for valid angles
         var validAngles = interval.GetValidAngles();
         if (validAngles.IsDefaultOrEmpty)
         {
-            return [new BlockOrientationDefinition(block.BlockId, 0f)];
+            return [new BlockOrientation(block.BlockId, 0f)];
         }
 
         string? rotationAttributeName = ResolveRotationAttributeName(block);
-        var builder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(validAngles.Length);
+        var builder = ImmutableArray.CreateBuilder<BlockOrientation>(validAngles.Length);
         
         foreach (float angle in validAngles)
         {
-            builder.Add(new BlockOrientationDefinition(block.BlockId, angle, rotationAttributeName));
+            builder.Add(new BlockOrientation(block.BlockId, angle, rotationAttributeName));
         }
         
         return builder.MoveToImmutable();

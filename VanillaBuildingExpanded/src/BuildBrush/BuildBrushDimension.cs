@@ -447,8 +447,8 @@ public class BuildBrushDimension
             return;
 
         // Extract definitions from event args
-        BlockOrientationDefinition previousDef = eventArgs.PreviousDefinition;
-        BlockOrientationDefinition currentDef = eventArgs.CurrentDefinition;
+        BlockOrientation previousDef = eventArgs.PreviousDefinition;
+        BlockOrientation currentDef = eventArgs.CurrentDefinition;
 
         // Normalize angle
         RotationAngle = ((int)currentDef.MeshAngleDegrees % 360 + 360) % 360;
@@ -515,8 +515,8 @@ public class BuildBrushDimension
     /// <param name="forceReplacement">If true, forces full block replacement (e.g., when variant changed).</param>
     private void ApplyRotatableRotation(
         BuildBrushOrientationInfo orientationInfo,
-        BlockOrientationDefinition previousDefinition,
-        BlockOrientationDefinition currentDefinition,
+        BlockOrientation previousDefinition,
+        BlockOrientation currentDefinition,
         bool forceReplacement = false)
     {
         if (dimension is null || currentBlock is null || internalBlockPos is null || orientationInfo is null)

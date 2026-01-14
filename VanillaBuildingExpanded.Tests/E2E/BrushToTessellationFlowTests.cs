@@ -207,7 +207,7 @@ public class BrushToTessellationFlowTests
             }
 
             // Create definitions based on mode
-            var definitionsBuilder = ImmutableArray.CreateBuilder<BlockOrientationDefinition>(orientationCount);
+            var definitionsBuilder = ImmutableArray.CreateBuilder<BlockOrientation>(orientationCount);
             for (int i = 0; i < orientationCount; i++)
             {
                 int definitionBlockId = mode == EBuildBrushRotationMode.Rotatable
@@ -225,7 +225,7 @@ public class BrushToTessellationFlowTests
                     MockWorld.Setup(w => w.GetBlock(definitionBlockId)).Returns(variantBlock);
                 }
 
-                definitionsBuilder.Add(new BlockOrientationDefinition(definitionBlockId, meshAngle));
+                definitionsBuilder.Add(new BlockOrientation(definitionBlockId, meshAngle));
             }
 
             var definitions = definitionsBuilder.MoveToImmutable();
@@ -244,7 +244,7 @@ public class BrushToTessellationFlowTests
             IWorldAccessor world,
             Block block,
             EBuildBrushRotationMode mode,
-            ImmutableArray<BlockOrientationDefinition> definitions)
+            ImmutableArray<BlockOrientation> definitions)
         {
             return new BuildBrushOrientationInfo(world, block, mode, definitions);
         }
