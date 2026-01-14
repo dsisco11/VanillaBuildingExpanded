@@ -13,7 +13,7 @@ using Xunit;
 namespace VanillaBuildingExpanded.Tests.BuildBrush;
 
 /// <summary>
-/// Tests for <see cref="BuildBrushDimension"/>.
+/// Tests for <see cref="BrushDimension"/>.
 /// Verifies subscription lifecycle and event handler behavior.
 /// </summary>
 public class BuildBrushDimensionTests
@@ -247,36 +247,36 @@ public class BuildBrushDimensionTests
     /// <summary>
     /// Helper to set RotationMode on dimension via reflection.
     /// </summary>
-    private static void SetRotationMode(BuildBrushDimension dimension, EBuildBrushRotationMode mode)
+    private static void SetRotationMode(BrushDimension dimension, EBuildBrushRotationMode mode)
     {
-        var prop = typeof(BuildBrushDimension).GetProperty("RotationMode");
+        var prop = typeof(BrushDimension).GetProperty("RotationMode");
         prop?.SetValue(dimension, mode);
     }
 
     /// <summary>
     /// Helper to set originalBlock on dimension via reflection.
     /// </summary>
-    private static void SetOriginalBlock(BuildBrushDimension dimension, Block block)
+    private static void SetOriginalBlock(BrushDimension dimension, Block block)
     {
-        var field = typeof(BuildBrushDimension).GetField("originalBlock", BindingFlags.NonPublic | BindingFlags.Instance);
+        var field = typeof(BrushDimension).GetField("originalBlock", BindingFlags.NonPublic | BindingFlags.Instance);
         field?.SetValue(dimension, block);
     }
 
     /// <summary>
     /// Helper to set currentBlock on dimension via reflection.
     /// </summary>
-    private static void SetCurrentBlock(BuildBrushDimension dimension, Block block)
+    private static void SetCurrentBlock(BrushDimension dimension, Block block)
     {
-        var field = typeof(BuildBrushDimension).GetField("currentBlock", BindingFlags.NonPublic | BindingFlags.Instance);
+        var field = typeof(BrushDimension).GetField("currentBlock", BindingFlags.NonPublic | BindingFlags.Instance);
         field?.SetValue(dimension, block);
     }
 
     /// <summary>
     /// Helper to get currentBlock from dimension via reflection.
     /// </summary>
-    private static Block? GetCurrentBlock(BuildBrushDimension dimension)
+    private static Block? GetCurrentBlock(BrushDimension dimension)
     {
-        var field = typeof(BuildBrushDimension).GetField("currentBlock", BindingFlags.NonPublic | BindingFlags.Instance);
+        var field = typeof(BrushDimension).GetField("currentBlock", BindingFlags.NonPublic | BindingFlags.Instance);
         return field?.GetValue(dimension) as Block;
     }
 
@@ -285,7 +285,7 @@ public class BuildBrushDimensionTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var dimension = new BuildBrushDimension(mockWorld.Object);
+        var dimension = new BrushDimension(mockWorld.Object);
 
         var blockNorth = TestHelpers.CreateTestBlock(100, "game:hybrid-north");
         var blockEast = TestHelpers.CreateTestBlock(101, "game:hybrid-east");
@@ -325,7 +325,7 @@ public class BuildBrushDimensionTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var dimension = new BuildBrushDimension(mockWorld.Object);
+        var dimension = new BrushDimension(mockWorld.Object);
 
         var blockNorth = TestHelpers.CreateTestBlock(100, "game:hybrid-north");
         mockWorld.Setup(w => w.GetBlock(100)).Returns(blockNorth);
@@ -363,7 +363,7 @@ public class BuildBrushDimensionTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var dimension = new BuildBrushDimension(mockWorld.Object);
+        var dimension = new BrushDimension(mockWorld.Object);
 
         var blockNorth = TestHelpers.CreateTestBlock(100, "game:variant-north");
         var blockEast = TestHelpers.CreateTestBlock(101, "game:variant-east");
@@ -403,7 +403,7 @@ public class BuildBrushDimensionTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var dimension = new BuildBrushDimension(mockWorld.Object);
+        var dimension = new BrushDimension(mockWorld.Object);
 
         var blockNorth = TestHelpers.CreateTestBlock(100, "game:hybrid-north");
         mockWorld.Setup(w => w.GetBlock(100)).Returns(blockNorth);
@@ -438,7 +438,7 @@ public class BuildBrushDimensionTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var dimension = new BuildBrushDimension(mockWorld.Object);
+        var dimension = new BrushDimension(mockWorld.Object);
 
         var block = TestHelpers.CreateTestBlock(100, "game:static");
         var otherBlock = TestHelpers.CreateTestBlock(101, "game:other");
@@ -487,7 +487,7 @@ public class BuildBrushDimensionTests
         mockWorld.Setup(w => w.GetBlock(100)).Returns(block);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var dimension = new BuildBrushDimension(mockWorld.Object);
+        var dimension = new BrushDimension(mockWorld.Object);
 
         // Initialize dimension with mock mini-dimension
         var mockMiniDimension = new Mock<IMiniDimension>();
@@ -563,7 +563,7 @@ public class BuildBrushDimensionTests
         mockWorld.Setup(w => w.GetBlock(101)).Returns(blockEast);
 
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var dimension = new BuildBrushDimension(mockWorld.Object);
+        var dimension = new BrushDimension(mockWorld.Object);
 
         // Initialize dimension with mock mini-dimension
         var mockMiniDimension = new Mock<IMiniDimension>();

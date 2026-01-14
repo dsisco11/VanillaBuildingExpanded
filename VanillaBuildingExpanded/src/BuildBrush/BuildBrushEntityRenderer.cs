@@ -104,7 +104,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
         TrySubscribeToBrushInstance();
 
         IMiniDimension? dimension = brushEntity.Dimension;
-        BuildBrushDimension? brushDimension = BrushInstance?.Dimension;
+        BrushDimension? brushDimension = BrushInstance?.Dimension;
 
         if (dimension is null || brushDimension is null)
         {

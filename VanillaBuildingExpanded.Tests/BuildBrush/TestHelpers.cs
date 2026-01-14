@@ -291,10 +291,10 @@ public static class TestHelpers
     /// Creates a BuildBrushDimension with default mock world.
     /// Note: Won't be fully initialized without server API.
     /// </summary>
-    public static BuildBrushDimension CreateTestDimension(Mock<IWorldAccessor>? mockWorld = null)
+    public static BrushDimension CreateTestDimension(Mock<IWorldAccessor>? mockWorld = null)
     {
         mockWorld ??= CreateMockWorld();
-        return new BuildBrushDimension(mockWorld.Object);
+        return new BrushDimension(mockWorld.Object);
     }
 
     #endregion

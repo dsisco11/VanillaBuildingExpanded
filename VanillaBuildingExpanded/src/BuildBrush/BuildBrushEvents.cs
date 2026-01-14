@@ -222,9 +222,9 @@ public class DimensionLifecycleEventArgs : BuildBrushStateChangedEventArgs
     /// <summary>
     /// The dimension instance (available on creation, may be null on destruction).
     /// </summary>
-    public BuildBrushDimension? Dimension { get; }
+    public BrushDimension? Dimension { get; }
 
-    public DimensionLifecycleEventArgs(bool isCreated, BuildBrushDimension? dimension)
+    public DimensionLifecycleEventArgs(bool isCreated, BrushDimension? dimension)
     {
         IsCreated = isCreated;
         Dimension = dimension;

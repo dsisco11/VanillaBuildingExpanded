@@ -13,7 +13,7 @@ namespace VanillaBuildingExpanded.BuildHammer;
 /// Wrapper class that manages a mini-dimension for the build brush system.
 /// Handles block placement and rotation within the preview dimension.
 /// </summary>
-public class BuildBrushDimension
+public class BrushDimension
 {
     #region Fields
     private readonly IWorldAccessor world;
@@ -113,7 +113,7 @@ public class BuildBrushDimension
     #endregion
 
     #region Constructor
-    public BuildBrushDimension(IWorldAccessor world)
+    public BrushDimension(IWorldAccessor world)
     {
         this.world = world;
         this.sapi = world.Api as ICoreServerAPI;
@@ -446,7 +446,7 @@ public class BuildBrushDimension
             {
                 world.Logger.Error(
                     "[{0}]: Invalid orientation definition block id {1} (mode={2}). Cannot resolve block for preview rotation.",
-                    nameof(BuildBrushDimension),
+                    nameof(BrushDimension),
                     currentDef.BlockId,
                     RotationMode
                 );
@@ -608,7 +608,7 @@ public class BuildBrushDimension
             {
                 world.Logger.Error(
                     "[{0}]: Invalid orientation definition block id {1} (mode={2}). Cannot update preview block.",
-                    nameof(BuildBrushDimension),
+                    nameof(BrushDimension),
                     e.CurrentDefinition.BlockId,
                     rotation.Mode
                 );

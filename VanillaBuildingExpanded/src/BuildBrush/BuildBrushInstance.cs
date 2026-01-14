@@ -46,7 +46,7 @@ public class BuildBrushInstance
     /// <summary>
     /// The mini-dimension wrapper for this brush.
     /// </summary>
-    private BuildBrushDimension? _dimension;
+    private BrushDimension? _dimension;
 
     /// <summary>
     /// The entity that renders the brush preview.
@@ -182,7 +182,7 @@ public class BuildBrushInstance
     /// <summary>
     /// The mini-dimension wrapper for this brush.
     /// </summary>
-    public BuildBrushDimension? Dimension => _dimension;
+    public BrushDimension? Dimension => _dimension;
 
     /// <summary>
     /// The entity that renders the brush preview.
@@ -786,7 +786,7 @@ public class BuildBrushInstance
             return false;
         }
 
-        _dimension = new BuildBrushDimension(World);
+        _dimension = new BrushDimension(World);
         if (!_dimension.Initialize(existingDimensionId))
         {
             Logger.Error($"[{nameof(BuildBrushInstance)}][{nameof(InitializeDimension)}]: Failed to initialize dimension.");
@@ -875,7 +875,7 @@ public class BuildBrushInstance
         // On client side, wrap the entity's dimension so the renderer can access it
         if (World.Side == EnumAppSide.Client && entity.Dimension is not null && _dimension is null)
         {
-            _dimension = new BuildBrushDimension(World);
+            _dimension = new BrushDimension(World);
             _dimension.InitializeClientSide(entity.Dimension);
 
             // Subscribe dimension to this instance's events for automatic updates

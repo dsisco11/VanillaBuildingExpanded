@@ -39,7 +39,7 @@ public class BrushToTessellationFlowTests
         public Mock<IMiniDimension> MockMiniDimension { get; }
 
         public BuildBrushInstance Instance { get; }
-        public BuildBrushDimension Dimension { get; }
+        public BrushDimension Dimension { get; }
 
         // Event tracking
         public int BlockTransformedChangedCount { get; private set; }
@@ -65,7 +65,7 @@ public class BrushToTessellationFlowTests
 
             // Create real components
             Instance = new BuildBrushInstance(MockPlayer.Object, MockWorld.Object);
-            Dimension = new BuildBrushDimension(MockWorld.Object);
+            Dimension = new BrushDimension(MockWorld.Object);
 
             // Initialize the dimension with a mock IMiniDimension so it's considered "initialized"
             // Without this, SetBlock/MarkDirty won't fire OnDirty events
