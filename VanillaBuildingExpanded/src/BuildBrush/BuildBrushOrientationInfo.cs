@@ -127,7 +127,10 @@ public class BuildBrushOrientationInfo
 
     /// <summary>
     /// Gets the mesh angle increment in degrees between orientation steps.
-    /// For rotatable blocks, this is typically 90°. For variant-only blocks, returns 0.
+    /// <note>
+    /// Not all rotation sequences have a fixed increment, so this value is computed based
+    /// on the current orientation vs the next one.
+    /// </note>
     /// </summary>
     public float MeshIncrementAngleDegrees
     {
