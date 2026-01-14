@@ -90,16 +90,6 @@ public class BrushDimension
     public EBuildBrushRotationMode RotationMode { get; private set; } = EBuildBrushRotationMode.None;
 
     /// <summary>
-    /// The current block in the dimension (may be a rotated variant).
-    /// </summary>
-    public Block? CurrentBlock => currentBlock;
-
-    /// <summary>
-    /// The original unrotated block.
-    /// </summary>
-    public Block? OriginalBlock => originalBlock;
-
-    /// <summary>
     /// Whether there are any blocks placed in the dimension.
     /// </summary>
     public bool HasActiveBounds => activeBoundsMin is not null && activeBoundsMax is not null;
@@ -270,17 +260,6 @@ public class BrushDimension
         OnDirty?.Invoke(this, new DimensionDirtyEventArgs(reason));
     }
 
-    /// <summary>
-    /// Gets the block entity at the internal block position.
-    /// </summary>
-    /// <returns>The block entity if one exists, null otherwise.</returns>
-    public BlockEntity? GetBlockEntity()
-    {
-        if (dimension is null || internalBlockPos is null)
-            return null;
-
-        return dimension.GetBlockEntity(internalBlockPos);
-    }
     #endregion
 
     #region Block Management
@@ -323,19 +302,6 @@ public class BrushDimension
         RotationMode = rotationMode ?? EBuildBrushRotationMode.None;
 
         // Place the block in the dimension
-        PlaceBlockInDimension();
-    }
-
-    /// <summary>
-    /// Updates the block variant (for variant-based rotation).
-    /// </summary>
-    /// <param name="variantBlock">The rotated variant block.</param>
-    public void SetVariantBlock(Block variantBlock)
-    {
-        if (dimension is null || !IsInitialized || originalBlock is null)
-            return;
-
-        currentBlock = variantBlock;
         PlaceBlockInDimension();
     }
 
@@ -430,6 +396,11 @@ public class BrushDimension
         if (dimension is null || !IsInitialized || originalBlock is null || eventArgs is null || orientationInfo is null)
             return;
 
+        if (RotationMode == EBuildBrushRotationMode.None)
+        {
+            return;
+        }
+
         // Extract definitions from event args
         BlockOrientation previousDef = eventArgs.PreviousDefinition;
         BlockOrientation currentDef = eventArgs.CurrentDefinition;
@@ -453,37 +424,19 @@ public class BrushDimension
                 return;
             }
         }
+        // Use the provided variant block (skip if already set to avoid redundant placement)
+        if (variantChanged && variantBlock is not null)
+        {
+            if (currentBlock is null || currentBlock.BlockId != variantBlock.BlockId)
+            {
+                currentBlock = variantBlock;
+                PlaceBlockInDimension();
+            }
+        }
 
         switch (RotationMode)
         {
-            case EBuildBrushRotationMode.None:
-                // No rotation possible
-                break;
-
-            case EBuildBrushRotationMode.VariantBased:
-                // Use the provided variant block (skip if already set to avoid redundant placement)
-                if (variantChanged && variantBlock is not null)
-                {
-                    if (currentBlock is null || currentBlock.BlockId != variantBlock.BlockId)
-                    {
-                        currentBlock = variantBlock;
-                        PlaceBlockInDimension();
-                    }
-                }
-                break;
-
             case EBuildBrushRotationMode.Rotatable:
-                // Some test scenarios (and any misconfigured definitions) may change the block-id even in
-                // rotatable mode. Ensure the correct block is placed so the preview updates and we get a dirty event
-                // even when no IRotatable block entity exists.
-                if (variantChanged && variantBlock is not null)
-                {
-                    currentBlock = variantBlock;
-                    PlaceBlockInDimension();
-                    // Block was replaced; no further rotation to apply for this step.
-                    break;
-                }
-
                 // Apply rotation via IRotatable
                 ApplyRotatableRotation(orientationInfo, previousDef, currentDef);
                 break;
