@@ -12,7 +12,7 @@ using Xunit;
 namespace VanillaBuildingExpanded.Tests.BuildBrush;
 
 /// <summary>
-/// Tests for <see cref="BuildBrushOrientationInfo"/>.
+/// Tests for <see cref="BrushOrientation"/>.
 /// Verifies that orientation changes raise events with correct previous/current state.
 /// </summary>
 public class BuildBrushOrientationInfoTests
@@ -22,20 +22,20 @@ public class BuildBrushOrientationInfoTests
     /// <summary>
     /// Creates a BuildBrushOrientationInfo via reflection since the constructor is private.
     /// </summary>
-    private static BuildBrushOrientationInfo CreateOrientationInfo(
+    private static BrushOrientation CreateOrientationInfo(
         IWorldAccessor world,
         Block originalBlock,
         EBuildBrushRotationMode mode,
         ImmutableArray<BlockOrientation> definitions)
     {
         // Use reflection to access private constructor
-        var ctor = typeof(BuildBrushOrientationInfo).GetConstructor(
+        var ctor = typeof(BrushOrientation).GetConstructor(
             BindingFlags.NonPublic | BindingFlags.Instance,
             null,
             [typeof(IWorldAccessor), typeof(Block), typeof(EBuildBrushRotationMode), typeof(ImmutableArray<BlockOrientation>)],
             null);
 
-        return (BuildBrushOrientationInfo)ctor!.Invoke([world, originalBlock, mode, definitions]);
+        return (BrushOrientation)ctor!.Invoke([world, originalBlock, mode, definitions]);
     }
 
     /// <summary>

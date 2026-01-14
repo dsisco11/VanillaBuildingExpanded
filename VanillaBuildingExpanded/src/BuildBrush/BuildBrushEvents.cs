@@ -20,7 +20,7 @@ public abstract class BuildBrushStateChangedEventArgs : EventArgs
 
 /// <summary>
 /// Event args for orientation index changes.
-/// Raised by <see cref="BuildBrushOrientationInfo"/> when <see cref="BuildBrushOrientationInfo.CurrentIndex"/> changes.
+/// Raised by <see cref="BrushOrientation"/> when <see cref="BrushOrientation.CurrentIndex"/> changes.
 /// </summary>
 public class OrientationIndexChangedEventArgs : BuildBrushStateChangedEventArgs
 {
@@ -107,12 +107,12 @@ public class RotationInfoChangedEventArgs : BuildBrushStateChangedEventArgs
     /// <summary>
     /// The previous rotation info (null if none was set).
     /// </summary>
-    public BuildBrushOrientationInfo? PreviousRotation { get; }
+    public BrushOrientation? PreviousRotation { get; }
 
     /// <summary>
     /// The current rotation info (null if cleared).
     /// </summary>
-    public BuildBrushOrientationInfo? CurrentRotation { get; }
+    public BrushOrientation? CurrentRotation { get; }
 
     /// <summary>
     /// The source block that triggered this change.
@@ -120,8 +120,8 @@ public class RotationInfoChangedEventArgs : BuildBrushStateChangedEventArgs
     public Block? SourceBlock { get; }
 
     public RotationInfoChangedEventArgs(
-        BuildBrushOrientationInfo? previousRotation,
-        BuildBrushOrientationInfo? currentRotation,
+        BrushOrientation? previousRotation,
+        BrushOrientation? currentRotation,
         Block? sourceBlock)
     {
         PreviousRotation = previousRotation;

@@ -441,7 +441,7 @@ public class BuildBrushDimension
     /// <param name="previousAppliedAngle">The previously applied rotation angle in degrees.</param>
     /// <param name="eventArgs">Event args containing previous and current orientation definitions.</param>
     /// <param name="orientationInfo">The orientation info to use for applying rotation.</param>
-    public void ApplyRotation(OrientationIndexChangedEventArgs eventArgs, BuildBrushOrientationInfo orientationInfo)
+    public void ApplyRotation(OrientationIndexChangedEventArgs eventArgs, BrushOrientation orientationInfo)
     {
         if (dimension is null || !IsInitialized || originalBlock is null || eventArgs is null || orientationInfo is null)
             return;
@@ -514,7 +514,7 @@ public class BuildBrushDimension
     /// <param name="currentDefinition">The current/target orientation definition to apply.</param>
     /// <param name="forceReplacement">If true, forces full block replacement (e.g., when variant changed).</param>
     private void ApplyRotatableRotation(
-        BuildBrushOrientationInfo orientationInfo,
+        BrushOrientation orientationInfo,
         BlockOrientation previousDefinition,
         BlockOrientation currentDefinition,
         bool forceReplacement = false)

@@ -240,20 +240,20 @@ public class BrushToTessellationFlowTests
         /// <summary>
         /// Creates a BuildBrushOrientationInfo directly using the internal constructor.
         /// </summary>
-        private static BuildBrushOrientationInfo CreateOrientationInfo(
+        private static BrushOrientation CreateOrientationInfo(
             IWorldAccessor world,
             Block block,
             EBuildBrushRotationMode mode,
             ImmutableArray<BlockOrientation> definitions)
         {
-            return new BuildBrushOrientationInfo(world, block, mode, definitions);
+            return new BrushOrientation(world, block, mode, definitions);
         }
 
         /// <summary>
         /// Injects pre-configured rotation info into the instance via reflection.
         /// Also sets up the block and wires events.
         /// </summary>
-        private static void InjectOrientationInfo(BuildBrushInstance instance, BuildBrushOrientationInfo orientationInfo, Block block)
+        private static void InjectOrientationInfo(BuildBrushInstance instance, BrushOrientation orientationInfo, Block block)
         {
             // Get private fields
             var rotationField = typeof(BuildBrushInstance).GetField("_rotation", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -261,7 +261,7 @@ public class BrushToTessellationFlowTests
             var blockIdField = typeof(BuildBrushInstance).GetField("_blockId", BindingFlags.NonPublic | BindingFlags.Instance);
 
             // Unsubscribe from old rotation if any
-            var oldRotation = rotationField?.GetValue(instance) as BuildBrushOrientationInfo;
+            var oldRotation = rotationField?.GetValue(instance) as BrushOrientation;
             if (oldRotation is not null)
             {
                 // Need to unsubscribe via reflection - get the event handler field

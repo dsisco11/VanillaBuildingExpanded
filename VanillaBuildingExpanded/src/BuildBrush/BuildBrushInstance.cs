@@ -56,7 +56,7 @@ public class BuildBrushInstance
     /// <summary>
     /// Encapsulates all rotation data and logic for the current block.
     /// </summary>
-    private BuildBrushOrientationInfo? _rotation;
+    private BrushOrientation? _rotation;
 
     /// <summary>
     /// Resolver for precomputing and caching rotation definitions.
@@ -192,7 +192,7 @@ public class BuildBrushInstance
     /// <summary>
     /// The rotation info for the current block.
     /// </summary>
-    public BuildBrushOrientationInfo? Rotation => _rotation;
+    public BrushOrientation? Rotation => _rotation;
 
     /// <summary>
     /// The detected rotation mode for the current block.
@@ -363,7 +363,7 @@ public class BuildBrushInstance
             }
 
             Block? previousBlock = _blockUntransformed;
-            BuildBrushOrientationInfo? previousRotation = _rotation;
+            BrushOrientation? previousRotation = _rotation;
 
             // Unsubscribe from old rotation info events
             if (_rotation is not null)
@@ -379,7 +379,7 @@ public class BuildBrushInstance
             // Create rotation info for the new block using the resolver
             // Pass source ItemStack to resolve type-specific properties (e.g., for typed containers)
             _rotation = value is not null
-                ? BuildBrushOrientationInfo.Create(value, _orientationResolver, _sourceItemStack)
+                ? BrushOrientation.Create(value, _orientationResolver, _sourceItemStack)
                 : null;
 
             // Subscribe to new rotation info events

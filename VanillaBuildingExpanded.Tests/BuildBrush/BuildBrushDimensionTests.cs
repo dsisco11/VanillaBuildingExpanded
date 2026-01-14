@@ -309,7 +309,7 @@ public class BuildBrushDimensionTests
         
         // Create mock orientation info
         var definitions = System.Collections.Immutable.ImmutableArray.Create(previousDef, currentDef);
-        var orientationInfo = new BuildBrushOrientationInfo(mockWorld.Object, blockNorth, EBuildBrushRotationMode.Rotatable, definitions);
+        var orientationInfo = new BrushOrientation(mockWorld.Object, blockNorth, EBuildBrushRotationMode.Rotatable, definitions);
         orientationInfo.CurrentIndex = 1; // Set to the new index
 
         // Act - Apply rotation with different variant block
@@ -347,7 +347,7 @@ public class BuildBrushDimensionTests
         
         // Create mock orientation info
         var definitions = System.Collections.Immutable.ImmutableArray.Create(previousDef, currentDef);
-        var orientationInfo = new BuildBrushOrientationInfo(mockWorld.Object, blockNorth, EBuildBrushRotationMode.Rotatable, definitions);
+        var orientationInfo = new BrushOrientation(mockWorld.Object, blockNorth, EBuildBrushRotationMode.Rotatable, definitions);
         orientationInfo.CurrentIndex = 1;
 
         // Act - Apply rotation with SAME variant block (different angle, same block)
@@ -387,7 +387,7 @@ public class BuildBrushDimensionTests
         
         // Create mock orientation info
         var definitions = System.Collections.Immutable.ImmutableArray.Create(previousDef, currentDef);
-        var orientationInfo = new BuildBrushOrientationInfo(mockWorld.Object, blockNorth, EBuildBrushRotationMode.VariantBased, definitions);
+        var orientationInfo = new BrushOrientation(mockWorld.Object, blockNorth, EBuildBrushRotationMode.VariantBased, definitions);
         orientationInfo.CurrentIndex = 1;
 
         // Act - Apply rotation with different variant block
@@ -425,7 +425,7 @@ public class BuildBrushDimensionTests
         
         // Create mock orientation info
         var definitions = System.Collections.Immutable.ImmutableArray.Create(previousDef, currentDef);
-        var orientationInfo = new BuildBrushOrientationInfo(mockWorld.Object, blockNorth, EBuildBrushRotationMode.Rotatable, definitions);
+        var orientationInfo = new BrushOrientation(mockWorld.Object, blockNorth, EBuildBrushRotationMode.Rotatable, definitions);
         orientationInfo.CurrentIndex = 1;
 
         // Act & Assert - Should not throw even with null CurrentBlock in orientation info
@@ -461,7 +461,7 @@ public class BuildBrushDimensionTests
         
         // Create mock orientation info
         var definitions = System.Collections.Immutable.ImmutableArray.Create(previousDef, currentDef);
-        var orientationInfo = new BuildBrushOrientationInfo(mockWorld.Object, block, EBuildBrushRotationMode.None, definitions);
+        var orientationInfo = new BrushOrientation(mockWorld.Object, block, EBuildBrushRotationMode.None, definitions);
         orientationInfo.CurrentIndex = 1;
 
         // Act - Try to apply rotation with different block
@@ -505,7 +505,7 @@ public class BuildBrushDimensionTests
             new BlockOrientation(100, 270f)
         );
 
-        var rotation = new BuildBrushOrientationInfo(mockWorld.Object, block, EBuildBrushRotationMode.Rotatable, definitions);
+        var rotation = new BrushOrientation(mockWorld.Object, block, EBuildBrushRotationMode.Rotatable, definitions);
 
         // Inject rotation info into instance
         var rotationField = typeof(BuildBrushInstance).GetField("_rotation", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -578,7 +578,7 @@ public class BuildBrushDimensionTests
             new BlockOrientation(101, 0f)
         );
 
-        var rotation = new BuildBrushOrientationInfo(mockWorld.Object, blockNorth, EBuildBrushRotationMode.VariantBased, definitions);
+        var rotation = new BrushOrientation(mockWorld.Object, blockNorth, EBuildBrushRotationMode.VariantBased, definitions);
 
         // Inject rotation info
         var rotationField = typeof(BuildBrushInstance).GetField("_rotation", BindingFlags.NonPublic | BindingFlags.Instance);

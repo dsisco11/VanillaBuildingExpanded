@@ -53,7 +53,7 @@ public class RotatableOrientationCyclingTests
         var (blocks, definitions) = CreateRotatableSetup(baseBlockId: 100, intervalDegrees, stepCount);
         var world = CreateMockWorld(blocks);
         var originalBlock = blocks[100];
-        var info = new BuildBrushOrientationInfo(world, originalBlock, EBuildBrushRotationMode.Rotatable, definitions);
+        var info = new BrushOrientation(world, originalBlock, EBuildBrushRotationMode.Rotatable, definitions);
 
         // Act & Assert
         for (int i = 0; i < stepCount; i++)
@@ -78,7 +78,7 @@ public class RotatableOrientationCyclingTests
         var (blocks, definitions) = CreateRotatableSetup(baseBlockId: 100, intervalDegrees, stepCount);
         var world = CreateMockWorld(blocks);
         var originalBlock = blocks[100];
-        var info = new BuildBrushOrientationInfo(world, originalBlock, EBuildBrushRotationMode.Rotatable, definitions);
+        var info = new BrushOrientation(world, originalBlock, EBuildBrushRotationMode.Rotatable, definitions);
 
         // Act
         info.Rotate(EModeCycleDirection.Backward);
@@ -99,7 +99,7 @@ public class RotatableOrientationCyclingTests
         var (blocks, definitions) = CreateRotatableSetup(baseBlockId: 100, intervalDegrees, stepCount);
         var world = CreateMockWorld(blocks);
         var originalBlock = blocks[100];
-        var info = new BuildBrushOrientationInfo(world, originalBlock, EBuildBrushRotationMode.Rotatable, definitions);
+        var info = new BrushOrientation(world, originalBlock, EBuildBrushRotationMode.Rotatable, definitions);
 
         var captured = new List<OrientationIndexChangedEventArgs>();
         info.OnOrientationChanged += (sender, args) => captured.Add(args);
