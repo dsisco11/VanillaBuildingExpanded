@@ -1,10 +1,7 @@
-using System.Threading;
-
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
-using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 
 using VanillaBuildingExpanded.BuildHammer.Tessellation;
@@ -22,10 +19,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
     private readonly BuildBrushEntity brushEntity;
     private readonly MiniDimensionTessellator tessellator;
     private readonly Vec4f RgbaGlowClear = new(1, 1, 1, 0);
-
-    // Async tessellation state
-    private CancellationTokenSource? tessellationCts;
-    private volatile bool isTessellating;
 
     // Track which brush instance we're subscribed to
     private BuildBrushInstance? subscribedBrushInstance;
@@ -133,75 +126,22 @@ public class BuildBrushEntityRenderer : EntityRenderer
             return;
         }
 
-        // Cancel any pending tessellation
-        CancelPendingTessellation();
-
-        // Start async tessellation
-        isTessellating = true;
-        tessellationCts = new CancellationTokenSource();
-        CancellationToken token = tessellationCts.Token;
-
         capi.Event.EnqueueMainThreadTask(() =>
         {
             MeshData ? meshData = tessellator.Tessellate(dimension, min, max);
             _upload_mesh(meshData);
         }, $"{nameof(BuildBrushEntityRenderer)}.{nameof(RebuildMesh)}");
 
-        //tessellator.TessellateAsync(dimension, min, max, token)
-        //    .ContinueWith(task =>
-        //    {
-        //        // Check if cancelled or faulted
-        //        if (task.IsCanceled || task.IsFaulted || token.IsCancellationRequested)
-        //        {
-        //            isTessellating = false;
-        //            return;
-        //        }
-
-        //        MeshData? meshData = task.Result;
-        //        _upload_mesh(meshData);
-        //    }, token);
-
         void _upload_mesh(MeshData? meshData)
         {
             if (meshData is null || meshData.VerticesCount == 0)
             {
-                isTessellating = false;
                 return;
             }
 
-            // Marshal back to main thread for GPU upload
-            //capi.Event.EnqueueMainThreadTask(() =>
-            //{
-                // Double-check we weren't cancelled while waiting
-                //if (token.IsCancellationRequested)
-                //{
-                //    isTessellating = false;
-                //    return;
-                //}
-
-                // Dispose old mesh and upload new one
-
-                DisposeMesh();
-                meshRef = capi.Render.UploadMultiTextureMesh(meshData);
-                isTessellating = false;
-            //}, $"{nameof(BuildBrushEntityRenderer)}.{nameof(RebuildMesh)}");
-        }
-    }
-
-    /// <summary>
-    /// Cancels any pending tessellation operation.
-    /// </summary>
-    private void CancelPendingTessellation()
-    {
-        try
-        {
-            tessellationCts?.Cancel();
-            tessellationCts?.Dispose();
-        }
-        catch { }
-        finally
-        {
-            tessellationCts = null;
+            // Dispose old mesh and upload new one
+            DisposeMesh();
+            meshRef = capi.Render.UploadMultiTextureMesh(meshData);
         }
     }
 
@@ -279,9 +219,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
 
     public override void Dispose()
     {
-        // Cancel any pending tessellation
-        CancelPendingTessellation();
-
         // Unsubscribe from brush instance events
         if (subscribedBrushInstance is not null)
         {
