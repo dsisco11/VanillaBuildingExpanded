@@ -2,9 +2,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 
-using Vintagestory.API.Client;
 using Vintagestory.API.Common;
-using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 
@@ -137,16 +135,6 @@ public class BuildBrushInstance
 
             // Raise activation changed event
             OnActivationChanged?.Invoke(this, new BrushActivationChangedEventArgs(wasActive, value));
-
-            // Manage dimension/entity lifecycle based on active state
-            if (value)
-            {
-                ActivateDimension();
-            }
-            else
-            {
-                DeactivateDimension();
-            }
         }
     }
 
@@ -687,7 +675,6 @@ public class BuildBrushInstance
     #region Event Handlers
     public void OnEquipped()
     {
-        DisplaySnappingModeNotice();
         TryUpdateBlockId();
     }
 
@@ -697,43 +684,11 @@ public class BuildBrushInstance
         BlockId = 0;
     }
 
-    public void OnBlockPlaced()
+    public void OnBlockPlacedServer()
     {
-        //Logger.Audit($"[{nameof(BuildBrushInstance)}][{nameof(OnBlockPlaced)}]: Block placed by player '{Player.PlayerName}'.");
+        //Logger.Audit($"[{nameof(BuildBrushInstance)}][{nameof(OnBlockPlacedServer)}]: Block placed by player '{Player.PlayerName}'.");
         Player.InventoryManager.ActiveHotbarSlot?.MarkDirty();
         TryUpdateBlockId();
-        if (World.Side != EnumAppSide.Client)
-        {
-            return;
-        }
-
-        TryUpdate();
-    }
-    #endregion
-
-    #region Private
-    /// <summary>
-    /// Shows a HUD notice to the player indicating the current snapping mode.
-    /// </summary>
-    public void DisplaySnappingModeNotice()
-    {
-        if (World.Side != EnumAppSide.Client)
-        {
-            return;
-        }
-
-        ModInfo? modInfo = World.Api.ModLoader.GetModSystem<VanillaBuildingExpandedModSystem>()?.Mod.Info;
-        if (modInfo is null)
-        {
-            return;
-        }
-
-        if (World.Api is not ICoreClientAPI client)
-        {
-            return;
-        }
-
-        client.TriggerIngameError(this, $"{modInfo.ModID}:brush-snapping-mode-changed", Lang.Get($"{modInfo.ModID}:brush-snapping-mode-changed-{Snapping.GetCode()}"));
     }
     #endregion
 
@@ -741,12 +696,8 @@ public class BuildBrushInstance
     /// <summary>
     /// Activates the dimension and entity when the brush becomes active.
     /// </summary>
-    private void ActivateDimension()
+    internal void ActivateDimension()
     {
-        // Only server creates dimensions
-        if (World.Side != EnumAppSide.Server)
-            return;
-
         if (_dimension is not null)
             return; // Already active
 
@@ -765,12 +716,8 @@ public class BuildBrushInstance
     /// <summary>
     /// Deactivates and destroys the dimension and entity when the brush becomes inactive.
     /// </summary>
-    private void DeactivateDimension()
+    internal void DeactivateDimension()
     {
-        // Only server manages dimensions
-        if (World.Side != EnumAppSide.Server)
-            return;
-
         DestroyDimension();
     }
 
@@ -780,14 +727,8 @@ public class BuildBrushInstance
     /// </summary>
     /// <param name="existingDimensionId">Optional existing dimension ID to reuse.</param>
     /// <returns>True if initialization succeeded.</returns>
-    private bool InitializeDimension(int existingDimensionId = -1)
+    internal bool InitializeDimension(int existingDimensionId = -1)
     {
-        if (World.Side != EnumAppSide.Server)
-        {
-            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(InitializeDimension)}]: Cannot initialize dimension on client side.");
-            return false;
-        }
-
         _dimension = new BrushDimension(World);
         if (!_dimension.Initialize(existingDimensionId))
         {
@@ -816,17 +757,11 @@ public class BuildBrushInstance
     /// Must be called after InitializeDimension().
     /// </summary>
     /// <returns>True if the entity was spawned successfully.</returns>
-    private bool SpawnEntity()
+    internal bool SpawnEntity()
     {
         if (_dimension?.Dimension is null || !_dimension.IsInitialized)
         {
             Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(SpawnEntity)}]: Cannot spawn entity without initialized dimension.");
-            return false;
-        }
-
-        if (World.Side != EnumAppSide.Server)
-        {
-            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(SpawnEntity)}]: Cannot spawn entity on client side.");
             return false;
         }
 
@@ -875,7 +810,7 @@ public class BuildBrushInstance
         _entity = entity;
 
         // On client side, wrap the entity's dimension so the renderer can access it
-        if (World.Side == EnumAppSide.Client && entity.Dimension is not null && _dimension is null)
+        if (entity.Dimension is not null && _dimension is null)
         {
             _dimension = new BrushDimension(World);
             _dimension.InitializeClientSide(entity.Dimension);
@@ -928,11 +863,6 @@ public class BuildBrushInstance
     /// </summary>
     private void Dimension_OnDirty(object? sender, DimensionDirtyEventArgs e)
     {
-        if (World.Side == EnumAppSide.Server && _entity is not null)
-        {
-            _entity.IncrementBrushDirtyCounter();
-        }
-
         OnDimensionDirty?.Invoke(this, e);
     }
 

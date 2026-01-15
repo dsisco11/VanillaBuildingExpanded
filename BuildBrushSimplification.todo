@@ -89,24 +89,24 @@ PHASE 3 — Split model from side-effects (BuildBrushState + controllers)
 
 Intent: Separate “pure brush state + computations” from server/client side-effectful orchestration.
 
-- [ ] Create `BuildBrushState`
-  - [ ] Holds: block selection, snapping mode/options, orientation index/state, resolved placement position
-  - [ ] Contains: pure computations only (e.g., resolve selection/position/orientation)
+- [x] Create `BuildBrushState`
+  - [x] Holds: block selection, snapping mode/options, orientation index/state, resolved placement position
+  - [x] Contains: pure computations only (e.g., resolve selection/position/orientation)
 
-- [ ] Create `BuildBrushControllerClient`
-  - [ ] Owns local state instance
-  - [ ] Handles hotkeys and per-tick updates
-  - [ ] Sends brush updates (seq)
-  - [ ] Optional: client-side prediction
+- [x] Create `BuildBrushControllerClient`
+  - [x] Owns local state instance
+  - [x] Handles hotkeys and per-tick updates
+  - [x] Sends brush updates (seq)
+  - [x] Optional: client-side prediction
 
-- [ ] Create `BuildBrushControllerServer`
-  - [ ] Owns per-player server state
-  - [ ] Receives state updates
-  - [ ] Owns preview lifecycle (dimension/entity)
-  - [ ] Owns authoritative placement validation + placement call
+- [x] Create `BuildBrushControllerServer`
+  - [x] Owns per-player server state
+  - [x] Receives state updates
+  - [x] Owns preview lifecycle (dimension/entity)
+  - [x] Owns authoritative placement validation + placement call
 
-- [ ] Reduce cross-side branching
-  - [ ] Remove client/server `if (api.Side...)` branches from core model types
+- [x] Reduce cross-side branching
+  - [x] Remove client/server `if (api.Side...)` branches from core model types
 
 Acceptance criteria:
 - Brush “state object” is testable without game world side-effects.

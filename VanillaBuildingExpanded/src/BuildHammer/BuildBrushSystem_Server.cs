@@ -18,7 +18,7 @@ public class BuildBrushSystem_Server : ModSystem
     #region Fields
     protected ICoreServerAPI api;
     protected IServerNetworkChannel serverChannel;
-    protected readonly Dictionary<int, BuildBrushInstance> Brushes = [];
+    protected readonly Dictionary<int, BuildBrushControllerServer> Controllers = [];
 
     private VbeConfig? config;
 
@@ -50,11 +50,12 @@ public class BuildBrushSystem_Server : ModSystem
     public override void Dispose()
     {
         // Destroy all brush dimensions before clearing
-        foreach (var brush in Brushes.Values)
+        foreach (var controller in Controllers.Values)
         {
-            brush.DestroyDimension();
+            controller.Destroy();
+            controller.Dispose();
         }
-        Brushes.Clear();
+        Controllers.Clear();
     }
     #endregion
 
@@ -64,13 +65,13 @@ public class BuildBrushSystem_Server : ModSystem
         if (player is null || api.World is null)
             return null;
 
-        if (!Brushes.TryGetValue(player.ClientId, out BuildBrushInstance? brush))
+        if (!Controllers.TryGetValue(player.ClientId, out BuildBrushControllerServer? controller))
         {
             Logger.Warning($"Build brush instance not found for player {player.PlayerName} (ID: {player.ClientId})");
             return null;
         }
 
-        return brush;
+        return controller.Brush;
     }
     #endregion
 
@@ -114,7 +115,7 @@ public class BuildBrushSystem_Server : ModSystem
 
             world.BlockAccessor.MarkBlockModified(blockSel.Position);
             world.BlockAccessor.TriggerNeighbourBlockUpdate(blockSel.Position);
-            brush.OnBlockPlaced();
+            brush.OnBlockPlacedServer();
         }
         return true;
     }
@@ -126,8 +127,8 @@ public class BuildBrushSystem_Server : ModSystem
     /// </summary>
     private void Event_PlayerJoin(IServerPlayer byPlayer)
     {
-        BuildBrushInstance brush = new(byPlayer, api.World);
-        Brushes.Add(byPlayer.ClientId, brush);
+        BuildBrushControllerServer controller = new(api, byPlayer);
+        Controllers.Add(byPlayer.ClientId, controller);
 
         IInventory? hotbarInv = byPlayer.InventoryManager?.GetHotbarInventory();
         if (hotbarInv is not null)
@@ -141,8 +142,8 @@ public class BuildBrushSystem_Server : ModSystem
             offhandInventory.SlotModified += (int slot) => Event_OffhandSlotModified(byPlayer, slot);
         }
 
-        brush.IsActive = byPlayer.IsHoldingBuildHammer();
-        brush.TryUpdateBlockId();
+        controller.Brush.IsActive = byPlayer.IsHoldingBuildHammer();
+        controller.Brush.TryUpdateBlockId();
     }
 
     /// <summary>
@@ -150,10 +151,11 @@ public class BuildBrushSystem_Server : ModSystem
     /// </summary>
     private void Event_PlayerDisconnect(IServerPlayer byPlayer)
     {
-        if (Brushes.TryGetValue(byPlayer.ClientId, out var brush))
+        if (Controllers.TryGetValue(byPlayer.ClientId, out var controller))
         {
-            brush.DestroyDimension();
-            Brushes.Remove(byPlayer.ClientId);
+            controller.Destroy();
+            controller.Dispose();
+            Controllers.Remove(byPlayer.ClientId);
         }
     }
 
@@ -220,8 +222,7 @@ public class BuildBrushSystem_Server : ModSystem
     /// </summary>
     private void HandlePacket_SetBuildBrush(IServerPlayer fromPlayer, Packet_SetBuildBrush packet)
     {
-        BuildBrushInstance brush = GetBrush(fromPlayer);
-        if (brush is null)
+        if (!Controllers.TryGetValue(fromPlayer.ClientId, out BuildBrushControllerServer? controller))
             return;
 
         long lastAppliedSeq = 0;
@@ -258,19 +259,15 @@ public class BuildBrushSystem_Server : ModSystem
         }
 
         lastAppliedSeqByClientId[fromPlayer.ClientId] = packet.seq;
-        brush.LastAppliedSeq = packet.seq;
 
-        brush.IsActive = packet.isActive;
-        brush.Snapping = packet.snapping;
-        brush.OrientationIndex = packet.orientationIndex;
-        brush.Position = packet.position;
+        controller.ApplyState(packet);
 
         serverChannel.SendPacket(new Packet_BuildBrushAck { lastAppliedSeq = packet.seq }, fromPlayer);
 
         // Sync dimension changes to nearby players
-        if (brush.Dimension?.IsInitialized == true)
+        if (controller.Brush.Dimension?.IsInitialized == true)
         {
-            brush.SyncDimensionToPlayers([fromPlayer]);
+            controller.Brush.SyncDimensionToPlayers([fromPlayer]);
         }
     }
     #endregion

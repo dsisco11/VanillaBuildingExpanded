@@ -22,7 +22,7 @@ public class BuildBrushSystem_Client : ModSystem
 {
     #region Fields
     private ICoreClientAPI? api;
-    private BuildBrushInstance? _brush;
+    private BuildBrushControllerClient? controller;
     protected IClientNetworkChannel? clientChannel;
     private BuildPreviewRenderer? renderer;
 
@@ -48,6 +48,8 @@ public class BuildBrushSystem_Client : ModSystem
     public override void StartClientSide(ICoreClientAPI api)
     {
         this.api = api;
+
+        controller = new BuildBrushControllerClient(api);
 
         config = VbeConfig.Get(api);
 
@@ -88,9 +90,7 @@ public class BuildBrushSystem_Client : ModSystem
             throw new InvalidOperationException("Cannot get build brush instance: Player or World is null.");
         }
 
-        // if brush is null but we have the player and world, initialize it
-        _brush ??= new BuildBrushInstance(Player!, api!.World);
-        return _brush!;
+        return controller!.GetBrush(Player!);
     }
     #endregion
 
@@ -106,9 +106,7 @@ public class BuildBrushSystem_Client : ModSystem
         if (brush.Position != pos)
             return;
 
-        brush.OnBlockPlaced();
-        brush.TryUpdateBlockId();
-        brush.TryUpdate();
+        controller!.OnBlockPlacedClient();
     }
 
     private void Event_AfterActiveSlotChanged(ActiveSlotChangeEventArgs e)
@@ -167,11 +165,11 @@ public class BuildBrushSystem_Client : ModSystem
         //brushManager.SendToServer();
         if (oldState && !newState)
         {
-            brush.OnUnequipped();
+            controller!.OnUnequipped();
         }
         else if (!oldState && newState)
         {
-            brush.OnEquipped();
+            controller!.OnEquipped();
         }
     }
 
@@ -210,7 +208,7 @@ public class BuildBrushSystem_Client : ModSystem
             return;
 
         BlockSelection? currentSelection = this.api!.World?.Player?.CurrentBlockSelection;
-        bool positionChanged = brush.TryUpdate(currentSelection);
+        bool positionChanged = controller!.TryUpdate(currentSelection);
 
         // Send position updates to server when position changes
         if (positionChanged && brush.Position is not null && !brush.Position.Equals(lastSentPosition))
@@ -248,7 +246,7 @@ public class BuildBrushSystem_Client : ModSystem
         if (currentSelection is null)
             return;
 
-        brush.TryUpdatePlacementValidity(currentSelection!);
+        controller!.TryUpdatePlacementValidity(currentSelection!);
     }
     #endregion
 
@@ -271,7 +269,7 @@ public class BuildBrushSystem_Client : ModSystem
             );
         }
 
-        if (brush.CycleOrientation(direction))
+        if (controller!.RotateCursor(direction))
         {
             SendToServer();
 
@@ -293,18 +291,7 @@ public class BuildBrushSystem_Client : ModSystem
             return;
         }
 
-        BuildBrushInstance? brush = GetBrush(player);
-        if (brush is null)
-        {
-            return;
-        }
-
-        int d = (int)direction;
-        EBuildBrushSnapping ModeSearchFilter = EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical;
-        int SnappingModeIndex = BuildBrushInstance.BrushSnappingModes.IndexOf(brush.Snapping & ModeSearchFilter);
-        SnappingModeIndex = (SnappingModeIndex + d + BuildBrushInstance.BrushSnappingModes.Length) % BuildBrushInstance.BrushSnappingModes.Length;
-        brush.Snapping = BuildBrushInstance.BrushSnappingModes[SnappingModeIndex];
-        brush.DisplaySnappingModeNotice();
+        controller!.CycleSnappingMode(direction);
     }
 
     /// <summary>
@@ -318,6 +305,7 @@ public class BuildBrushSystem_Client : ModSystem
             return;
         }
 
+        controller!.SyncStateFromBrush();
         debugLocalSeq++;
 
         if (config?.BuildBrushDebugLogging == true)
@@ -336,10 +324,10 @@ public class BuildBrushSystem_Client : ModSystem
             new Packet_SetBuildBrush()
             {
                 seq = debugLocalSeq,
-                isActive = brush.IsActive,
-                orientationIndex = brush.OrientationIndex,
-                position = brush.Position,
-                snapping = brush.Snapping
+                isActive = controller.State.IsActive,
+                orientationIndex = controller.State.OrientationIndex,
+                position = controller.State.Position,
+                snapping = controller.State.Snapping
             });
 
         if (config?.BuildBrushDebugHud == true && this.api is not null)
@@ -577,6 +565,7 @@ public class BuildBrushSystem_Client : ModSystem
             World.BlockAccessor.TriggerNeighbourBlockUpdate(brushPos);
             handling = EnumHandling.PreventSubsequent;
             brush.MarkDirty();
+            controller!.OnBlockPlacedClient();
         }
         else
         {
