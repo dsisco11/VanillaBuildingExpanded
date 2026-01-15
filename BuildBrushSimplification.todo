@@ -15,18 +15,18 @@ Non-goals:
 
 PHASE 0 — Baseline + safety rails
 
-- [ ] Inventory entry points
-  - [ ] Identify brush creation/teardown call sites (client + server)
-  - [ ] Identify where packets are sent/received
-  - [ ] Identify where placement is intercepted and applied
+- [x] Inventory entry points
+  - [x] Identify brush creation/teardown call sites (client + server)
+  - [x] Identify where packets are sent/received
+  - [x] Identify where placement is intercepted and applied
 
-- [ ] Add short “architecture notes” doc
-  - [ ] Write a short module map (files + responsibilities)
-  - [ ] Write a one-page flow: tick/update → packet → preview update → render; click → predict → intercept → place
+- [x] Add short “architecture notes” doc
+  - [x] Write a short module map (files + responsibilities)
+  - [x] Write a one-page flow: tick/update → packet → preview update → render; click → predict → intercept → place
 
-- [ ] Add instrumentation toggles
-  - [ ] Add a debug config switch for logging seq/ack and placement versioning
-  - [ ] Add a debug overlay/log showing current local seq + last acked seq
+- [x] Add instrumentation toggles
+  - [x] Add a debug config switch for logging seq/ack and placement versioning
+  - [x] Add a debug overlay/log showing current local seq + last acked seq
 
 Acceptance criteria:
 - Can reproduce current behavior and log the order of: rotate → update packet → place.

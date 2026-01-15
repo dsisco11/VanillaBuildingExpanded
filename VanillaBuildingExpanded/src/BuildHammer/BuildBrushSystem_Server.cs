@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
+using VanillaBuildingExpanded.Config;
 using VanillaBuildingExpanded.Networking;
 
 using Vintagestory.API.Common;
@@ -18,6 +19,8 @@ public class BuildBrushSystem_Server : ModSystem
     protected ICoreServerAPI api;
     protected IServerNetworkChannel serverChannel;
     protected readonly Dictionary<int, BuildBrushInstance> Brushes = [];
+
+    private VbeConfig? config;
     #endregion
 
     #region Accessors
@@ -29,6 +32,8 @@ public class BuildBrushSystem_Server : ModSystem
     public override void StartServerSide(ICoreServerAPI api)
     {
         this.api = api;
+
+        config = VbeConfig.Get(api);
 
         // Networking
         serverChannel = api.Network.GetChannel(Mod.Info.ModID);
@@ -73,6 +78,17 @@ public class BuildBrushSystem_Server : ModSystem
         var brush = GetBrush(byPlayer);
         if (brush is null || brush.IsDisabled)
             return false;
+
+        if (config?.BuildBrushDebugLogging == true)
+        {
+            Logger.Debug(
+                "[BuildBrush][Debug][ServerPlace]: player={0} brushPos={1} brushOri={2} blockSelPos={3}",
+                byPlayer?.PlayerName,
+                brush.Position,
+                brush.OrientationIndex,
+                blockSel.Position
+            );
+        }
 
         // We should be able to place the block; if we don't have a placement block then we still return true
         // to act as though we placed it (to prevent normal placement and unexpected behavior)
@@ -204,6 +220,18 @@ public class BuildBrushSystem_Server : ModSystem
         BuildBrushInstance brush = GetBrush(fromPlayer);
         if (brush is null)
             return;
+
+        if (config?.BuildBrushDebugLogging == true)
+        {
+            Logger.Debug(
+                "[BuildBrush][Debug][ServerRecv]: player={0} isActive={1} orientationIndex={2} snapping={3} pos={4}",
+                fromPlayer.PlayerName,
+                packet.isActive,
+                packet.orientationIndex,
+                packet.snapping,
+                packet.position
+            );
+        }
 
         brush.IsActive = packet.isActive;
         brush.Snapping = packet.snapping;

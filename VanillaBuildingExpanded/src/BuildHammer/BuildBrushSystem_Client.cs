@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
 
+using VanillaBuildingExpanded.Config;
 using VanillaBuildingExpanded.Networking;
 
 using Vintagestory.API.Client;
@@ -25,6 +26,11 @@ public class BuildBrushSystem_Client : ModSystem
     protected IClientNetworkChannel? clientChannel;
     private BuildPreviewRenderer? renderer;
 
+    private VbeConfig? config;
+
+    private long debugLocalSeq;
+    private long debugLastAckSeq = 0;
+
     /// <summary>
     /// Tracks the last position sent to the server to avoid sending unnecessary updates.
     /// </summary>
@@ -42,6 +48,8 @@ public class BuildBrushSystem_Client : ModSystem
     public override void StartClientSide(ICoreClientAPI api)
     {
         this.api = api;
+
+        config = VbeConfig.Get(api);
 
         // Register entity renderer
         api.RegisterEntityRendererClass(BuildBrushEntity.RendererClassName, typeof(BuildBrushEntityRenderer));
@@ -252,9 +260,28 @@ public class BuildBrushSystem_Client : ModSystem
             return;
         }
 
+        if (config?.BuildBrushDebugLogging == true)
+        {
+            Logger.Debug(
+                "[BuildBrush][Debug][Rotate]: direction={0} pre(orientationIndex={1}, pos={2})",
+                direction,
+                brush.OrientationIndex,
+                brush.Position
+            );
+        }
+
         if (brush.CycleOrientation(direction))
         {
             SendToServer();
+
+            if (config?.BuildBrushDebugHud == true && this.api is not null)
+            {
+                this.api.TriggerIngameError(
+                    this,
+                    $"{Mod.Info.ModID}:buildbrush-debug-status",
+                    $"BuildBrush seq={debugLocalSeq} ack={debugLastAckSeq} ori={brush.OrientationIndex} pos={brush.Position}"
+                );
+            }
         }
     }
 
@@ -290,6 +317,20 @@ public class BuildBrushSystem_Client : ModSystem
             return;
         }
 
+        debugLocalSeq++;
+
+        if (config?.BuildBrushDebugLogging == true)
+        {
+            Logger.Debug(
+                "[BuildBrush][Debug][SendToServer]: seq={0} isActive={1} orientationIndex={2} snapping={3} pos={4}",
+                debugLocalSeq,
+                brush.IsActive,
+                brush.OrientationIndex,
+                brush.Snapping,
+                brush.Position
+            );
+        }
+
         clientChannel.SendPacket(
             new Packet_SetBuildBrush()
             {
@@ -298,6 +339,15 @@ public class BuildBrushSystem_Client : ModSystem
                 position = brush.Position,
                 snapping = brush.Snapping
             });
+
+        if (config?.BuildBrushDebugHud == true && this.api is not null)
+        {
+            this.api.TriggerIngameError(
+                this,
+                $"{Mod.Info.ModID}:buildbrush-debug-status",
+                $"BuildBrush seq={debugLocalSeq} ack={debugLastAckSeq} ori={brush.OrientationIndex} pos={brush.Position}"
+            );
+        }
     }
     #endregion
 
@@ -445,6 +495,18 @@ public class BuildBrushSystem_Client : ModSystem
         if (!CheckBlockPlacement(brushPos, stackToPlace, out string precheckFailure))
             return;
 
+        if (config?.BuildBrushDebugLogging == true)
+        {
+            Logger.Debug(
+                "[BuildBrush][Debug][ClientPlace]: seq={0} ack={1} pos={2} ori={3} blockSelPos={4}",
+                debugLocalSeq,
+                debugLastAckSeq,
+                brushPos,
+                brush.OrientationIndex,
+                blockSelection.Position
+            );
+        }
+
         string failureCode = string.Empty;
         if (block.CanPlaceBlock(api.World, Player, blockSelection, ref failureCode))
         {
@@ -463,6 +525,16 @@ public class BuildBrushSystem_Client : ModSystem
             }
 
             api.Network.SendPacketClient(ClientPackets.BlockInteraction(blockSelection, 1, 0));
+
+            if (config?.BuildBrushDebugLogging == true)
+            {
+                Logger.Debug(
+                    "[BuildBrush][Debug][ClientPlace->BlockInteractionSent]: seq={0} pos={1}",
+                    debugLocalSeq,
+                    blockSelection.Position
+                );
+            }
+
             World.BlockAccessor.MarkBlockModified(brushPos);
             World.BlockAccessor.TriggerNeighbourBlockUpdate(brushPos);
             handling = EnumHandling.PreventSubsequent;
