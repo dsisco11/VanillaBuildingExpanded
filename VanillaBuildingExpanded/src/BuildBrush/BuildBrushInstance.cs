@@ -114,6 +114,8 @@ public class BuildBrushInstance
     #endregion
 
     #region Properties
+    public long LastAppliedSeq { get; internal set; } = 0;
+
     public bool IsDirty { get; private set; } = false;
 
     private long markedDirtyCallbackId;

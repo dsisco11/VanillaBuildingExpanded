@@ -61,23 +61,23 @@ PHASE 2 — Sequence numbers and server acknowledgement (ordering + convergence)
 
 Intent: Prevent stale-state placement caused by cross-channel reordering (mod packet vs vanilla interaction packet).
 
-- [ ] Add `seq` to client→server brush update packet
-  - [ ] Maintain monotonically increasing `seq` client-side
-  - [ ] Include `seq` on each brush state update send
+- [x] Add `seq` to client→server brush update packet
+  - [x] Maintain monotonically increasing `seq` client-side
+  - [x] Include `seq` on each brush state update send
 
-- [ ] Add server-side “last applied seq” tracking
-  - [ ] Per-player: store last applied seq
-  - [ ] Ignore older/out-of-order updates
+- [x] Add server-side “last applied seq” tracking
+  - [x] Per-player: store last applied seq
+  - [x] Ignore older/out-of-order updates
 
-- [ ] Add server→client ack packet
-  - [ ] `BuildBrushAck { lastAppliedSeq }`
-  - [ ] Client stores `lastAckSeq`
+- [x] Add server→client ack packet
+  - [x] `BuildBrushAck { lastAppliedSeq }`
+  - [x] Client stores `lastAckSeq`
 
-- [ ] Decide policy for placement gating
-  - [ ] Option A (diagnostics only): ack exists but does not change behavior
-  - [ ] Option B (correctness): if a placement depends on a just-changed orientation, delay placement until `lastAckSeq >= seqForThatState`
+- [x] Decide policy for placement gating
+  - [x] Option A (diagnostics only): ack exists but does not change behavior
+  - [x] Option B (correctness): if a placement depends on a just-changed orientation, delay placement until `lastAckSeq >= seqForThatState`
 
-- [ ] Add debug logging for “placement used seq X / lastAckSeq Y”
+- [x] Add debug logging for “placement used seq X / lastAckSeq Y"
 
 Acceptance criteria:
 - No more “place with previous orientation immediately after rotate” (if Option B enabled).

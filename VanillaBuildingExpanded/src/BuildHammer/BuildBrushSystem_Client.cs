@@ -61,6 +61,7 @@ public class BuildBrushSystem_Client : ModSystem
         // Networking
         clientChannel = api.Network.GetChannel(Mod.Info.ModID);
         clientChannel.SetMessageHandler<Packet_SetBuildBrush>(HandlePacket_SetBuildBrush);
+        clientChannel.SetMessageHandler<Packet_BuildBrushAck>(HandlePacket_BuildBrushAck);
 
         // User input
         RegisterInputHandlers();
@@ -334,6 +335,7 @@ public class BuildBrushSystem_Client : ModSystem
         clientChannel.SendPacket(
             new Packet_SetBuildBrush()
             {
+                seq = debugLocalSeq,
                 isActive = brush.IsActive,
                 orientationIndex = brush.OrientationIndex,
                 position = brush.Position,
@@ -361,6 +363,26 @@ public class BuildBrushSystem_Client : ModSystem
 
         brush.OrientationIndex = packet.orientationIndex;
         //brush.Position = packet.position;
+    }
+
+    private void HandlePacket_BuildBrushAck(Packet_BuildBrushAck packet)
+    {
+        debugLastAckSeq = Math.Max(debugLastAckSeq, packet.lastAppliedSeq);
+
+        if (config?.BuildBrushDebugLogging == true)
+        {
+            Logger.Debug("[BuildBrush][Debug][Ack]: lastAppliedSeq={0}", packet.lastAppliedSeq);
+        }
+
+        if (config?.BuildBrushDebugHud == true && this.api is not null)
+        {
+            var brush = GetBrush(Player);
+            this.api.TriggerIngameError(
+                this,
+                $"{Mod.Info.ModID}:buildbrush-debug-status",
+                $"BuildBrush seq={debugLocalSeq} ack={debugLastAckSeq} ori={brush.OrientationIndex} pos={brush.Position}"
+            );
+        }
     }
     #endregion
 
@@ -494,6 +516,22 @@ public class BuildBrushSystem_Client : ModSystem
 
         if (!CheckBlockPlacement(brushPos, stackToPlace, out string precheckFailure))
             return;
+
+        // Phase 2: Optional correctness gate. Disabled by default to avoid behavior changes.
+        // When enabled, prevents placement until the server has acknowledged the latest brush state.
+        if (config?.BuildBrushGatePlacementOnAck == true && debugLastAckSeq < debugLocalSeq)
+        {
+            if (config?.BuildBrushDebugLogging == true)
+            {
+                Logger.Debug(
+                    "[BuildBrush][Debug][ClientPlaceBlocked]: waiting for ack (seq={0}, ack={1})",
+                    debugLocalSeq,
+                    debugLastAckSeq
+                );
+            }
+            handling = EnumHandling.PreventSubsequent;
+            return;
+        }
 
         if (config?.BuildBrushDebugLogging == true)
         {

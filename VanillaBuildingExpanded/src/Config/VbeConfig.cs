@@ -14,6 +14,12 @@ public sealed class VbeConfig
     #region Build Brush Debugging
     public bool BuildBrushDebugLogging { get; set; } = false;
     public bool BuildBrushDebugHud { get; set; } = false;
+
+    /// <summary>
+    /// If true, client-side placement waits until the server acknowledges the latest brush state.
+    /// Default is false to preserve existing behavior.
+    /// </summary>
+    public bool BuildBrushGatePlacementOnAck { get; set; } = false;
     #endregion
 
     #region Public

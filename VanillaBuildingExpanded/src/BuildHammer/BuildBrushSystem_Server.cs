@@ -21,6 +21,8 @@ public class BuildBrushSystem_Server : ModSystem
     protected readonly Dictionary<int, BuildBrushInstance> Brushes = [];
 
     private VbeConfig? config;
+
+    private readonly Dictionary<int, long> lastAppliedSeqByClientId = [];
     #endregion
 
     #region Accessors
@@ -82,8 +84,9 @@ public class BuildBrushSystem_Server : ModSystem
         if (config?.BuildBrushDebugLogging == true)
         {
             Logger.Debug(
-                "[BuildBrush][Debug][ServerPlace]: player={0} brushPos={1} brushOri={2} blockSelPos={3}",
+                "[BuildBrush][Debug][ServerPlace]: player={0} seq={1} brushPos={2} brushOri={3} blockSelPos={4}",
                 byPlayer?.PlayerName,
+                brush.LastAppliedSeq,
                 brush.Position,
                 brush.OrientationIndex,
                 blockSel.Position
@@ -221,11 +224,32 @@ public class BuildBrushSystem_Server : ModSystem
         if (brush is null)
             return;
 
+        long lastAppliedSeq = 0;
+        lastAppliedSeqByClientId.TryGetValue(fromPlayer.ClientId, out lastAppliedSeq);
+
+        // Ignore out-of-order brush updates.
+        if (packet.seq <= lastAppliedSeq)
+        {
+            if (config?.BuildBrushDebugLogging == true)
+            {
+                Logger.Debug(
+                    "[BuildBrush][Debug][ServerRecvIgnored]: player={0} seq={1} lastAppliedSeq={2}",
+                    fromPlayer.PlayerName,
+                    packet.seq,
+                    lastAppliedSeq
+                );
+            }
+
+            serverChannel.SendPacket(new Packet_BuildBrushAck { lastAppliedSeq = lastAppliedSeq }, fromPlayer);
+            return;
+        }
+
         if (config?.BuildBrushDebugLogging == true)
         {
             Logger.Debug(
-                "[BuildBrush][Debug][ServerRecv]: player={0} isActive={1} orientationIndex={2} snapping={3} pos={4}",
+                "[BuildBrush][Debug][ServerRecv]: player={0} seq={1} isActive={2} orientationIndex={3} snapping={4} pos={5}",
                 fromPlayer.PlayerName,
+                packet.seq,
                 packet.isActive,
                 packet.orientationIndex,
                 packet.snapping,
@@ -233,10 +257,15 @@ public class BuildBrushSystem_Server : ModSystem
             );
         }
 
+        lastAppliedSeqByClientId[fromPlayer.ClientId] = packet.seq;
+        brush.LastAppliedSeq = packet.seq;
+
         brush.IsActive = packet.isActive;
         brush.Snapping = packet.snapping;
         brush.OrientationIndex = packet.orientationIndex;
         brush.Position = packet.position;
+
+        serverChannel.SendPacket(new Packet_BuildBrushAck { lastAppliedSeq = packet.seq }, fromPlayer);
 
         // Sync dimension changes to nearby players
         if (brush.Dimension?.IsInitialized == true)

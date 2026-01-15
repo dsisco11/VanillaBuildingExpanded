@@ -7,6 +7,7 @@ namespace VanillaBuildingExpanded.Networking;
 [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
 public class Packet_SetBuildBrush
 {
+    public required long seq;
     public required bool isActive;
     public required int orientationIndex;
     public required BlockPos position;
