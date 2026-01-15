@@ -94,27 +94,38 @@ public class BuildBrushSystem_Server : ModSystem
             );
         }
 
+        if (!brush.TryBuildPlacementRequest(blockSel, out BuildBrushPlacementRequest? request) || request is null)
+        {
+            return true;
+        }
+
+        string failureCode = string.Empty;
+        if (!request.PlacementBlock.CanPlaceBlock(world, byPlayer, request.Selection, ref failureCode))
+        {
+            return true;
+        }
+
         // We should be able to place the block; if we don't have a placement block then we still return true
         // to act as though we placed it (to prevent normal placement and unexpected behavior)
-        if (brush.CurrentPlacementBlock is not null)
+        if (request.PlacementBlock is not null)
         {
             // Use brush.ItemStack instead of the hotbar itemstack - brush.ItemStack has the correct
             // meshAngle attribute set for IRotatable blocks and the correct block for variant rotation
-            brush.CurrentPlacementBlock.DoPlaceBlock(world, byPlayer, blockSel, brush.ItemStack);
+            request.PlacementBlock.DoPlaceBlock(world, byPlayer, request.Selection, request.ItemStack);
 
             // Some vanilla placement logic overwrites rotatable mesh angles based on player facing.
             // Enforce the brush's target rotation on the placed block entity.
-            if (brush.Rotation is not null && brush.Rotation.HasRotatableEntity)
+            if (request.Rotation is not null && request.Rotation.HasRotatableEntity)
             {
-                var placedBe = world.BlockAccessor.GetBlockEntity(blockSel.Position);
+                var placedBe = world.BlockAccessor.GetBlockEntity(request.Selection.Position);
                 if (placedBe is not null)
                 {
-                    brush.Rotation.ApplyToPlacedBlockEntity(placedBe, brush.Rotation.Current, brush.ItemStack);
+                    request.Rotation.ApplyToPlacedBlockEntity(placedBe, request.Rotation.Current, request.ItemStack);
                 }
             }
 
-            world.BlockAccessor.MarkBlockModified(blockSel.Position);
-            world.BlockAccessor.TriggerNeighbourBlockUpdate(blockSel.Position);
+            world.BlockAccessor.MarkBlockModified(request.Selection.Position);
+            world.BlockAccessor.TriggerNeighbourBlockUpdate(request.Selection.Position);
             brush.OnBlockPlacedServer();
         }
         return true;

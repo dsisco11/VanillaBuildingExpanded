@@ -661,6 +661,39 @@ public class BuildBrushInstance
         return IsValidPlacement;
     }
 
+    public bool TryBuildPlacementRequest(BlockSelection? selectionOverride, out BuildBrushPlacementRequest? request)
+    {
+        request = null;
+
+        if (Position is null)
+        {
+            return false;
+        }
+
+        BlockSelection selectionSource = selectionOverride ?? Selection;
+        if (selectionSource is null)
+        {
+            return false;
+        }
+
+        BlockSelection resolvedSelection = BuildResolvedSelection(selectionSource, Position);
+        Block? placementBlock = CurrentPlacementBlock;
+        ItemStack? placementStack = ItemStack;
+        if (placementBlock is null || placementStack is null)
+        {
+            return false;
+        }
+
+        request = new BuildBrushPlacementRequest(
+            resolvedSelection,
+            Position,
+            placementBlock,
+            placementStack,
+            Rotation
+        );
+        return true;
+    }
+
     private static BlockSelection BuildResolvedSelection(BlockSelection source, BlockPos? resolvedPos)
     {
         BlockSelection selection = source.Clone();

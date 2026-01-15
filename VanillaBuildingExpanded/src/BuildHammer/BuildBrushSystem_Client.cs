@@ -480,29 +480,13 @@ public class BuildBrushSystem_Client : ModSystem
         if (brush is null || brush.IsDisabled)
             return;
 
-        BlockPos brushPos = brush.Position;
-        BlockSelection blockSelection = brush.Selection;
-        if (blockSelection is null)
+        if (!brush.TryBuildPlacementRequest(brush.Selection, out BuildBrushPlacementRequest? request) || request is null)
         {
-            Logger.Warning($"[BuildBrush][{nameof(TryPlaceBlock)}]: No valid BlockSelection.");
+            Logger.Warning($"[BuildBrush][{nameof(TryPlaceBlock)}]: Unable to build placement request.");
             return;
         }
 
-        ItemStack? stackToPlace = brush.ItemStack;
-        if (stackToPlace is null)
-        {
-            Logger.Warning($"[BuildBrush][{nameof(TryPlaceBlock)}]: No item selected for placement.");
-            return;
-        }
-
-        Block block = stackToPlace.Block;
-        if (block is null)
-        {
-            Logger.Warning($"[BuildBrush][{nameof(TryPlaceBlock)}]: Selected item is not a block.");
-            return;
-        }
-
-        if (!CheckBlockPlacement(brushPos, stackToPlace, out string precheckFailure))
+        if (!CheckBlockPlacement(request.Position, request.ItemStack, out string precheckFailure))
             return;
 
         // Phase 2: Optional correctness gate. Disabled by default to avoid behavior changes.
@@ -527,42 +511,42 @@ public class BuildBrushSystem_Client : ModSystem
                 "[BuildBrush][Debug][ClientPlace]: seq={0} ack={1} pos={2} ori={3} blockSelPos={4}",
                 debugLocalSeq,
                 debugLastAckSeq,
-                brushPos,
+                request.Position,
                 brush.OrientationIndex,
-                blockSelection.Position
+                request.Selection.Position
             );
         }
 
         string failureCode = string.Empty;
-        if (block.CanPlaceBlock(api.World, Player, blockSelection, ref failureCode))
+        if (request.PlacementBlock.CanPlaceBlock(api.World, Player, request.Selection, ref failureCode))
         {
-            Block oldBlock = World.BlockAccessor.GetBlock(brushPos);
-            block.DoPlaceBlock(World, Player, blockSelection, stackToPlace);
+            Block oldBlock = World.BlockAccessor.GetBlock(request.Position);
+            request.PlacementBlock.DoPlaceBlock(World, Player, request.Selection, request.ItemStack);
 
             // Keep client-side prediction consistent with brush rotation.
             // Vanilla placement may set rotation from player facing; enforce brush target rotation.
-            if (brush.Rotation is not null && brush.Rotation.HasRotatableEntity)
+            if (request.Rotation is not null && request.Rotation.HasRotatableEntity)
             {
-                var placedBe = World.BlockAccessor.GetBlockEntity(brushPos);
+                var placedBe = World.BlockAccessor.GetBlockEntity(request.Position);
                 if (placedBe is not null)
                 {
-                    brush.Rotation.ApplyToPlacedBlockEntity(placedBe, brush.Rotation.Current, stackToPlace);
+                    request.Rotation.ApplyToPlacedBlockEntity(placedBe, request.Rotation.Current, request.ItemStack);
                 }
             }
 
-            api.Network.SendPacketClient(ClientPackets.BlockInteraction(blockSelection, 1, 0));
+            api.Network.SendPacketClient(ClientPackets.BlockInteraction(request.Selection, 1, 0));
 
             if (config?.BuildBrushDebugLogging == true)
             {
                 Logger.Debug(
                     "[BuildBrush][Debug][ClientPlace->BlockInteractionSent]: seq={0} pos={1}",
                     debugLocalSeq,
-                    blockSelection.Position
+                    request.Selection.Position
                 );
             }
 
-            World.BlockAccessor.MarkBlockModified(brushPos);
-            World.BlockAccessor.TriggerNeighbourBlockUpdate(brushPos);
+            World.BlockAccessor.MarkBlockModified(request.Position);
+            World.BlockAccessor.TriggerNeighbourBlockUpdate(request.Position);
             handling = EnumHandling.PreventSubsequent;
             brush.MarkDirty();
             controller!.OnBlockPlacedClient();

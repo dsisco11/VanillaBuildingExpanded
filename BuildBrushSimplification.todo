@@ -136,15 +136,15 @@ PHASE 5 — Consolidate placement intent (BuildBrushPlacementRequest)
 
 Intent: One object represents placement intent; client prediction is optional; server is authoritative.
 
-- [ ] Introduce `BuildBrushPlacementRequest`
-  - [ ] Includes target selection, block id, resolved orientation data, snapping offsets, and any derived rotation/variant decisions
+- [x] Introduce `BuildBrushPlacementRequest`
+  - [x] Includes target selection, block id, resolved orientation data, snapping offsets, and any derived rotation/variant decisions
 
-- [ ] Server uses placement request
-  - [ ] Validate request (claims, replaceability, rules)
-  - [ ] Apply placement using one centralized function
+- [x] Server uses placement request
+  - [x] Validate request (claims, replaceability, rules)
+  - [x] Apply placement using one centralized function
 
-- [ ] Client uses request for prediction
-  - [ ] Use same request builder logic to keep prediction consistent
+- [x] Client uses request for prediction
+  - [x] Use same request builder logic to keep prediction consistent
 
 Acceptance criteria:
 - A single server method describes placement end-to-end.
