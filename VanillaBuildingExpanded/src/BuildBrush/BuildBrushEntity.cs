@@ -35,6 +35,12 @@ public class BuildBrushEntity : EntityChunky
     public const string OwnerPlayerUidKey = "ownerPlayerUid";
 
     /// <summary>
+    /// Watched attribute key for the preview mesh dirty counter.
+    /// Increment whenever the preview mini-dimension content changes.
+    /// </summary>
+    public const string BrushDirtyCounterKey = "brushDirtyCounter";
+
+    /// <summary>
     /// Weak reference to the owning brush instance.
     /// </summary>
     private WeakReference<BuildBrushInstance>? brushInstanceRef;
@@ -67,7 +73,26 @@ public class BuildBrushEntity : EntityChunky
         entity.Code = new AssetLocation(EntityCode);
         entity.AssociateWithDimension(dimension);
         entity.WatchedAttributes.SetString(OwnerPlayerUidKey, ownerPlayerUid);
+        entity.WatchedAttributes.SetInt(BrushDirtyCounterKey, 0);
+        entity.WatchedAttributes.MarkPathDirty(BrushDirtyCounterKey);
         return entity;
+    }
+
+    /// <summary>
+    /// Gets the current preview dirty counter.
+    /// </summary>
+    public int GetBrushDirtyCounter() => WatchedAttributes.GetInt(BrushDirtyCounterKey);
+
+    /// <summary>
+    /// Increments the preview dirty counter and marks it dirty for replication.
+    /// Server-side only.
+    /// </summary>
+    public int IncrementBrushDirtyCounter()
+    {
+        int next = GetBrushDirtyCounter() + 1;
+        WatchedAttributes.SetInt(BrushDirtyCounterKey, next);
+        WatchedAttributes.MarkPathDirty(BrushDirtyCounterKey);
+        return next;
     }
 
     public BuildBrushEntity() : base()

@@ -37,19 +37,19 @@ PHASE 1 — Preview “dirty counter” (render rebuild trigger)
 
 Intent: The renderer should rebuild the preview mesh when the mini-dimension changes, using an explicit monotonic counter.
 
-- [ ] Add dirty counter on the preview entity
-  - [ ] Add an integer watched attribute (e.g., `brushDirtyCounter`)
-  - [ ] Increment on the server whenever the brush preview dimension is mutated (block changes, rotation re-applies, block entity changes)
+- [x] Add dirty counter on the preview entity
+  - [x] Add an integer watched attribute (e.g., `brushDirtyCounter`)
+  - [x] Increment on the server whenever the brush preview dimension is mutated (block changes, rotation re-applies, block entity changes)
 
-- [ ] Wire dirty counter into renderer
-  - [ ] Track last seen counter per entity renderer
-  - [ ] When counter changes, rebuild tessellation mesh
+- [x] Wire dirty counter into renderer
+  - [x] Track last seen counter per entity renderer
+  - [x] When counter changes, rebuild tessellation mesh
 
-- [ ] Define “what increments the counter”
-  - [ ] Brush position changes: does NOT require mesh rebuild (only translation)
-  - [ ] Orientation changes: DOES require mesh rebuild
-  - [ ] Block selection changes: DOES require mesh rebuild
-  - [ ] Anything that changes blocks within mini-dimension: DOES require mesh rebuild
+- [x] Define “what increments the counter”
+  - [x] Brush position changes: does NOT require mesh rebuild (only translation)
+  - [x] Orientation changes: DOES require mesh rebuild
+  - [x] Block selection changes: DOES require mesh rebuild
+  - [x] Anything that changes blocks within mini-dimension: DOES require mesh rebuild
 
 Acceptance criteria:
 - Rotating or changing selection always triggers rebuild.

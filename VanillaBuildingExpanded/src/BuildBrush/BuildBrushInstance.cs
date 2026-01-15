@@ -926,6 +926,11 @@ public class BuildBrushInstance
     /// </summary>
     private void Dimension_OnDirty(object? sender, DimensionDirtyEventArgs e)
     {
+        if (World.Side == EnumAppSide.Server && _entity is not null)
+        {
+            _entity.IncrementBrushDirtyCounter();
+        }
+
         OnDimensionDirty?.Invoke(this, e);
     }
 

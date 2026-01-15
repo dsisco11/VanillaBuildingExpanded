@@ -23,6 +23,8 @@ public class BuildBrushEntityRenderer : EntityRenderer
     // Track which brush instance we're subscribed to
     private BuildBrushInstance? subscribedBrushInstance;
 
+    private int lastSeenDirtyCounter = -1;
+
     #region Constants
     // Render colors
     private static readonly Vec4f ColorValid = ColorUtil.WhiteArgbVec;
@@ -47,6 +49,19 @@ public class BuildBrushEntityRenderer : EntityRenderer
         // Subscribe to brush instance events (the instance exists before the dimension)
         TrySubscribeToBrushInstance();
 
+        lastSeenDirtyCounter = brushEntity.WatchedAttributes.GetInt(BuildBrushEntity.BrushDirtyCounterKey);
+        RebuildMesh();
+    }
+
+    private void RebuildMeshIfDirtyCounterChanged()
+    {
+        int dirtyCounter = brushEntity.WatchedAttributes.GetInt(BuildBrushEntity.BrushDirtyCounterKey);
+        if (dirtyCounter == lastSeenDirtyCounter)
+        {
+            return;
+        }
+
+        lastSeenDirtyCounter = dirtyCounter;
         RebuildMesh();
     }
 
@@ -82,6 +97,8 @@ public class BuildBrushEntityRenderer : EntityRenderer
     /// </summary>
     private void BrushInstance_OnDimensionDirty(object? sender, DimensionDirtyEventArgs e)
     {
+        // Local client-side dimension mutations (e.g., immediate preview update) may not flow through
+        // the server-driven dirty counter. Keep this as a fast path.
         RebuildMesh();
     }
 
@@ -158,6 +175,10 @@ public class BuildBrushEntityRenderer : EntityRenderer
     {
         if (isShadowPass)
             return;
+
+        // Server-side preview updates are signaled via the watched dirty counter.
+        // This avoids mesh rebuild on cursor movement (translation-only updates).
+        RebuildMeshIfDirtyCounterChanged();
 
         BuildBrushInstance? brush = BrushInstance;
         if (brush is null || brush.IsDisabled)
