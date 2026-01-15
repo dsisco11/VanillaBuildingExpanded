@@ -212,13 +212,6 @@ public class BuildBrushInstance
 
             BlockPos? previousPosition = _position?.Copy();
             _position = value;
-            Selection = new()
-            {
-                Position = value?.Copy(),
-                Face = BlockFacing.UP,
-                HitPosition = new Vec3d(0.5, 0.5, 0.5),
-                DidOffset = true
-            };
 
             // Raise position changed event with previous state
             OnPositionChanged?.Invoke(this, new PositionChangedEventArgs(previousPosition, _position));
@@ -549,6 +542,7 @@ public class BuildBrushInstance
         IsDirty = false;
         IsValidPlacement = isValidPlacement;
         Position = resolvedPos;
+        Selection = BuildResolvedSelection(blockSelection, resolvedPos);
         return result;
     }
 
@@ -650,10 +644,8 @@ public class BuildBrushInstance
         outBlockPos = snapping.ResolvePosition(snappingMode);
 
         string failureCode = "";
-        BlockSelection newSelection = blockSelection.Clone();
-        newSelection.DidOffset = true;
-        newSelection.SetPos(outBlockPos.X, outBlockPos.Y, outBlockPos.Z);
-        return placingBlock.CanPlaceBlock(World, Player, newSelection, ref failureCode);
+        BlockSelection resolvedSelection = BuildResolvedSelection(blockSelection, outBlockPos);
+        return placingBlock.CanPlaceBlock(World, Player, resolvedSelection, ref failureCode);
     }
 
     public bool TryUpdatePlacementValidity(in BlockSelection blockSelection)
@@ -664,11 +656,20 @@ public class BuildBrushInstance
             return false;
         }
         string failureCode = "";
-        BlockSelection newSelection = blockSelection.Clone();
-        newSelection.DidOffset = true;
-        newSelection.SetPos(Position.X, Position.Y, Position.Z);
-        IsValidPlacement = placingBlock.CanPlaceBlock(World, Player, newSelection, ref failureCode);
+        BlockSelection resolvedSelection = BuildResolvedSelection(blockSelection, Position);
+        IsValidPlacement = placingBlock.CanPlaceBlock(World, Player, resolvedSelection, ref failureCode);
         return IsValidPlacement;
+    }
+
+    private static BlockSelection BuildResolvedSelection(BlockSelection source, BlockPos? resolvedPos)
+    {
+        BlockSelection selection = source.Clone();
+        if (resolvedPos is not null)
+        {
+            selection.DidOffset = true;
+            selection.SetPos(resolvedPos.X, resolvedPos.Y, resolvedPos.Z);
+        }
+        return selection;
     }
     #endregion
 

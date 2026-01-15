@@ -118,13 +118,13 @@ PHASE 4 — Fix selection semantics (preserve hit/face data)
 
 Intent: Avoid abstraction leaks where selection is silently rebuilt with synthetic face/hit data.
 
-- [ ] Audit selection usage
-  - [ ] Identify which systems depend on `BlockSelection.Face` / hit position
-  - [ ] Identify whether preview/placement needs the original face
+- [x] Audit selection usage
+  - [x] Identify which systems depend on `BlockSelection.Face` / hit position
+  - [x] Identify whether preview/placement needs the original face
 
-- [ ] Replace Selection setter behavior
-  - [ ] Introduce a method that produces a resolved selection by modifying only position + derived properties while preserving raycast semantics
-  - [ ] Ensure validity checks and placement both use the same selection semantics
+- [x] Replace Selection setter behavior
+  - [x] Introduce a method that produces a resolved selection by modifying only position + derived properties while preserving raycast semantics
+  - [x] Ensure validity checks and placement both use the same selection semantics
 
 Acceptance criteria:
 - Face-dependent blocks still place correctly.
