@@ -24,7 +24,6 @@ public class BuildBrushSystem_Client : ModSystem
     private ICoreClientAPI? api;
     private BuildBrushControllerClient? controller;
     protected IClientNetworkChannel? clientChannel;
-    private BuildPreviewRenderer? renderer;
 
     private VbeConfig? config;
 
@@ -55,10 +54,6 @@ public class BuildBrushSystem_Client : ModSystem
 
         // Register entity renderer
         api.RegisterEntityRendererClass(BuildBrushEntity.RendererClassName, typeof(BuildBrushEntityRenderer));
-
-        // Rendering
-        renderer = new BuildPreviewRenderer(api, this);
-        api.Event.RegisterRenderer(renderer, EnumRenderStage.Opaque, "build_brush");
 
         // Networking
         clientChannel = api.Network.GetChannel(Mod.Info.ModID);

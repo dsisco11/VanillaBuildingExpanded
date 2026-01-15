@@ -172,17 +172,17 @@ Acceptance criteria:
 
 PHASE 7 — Cleanup + tests
 
-- [ ] Remove dead code paths
-  - [ ] Either delete unused preview system registrations or fully implement them
-  - [ ] Normalize namespaces to make BuildBrush module discoverable
+- [x] Remove dead code paths
+  - [x] Either delete unused preview system registrations or fully implement them
+  - [x] Normalize namespaces to make BuildBrush module discoverable
 
-- [ ] Add/extend tests
-  - [ ] Brush state computations (position/orientation) in isolation
-  - [ ] Server “ignore older seq” test
-  - [ ] Dirty counter increments on orientation change
+- [x] Add/extend tests
+  - [x] Brush state computations (position/orientation) in isolation
+  - [x] Server “ignore older seq” test
+  - [x] Dirty counter increments on orientation change
 
-- [ ] Build + run unit tests
-  - [ ] Ensure `dotnet build` and `dotnet test` pass
+- [x] Build + run unit tests
+  - [x] Ensure `dotnet build` and `dotnet test` pass
 
 Acceptance criteria:
 - No regressions in existing tests.

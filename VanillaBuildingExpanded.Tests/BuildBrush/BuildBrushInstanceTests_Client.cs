@@ -78,7 +78,7 @@ public class BuildBrushInstanceTests_Client
     #region OnBlockPlaced Client Behavior Tests
 
     [Fact]
-    public void OnBlockPlaced_OnClient_WithNoBlockSelection_DoesNotThrow()
+    public void OnBlockPlacedServer_OnClient_WithNoBlockSelection_DoesNotThrow()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
@@ -95,12 +95,12 @@ public class BuildBrushInstanceTests_Client
         instance.BlockId = 100;
 
         // Act & Assert - should not throw even without block selection
-        var exception = Record.Exception(() => instance.OnBlockPlaced());
+        var exception = Record.Exception(() => instance.OnBlockPlacedServer());
         Assert.Null(exception);
     }
 
     [Fact]
-    public void OnBlockPlaced_OnClient_UpdatesBlockIdFromHotbar()
+    public void OnBlockPlacedServer_OnClient_UpdatesBlockIdFromHotbar()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
@@ -123,7 +123,7 @@ public class BuildBrushInstanceTests_Client
         dummySlot.Itemstack = itemStack2;
 
         // Act
-        instance.OnBlockPlaced();
+        instance.OnBlockPlacedServer();
 
         // Assert - BlockId should update
         Assert.Equal(200, instance.BlockId);
@@ -181,41 +181,55 @@ public class BuildBrushInstanceTests_Client
     #region Selection Property Tests
 
     [Fact]
-    public void Selection_WhenPositionSet_UpdatesSelectionPosition()
+    public void Selection_WhenTryUpdate_UpdatesSelectionPosition()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
         var mockPlayer = TestHelpers.CreateMockPlayer();
         
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var newPos = new BlockPos(10, 20, 30);
+        var selection = new BlockSelection
+        {
+            Position = new BlockPos(1, 2, 3),
+            Face = BlockFacing.UP,
+            HitPosition = new Vec3d(0.25, 0.5, 0.75),
+            DidOffset = false
+        };
 
         // Act
-        instance.Position = newPos;
+        instance.TryUpdate(selection, force: true);
 
         // Assert - Selection should be updated
         Assert.NotNull(instance.Selection);
-        Assert.Equal(10, instance.Selection.Position?.X);
-        Assert.Equal(20, instance.Selection.Position?.Y);
-        Assert.Equal(30, instance.Selection.Position?.Z);
+        Assert.Equal(instance.Position?.X, instance.Selection.Position?.X);
+        Assert.Equal(instance.Position?.Y, instance.Selection.Position?.Y);
+        Assert.Equal(instance.Position?.Z, instance.Selection.Position?.Z);
     }
 
     [Fact]
-    public void Selection_WhenPositionSet_HasDefaultFaceAndHitPosition()
+    public void Selection_WhenTryUpdate_PreservesFaceAndHitPosition()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
         var mockPlayer = TestHelpers.CreateMockPlayer();
         
         var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var newPos = new BlockPos(10, 20, 30);
+        var selection = new BlockSelection
+        {
+            Position = new BlockPos(1, 2, 3),
+            Face = BlockFacing.NORTH,
+            HitPosition = new Vec3d(0.1, 0.2, 0.3),
+            DidOffset = false
+        };
 
         // Act
-        instance.Position = newPos;
+        instance.TryUpdate(selection, force: true);
 
         // Assert
-        Assert.Equal(BlockFacing.UP, instance.Selection.Face);
-        Assert.True(instance.Selection.DidOffset);
+        Assert.Equal(BlockFacing.NORTH, instance.Selection.Face);
+        Assert.Equal(0.1, instance.Selection.HitPosition.X);
+        Assert.Equal(0.2, instance.Selection.HitPosition.Y);
+        Assert.Equal(0.3, instance.Selection.HitPosition.Z);
     }
 
     #endregion

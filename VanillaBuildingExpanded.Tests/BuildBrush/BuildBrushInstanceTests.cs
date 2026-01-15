@@ -806,7 +806,7 @@ public class BuildBrushInstanceTests
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
-    public void OnBlockPlaced_CallsTryUpdateBlockId(EnumAppSide side)
+    public void OnBlockPlacedServer_CallsTryUpdateBlockId(EnumAppSide side)
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
@@ -829,7 +829,7 @@ public class BuildBrushInstanceTests
         dummySlot.Itemstack = itemStack2;
 
         // Act
-        instance.OnBlockPlaced();
+        instance.OnBlockPlacedServer();
 
         // Assert - BlockId should update to new block
         Assert.Equal(200, instance.BlockId);

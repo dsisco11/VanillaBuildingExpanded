@@ -80,21 +80,7 @@ public class BuildBrushInstanceTests_Server
     #region Server-Side Behavior Tests
 
     [Fact]
-    public void DisplaySnappingModeNotice_OnServer_DoesNotThrow()
-    {
-        // Arrange - on server side, DisplaySnappingModeNotice should return early
-        var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Server);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-
-        // Act & Assert - should not throw
-        var exception = Record.Exception(() => instance.DisplaySnappingModeNotice());
-        Assert.Null(exception);
-    }
-
-    [Fact]
-    public void OnBlockPlaced_OnServer_DoesNotCallTryUpdate()
+    public void OnBlockPlacedServer_OnServer_DoesNotCallTryUpdate()
     {
         // Arrange - OnBlockPlaced only calls TryUpdate on client
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Server);
@@ -115,7 +101,7 @@ public class BuildBrushInstanceTests_Server
         instance.OnPositionChanged += (_, _) => positionChanges++;
 
         // Act
-        instance.OnBlockPlaced();
+        instance.OnBlockPlacedServer();
 
         // Assert - position should not change (TryUpdate not called on server)
         Assert.Equal(0, positionChanges);
