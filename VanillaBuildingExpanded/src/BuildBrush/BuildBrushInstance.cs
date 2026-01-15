@@ -160,8 +160,8 @@ public class BuildBrushInstance
         if (_entity is null)
             return;
 
-        _entity.WatchedAttributes.SetBool("isValid", isValid);
-        _entity.WatchedAttributes.MarkPathDirty("isValid");
+        _entity.WatchedAttributes.SetBool(BuildBrushEntity.BrushIsValidKey, isValid);
+        _entity.WatchedAttributes.MarkPathDirty(BuildBrushEntity.BrushIsValidKey);
     }
 
     /// <summary>

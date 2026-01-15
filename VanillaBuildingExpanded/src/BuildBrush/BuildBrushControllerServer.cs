@@ -3,6 +3,7 @@ using System;
 using VanillaBuildingExpanded.Networking;
 
 using Vintagestory.API.Common;
+using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 
 namespace VanillaBuildingExpanded.BuildHammer;
@@ -72,6 +73,15 @@ public sealed class BuildBrushControllerServer : IDisposable
     {
         if (brush.Entity is null)
             return;
+
+        if (brush.Dimension is not null && brush.Dimension.GetActiveBounds(out BlockPos min, out BlockPos max))
+        {
+            brush.Entity.SetPreviewBounds(min, max);
+        }
+        else
+        {
+            brush.Entity.ClearPreviewBounds();
+        }
 
         brush.Entity.IncrementBrushDirtyCounter();
     }

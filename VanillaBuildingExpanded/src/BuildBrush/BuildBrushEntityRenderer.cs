@@ -20,9 +20,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
     private readonly MiniDimensionTessellator tessellator;
     private readonly Vec4f RgbaGlowClear = new(1, 1, 1, 0);
 
-    // Track which brush instance we're subscribed to
-    private BuildBrushInstance? subscribedBrushInstance;
-
     private int lastSeenDirtyCounter = -1;
 
     #region Constants
@@ -30,10 +27,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
     private static readonly Vec4f ColorValid = ColorUtil.WhiteArgbVec;
     private static readonly Vec4f ColorInvalid = new(1f, .2f, .2f, 0.1f);
     protected static readonly Vec4f RenderGlow = new(1f, 1f, 1f, .1f);
-    #endregion
-
-    #region Accessors
-    private BuildBrushInstance? BrushInstance => brushEntity?.BrushInstance;
     #endregion
 
     public BuildBrushEntityRenderer(Entity entity, ICoreClientAPI api) : base(entity, api)
@@ -45,9 +38,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
     public override void OnEntityLoaded()
     {
         base.OnEntityLoaded();
-
-        // Subscribe to brush instance events (the instance exists before the dimension)
-        TrySubscribeToBrushInstance();
 
         lastSeenDirtyCounter = brushEntity.WatchedAttributes.GetInt(BuildBrushEntity.BrushDirtyCounterKey);
         RebuildMesh();
@@ -66,43 +56,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
     }
 
     /// <summary>
-    /// Attempts to subscribe to the brush instance's OnDimensionDirty event.
-    /// The brush instance forwards the dimension's dirty events, so we don't need to track dimension lifetime.
-    /// </summary>
-    private void TrySubscribeToBrushInstance()
-    {
-        var brushInstance = BrushInstance;
-        
-        // Already subscribed to this instance
-        if (brushInstance is not null && brushInstance == subscribedBrushInstance)
-            return;
-
-        // Unsubscribe from old instance if any
-        if (subscribedBrushInstance is not null)
-        {
-            subscribedBrushInstance.OnDimensionDirty -= BrushInstance_OnDimensionDirty;
-            subscribedBrushInstance = null;
-        }
-
-        // Subscribe to new instance if available
-        if (brushInstance is not null)
-        {
-            brushInstance.OnDimensionDirty += BrushInstance_OnDimensionDirty;
-            subscribedBrushInstance = brushInstance;
-        }
-    }
-
-    /// <summary>
-    /// Called when the brush instance's dimension is marked dirty and needs mesh rebuild.
-    /// </summary>
-    private void BrushInstance_OnDimensionDirty(object? sender, DimensionDirtyEventArgs e)
-    {
-        // Local client-side dimension mutations (e.g., immediate preview update) may not flow through
-        // the server-driven dirty counter. Keep this as a fast path.
-        RebuildMesh();
-    }
-
-    /// <summary>
     /// Rebuilds the mesh from the blocks in the dimension using async tessellation.
     /// </summary>
     public void RebuildMesh()
@@ -110,13 +63,9 @@ public class BuildBrushEntityRenderer : EntityRenderer
         if (capi.World.Side != EnumAppSide.Client)
             return;
 
-        // Ensure we're subscribed to brush instance events (handles late initialization)
-        TrySubscribeToBrushInstance();
-
         IMiniDimension? dimension = brushEntity.Dimension;
-        BrushDimension? brushDimension = BrushInstance?.Dimension;
 
-        if (dimension is null || brushDimension is null)
+        if (dimension is null)
         {
             DisposeMesh();
             return;
@@ -136,11 +85,19 @@ public class BuildBrushEntityRenderer : EntityRenderer
             return;
         }
 
-        // Get active bounds from the dimension
-        if (!brushDimension.GetActiveBounds(out BlockPos min, out BlockPos max))
+        // Get active bounds from watched attrs, falling back to origin for single-block previews.
+        if (!brushEntity.TryGetPreviewBounds(out BlockPos min, out BlockPos max))
         {
-            DisposeMesh();
-            return;
+            BlockPos originFallback = new(0, 0, 0, Dimensions.MiniDimensions);
+            Block? originBlock = dimension.GetBlock(originFallback);
+            if (originBlock is null || originBlock.BlockId == 0)
+            {
+                DisposeMesh();
+                return;
+            }
+
+            min = originFallback;
+            max = originFallback;
         }
 
         capi.Event.EnqueueMainThreadTask(() =>
@@ -180,16 +137,12 @@ public class BuildBrushEntityRenderer : EntityRenderer
         // This avoids mesh rebuild on cursor movement (translation-only updates).
         RebuildMeshIfDirtyCounterChanged();
 
-        BuildBrushInstance? brush = BrushInstance;
-        if (brush is null || brush.IsDisabled)
-            return;
-
         if (meshRef is null)
             return;
 
         IRenderAPI rapi = capi.Render;
         Vec3d camPos = capi.World.Player.Entity.CameraPos;
-        Vec3d entityPos = brush.Position?.ToVec3d() ?? entity?.Pos.XYZ ?? Vec3d.Zero;
+        Vec3d entityPos = entity?.Pos.XYZ ?? Vec3d.Zero;
 
         // Build model matrix - translate to world position relative to camera
         modelMat.Identity();
@@ -199,8 +152,8 @@ public class BuildBrushEntityRenderer : EntityRenderer
             (float)(entityPos.Z - camPos.Z)
         );
 
-        // Get validity state
-        bool isValid = brush.IsValidPlacement;
+        // Get validity state from watched attributes
+        bool isValid = brushEntity.WatchedAttributes.GetBool(BuildBrushEntity.BrushIsValidKey);
 
         // Setup the shader
         IStandardShaderProgram shader = rapi.StandardShader;
@@ -240,13 +193,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
 
     public override void Dispose()
     {
-        // Unsubscribe from brush instance events
-        if (subscribedBrushInstance is not null)
-        {
-            subscribedBrushInstance.OnDimensionDirty -= BrushInstance_OnDimensionDirty;
-            subscribedBrushInstance = null;
-        }
-
         DisposeMesh();
     }
 }

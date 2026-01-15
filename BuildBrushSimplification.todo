@@ -156,14 +156,14 @@ PHASE 6 — Renderer decoupling (render from entity state)
 
 Intent: Renderer shouldn’t require linking to a local singleton `BuildBrushInstance`; it should render any brush preview entity from its own state.
 
-- [ ] Move render-relevant state to the entity
-  - [ ] Validity flag (watched attr)
-  - [ ] Dirty counter (watched attr)
-  - [ ] Optional: preview bounds/extents if needed
+- [x] Move render-relevant state to the entity
+  - [x] Validity flag (watched attr)
+  - [x] Dirty counter (watched attr)
+  - [x] Optional: preview bounds/extents if needed
 
-- [ ] Renderer reads watched attrs + mini-dimension only
-  - [ ] Remove dependency on “entity links to local player instance” where possible
-  - [ ] Ensure entity renderer can render multiple previews safely (future-proof)
+- [x] Renderer reads watched attrs + mini-dimension only
+  - [x] Remove dependency on “entity links to local player instance” where possible
+  - [x] Ensure entity renderer can render multiple previews safely (future-proof)
 
 Acceptance criteria:
 - Renderer works even if the client controller isn’t initialized (as long as entity is present).

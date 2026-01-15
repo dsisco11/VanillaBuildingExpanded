@@ -41,6 +41,24 @@ public class BuildBrushEntity : EntityChunky
     public const string BrushDirtyCounterKey = "brushDirtyCounter";
 
     /// <summary>
+    /// Watched attribute key for placement validity (used for tinting the preview).
+    /// </summary>
+    public const string BrushIsValidKey = "isValid";
+
+    /// <summary>
+    /// Watched attribute keys for preview bounds (min/max in mini-dimension space).
+    /// </summary>
+    public const string BrushBoundsMinKey = "brushBoundsMin";
+    public const string BrushBoundsMaxKey = "brushBoundsMax";
+    public const string BrushHasBoundsKey = "brushHasBounds";
+    public const string BrushBoundsMinXKey = "brushBoundsMinX";
+    public const string BrushBoundsMinYKey = "brushBoundsMinY";
+    public const string BrushBoundsMinZKey = "brushBoundsMinZ";
+    public const string BrushBoundsMaxXKey = "brushBoundsMaxX";
+    public const string BrushBoundsMaxYKey = "brushBoundsMaxY";
+    public const string BrushBoundsMaxZKey = "brushBoundsMaxZ";
+
+    /// <summary>
     /// Weak reference to the owning brush instance.
     /// </summary>
     private WeakReference<BuildBrushInstance>? brushInstanceRef;
@@ -93,6 +111,61 @@ public class BuildBrushEntity : EntityChunky
         WatchedAttributes.SetInt(BrushDirtyCounterKey, next);
         WatchedAttributes.MarkPathDirty(BrushDirtyCounterKey);
         return next;
+    }
+
+    /// <summary>
+    /// Sets preview bounds for client rendering.
+    /// </summary>
+    public void SetPreviewBounds(BlockPos min, BlockPos max)
+    {
+        WatchedAttributes.SetBool(BrushHasBoundsKey, true);
+        WatchedAttributes.SetInt(BrushBoundsMinXKey, min.X);
+        WatchedAttributes.SetInt(BrushBoundsMinYKey, min.Y);
+        WatchedAttributes.SetInt(BrushBoundsMinZKey, min.Z);
+        WatchedAttributes.SetInt(BrushBoundsMaxXKey, max.X);
+        WatchedAttributes.SetInt(BrushBoundsMaxYKey, max.Y);
+        WatchedAttributes.SetInt(BrushBoundsMaxZKey, max.Z);
+        WatchedAttributes.MarkPathDirty(BrushHasBoundsKey);
+        WatchedAttributes.MarkPathDirty(BrushBoundsMinXKey);
+        WatchedAttributes.MarkPathDirty(BrushBoundsMinYKey);
+        WatchedAttributes.MarkPathDirty(BrushBoundsMinZKey);
+        WatchedAttributes.MarkPathDirty(BrushBoundsMaxXKey);
+        WatchedAttributes.MarkPathDirty(BrushBoundsMaxYKey);
+        WatchedAttributes.MarkPathDirty(BrushBoundsMaxZKey);
+    }
+
+    /// <summary>
+    /// Clears preview bounds.
+    /// </summary>
+    public void ClearPreviewBounds()
+    {
+        WatchedAttributes.SetBool(BrushHasBoundsKey, false);
+        WatchedAttributes.MarkPathDirty(BrushHasBoundsKey);
+    }
+
+    /// <summary>
+    /// Attempts to read preview bounds from watched attributes.
+    /// </summary>
+    public bool TryGetPreviewBounds(out BlockPos min, out BlockPos max)
+    {
+        min = new BlockPos(0, 0, 0);
+        max = new BlockPos(0, 0, 0);
+
+        if (!WatchedAttributes.GetBool(BrushHasBoundsKey))
+        {
+            return false;
+        }
+
+        int minX = WatchedAttributes.GetInt(BrushBoundsMinXKey);
+        int minY = WatchedAttributes.GetInt(BrushBoundsMinYKey);
+        int minZ = WatchedAttributes.GetInt(BrushBoundsMinZKey);
+        int maxX = WatchedAttributes.GetInt(BrushBoundsMaxXKey);
+        int maxY = WatchedAttributes.GetInt(BrushBoundsMaxYKey);
+        int maxZ = WatchedAttributes.GetInt(BrushBoundsMaxZKey);
+
+        min = new BlockPos(minX, minY, minZ);
+        max = new BlockPos(maxX, maxY, maxZ);
+        return true;
     }
 
     public BuildBrushEntity() : base()
