@@ -1,0 +1,189 @@
+# BuildBrush architectural simplification (.todo)
+
+Goal: Simplify BuildBrush architecture without reducing abstraction quality.
+Definition of “abstraction quality” here:
+- Brush computes intent (state + derived placement request)
+- Server is authoritative (validation + placement)
+- Client is fast (preview + optional prediction)
+- Rendering depends on entity state (not global singleton wiring)
+
+Non-goals:
+- No feature cuts
+- No behavior changes unless explicitly called out + tested
+
+---
+
+PHASE 0 — Baseline + safety rails
+
+- [ ] Inventory entry points
+  - [ ] Identify brush creation/teardown call sites (client + server)
+  - [ ] Identify where packets are sent/received
+  - [ ] Identify where placement is intercepted and applied
+
+- [ ] Add short “architecture notes” doc
+  - [ ] Write a short module map (files + responsibilities)
+  - [ ] Write a one-page flow: tick/update → packet → preview update → render; click → predict → intercept → place
+
+- [ ] Add instrumentation toggles
+  - [ ] Add a debug config switch for logging seq/ack and placement versioning
+  - [ ] Add a debug overlay/log showing current local seq + last acked seq
+
+Acceptance criteria:
+- Can reproduce current behavior and log the order of: rotate → update packet → place.
+
+---
+
+PHASE 1 — Preview “dirty counter” (render rebuild trigger)
+
+Intent: The renderer should rebuild the preview mesh when the mini-dimension changes, using an explicit monotonic counter.
+
+- [ ] Add dirty counter on the preview entity
+  - [ ] Add an integer watched attribute (e.g., `brushDirtyCounter`)
+  - [ ] Increment on the server whenever the brush preview dimension is mutated (block changes, rotation re-applies, block entity changes)
+
+- [ ] Wire dirty counter into renderer
+  - [ ] Track last seen counter per entity renderer
+  - [ ] When counter changes, rebuild tessellation mesh
+
+- [ ] Define “what increments the counter”
+  - [ ] Brush position changes: does NOT require mesh rebuild (only translation)
+  - [ ] Orientation changes: DOES require mesh rebuild
+  - [ ] Block selection changes: DOES require mesh rebuild
+  - [ ] Anything that changes blocks within mini-dimension: DOES require mesh rebuild
+
+Acceptance criteria:
+- Rotating or changing selection always triggers rebuild.
+- Moving cursor does not trigger rebuild (unless required by design).
+
+---
+
+PHASE 2 — Sequence numbers and server acknowledgement (ordering + convergence)
+
+Intent: Prevent stale-state placement caused by cross-channel reordering (mod packet vs vanilla interaction packet).
+
+- [ ] Add `seq` to client→server brush update packet
+  - [ ] Maintain monotonically increasing `seq` client-side
+  - [ ] Include `seq` on each brush state update send
+
+- [ ] Add server-side “last applied seq” tracking
+  - [ ] Per-player: store last applied seq
+  - [ ] Ignore older/out-of-order updates
+
+- [ ] Add server→client ack packet
+  - [ ] `BuildBrushAck { lastAppliedSeq }`
+  - [ ] Client stores `lastAckSeq`
+
+- [ ] Decide policy for placement gating
+  - [ ] Option A (diagnostics only): ack exists but does not change behavior
+  - [ ] Option B (correctness): if a placement depends on a just-changed orientation, delay placement until `lastAckSeq >= seqForThatState`
+
+- [ ] Add debug logging for “placement used seq X / lastAckSeq Y”
+
+Acceptance criteria:
+- No more “place with previous orientation immediately after rotate” (if Option B enabled).
+- Under packet reordering, server does not regress brush state.
+
+---
+
+PHASE 3 — Split model from side-effects (BuildBrushState + controllers)
+
+Intent: Separate “pure brush state + computations” from server/client side-effectful orchestration.
+
+- [ ] Create `BuildBrushState`
+  - [ ] Holds: block selection, snapping mode/options, orientation index/state, resolved placement position
+  - [ ] Contains: pure computations only (e.g., resolve selection/position/orientation)
+
+- [ ] Create `BuildBrushControllerClient`
+  - [ ] Owns local state instance
+  - [ ] Handles hotkeys and per-tick updates
+  - [ ] Sends brush updates (seq)
+  - [ ] Optional: client-side prediction
+
+- [ ] Create `BuildBrushControllerServer`
+  - [ ] Owns per-player server state
+  - [ ] Receives state updates
+  - [ ] Owns preview lifecycle (dimension/entity)
+  - [ ] Owns authoritative placement validation + placement call
+
+- [ ] Reduce cross-side branching
+  - [ ] Remove client/server `if (api.Side...)` branches from core model types
+
+Acceptance criteria:
+- Brush “state object” is testable without game world side-effects.
+- Server placement does not require referencing client-only types.
+
+---
+
+PHASE 4 — Fix selection semantics (preserve hit/face data)
+
+Intent: Avoid abstraction leaks where selection is silently rebuilt with synthetic face/hit data.
+
+- [ ] Audit selection usage
+  - [ ] Identify which systems depend on `BlockSelection.Face` / hit position
+  - [ ] Identify whether preview/placement needs the original face
+
+- [ ] Replace Selection setter behavior
+  - [ ] Introduce a method that produces a resolved selection by modifying only position + derived properties while preserving raycast semantics
+  - [ ] Ensure validity checks and placement both use the same selection semantics
+
+Acceptance criteria:
+- Face-dependent blocks still place correctly.
+- Preview matches server placement rules.
+
+---
+
+PHASE 5 — Consolidate placement intent (BuildBrushPlacementRequest)
+
+Intent: One object represents placement intent; client prediction is optional; server is authoritative.
+
+- [ ] Introduce `BuildBrushPlacementRequest`
+  - [ ] Includes target selection, block id, resolved orientation data, snapping offsets, and any derived rotation/variant decisions
+
+- [ ] Server uses placement request
+  - [ ] Validate request (claims, replaceability, rules)
+  - [ ] Apply placement using one centralized function
+
+- [ ] Client uses request for prediction
+  - [ ] Use same request builder logic to keep prediction consistent
+
+Acceptance criteria:
+- A single server method describes placement end-to-end.
+- Prediction mismatches are reduced and are explainable (claims/rules differences).
+
+---
+
+PHASE 6 — Renderer decoupling (render from entity state)
+
+Intent: Renderer shouldn’t require linking to a local singleton `BuildBrushInstance`; it should render any brush preview entity from its own state.
+
+- [ ] Move render-relevant state to the entity
+  - [ ] Validity flag (watched attr)
+  - [ ] Dirty counter (watched attr)
+  - [ ] Optional: preview bounds/extents if needed
+
+- [ ] Renderer reads watched attrs + mini-dimension only
+  - [ ] Remove dependency on “entity links to local player instance” where possible
+  - [ ] Ensure entity renderer can render multiple previews safely (future-proof)
+
+Acceptance criteria:
+- Renderer works even if the client controller isn’t initialized (as long as entity is present).
+
+---
+
+PHASE 7 — Cleanup + tests
+
+- [ ] Remove dead code paths
+  - [ ] Either delete unused preview system registrations or fully implement them
+  - [ ] Normalize namespaces to make BuildBrush module discoverable
+
+- [ ] Add/extend tests
+  - [ ] Brush state computations (position/orientation) in isolation
+  - [ ] Server “ignore older seq” test
+  - [ ] Dirty counter increments on orientation change
+
+- [ ] Build + run unit tests
+  - [ ] Ensure `dotnet build` and `dotnet test` pass
+
+Acceptance criteria:
+- No regressions in existing tests.
+- New tests cover ordering and dirty-counter behavior.
