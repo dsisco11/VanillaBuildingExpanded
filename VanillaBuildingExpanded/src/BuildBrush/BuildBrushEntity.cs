@@ -5,6 +5,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
+using Vintagestory.API.Datastructures;
 
 namespace VanillaBuildingExpanded.BuildHammer;
 
@@ -48,15 +49,7 @@ public class BuildBrushEntity : EntityChunky
     /// <summary>
     /// Watched attribute keys for preview bounds (min/max in mini-dimension space).
     /// </summary>
-    public const string BrushBoundsMinKey = "brushBoundsMin";
-    public const string BrushBoundsMaxKey = "brushBoundsMax";
-    public const string BrushHasBoundsKey = "brushHasBounds";
-    public const string BrushBoundsMinXKey = "brushBoundsMinX";
-    public const string BrushBoundsMinYKey = "brushBoundsMinY";
-    public const string BrushBoundsMinZKey = "brushBoundsMinZ";
-    public const string BrushBoundsMaxXKey = "brushBoundsMaxX";
-    public const string BrushBoundsMaxYKey = "brushBoundsMaxY";
-    public const string BrushBoundsMaxZKey = "brushBoundsMaxZ";
+    public const string BrushBoundsKey = "brushBounds";
 
     /// <summary>
     /// Weak reference to the owning brush instance.
@@ -118,20 +111,13 @@ public class BuildBrushEntity : EntityChunky
     /// </summary>
     public void SetPreviewBounds(BlockPos min, BlockPos max)
     {
-        WatchedAttributes.SetBool(BrushHasBoundsKey, true);
-        WatchedAttributes.SetInt(BrushBoundsMinXKey, min.X);
-        WatchedAttributes.SetInt(BrushBoundsMinYKey, min.Y);
-        WatchedAttributes.SetInt(BrushBoundsMinZKey, min.Z);
-        WatchedAttributes.SetInt(BrushBoundsMaxXKey, max.X);
-        WatchedAttributes.SetInt(BrushBoundsMaxYKey, max.Y);
-        WatchedAttributes.SetInt(BrushBoundsMaxZKey, max.Z);
-        WatchedAttributes.MarkPathDirty(BrushHasBoundsKey);
-        WatchedAttributes.MarkPathDirty(BrushBoundsMinXKey);
-        WatchedAttributes.MarkPathDirty(BrushBoundsMinYKey);
-        WatchedAttributes.MarkPathDirty(BrushBoundsMinZKey);
-        WatchedAttributes.MarkPathDirty(BrushBoundsMaxXKey);
-        WatchedAttributes.MarkPathDirty(BrushBoundsMaxYKey);
-        WatchedAttributes.MarkPathDirty(BrushBoundsMaxZKey);
+        // Store as a single watched subtree.
+        // Important: set the subtree via SetAttribute so the parent path is marked dirty.
+        var bounds = new TreeAttribute();
+        bounds.SetBool("has", true);
+        bounds.SetBlockPos("min", min);
+        bounds.SetBlockPos("max", max);
+        WatchedAttributes.SetAttribute(BrushBoundsKey, bounds);
     }
 
     /// <summary>
@@ -139,8 +125,9 @@ public class BuildBrushEntity : EntityChunky
     /// </summary>
     public void ClearPreviewBounds()
     {
-        WatchedAttributes.SetBool(BrushHasBoundsKey, false);
-        WatchedAttributes.MarkPathDirty(BrushHasBoundsKey);
+        var bounds = new TreeAttribute();
+        bounds.SetBool("has", false);
+        WatchedAttributes.SetAttribute(BrushBoundsKey, bounds);
     }
 
     /// <summary>
@@ -151,20 +138,25 @@ public class BuildBrushEntity : EntityChunky
         min = new BlockPos(0, 0, 0);
         max = new BlockPos(0, 0, 0);
 
-        if (!WatchedAttributes.GetBool(BrushHasBoundsKey))
+        if (!WatchedAttributes.TryGetAttribute(BrushBoundsKey, out IAttribute attr) || attr is not ITreeAttribute bounds)
         {
             return false;
         }
 
-        int minX = WatchedAttributes.GetInt(BrushBoundsMinXKey);
-        int minY = WatchedAttributes.GetInt(BrushBoundsMinYKey);
-        int minZ = WatchedAttributes.GetInt(BrushBoundsMinZKey);
-        int maxX = WatchedAttributes.GetInt(BrushBoundsMaxXKey);
-        int maxY = WatchedAttributes.GetInt(BrushBoundsMaxYKey);
-        int maxZ = WatchedAttributes.GetInt(BrushBoundsMaxZKey);
+        if (!bounds.GetBool("has", false))
+        {
+            return false;
+        }
 
-        min = new BlockPos(minX, minY, minZ);
-        max = new BlockPos(maxX, maxY, maxZ);
+        BlockPos? minPos = bounds.GetBlockPos("min");
+        BlockPos? maxPos = bounds.GetBlockPos("max");
+        if (minPos is null || maxPos is null)
+        {
+            return false;
+        }
+
+        min = minPos;
+        max = maxPos;
         return true;
     }
 
