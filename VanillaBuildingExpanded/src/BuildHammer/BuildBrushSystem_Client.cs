@@ -376,7 +376,6 @@ public class BuildBrushSystem_Client : ModSystem
 
     private void InWorldAction(EnumEntityAction action, bool on, ref EnumHandling handling)
     {
-        handling = EnumHandling.PassThrough;
         if (action == EnumEntityAction.InWorldRightMouseDown && on)
         {
             TryPlaceBlock(ref handling);
