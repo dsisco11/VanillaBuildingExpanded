@@ -809,7 +809,6 @@ public class BuildBrushInstance
         if (_position is not null)
         {
             _entity.Pos.SetPos(_position.ToVec3d());
-            _entity.ServerPos.SetPos(_position.ToVec3d());
         }
 
         // Subscribe to position changes on server
@@ -831,7 +830,6 @@ public class BuildBrushInstance
 
         var vec = e.CurrentPosition.ToVec3d();
         _entity.Pos.SetPos(vec);
-        _entity.ServerPos.SetPos(vec);
     }
 
     /// <summary>
