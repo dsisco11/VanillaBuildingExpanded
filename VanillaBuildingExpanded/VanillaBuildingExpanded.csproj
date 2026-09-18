@@ -53,7 +53,7 @@
 </ItemGroup>
 
 <ItemGroup>
-  <PackageReference Include="protobuf-net" Version="2.4.9" />
+  <PackageReference Include="protobuf-net" Version="3.4.30" />
 </ItemGroup>
 
 </Project>
