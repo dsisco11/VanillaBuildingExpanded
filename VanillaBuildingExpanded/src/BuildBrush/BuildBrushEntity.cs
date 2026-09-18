@@ -244,7 +244,6 @@ public class BuildBrushEntity : EntityChunky
         {
             var vec = e.CurrentPosition.ToVec3d();
             Pos.SetPos(vec);
-            ServerPos.SetPos(vec);
         }
     }
 
