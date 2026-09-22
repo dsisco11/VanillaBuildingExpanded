@@ -7,8 +7,8 @@
         "Sisco++"
     ],
     "description": "Adds quality-of-life improvements related to building while striving to remain as close to the vanilla game as possible.",
-    "version": "0.0.8",
+    "version": "999.0.0",
     "dependencies": {
-        "game": "1.21.5"
+        "game": "1.22.7"
     }
 }
