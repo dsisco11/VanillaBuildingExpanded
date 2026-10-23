@@ -35,5 +35,8 @@ Approved behavior:
     Automated verification: canonical build/package and Release 402/402 tests passed with the official icon and top-center layout; packaged HUD texture matches modicon.png exactly. User confirmed the visual and behavior checks passed.
 
 ## Phase 5: Validate the completed change
-    ☐ Have a subagent run the relevant build and tests; resolve failures and review the final diff against this tasklist.
-    ☐ User-run in-game checks: key rebinding, mode feedback, offhand items, tool interactions, multiplayer toggles, reconnect/respawn, and existing-save hammer handling.
+    ☑ Have a subagent run the relevant build and tests; resolve failures and review the final diff against this tasklist.
+    ☑ User-run in-game checks: key rebinding, mode feedback, offhand items, tool interactions, multiplayer toggles, reconnect/respawn, and existing-save hammer handling.
+
+    Final automated verification: Debug and Release 402/402 tests passed; canonical JSON validation, publish and package succeeded. Packaged DLL matches tested output; HUD texture matches the official icon; legacy hammer identifiers remain, with no recipe or creative/handbook availability. Final diff review passed after removing a trailing blank line.
+    User confirmation from the overlay review covers appearance, input handling, targetless/suspended visibility, toggle-off and death/rejoin. User confirmed all remaining checks passed: key rebinding and notices, offhand items/tools, multiplayer toggles and placement, and existing-save legacy hammer handling.

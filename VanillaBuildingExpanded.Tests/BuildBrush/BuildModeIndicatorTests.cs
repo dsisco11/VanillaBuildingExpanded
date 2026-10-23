@@ -132,4 +132,3 @@ public sealed class BuildModeIndicatorTests
     }
     #endregion
 }
-
