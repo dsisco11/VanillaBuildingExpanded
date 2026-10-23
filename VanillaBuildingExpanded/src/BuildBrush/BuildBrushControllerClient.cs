@@ -29,9 +29,10 @@ public sealed class BuildBrushControllerClient
     #endregion
 
     #region Public
+    /// <summary>Gets the local brush, binding native placement rules when it is first created.</summary>
     public BuildBrushInstance GetBrush(IPlayer player)
     {
-        brush ??= new BuildBrushInstance(player, api.World);
+        brush ??= new BuildBrushInstance(player, api.World, new PlayerBrushPlacementValidator(api.World, player));
         return brush;
     }
 

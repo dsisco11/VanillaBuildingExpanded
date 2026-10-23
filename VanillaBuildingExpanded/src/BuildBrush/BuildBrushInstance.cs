@@ -29,6 +29,7 @@ public class BuildBrushInstance
     /// </summary>
     public IPlayer Player { get; internal set; }
     public IWorldAccessor World { get; internal set; }
+    private readonly BrushPlacementValidation placementValidation;
     private int? _blockId = null;
     private BlockPos? _position;
     private Block? _blockUntransformed = null;
@@ -489,10 +490,21 @@ public class BuildBrushInstance
     #endregion
 
     #region Constructors
+    /// <summary>Creates a brush whose placement checks use its owner's native game rules.</summary>
     public BuildBrushInstance(IPlayer player, IWorldAccessor world)
+        : this(player, world, new PlayerBrushPlacementValidator(world, player))
+    {
+    }
+
+    /// <summary>Creates a brush for its owner using the supplied placement-rule boundary.</summary>
+    /// <param name="player">The owning player, also used for inventory and selection access.</param>
+    /// <param name="world">The world containing the brush.</param>
+    /// <param name="placementValidator">The rule boundary used for resolved brush candidates.</param>
+    public BuildBrushInstance(IPlayer player, IWorldAccessor world, IBrushPlacementValidator placementValidator)
     {
         Player = player;
         World = world;
+        placementValidation = new BrushPlacementValidation(placementValidator);
 
         // Initialize with the block in the player's active hotbar slot
         TryUpdateBlockId();
@@ -542,7 +554,7 @@ public class BuildBrushInstance
         IsDirty = false;
         IsValidPlacement = isValidPlacement;
         Position = resolvedPos;
-        Selection = BuildResolvedSelection(blockSelection, resolvedPos);
+        Selection = BrushPlacementValidation.BuildResolvedSelection(blockSelection, resolvedPos);
         return result;
     }
 
@@ -610,21 +622,7 @@ public class BuildBrushInstance
     /// <returns></returns>
     public BlockPos ResolveFinalSelectionPosition(in Block? placingBlock, [NotNull] in BlockSelection blockSelection, EBuildBrushSnapping snappingMode, BrushSnapping snapping, out bool isValidPos)
     {
-        if (placingBlock is null)
-        {
-            isValidPos = true;
-            return blockSelection.Position;
-        }
-
-        if (TryGetValidSnappedPosition(placingBlock, blockSelection, snapping, snappingMode, out BlockPos outSnappedPos))
-        {
-            isValidPos = true;
-            return outSnappedPos;
-        }
-
-        // the snapped position is invalid, use an unsnapped position instead.
-        isValidPos = TryGetValidSnappedPosition(placingBlock, blockSelection, snapping, EBuildBrushSnapping.None, out BlockPos outUnsnappedPos);
-        return outUnsnappedPos;
+        return placementValidation.ResolvePosition(placingBlock, blockSelection, snappingMode, snapping, out isValidPos);
     }
 
     /// <summary>
@@ -635,19 +633,10 @@ public class BuildBrushInstance
     /// </returns>
     public bool TryGetValidSnappedPosition(in Block? placingBlock, in BlockSelection blockSelection, in BrushSnapping snapping, EBuildBrushSnapping snappingMode, out BlockPos outBlockPos)
     {
-        if (placingBlock is null)
-        {
-            outBlockPos = blockSelection.Position.Copy();
-            return true;
-        }
-
-        outBlockPos = snapping.ResolvePosition(snappingMode);
-
-        string failureCode = "";
-        BlockSelection resolvedSelection = BuildResolvedSelection(blockSelection, outBlockPos);
-        return placingBlock.CanPlaceBlock(World, Player, resolvedSelection, ref failureCode);
+        return placementValidation.TryGetValidSnappedPosition(placingBlock, blockSelection, snapping, snappingMode, out outBlockPos);
     }
 
+    /// <summary>Updates preview validity at the current brush position using the selected placement block.</summary>
     public bool TryUpdatePlacementValidity(in BlockSelection blockSelection)
     {
         Block? placingBlock = CurrentPlacementBlock;
@@ -655,9 +644,7 @@ public class BuildBrushInstance
         {
             return false;
         }
-        string failureCode = "";
-        BlockSelection resolvedSelection = BuildResolvedSelection(blockSelection, Position);
-        IsValidPlacement = placingBlock.CanPlaceBlock(World, Player, resolvedSelection, ref failureCode);
+        IsValidPlacement = placementValidation.CanPlaceAtPosition(placingBlock, blockSelection, Position);
         return IsValidPlacement;
     }
 
@@ -676,7 +663,7 @@ public class BuildBrushInstance
             return false;
         }
 
-        BlockSelection resolvedSelection = BuildResolvedSelection(selectionSource, Position);
+        BlockSelection resolvedSelection = BrushPlacementValidation.BuildResolvedSelection(selectionSource, Position);
         Block? placementBlock = CurrentPlacementBlock;
         ItemStack? placementStack = ItemStack;
         if (placementBlock is null || placementStack is null)
@@ -694,16 +681,6 @@ public class BuildBrushInstance
         return true;
     }
 
-    private static BlockSelection BuildResolvedSelection(BlockSelection source, BlockPos? resolvedPos)
-    {
-        BlockSelection selection = source.Clone();
-        if (resolvedPos is not null)
-        {
-            selection.DidOffset = true;
-            selection.SetPos(resolvedPos.X, resolvedPos.Y, resolvedPos.Z);
-        }
-        return selection;
-    }
     #endregion
 
     #region Event Handlers

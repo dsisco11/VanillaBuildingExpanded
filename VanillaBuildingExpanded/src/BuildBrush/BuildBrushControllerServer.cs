@@ -23,9 +23,10 @@ public sealed class BuildBrushControllerServer : IDisposable
     #endregion
 
     #region Constructor
+    /// <summary>Creates the owner's server brush and subscribes to preview lifecycle events.</summary>
     public BuildBrushControllerServer(ICoreServerAPI api, IServerPlayer player)
     {
-        brush = new BuildBrushInstance(player, api.World);
+        brush = new BuildBrushInstance(player, api.World, new PlayerBrushPlacementValidator(api.World, player));
         brush.OnActivationChanged += Brush_OnActivationChanged;
         brush.OnDimensionDirty += Brush_OnDimensionDirty;
     }

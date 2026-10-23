@@ -133,23 +133,32 @@ PHASE 2 — Introduce native placement validation as an explicit dependency
 Depends on: Phase 1.
 Outcome: Snapping and preview validity can be tested with controlled placement outcomes.
 
-- [ ] Add the minimal placement-validation interface and production implementation in files with distinct responsibilities.
-  - [ ] Production implementation retains the real game context and invokes the selected block's native `CanPlaceBlock` implementation.
-  - [ ] Keep player objects private to the integration implementation; do not expose them through the narrow contract.
-  - [ ] Do not bypass claims with a null player or substitute simplified placement rules.
-- [ ] Route `BuildBrushInstance.TryGetValidSnappedPosition` and `TryUpdatePlacementValidity` through this dependency.
-  - [ ] Preserve `BuildResolvedSelection` behavior, including original face/hit data and resolved position/offset semantics.
-  - [ ] Preserve current placement-block selection, snapped/unsnapped check order, and null-block behavior.
-- [ ] Add focused tests for accepted placement, rejected placement with fallback, and rejected preview validity using a fake or mock of the narrow contract.
-  - [ ] Assert the selected block and resolved selection received by validation, rather than testing only an unconditional success stub.
-  - [ ] Distinguish brush-decision tests from evidence that native claims/collision/block behaviors still run with a real player.
-- [ ] Have a subagent build and run applicable focused tests.
-  - [ ] Existing player-mock failures may remain until Phase 3; report that limitation explicitly.
+- [x] Add the minimal placement-validation interface and production implementation in files with distinct responsibilities.
+  - [x] Production implementation retains the real game context and invokes the selected block's native `CanPlaceBlock` implementation.
+  - [x] Keep player objects private to the integration implementation; do not expose them through the narrow contract.
+  - [x] Do not bypass claims with a null player or substitute simplified placement rules.
+- [x] Route `BuildBrushInstance.TryGetValidSnappedPosition` and `TryUpdatePlacementValidity` through this dependency.
+  - [x] Preserve `BuildResolvedSelection` behavior, including original face/hit data and resolved position/offset semantics.
+  - [x] Preserve current placement-block selection, snapped/unsnapped check order, and null-block behavior.
+- [x] Add focused tests for accepted placement, rejected placement with fallback, and rejected preview validity using a fake or mock of the narrow contract.
+  - [x] Assert the selected block and resolved selection received by validation, rather than testing only an unconditional success stub.
+  - [x] Distinguish brush-decision tests from evidence that native claims/collision/block behaviors still run with a real player.
+- [x] Have a subagent build and run applicable focused tests.
+  - [x] Existing player-mock failures may remain until Phase 3; report that limitation explicitly.
 
 Acceptance criteria:
-- [ ] Brush validity decisions no longer directly invoke player-dependent native placement checks.
-- [ ] The production adapter preserves native placement dispatch and side effects.
-- [ ] Focused player-independent placement tests pass; remaining migration failures are identified.
+- [x] Brush validity decisions no longer directly invoke player-dependent native placement checks.
+- [x] The production adapter preserves native placement dispatch and side effects.
+- [x] Focused player-independent placement tests pass; remaining migration failures are identified.
+
+### Phase 2 implementation and verification
+
+- Rule contract -> Phase 1 placement-validation decisions + `../vsapi/Common/Collectible/Block/Block.cs:CanPlaceBlock` -> `IBrushPlacementValidator` and `PlayerBrushPlacementValidator` at their planned module paths. The adapter keeps non-null world/player references private and directly forwards native virtual dispatch and the failure-code reference; claims, collision and behavior rules are not reimplemented.
+- Brush decision routing -> `BuildBrushInstance.ResolveFinalSelectionPosition/TryGetValidSnappedPosition/TryUpdatePlacementValidity` and the original selection builder -> internal `src/BuildBrush/Placement/BrushPlacementValidation.cs`. It owns the existing snapped/fallback search and selection cloning so the same production decisions can be tested without player-dependent construction. Existing instance methods remain facades binding this rule context; validity/entity assignment and missing-block/position guards stay on the brush.
+- Composition -> both controller brush-creation sites bind the actual world/player once per brush. The original two-argument brush constructor remains available and uses native validation; a three-argument overload accepts an explicit validator. Controllers still acquire player state in this intermediate implementation; their narrow-input construction and moving composition fully to the systems remain Phase 3 work.
+- Focused evidence -> `VanillaBuildingExpanded.Tests/BuildBrush/BrushPlacementValidationTests.cs` -> eleven passing cases exercise accepted snapping, rejected snapping with accepted/rejected fallback, coincident-candidate call order, null-block semantics, rejected preview validation, cloned face/hit/selection-box data, source mutation isolation, fresh failure codes, and missing dependencies. These are decision tests of the extracted production component, not native claims/collision integration or a migrated player-independent brush constructor.
+- Final delegated build/test receipt -> `C:\Users\Sisco\AppData\Local\Temp\vbe-player-dependencies-phase2-20261023-074046` (`focused-final.log/.trx`, `full-final.log/.trx`, `summary.json`, `candidate-hashes.json`). With process-local `NUGET_PACKAGES=C:\Users\Sisco\.nuget\packages`, `dotnet test VanillaBuildingExpanded.Tests/VanillaBuildingExpanded.Tests.csproj --no-restore --filter "FullyQualifiedName~BrushPlacementValidationTests|FullyQualifiedName~BrushSnappingTests"` plus TRX output passed 52/52 (11 placement + 41 snapping). The subsequent full project run with `--no-build --no-restore` passed 170 and failed 189 of 359, zero skipped. All failures retain the existing missing-method proxy signature: 187 `IPlayer`, two `IServerPlayer`; no unrelated failures. Build: zero errors, 31 compiler warnings, no NuGet warnings.
+- Environment -> SDK `10.0.401`, runtime `10.0.13`, API assembly `1.22.7.0`; installed API hash unchanged from Phase 1. No mock-tool/API patch, package, game launch or live-runtime evidence is part of this increment. Inherited architecture constraints were reconciled against current source; the previously identified stale ack/seq wording remains Phase 5 documentation work.
 
 ---
 
