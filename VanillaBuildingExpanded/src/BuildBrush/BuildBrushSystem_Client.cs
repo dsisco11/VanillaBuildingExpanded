@@ -24,6 +24,7 @@ public class BuildBrushSystem_Client : ModSystem
     private ICoreClientAPI? api;
     private BuildBrushControllerClient? controller;
     private BuildModeIndicatorBinding? modeIndicator;
+    private BuildBrushWheelInput? wheelInput;
     private IInventory? subscribedHotbar;
     private long fastTickId;
     private long slowTickId;
@@ -95,6 +96,7 @@ public class BuildBrushSystem_Client : ModSystem
         api.Event.AfterActiveSlotChanged -= Event_AfterActiveSlotChanged;
         api.Event.LeaveWorld -= Event_LeaveWorld;
         api.Input.InWorldAction -= InWorldAction;
+        wheelInput?.Dispose();
         base.Dispose();
     }
     #endregion
@@ -413,6 +415,7 @@ public class BuildBrushSystem_Client : ModSystem
     private void RegisterInputHandlers()
     {
         api.Input.InWorldAction += this.InWorldAction;
+        wheelInput = new BuildBrushWheelInput(api, RotateCursorFromWheel);
         api.Input.TryRegisterHotKey("vbe.ToggleBuildMode", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-toggle-build-mode"),
             GlKeys.Tilde, HotkeyType.CharacterControls);
         api.Input.SetHotKeyHandler("vbe.ToggleBuildMode", Input_ToggleBuildMode);
@@ -431,6 +434,15 @@ public class BuildBrushSystem_Client : ModSystem
 
         api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Backward", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-cycle-snapping-mode-backward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.CharacterControls, shiftPressed: true);
         api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Backward", this.Input_CycleSnappingMode_Backward);
+    }
+
+    /// <summary>Refreshes live selection before routing wheel rotation through the synchronized brush operation.</summary>
+    private bool RotateCursorFromWheel(EModeCycleDirection direction)
+    {
+        if (api?.World?.Player is null) return false;
+        // Refresh the selected item before deciding whether the brush owns this scroll event.
+        controller!.TryUpdate(Player.CurrentBlockSelection);
+        return RotateCursor(direction);
     }
 
     /// <summary>Toggles build mode for a living player and reports the resulting state.</summary>

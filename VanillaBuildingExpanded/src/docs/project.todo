@@ -1,5 +1,5 @@
 # Short-Term:
-    ☐ Allow Shift + MouseWheel for cycling through orientations.
+    ☑ Allow Shift + MouseWheel for cycling through orientations.
     ☐ Snapping indicators to visualize which edges the "build brush" is snapping to.
     ☐ Placement restriction modes (e.g. only placing blocks along a specific plane, such as when you are building a long straight wall or flooring).
 

@@ -36,13 +36,14 @@ Build mode stays enabled when you change hotbar slots. Selecting a tool, an unsu
 | Toggle Build Mode            | Backtick (`)           |
 | Rotate Build Cursor Forward  | `R`                    |
 | Rotate Build Cursor Backward | `Shift + R`            |
+| Rotate Build Cursor with Wheel | `Shift + Mouse Wheel` (up: forward, down: backward) |
 | Cycle Snapping Mode Forward  | `Middle Mouse`         |
 | Cycle Snapping Mode Backward | `Shift + Middle Mouse` |
 | Shift Placement              | `Shift`                |
 
 **NOTE:** The _"Shift placement"_ keybind will offset the block placement position by 1 block in the direction of the block face you are targeting, this is useful for placing roofing or stairs, for example.
 
-All controls are rebindable in the game controls settings. Backtick also opens WorldEdit in creative mode; rebind one of those actions if you use both. Brush hotkeys pass through while mode is off or brush use is suspended. Rotation passes through for blocks without rotation support; these blocks still support brush placement and snapping.
+Keyboard and mouse-button hotkeys are rebindable in the game controls settings. Shift + mouse wheel is an additional fixed shortcut. Backtick also opens WorldEdit in creative mode; rebind one of those actions if you use both. Brush hotkeys pass through while mode is off or brush use is suspended. Rotation passes through for blocks without rotation support; these blocks still support brush placement and snapping. Shift-scroll only consumes successful rotations while the mouse is grabbed for gameplay, preserving scrolling in menus and normal hotbar scrolling otherwise.
 
 ## Compatibility
 

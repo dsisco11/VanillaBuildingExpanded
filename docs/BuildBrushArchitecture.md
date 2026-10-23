@@ -28,6 +28,8 @@ Brush controls require enabled mode and an eligible held block. Rotation additio
 
 The saved hammer collectible retains its class and material variant codes, with no crafting recipe, creative inventory entries, or activation behavior.
 
+Shift + mouse wheel provides an additional orientation control using either Shift key: wheel up cycles forward and wheel down cycles backward. The client refreshes the source before rotation, publishes successful changes through the existing brush update, and consumes only successful rotations during grabbed-mouse gameplay. Previously handled events and menu scrolling pass through.
+
 ## Mode indicator
 
 [BuildModeIndicatorBinding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) observes local controller mode transitions independently of preview eligibility. It lazily owns a [BuildModeHud](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs), which draws a 36 GUI-unit copy of the official mod icon at 85% opacity at the top center with a 16-unit inset. The native HUD never takes focus or handles mouse/keyboard input. Its static composer retains artwork between toggles, rebuilds when GUI scale changes, and follows native window bounds on resize.
