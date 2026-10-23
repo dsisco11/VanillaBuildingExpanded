@@ -14,7 +14,7 @@ Non-goals:
 - No Harmony patches to Moq or Castle, API assembly rewriting, friend-access injection, or changes to game source/installed assemblies.
 - No replacement of native claims, collision, placement, or block-behavior logic.
 - No broad replacement-player interface, general networking framework, packet schema changes, or redesign of brush rendering/lifecycle.
-- Do not implement unrelated outstanding work from `BuildBrushSimplification.todo` or `VanillaBuildingExpanded/src/docs/project.todo`.
+- Do not implement unrelated work from the historical `BuildBrushSimplification.todo` (deleted in `c6a3121`, last version at `8a34ff7:BuildBrushSimplification.todo`) or the active `VanillaBuildingExpanded/src/docs/project.todo`.
 
 Assumptions and design decisions to resolve:
 - The previous assessment is the proposal; no separate proposal document exists. This plan does not authorize implementation by itself.
@@ -31,24 +31,100 @@ PHASE 1 — Establish current contracts and dependency boundaries
 
 Outcome: Implementation has an explicit behavior baseline and a bounded design for native operations.
 
-- [ ] Inspect repository instructions and record the current working tree and installed API/test dependency versions.
-- [ ] Have a subagent run `VanillaBuildingExpanded.Tests/VanillaBuildingExpanded.Tests.csproj` and retain current totals and failure signatures.
-  - [ ] Treat the conversation's earlier 348 total / 159 passed / 189 failed result as an earlier receipt, not a fresh baseline.
-  - [ ] Distinguish player-proxy failures from unrelated build, dependency, or test failures.
-- [ ] Reconcile the proposal with current source and affected tests.
-  - [ ] Inventory player reads in `BuildBrushInstance`, both controllers, both `BuildBrushSystem` implementations, and `src/Extensions/Player.cs`.
-  - [ ] Include `TestHelpers`, brush fixtures, tessellation flow fixtures, `BrushDirtyCounterTests`, and `BrushSyncTests`.
-  - [ ] Identify implicit reads through `api.World.Player`, not just explicit player-typed parameters.
-- [ ] Specify the narrow placement-validation contract and adapter boundary.
-  - [ ] Preserve the selected block, resolved selection, real world/player, native virtual dispatch, and failure-code handling at existing call sites.
-  - [ ] Keep `CanPlaceBlock` side effects and invocation order intact, including snapped-position rejection followed by unsnapped fallback.
-- [ ] Record packet-handler behavior before extraction: unknown client, older/equal sequence, accepted sequence, acknowledgment contents/order, and owner-only dimension synchronization.
-- [ ] Check linked architecture/planning documents for constraints without treating historical completion marks or stale descriptions as current implementation evidence.
+- [x] Inspect repository instructions and record the current working tree and installed API/test dependency versions.
+- [x] Have a subagent run `VanillaBuildingExpanded.Tests/VanillaBuildingExpanded.Tests.csproj` and retain current totals and failure signatures.
+  - [x] Treat the conversation's earlier 348 total / 159 passed / 189 failed result as an earlier receipt, not a fresh baseline.
+  - [x] Distinguish player-proxy failures from unrelated build, dependency, or test failures.
+- [x] Reconcile the proposal with current source and affected tests.
+  - [x] Inventory player reads in `BuildBrushInstance`, both controllers, both `BuildBrushSystem` implementations, and `src/Extensions/Player.cs`.
+  - [x] Include `TestHelpers`, brush fixtures, tessellation flow fixtures, `BrushDirtyCounterTests`, and `BrushSyncTests`.
+  - [x] Identify implicit reads through `api.World.Player`, not just explicit player-typed parameters.
+- [x] Specify the narrow placement-validation contract and adapter boundary.
+  - [x] Preserve the selected block, resolved selection, real world/player, native virtual dispatch, and failure-code handling at existing call sites.
+  - [x] Keep `CanPlaceBlock` side effects and invocation order intact, including snapped-position rejection followed by unsnapped fallback.
+- [x] Record packet-handler behavior before extraction: unknown client, older/equal sequence, accepted sequence, acknowledgment contents/order, and owner-only dimension synchronization.
+- [x] Check linked architecture/planning documents for constraints without treating historical completion marks or stale descriptions as current implementation evidence.
 
 Acceptance criteria:
-- [ ] Every player dependency has a designated narrow input or justified game integration boundary.
-- [ ] Tests can exercise proposed contracts without constructing a player proxy or passing a substitute player into native code.
-- [ ] No behavior change or unrelated redesign has been introduced into the agreed scope.
+- [x] Every player dependency has a designated narrow input or justified game integration boundary.
+- [x] Tests can exercise proposed contracts without constructing a player proxy or passing a substitute player into native code.
+- [x] No behavior change or unrelated redesign has been introduced into the agreed scope.
+
+### Phase 1 contract decisions and source reconciliation
+
+These are implementation constraints for the subsequent phases, not claims that the proposed interfaces or migrated tests already exist.
+
+Baseline identity:
+- Source candidate: `d63c1cef8727a0a8dd2f324fe92be6e80031ece5`; working tree was clean before this work. The only planned tracked change here is this `.todo` file.
+- Instructions: user-supplied AGENTS.md instructions in this conversation; no repository or checked ancestor AGENTS.md was present. All builds/tests are delegated to a subagent. No game launch is authorized for acceptance.
+- Fresh delegated run started `2026-10-23T13:47:36.1620313Z`: 348 total, 159 passed, 189 failed, zero skipped. All 189 failures are `TypeLoadException` for missing `IsInInteractionRangeOf` implementations: 187 `IPlayer` proxies and two `IServerPlayer` proxies; no unrelated failure signatures. Build succeeded with zero errors, 31 compiler warnings and two NU1900 vulnerability-feed warnings. These failures are the expected baseline to address in later phases, not a Phase 1 pass claim.
+- Environment: SDK `10.0.401`, installed current runtime `10.0.13`, target `net10.0`, `VINTAGE_STORY=G:\Vintagestory`. Installed API assembly `1.22.7.0`, file/product `1.22.0`, SHA256 `034283E7E9D98EAE45EE63005576FD89BADC3C995B531CC4C3FE46F3EB2D3296`.
+- Resolved test dependencies: Moq `4.20.72`, Castle.Core `5.1.1`, Microsoft.NET.Test.Sdk `18.10.1`, xunit `2.9.3`, xunit.runner.visualstudio `4.0.0`, coverlet.collector `10.0.1`.
+- Receipt directory: `C:\Users\Sisco\AppData\Local\Temp\vbe-player-dependencies-phase1-20261023`; `baseline.trx` and `baseline.log` hold test evidence, `summary.json` classifies failures, and `installed-api.txt`, `resolved-test-packages.txt`, `dotnet-info.txt`, and `offline-restore.log` record environment/restore details. These are local temporary receipts, not versioned or live-game evidence.
+- Normal restore encountered sandbox network restrictions. The successful delegated commands used process-local `NUGET_PACKAGES=C:\Users\Sisco\.nuget\packages`, then `dotnet restore VanillaBuildingExpanded.Tests/VanillaBuildingExpanded.Tests.csproj --ignore-failed-sources` and `dotnet test VanillaBuildingExpanded.Tests/VanillaBuildingExpanded.Tests.csproj --no-restore --logger "trx;LogFileName=baseline.trx" --results-directory "C:\Users\Sisco\AppData\Local\Temp\vbe-player-dependencies-phase1-20261023"`. No tool/API patches were used. The prior conversation receipt was not reused as current evidence.
+
+Dependency inventory and designated destinations:
+
+| Source / current use | Narrow input or retained boundary | Behavior to preserve |
+| --- | --- | --- |
+| `BuildBrushInstance` constructor, `TryUpdateBlockId`, `OnBlockPlacedServer`: `Player.InventoryManager` | Existing `IPlayerInventoryManager` | Initialize from the current slot, retain source itemstack behavior, and reread the active slot for updates/dirty marking. |
+| `BuildBrushInstance.TryUpdate`: `Player.CurrentBlockSelection` fallback | Explicit `BlockSelection?`, resolved by client caller | Current null means fall back to the player's selection; callers must resolve that before invoking the new contract. A resolved null clears validity/position and returns false. Preserve force/dirty checks and selection cloning. |
+| `BuildBrushInstance.MarkDirty` -> scheduled `DoDirtyUpdate` -> parameterless `TryUpdate` | Narrow `Func<BlockSelection?>` supplied at the game boundary for deferred refresh only | Preserve the existing one-millisecond callback registration/unregistration and read the selection when the callback runs, not when it is scheduled. The callback invokes `TryUpdate` with that explicit current value. |
+| `BuildBrushInstance.ActivateDimension` / `SpawnEntity`: name and UID | Name and owner UID strings | Keep warning context and entity ownership; do not change activation, subscription, spawn, or destruction order. |
+| `TryGetValidSnappedPosition` / `TryUpdatePlacementValidity`: native `CanPlaceBlock` | `IBrushPlacementValidator` below | Keep the actual block, resolved selection, native dispatch, side effects, and invocation order. |
+| Both controllers: brush construction and implicit local-player acquisition | Inventory, identity, validator; explicit selections on updates | Server controller no longer needs a player; client controller operations must not reacquire `api.World.Player`. Keep API services still needed for notices/world access. |
+| Client system: `Player` accessor, join/equip/slot events, fast/slow ticks, post-placement refresh | Game-facing extraction of live inventory, current selection, effective offhand, and identity | Keep local-only join handling, lazy brush construction, active/dirty guards, 50/150 ms tick registration, and post-placement refresh. |
+| Client `GetBrush`, `RotateCursor`, `CycleSnappingMode` parameters | Local brush and cycle direction where the player argument is unused | Review entity-link/input callers before removal; the current `GetBrush` ignores its argument and uses the local player. |
+| Client placement/prediction and lava precheck | Retain real player at native placement; game-mode value if precheck logic is extracted | Keep claim/collision/behavior checks, prediction, active-slot dirty marking, creative-mode exception, packet dispatch, and optional ack gate. Do not extract unrelated precheck policy just to eliminate textual references. |
+| Server lookup/join/disconnect/inventory events | Client ID, name, inventory, effective offhand at core operations; real players at events | Preserve per-client controllers, subscription closures, activation/equip changes, destruction/disposal. Do not redesign sequence-map cleanup. |
+| Server packet handler | Client ID and packet for decisions; optional name for existing logging | Retain actual sender exclusively for transport/sync; decision behavior is specified below. |
+| `src/Extensions/Player.cs` hammer detection | Effective `ItemSlot?` | Integration resolves `InventoryManager?.OffhandHotbarSlot ?? Entity.LeftHandItemSlot`; only then inspect the collectible. Preserve short-circuit fallback behavior. |
+| Harmony `BlockBuildHammerIntercept`, server/client `CanPlaceBlock` and `DoPlaceBlock` | Retained native-player boundaries | Preserve server-only interception, pass-through guards, block/itemstack/selection/rotation handling and native virtual dispatch. |
+| `BuildBrushInstance.SyncDimensionToPlayers` -> `BrushDimension.SyncToPlayers` -> `IMiniDimension.CollectChunksForSending` | Retain `IPlayer[]` integration forwarding | Keep current recipient list and initialized-dimension guard; do not introduce a new sync abstraction. |
+| `BuildBrushEntity.TryLinkToBrushInstance`: implicit local UID / player lookup | Retain game entity-link boundary; adapt brush lookup call only | Preserve local-owner filtering, association, and subscriptions. |
+| `BuildBrushEntityRenderer.DoRender3DOpaque`: `capi.World.Player.Entity.CameraPos` | Retain renderer camera boundary | No renderer/camera redesign or player mock is needed for the brush refactor. |
+
+Placement-validation contract:
+- Public interface `IBrushPlacementValidator`, owned by `src/BuildBrush/Placement/IBrushPlacementValidator.cs`, with `bool CanPlace(Block block, BlockSelection selection, ref string failureCode)`. Use the module's existing namespace conventions; public visibility permits its use by the existing public brush API.
+- Internal sealed adapter `PlayerBrushPlacementValidator`, owned by `src/BuildHammer/Placement/PlayerBrushPlacementValidator.cs`, takes `IWorldAccessor world` and the real `IPlayer player`. Keep those private and invoke `block.CanPlaceBlock(world, player, selection, ref failureCode)` without replacing rules, catching native failures, cloning the supplied selection again, or changing side effects.
+- Client/server systems create the adapter when constructing their session-owned brush/controller. Its world/player must be the same objects that the current brush would supply; do not resolve different players or allocate adapters per validation call.
+- Each existing brush check starts with an empty failure-code string, forwards it by reference, and currently uses only the boolean result. Preserve that behavior; do not add failure-code presentation or change authoritative placement call sites.
+- `ResolveFinalSelectionPosition` uses `_blockUntransformed` through `TryUpdate`: check requested snapping first, then `None` only if rejected, even if the positions coincide. No caching/deduplication of native calls. Null-block paths perform no native validation.
+- `TryUpdatePlacementValidity` uses `CurrentPlacementBlock` at the existing resolved `Position`. Missing block/position returns false without assigning a new validity value; preserve this distinction rather than silently resetting it.
+- `BuildResolvedSelection` clones the original and changes only resolved position / `DidOffset`; keep face, hit, and other selection data intact.
+- Native source `vsapi/Common/Collectible/Block/Block.cs:CanPlaceBlock` checks replaceability, intersecting entities, claims, and block behaviors. Claim denial also dirties the active slot. These source observations constrain the adapter; they are not fresh in-game verification of the installed binary.
+- Testability design: inject a fake/mock validator that records block/selection, assigns `failureCode`, and returns an ordered true/false sequence. Construct brush/controller fixtures from inventory mocks, real slots, strings and selections. No fake player or null-player call to native validation is required. Compiling this interface and executable tests belongs to Phases 2–3.
+- Deferred-selection design: both game-facing systems supply a getter bound to the same session player that the brush currently stores, e.g. `() => player.CurrentBlockSelection`, for `DoDirtyUpdate` only. A test can supply a mutable selection getter without a player. Ordinary ticks and post-placement controller refresh pass explicit selection values; do not remove the dirty callback, snapshot a selection at scheduling time, or make the core acquire `api.World.Player`. This is a narrow value-provider dependency, not another player interface or a lifecycle redesign.
+
+Packet behavior before extraction (`BuildBrushSystem_Server.HandlePacket_SetBuildBrush`):
+
+| Condition | Tracking/state effects | Ack and synchronization |
+| --- | --- | --- |
+| No controller for sender client ID | Return immediately; no tracking/state writes | No ack; no sync. |
+| Controller exists, tracking absent | Effective last sequence is zero | Apply the comparisons below, including rejecting zero/negative incoming sequences. |
+| Incoming sequence <= last sequence | Optional ignored-update log; no map/state changes | Ack existing sequence to original sender; return without sync. |
+| Incoming sequence > last sequence | Optional accepted-update log; write map first; call `controller.ApplyState(packet)` next | After successful application ack incoming sequence to original sender, then sync `[fromPlayer]` only when `Dimension?.IsInitialized == true`. |
+
+- State application order remains `State.Apply`, then brush active state, snapping, orientation, position, and last-applied sequence; activation and dirty events can occur during those assignments.
+- No new exception recovery/transaction semantics: if state application throws, existing earlier map writes remain and later ack/sync is not reached.
+- The proposed decision operation stays on the owning server component and uses client ID/packet; a minimal result may distinguish unknown, ignored, and applied updates and carry the ack sequence. The caller keeps the associated controller for the existing post-ack sync. Do not add packet fields, player wrappers, or a generic transport interface.
+- Test consequences: `BrushSyncTests` currently mocks `IServerPlayer`, invokes the private handler via reflection, and verifies only an ack call plus unchanged map for an older packet. Rewrite around decisions in Phase 4; add equal/accepted/unknown paths there. Transport recipient identity and actual chunk delivery remain integration evidence.
+
+Affected fixture inventory:
+- Shared `BuildBrush/TestHelpers.cs:CreateMockPlayer/CreateTestInstance` supplies a player mock with inventory/current selection. Replace that fixture with narrow inputs and update direct constructor users.
+- `BuildBrushInstanceTests.cs`, `BuildBrushInstanceTests_Client.cs`, `BuildBrushInstanceTests_Server.cs`, `BuildBrushDimensionTests.cs`, `BuildBrushPlacementTests.cs`, and `BlockPlacementInterceptTests.cs` create brush instances via that mock/helper; some configure active slots or current selection.
+- `Tessellation/TessellationIntegrationTests.cs`, `Tessellation/RotationModeTessellationTests.cs`, and `E2E/BrushToTessellationFlowTests.cs` use the same construction dependency. The E2E harness wires real brush/dimension components with mocked engine services; it does not establish live rendering acceptance.
+- `BrushDirtyCounterTests.cs` independently mocks server identity/inventory just to construct the controller; retain dirty-event assertions after narrowing. `BrushSyncTests.cs` has the separate handler dependency described above. These twelve files cover the current player-mock/helper references; keep assertion coverage rather than removing tests.
+
+Task-to-source traceability and document reconciliation:
+- Instructions/baseline -> conversation AGENTS.md + test `.csproj` / resolved assets + installed API -> method/class documentation, region rules, delegated testing, and exact versions -> instruction inspection and delegated receipt; no source implementation in this phase.
+- Dependency inventory -> `BuildBrushInstance` constructor/update/validity/lifecycle, both controllers, both systems, player extensions, entity linkage and renderer camera -> narrow data versus native boundaries -> inventory and contract above, checked against current source.
+- Fixture inventory -> the twelve test files above -> preserve slot/selection, dirty event, state/sequence and tessellation assertions -> source inspection now; executable migration evidence belongs to later phases.
+- Validation contract -> `BuildBrushInstance.ResolveFinalSelectionPosition/TryGetValidSnappedPosition/TryUpdatePlacementValidity/BuildResolvedSelection` + sibling `vsapi/Common/Collectible/Block/Block.cs:CanPlaceBlock` -> exact dispatch, failure codes, side effects and selection/call ordering -> specified contract, source review; native runtime qualification deferred.
+- Packet baseline -> server `HandlePacket_SetBuildBrush`, controller `ApplyState`, `Packet_SetBuildBrush`, `Packet_BuildBrushAck`, and `BrushDimension.SyncToPlayers` -> unknown/ignored/applied ordering and owner-only delivery -> behavior table and source review.
+- Linked architecture -> `docs/BuildBrushArchitecture.md` (read in full) -> module ownership, client prediction/server authority, owner-only sync -> preserved here. Its final instrumentation paragraph incorrectly says ack/seq is still planned; current packet/system source already implements it. Treat that paragraph as stale historical description, not a requirement to remove ack/seq. Phase 5 remains responsible for current-state cleanup.
+- Historical plan -> `8a34ff7:BuildBrushSimplification.todo` (read in full; deleted by `c6a3121`) -> no feature cuts, selection face/hit preservation, authoritative server, optional prediction/ack gate, entity-based rendering -> retained constraints only. Completed markers are not current validation evidence; do not restore the deleted checklist.
+- Active general plan -> `VanillaBuildingExpanded/src/docs/project.todo` (read in full) -> unrelated indicators, modes, block-entity/schematic aspirations -> no work imported. This checklist does not supersede their authority.
 
 ---
 
