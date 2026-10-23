@@ -1,0 +1,180 @@
+# BuildBrush narrow player dependencies (.todo)
+
+Source proposal: the current conversation's feasibility assessment of replacing internal `IPlayer` dependencies with narrower inputs, immediately preceding the request to extrapolate this plan.
+
+Goal: Make brush and controller unit tests independent of `IPlayer`, `IClientPlayer`, and `IServerPlayer` mocks while preserving existing gameplay and native placement behavior.
+
+Authoritative scope:
+- Use existing `IPlayerInventoryManager`, `ItemSlot`, explicit `BlockSelection?` inputs, and identity values where they express the actual dependency.
+- Add a small mod-owned placement-validation interface for brush computations that currently invoke native placement checks.
+- Retain real player objects at game callbacks, Harmony interception, native placement, network replies, and mini-dimension synchronization boundaries.
+- Preserve server authority, client prediction, selection semantics, sequencing, preview ownership, and resource lifecycle.
+
+Non-goals:
+- No Harmony patches to Moq or Castle, API assembly rewriting, friend-access injection, or changes to game source/installed assemblies.
+- No replacement of native claims, collision, placement, or block-behavior logic.
+- No broad replacement-player interface, general networking framework, packet schema changes, or redesign of brush rendering/lifecycle.
+- Do not implement unrelated outstanding work from `BuildBrushSimplification.todo` or `VanillaBuildingExpanded/src/docs/project.todo`.
+
+Assumptions and design decisions to resolve:
+- The previous assessment is the proposal; no separate proposal document exists. This plan does not authorize implementation by itself.
+- `IPlayer` can remain in integration-layer method signatures. Success means removing it from testable brush decisions and controller construction, not eliminating every player reference from the mod.
+- Existing `BuildBrushInstance.SyncDimensionToPlayers` / `BrushDimension.SyncToPlayers` forwarding is an integration boundary; relocating it is not required solely to remove textual player references.
+- Prefer passing the current selection explicitly from callers. Inventory access must remain live; do not capture the initially active slot as permanent brush state.
+- Determine the placement-validation interface name, signature, owner, and production adapter location during the first phase; names in this plan describe responsibilities rather than prescribing a new framework.
+- Separate packet decisions from transport with the smallest suitable method/result contract. A new networking abstraction is not a requirement.
+- Live acceptance is performed by the user. Automated receipts do not establish in-game appearance or multiplayer acceptance.
+
+---
+
+PHASE 1 — Establish current contracts and dependency boundaries
+
+Outcome: Implementation has an explicit behavior baseline and a bounded design for native operations.
+
+- [ ] Inspect repository instructions and record the current working tree and installed API/test dependency versions.
+- [ ] Have a subagent run `VanillaBuildingExpanded.Tests/VanillaBuildingExpanded.Tests.csproj` and retain current totals and failure signatures.
+  - [ ] Treat the conversation's earlier 348 total / 159 passed / 189 failed result as an earlier receipt, not a fresh baseline.
+  - [ ] Distinguish player-proxy failures from unrelated build, dependency, or test failures.
+- [ ] Reconcile the proposal with current source and affected tests.
+  - [ ] Inventory player reads in `BuildBrushInstance`, both controllers, both `BuildBrushSystem` implementations, and `src/Extensions/Player.cs`.
+  - [ ] Include `TestHelpers`, brush fixtures, tessellation flow fixtures, `BrushDirtyCounterTests`, and `BrushSyncTests`.
+  - [ ] Identify implicit reads through `api.World.Player`, not just explicit player-typed parameters.
+- [ ] Specify the narrow placement-validation contract and adapter boundary.
+  - [ ] Preserve the selected block, resolved selection, real world/player, native virtual dispatch, and failure-code handling at existing call sites.
+  - [ ] Keep `CanPlaceBlock` side effects and invocation order intact, including snapped-position rejection followed by unsnapped fallback.
+- [ ] Record packet-handler behavior before extraction: unknown client, older/equal sequence, accepted sequence, acknowledgment contents/order, and owner-only dimension synchronization.
+- [ ] Check linked architecture/planning documents for constraints without treating historical completion marks or stale descriptions as current implementation evidence.
+
+Acceptance criteria:
+- [ ] Every player dependency has a designated narrow input or justified game integration boundary.
+- [ ] Tests can exercise proposed contracts without constructing a player proxy or passing a substitute player into native code.
+- [ ] No behavior change or unrelated redesign has been introduced into the agreed scope.
+
+---
+
+PHASE 2 — Introduce native placement validation as an explicit dependency
+
+Depends on: Phase 1.
+Outcome: Snapping and preview validity can be tested with controlled placement outcomes.
+
+- [ ] Add the minimal placement-validation interface and production implementation in files with distinct responsibilities.
+  - [ ] Production implementation retains the real game context and invokes the selected block's native `CanPlaceBlock` implementation.
+  - [ ] Keep player objects private to the integration implementation; do not expose them through the narrow contract.
+  - [ ] Do not bypass claims with a null player or substitute simplified placement rules.
+- [ ] Route `BuildBrushInstance.TryGetValidSnappedPosition` and `TryUpdatePlacementValidity` through this dependency.
+  - [ ] Preserve `BuildResolvedSelection` behavior, including original face/hit data and resolved position/offset semantics.
+  - [ ] Preserve current placement-block selection, snapped/unsnapped check order, and null-block behavior.
+- [ ] Add focused tests for accepted placement, rejected placement with fallback, and rejected preview validity using a fake or mock of the narrow contract.
+  - [ ] Assert the selected block and resolved selection received by validation, rather than testing only an unconditional success stub.
+  - [ ] Distinguish brush-decision tests from evidence that native claims/collision/block behaviors still run with a real player.
+- [ ] Have a subagent build and run applicable focused tests.
+  - [ ] Existing player-mock failures may remain until Phase 3; report that limitation explicitly.
+
+Acceptance criteria:
+- [ ] Brush validity decisions no longer directly invoke player-dependent native placement checks.
+- [ ] The production adapter preserves native placement dispatch and side effects.
+- [ ] Focused player-independent placement tests pass; remaining migration failures are identified.
+
+---
+
+PHASE 3 — Narrow brush inputs, controller construction, and fixtures
+
+Depends on: Phase 2.
+Outcome: Brush/controller tests can run without player mocks, while client/server callers supply current game inputs.
+
+- [ ] Remove `BuildBrushInstance.Player` and its player-dependent constructor contract.
+  - [ ] Supply `IPlayerInventoryManager`, owner UID, logging name, and the placement-validation dependency as needed.
+  - [ ] Preserve constructor initialization from the current active hotbar item and source-itemstack handling.
+  - [ ] Read `ActiveHotbarSlot` at use time for block refresh and dirty marking; verify switching slots after brush construction still works.
+  - [ ] Preserve preview entity ownership and initialization-warning information.
+- [ ] Make selection input explicit in brush updates.
+  - [ ] Update every former parameterless caller to resolve its intended current selection at the appropriate integration boundary.
+  - [ ] Preserve no-selection clearing, explicit selection overrides, forced updates, and placement validity behavior.
+  - [ ] Review both controllers and the client tick/post-placement paths so no fallback silently reads a stored player.
+- [ ] Update `BuildBrushControllerClient` and `BuildBrushControllerServer` construction/brush acquisition to receive narrow dependencies.
+  - [ ] Keep game player extraction and adapter creation in the owning client/server integration code.
+  - [ ] Preserve lazy client brush creation, per-client server ownership, event subscriptions, destruction, and disposal.
+  - [ ] Keep current player-based game APIs at native placement and dimension-sync boundaries.
+- [ ] Narrow build-hammer detection to the effective offhand `ItemSlot`.
+  - [ ] Resolve `InventoryManager.OffhandHotbarSlot ?? Entity.LeftHandItemSlot` at the game boundary to preserve existing fallback semantics.
+  - [ ] Verify hammer, non-hammer, and empty-slot results without player mocks.
+- [ ] Remove redundant player parameters from internal client operations where only the local brush/direction is needed, after checking all callers.
+- [ ] Migrate `TestHelpers.CreateMockPlayer` / `CreateTestInstance` consumers to narrow fixtures.
+  - [ ] Migrate brush, dimension, placement, tessellation, and `E2E/BrushToTessellationFlowTests` construction and setups.
+  - [ ] Migrate `BrushDirtyCounterTests` to construct the server controller without `IServerPlayer`.
+  - [ ] Keep real `ItemSlot` test doubles and mock only the inventory/validation contracts actually needed.
+  - [ ] Remove obsolete shared player fixture APIs once their consumers have migrated; identify `BrushSyncTests` as the remaining packet-boundary migration if applicable.
+- [ ] Add or adapt meaningful coverage for live slot changes, dirty marking, explicit selection/no-selection behavior, and preview-owner UID.
+- [ ] Have a subagent build and run the migrated focused tests.
+
+Acceptance criteria:
+- [ ] Brush state/placement decisions and controller construction require no player interface or player mock.
+- [ ] Migrated fixtures preserve the behavior they previously asserted, including dimension and tessellation flows.
+- [ ] Focused migrated tests pass; packet-handler migration remains explicitly pending until Phase 4.
+
+---
+
+PHASE 4 — Separate server packet decisions from player transport
+
+Depends on: Phase 3.
+Outcome: Packet sequence and state tests no longer invoke an `IServerPlayer`-dependent handler.
+
+- [ ] Extract the existing sequence acceptance and state-application decision from `BuildBrushSystem_Server.HandlePacket_SetBuildBrush` into an owning, narrowly scoped operation.
+  - [ ] Accept client ID, packet, and only additional values required for the existing decision/logging behavior.
+  - [ ] Preserve controller lookup, last-applied tracking, older/equal rejection, accepted state application, and the acknowledgment sequence selected for each path.
+  - [ ] Keep operation policy with its owning server component; avoid a general network abstraction.
+- [ ] Keep the registered handler as the game-facing boundary.
+  - [ ] Extract identity from the real `IServerPlayer`, invoke the decision operation, and send the acknowledgment to that same player.
+  - [ ] Preserve no-controller behavior and the order of acknowledgment versus owner-only initialized-dimension synchronization.
+  - [ ] Do not move synchronization ahead of state application or perform it for rejected updates.
+- [ ] Rewrite `BrushSyncTests` around the player-independent operation, removing reflection-based invocation of the player handler.
+  - [ ] Cover unknown client, older/equal sequence, and accepted sequence with state/tracking and acknowledgment assertions.
+  - [ ] Retain transport and real-player synchronization as explicit integration acceptance items rather than claiming these unit tests cover them.
+- [ ] Search all test sources for player mocks and eliminate any remaining fixture dependency.
+- [ ] Have a subagent run the full unit-test project and investigate every remaining failure without dropping assertions or skipping tests to obtain a pass.
+
+Acceptance criteria:
+- [ ] No unit-test fixture creates a mock of `IPlayer`, `IClientPlayer`, or `IServerPlayer`.
+- [ ] Packet decision tests preserve sequence handling and state behavior without a player object.
+- [ ] The full test project passes, and retained real-player network/sync responsibilities are documented for integration verification.
+
+---
+
+PHASE 5 — Reconcile documentation and qualify the final change
+
+Depends on: Phase 4.
+Outcome: The dependency change has source, automated, packaging, and separately identified runtime evidence.
+
+- [ ] Update `docs/BuildBrushArchitecture.md` to describe the implemented dependency boundaries and current flow.
+  - [ ] Describe native validation, explicit selection/inventory inputs, packet decisions, and retained player integration boundaries.
+  - [ ] Remove stale staging/historical wording in the touched architecture descriptions; do not turn permanent documentation into a migration log.
+  - [ ] Reconcile relevant references in existing planning documents without marking unrelated work complete or rewriting their historical checklist authority.
+- [ ] Review the full change against the source proposal and project code practices.
+  - [ ] Give each new file one clearly named responsibility; keep dependency direction toward narrow contracts.
+  - [ ] Add XML documentation for new/changed classes and methods, explanatory comments for nontrivial logic, and visibility/functional region organization.
+  - [ ] Remove migration-only overloads and scaffolding; retain only adapters justified by the game API boundary.
+  - [ ] Confirm production behavior has no conditional test path, Castle/Moq patch, rewritten API copy, or newly added tool dependency to bypass access checks.
+- [ ] Have a subagent run the repository's Release build/test/package workflow through `build.ps1` / Cake and retain its result.
+  - [ ] Inspect current task arguments and outputs before invocation; use the canonical Package target and its build/test dependencies rather than inventing a separate packaging path.
+  - [ ] Inspect the resulting package for the expected mod contents and absence of test assemblies, fixtures, and bundled game API binaries.
+  - [ ] Repeat focused/full testing only if later edits or failures justify it.
+- [ ] Prepare runtime acceptance instructions and leave them pending until the user supplies results; do not launch the game for acceptance.
+  - [ ] Check offhand equip/unequip, active hotbar changes, no selection, rotation/snapping, preview ownership, and preview disposal/recreation.
+  - [ ] Check allowed and denied placement, including a claimed area and a behavior-dependent block, through native game rules.
+  - [ ] Check client prediction and authoritative server placement retain resolved selection, itemstack, and rotation behavior.
+  - [ ] Check multiplayer acknowledgments, accepted-update synchronization to the existing recipient, and rejection of stale updates.
+
+Acceptance criteria:
+- [ ] Final source review confirms every player use belongs to a required game integration boundary; no broad replacement-player abstraction was introduced.
+- [ ] Full automated tests and the canonical Release package workflow pass with receipts tied to the reviewed candidate.
+- [ ] Package contents and current-state documentation match the implemented code.
+- [ ] User-run runtime acceptance is recorded separately; any unverified item remains unchecked and prevents a claim of full runtime acceptance.
+
+---
+
+Final acceptance:
+- [ ] Every source-proposal requirement is implemented or explicitly deferred with rationale.
+- [ ] No player proxy is needed to run the complete unit-test project.
+- [ ] Native placement, transport, synchronization, ownership, and lifecycle behavior are preserved at their integration boundaries.
+- [ ] Automated results, package inspection, and user runtime evidence are reported with their respective limits.
+- [ ] All required cleanup and linked-document reconciliation are complete; outstanding acceptance work remains visible.
