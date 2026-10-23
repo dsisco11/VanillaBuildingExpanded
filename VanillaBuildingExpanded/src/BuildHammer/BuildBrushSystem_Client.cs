@@ -546,7 +546,16 @@ public class BuildBrushSystem_Client : ModSystem
         if (request.PlacementBlock.CanPlaceBlock(api.World, Player, request.Selection, ref failureCode))
         {
             Block oldBlock = World.BlockAccessor.GetBlock(request.Position);
-            request.PlacementBlock.DoPlaceBlock(World, Player, request.Selection, request.ItemStack);
+            bool placed = request.PlacementBlock.DoPlaceBlock(World, Player, request.Selection, request.ItemStack);
+            if (placed)
+            {
+                // Match vanilla's interaction sound lookup, including block-specific overrides and decor.
+                BlockSounds? sounds = request.PlacementBlock.GetSounds(World.BlockAccessor, request.Selection, null);
+                if (sounds is not null)
+                {
+                    api.World.PlaySound(sounds.Place);
+                }
+            }
 
             // Keep client-side prediction consistent with brush rotation.
             // Vanilla placement may set rotation from player facing; enforce brush target rotation.
