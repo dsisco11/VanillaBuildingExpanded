@@ -26,10 +26,13 @@ Approved behavior:
     ☑ Remove hammer crafting/creative availability and equipment helpers; handle item registration/assets according to the saved-item decision and update affected names and user documentation.
 
 ## Phase 4: Add the build-mode active overlay
-    ☐ Choose the icon artwork, screen position, and sizing; respect GUI scaling and avoid obstructing existing HUD elements.
-    ☐ Add a non-interactive HUD icon driven by local build-mode state; keep it visible while brush use is suspended or no target is selected, and hide it when mode is off.
-    ☐ Handle join, death/respawn, disconnect, and disposal so the overlay cannot retain stale state or rendering resources.
-    ☐ Verify visibility across repeated toggles and lifecycle changes; perform user-run in-game checks for placement, readability, GUI scaling, and normal input handling.
+    ☑ Choose the icon artwork, screen position, and sizing; respect GUI scaling and avoid obstructing existing HUD elements.
+    ☑ Add a non-interactive HUD icon driven by local build-mode state; keep it visible while brush use is suspended or no target is selected, and hide it when mode is off.
+    ☑ Handle join, death/respawn, disconnect, and disposal so the overlay cannot retain stale state or rendering resources.
+    ☑ Verify visibility across repeated toggles and lifecycle changes; perform user-run in-game checks for placement, readability, GUI scaling, and normal input handling.
+
+    Selected artwork: official mod icon at 85% opacity. Current layout: 36 GUI units, top center with a 16-unit top inset; passive input and mode-only visibility, with scale refresh and session cleanup.
+    Automated verification: canonical build/package and Release 402/402 tests passed with the official icon and top-center layout; packaged HUD texture matches modicon.png exactly. User confirmed the visual and behavior checks passed.
 
 ## Phase 5: Validate the completed change
     ☐ Have a subagent run the relevant build and tests; resolve failures and review the final diff against this tasklist.

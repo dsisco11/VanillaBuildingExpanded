@@ -14,7 +14,7 @@ A Vintage Story mod that adds quality-of-life improvements for building while st
 
 ### Build Mode
 
-Press the backtick key (`) to toggle **Build Mode**, then select a placeable block on your hotbar. The preview shows the target placement and orientation. Entering or leaving the mode displays a status notice.
+Press the backtick key (`) to toggle **Build Mode**, then select a placeable block on your hotbar. The preview shows the target placement and orientation. Entering or leaving the mode displays a status notice. The official mod icon at 85% opacity at the top center indicates that build mode is enabled, including while the brush is suspended or has no target. It scales with the GUI and does not capture input.
 
 Build mode stays enabled when you change hotbar slots. Selecting a tool, an unsupported item, or an empty slot suspends the brush and restores ordinary interactions; selecting a supported block resumes it. Mode starts off when you join and turns off on death. Snapping preferences persist across toggles within the session; held face offset does not.
 

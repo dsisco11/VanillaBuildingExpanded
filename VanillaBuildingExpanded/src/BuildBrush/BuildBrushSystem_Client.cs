@@ -23,6 +23,10 @@ public class BuildBrushSystem_Client : ModSystem
     #region Fields
     private ICoreClientAPI? api;
     private BuildBrushControllerClient? controller;
+    private BuildModeIndicatorBinding? modeIndicator;
+    private IInventory? subscribedHotbar;
+    private long fastTickId;
+    private long slowTickId;
     protected IClientNetworkChannel? clientChannel;
 
     private VbeConfig? config;
@@ -52,6 +56,7 @@ public class BuildBrushSystem_Client : ModSystem
 
         controller = new BuildBrushControllerClient(api, CreateBrush);
         controller.ModeChanged += SendToServer;
+        modeIndicator = new BuildModeIndicatorBinding(controller, () => new BuildModeHud(api));
 
         config = VbeConfig.Get(api);
 
@@ -67,18 +72,30 @@ public class BuildBrushSystem_Client : ModSystem
         RegisterInputHandlers();
 
         // Game events
-        api.Event.RegisterGameTickListener(Thunk_Client, 50);
-        api.Event.RegisterGameTickListener(Thunk_Client_Slow, 150);
+        fastTickId = api.Event.RegisterGameTickListener(Thunk_Client, 50);
+        slowTickId = api.Event.RegisterGameTickListener(Thunk_Client_Slow, 150);
         api.Event.PlayerJoin += Event_PlayerJoin;
         api.Event.PlayerDeath += Event_PlayerDeath;
         api.Event.BlockChanged += Event_BlockChanged;
         api.Event.AfterActiveSlotChanged += Event_AfterActiveSlotChanged;
+        api.Event.LeaveWorld += Event_LeaveWorld;
     }
 
     /// <summary>Releases resources owned by this system.</summary>
     public override void Dispose()
     {
-        // Resolver caches are managed per-instance, no global cleanup needed
+        if (api is null) return;
+        Event_LeaveWorld();
+        controller!.ModeChanged -= SendToServer;
+        api.Event.UnregisterGameTickListener(fastTickId);
+        api.Event.UnregisterGameTickListener(slowTickId);
+        api.Event.PlayerJoin -= Event_PlayerJoin;
+        api.Event.PlayerDeath -= Event_PlayerDeath;
+        api.Event.BlockChanged -= Event_BlockChanged;
+        api.Event.AfterActiveSlotChanged -= Event_AfterActiveSlotChanged;
+        api.Event.LeaveWorld -= Event_LeaveWorld;
+        api.Input.InWorldAction -= InWorldAction;
+        base.Dispose();
     }
     #endregion
 
@@ -144,15 +161,17 @@ public class BuildBrushSystem_Client : ModSystem
         if (byPlayer != Player)
             return;
 
-        IInventory? hotbarInv = byPlayer.InventoryManager?.GetHotbarInventory();
-        // unsure if inventory instance persists across respawns, so re-subscribe each time
-        if (hotbarInv is not null)
+        if (subscribedHotbar is not null)
+            subscribedHotbar.SlotModified -= Event_HotbarSlotModified;
+        subscribedHotbar = byPlayer.InventoryManager?.GetHotbarInventory();
+        if (subscribedHotbar is not null)
         {
-            hotbarInv.SlotModified += Event_HotbarSlotModified;
+            subscribedHotbar.SlotModified += Event_HotbarSlotModified;
         }
 
         // New sessions start with mode disabled, regardless of equipment.
         controller!.SetBuildMode(false, null);
+        modeIndicator ??= new BuildModeIndicatorBinding(controller, () => new BuildModeHud(api!));
         Logger.Audit("[BuildBrush][OnPlayerJoin]: Initializing build brush for player.");
     }
 
@@ -161,6 +180,22 @@ public class BuildBrushSystem_Client : ModSystem
     {
         if (byPlayer == Player)
             controller!.SetBuildMode(false, null);
+    }
+
+    /// <summary>Retires session artwork before clearing mode, without sending to a departing server.</summary>
+    private void Event_LeaveWorld()
+    {
+        modeIndicator?.Dispose();
+        modeIndicator = null;
+        if (subscribedHotbar is not null)
+            subscribedHotbar.SlotModified -= Event_HotbarSlotModified;
+        subscribedHotbar = null;
+        if (controller is not null && controller.State.IsActive)
+        {
+            controller.ModeChanged -= SendToServer;
+            controller.SetBuildMode(false, null);
+            controller.ModeChanged += SendToServer;
+        }
     }
     /// <summary>
     /// Handles hotbar slot modifications to update the brush's block ID if the contents of the active slot changes.
