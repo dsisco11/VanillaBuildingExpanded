@@ -69,6 +69,19 @@ public class BlockOrientationResolverTests
     }
 
     /// <summary>
+    /// Creates a brick slab with the ordered variant groups used by the game assets.
+    /// </summary>
+    private static Block CreateBrickSlab(int blockId, string color, string rotation)
+    {
+        var block = CreateSimpleBlock(blockId, $"game:brickslabs-four-{color}-{rotation}-free");
+        block.VariantStrict["courses"] = "four";
+        block.VariantStrict["type"] = color;
+        block.VariantStrict["rot"] = rotation;
+        block.VariantStrict["cover"] = "free";
+        return block;
+    }
+
+    /// <summary>
     /// Creates a block with IRotatable entity support.
     /// </summary>
     private static Block CreateRotatableBlock(int blockId, string code, string entityClass)
@@ -415,6 +428,33 @@ public class BlockOrientationResolverTests
     #endregion
 
     #region GetOrientations Tests - VariantBased Mode
+
+    /// <summary>
+    /// Reproduces brown brick slabs receiving red orientations after red slabs populate the cache.
+    /// </summary>
+    [Fact]
+    public void GetOrientations_SameBaseCodeDifferentColors_PreservesSelectedColor()
+    {
+        var mockWorld = CreateMockWorld();
+        string[] rotations = ["north", "east", "south", "west", "up", "down"];
+        Block[] redSlabs = rotations.Select((rotation, index) => CreateBrickSlab(100 + index, "red", rotation)).ToArray();
+        Block[] brownSlabs = rotations.Select((rotation, index) => CreateBrickSlab(200 + index, "brown", rotation)).ToArray();
+        SetupBlockLookup(mockWorld, redSlabs.Concat(brownSlabs).ToArray());
+
+        // Keep searches color-specific so only the resolver cache can mix the two families.
+        mockWorld.Setup(w => w.SearchBlocks(It.Is<AssetLocation>(code =>
+            code.Domain == "game" && code.Path == "brickslabs-four-red-*-free"))).Returns(redSlabs);
+        mockWorld.Setup(w => w.SearchBlocks(It.Is<AssetLocation>(code =>
+            code.Domain == "game" && code.Path == "brickslabs-four-brown-*-free"))).Returns(brownSlabs);
+        var resolver = new BlockOrientationResolver(mockWorld.Object);
+
+        // Select red first, then switch to brown without replacing the resolver.
+        var redOrientations = resolver.GetOrientations(redSlabs[5].BlockId);
+        var brownOrientations = resolver.GetOrientations(brownSlabs[5].BlockId);
+
+        Assert.Equal(redSlabs.Select(block => block.BlockId), redOrientations.Select(orientation => orientation.BlockId));
+        Assert.Equal(brownSlabs.Select(block => block.BlockId), brownOrientations.Select(orientation => orientation.BlockId));
+    }
 
     [Fact]
     public void GetOrientations_VariantBlock_ReturnsOneDefinitionPerVariant()
