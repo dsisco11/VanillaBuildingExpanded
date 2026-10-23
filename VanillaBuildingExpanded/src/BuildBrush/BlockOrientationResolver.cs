@@ -86,9 +86,9 @@ public class BlockOrientationResolver
     private readonly Dictionary<AssetLocation, EBuildBrushRotationMode> _modeCache = [];
 
     /// <summary>
-    /// Cache of orientation variants keyed by block base code.
+    /// Cache of orientation variants keyed by the complete search code, including its domain.
     /// </summary>
-    private readonly Dictionary<string, Block[]> _variantCache = [];
+    private readonly Dictionary<AssetLocation, Block[]> _variantCache = [];
     #endregion
 
     #region Constructor
@@ -432,35 +432,32 @@ public class BlockOrientationResolver
     /// </summary>
     private Block[] GetOrientationVariants(Block block)
     {
-        string baseCode = block.Code.FirstCodePart();
-
-        if (_variantCache.TryGetValue(baseCode, out Block[]? cached))
-            return cached;
-
         string? foundVariantGroup = block.Variant.Keys
             .FirstOrDefault(k => ValidOrientationVariantKeys.Contains(k));
 
         if (foundVariantGroup is null)
         {
-            _variantCache[baseCode] = [block];
             return [block];
         }
 
         AssetLocation? searchCode = block.CodeWithVariant(foundVariantGroup, "*");
         if (searchCode is null)
         {
-            _variantCache[baseCode] = [block];
             return [block];
         }
+
+        // Share results only when the domain and all non-selected variants match.
+        if (_variantCache.TryGetValue(searchCode, out Block[]? cached))
+            return cached;
 
         Block[] variants = World.SearchBlocks(searchCode);
         if (variants.Length == 0)
         {
-            _variantCache[baseCode] = [block];
+            // This fallback belongs to the source block, not the shared search family.
             return [block];
         }
 
-        _variantCache[baseCode] = variants;
+        _variantCache[searchCode] = variants;
         return variants;
     }
 

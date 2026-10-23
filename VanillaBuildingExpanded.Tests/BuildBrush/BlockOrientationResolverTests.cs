@@ -456,6 +456,72 @@ public class BlockOrientationResolverTests
         Assert.Equal(brownSlabs.Select(block => block.BlockId), brownOrientations.Select(orientation => orientation.BlockId));
     }
 
+    /// <summary>
+    /// Reuses a family search when different source orientations request the same variants.
+    /// </summary>
+    [Fact]
+    public void GetOrientations_DifferentOrientationsSameFamily_SearchesOnce()
+    {
+        var mockWorld = CreateMockWorld();
+        var north = CreateBrickSlab(100, "brown", "north");
+        var down = CreateBrickSlab(101, "brown", "down");
+        SetupBlockLookup(mockWorld, north, down);
+        SetupVariantSearch(mockWorld, [north, down]);
+        var resolver = new BlockOrientationResolver(mockWorld.Object);
+
+        // Different source IDs miss the per-block cache but share the same search.
+        var first = resolver.GetOrientations(north.BlockId);
+        var second = resolver.GetOrientations(down.BlockId);
+
+        Assert.Equal(new[] { 100, 101 }, first.Select(orientation => orientation.BlockId));
+        Assert.Equal(new[] { 100, 101 }, second.Select(orientation => orientation.BlockId));
+        mockWorld.Verify(w => w.SearchBlocks(It.IsAny<AssetLocation>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Keeps identical variant paths from different asset domains in separate families.
+    /// </summary>
+    [Fact]
+    public void GetOrientations_SamePathDifferentDomains_PreservesDomain()
+    {
+        var mockWorld = CreateMockWorld();
+        var vanilla = CreateVariantBlock(100, "game:stair-north", "rot", "north");
+        var modded = CreateVariantBlock(200, "example:stair-north", "rot", "north");
+        SetupBlockLookup(mockWorld, vanilla, modded);
+        mockWorld.Setup(w => w.SearchBlocks(It.Is<AssetLocation>(code =>
+            code.Domain == "game" && code.Path == "stair-*"))).Returns([vanilla]);
+        mockWorld.Setup(w => w.SearchBlocks(It.Is<AssetLocation>(code =>
+            code.Domain == "example" && code.Path == "stair-*"))).Returns([modded]);
+        var resolver = new BlockOrientationResolver(mockWorld.Object);
+
+        // Populate the vanilla family before resolving the identically named mod family.
+        resolver.GetOrientations(vanilla.BlockId);
+        var orientations = resolver.GetOrientations(modded.BlockId);
+
+        Assert.Equal(modded.BlockId, Assert.Single(orientations).BlockId);
+    }
+
+    /// <summary>
+    /// Keeps an empty search's fallback specific to each selected block.
+    /// </summary>
+    [Fact]
+    public void GetOrientations_EmptySharedSearch_PreservesEachSourceBlock()
+    {
+        var mockWorld = CreateMockWorld();
+        var north = CreateBrickSlab(100, "brown", "north");
+        var down = CreateBrickSlab(101, "brown", "down");
+        SetupBlockLookup(mockWorld, north, down);
+        SetupVariantSearch(mockWorld, []);
+        var resolver = new BlockOrientationResolver(mockWorld.Object);
+
+        // A fallback for north must not become the family's result when down is selected.
+        var first = resolver.GetOrientations(north.BlockId);
+        var second = resolver.GetOrientations(down.BlockId);
+
+        Assert.Equal(north.BlockId, Assert.Single(first).BlockId);
+        Assert.Equal(down.BlockId, Assert.Single(second).BlockId);
+    }
+
     [Fact]
     public void GetOrientations_VariantBlock_ReturnsOneDefinitionPerVariant()
     {
