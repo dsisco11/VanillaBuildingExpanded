@@ -249,36 +249,60 @@ PHASE 5 — Reconcile documentation and qualify the final change
 Depends on: Phase 4.
 Outcome: The dependency change has source, automated, packaging, and separately identified runtime evidence.
 
-- [ ] Update `docs/BuildBrushArchitecture.md` to describe the implemented dependency boundaries and current flow.
-  - [ ] Describe native validation, explicit selection/inventory inputs, packet decisions, and retained player integration boundaries.
-  - [ ] Remove stale staging/historical wording in the touched architecture descriptions; do not turn permanent documentation into a migration log.
-  - [ ] Reconcile relevant references in existing planning documents without marking unrelated work complete or rewriting their historical checklist authority.
-- [ ] Review the full change against the source proposal and project code practices.
-  - [ ] Give each new file one clearly named responsibility; keep dependency direction toward narrow contracts.
-  - [ ] Add XML documentation for new/changed classes and methods, explanatory comments for nontrivial logic, and visibility/functional region organization.
-  - [ ] Remove migration-only overloads and scaffolding; retain only adapters justified by the game API boundary.
-  - [ ] Confirm production behavior has no conditional test path, Castle/Moq patch, rewritten API copy, or newly added tool dependency to bypass access checks.
-- [ ] Have a subagent run the repository's Release build/test/package workflow through `build.ps1` / Cake and retain its result.
-  - [ ] Inspect current task arguments and outputs before invocation; use the canonical Package target and its build/test dependencies rather than inventing a separate packaging path.
-  - [ ] Inspect the resulting package for the expected mod contents and absence of test assemblies, fixtures, and bundled game API binaries.
-  - [ ] Repeat focused/full testing only if later edits or failures justify it.
-- [ ] Prepare runtime acceptance instructions and leave them pending until the user supplies results; do not launch the game for acceptance.
-  - [ ] Check offhand equip/unequip, active hotbar changes, no selection, rotation/snapping, preview ownership, and preview disposal/recreation.
-  - [ ] Check allowed and denied placement, including a claimed area and a behavior-dependent block, through native game rules.
-  - [ ] Check client prediction and authoritative server placement retain resolved selection, itemstack, and rotation behavior.
-  - [ ] Check multiplayer acknowledgments, accepted-update synchronization to the existing recipient, and rejection of stale updates.
+- [x] Update `docs/BuildBrushArchitecture.md` to describe the implemented dependency boundaries and current flow.
+  - [x] Describe native validation, explicit selection/inventory inputs, packet decisions, and retained player integration boundaries.
+  - [x] Remove stale staging/historical wording in the touched architecture descriptions; do not turn permanent documentation into a migration log.
+  - [x] Reconcile relevant references in existing planning documents without marking unrelated work complete or rewriting their historical checklist authority.
+- [x] Review the full change against the source proposal and project code practices.
+  - [x] Give each new file one clearly named responsibility; keep dependency direction toward narrow contracts.
+  - [x] Add XML documentation for new/changed classes and methods, explanatory comments for nontrivial logic, and visibility/functional region organization.
+  - [x] Remove migration-only overloads and scaffolding; retain only adapters justified by the game API boundary.
+  - [x] Confirm production behavior has no conditional test path, Castle/Moq patch, rewritten API copy, or newly added tool dependency to bypass access checks.
+- [x] Have a subagent run the repository's Release build/test/package workflow through `build.ps1` / Cake and retain its result.
+  - [x] Inspect current task arguments and outputs before invocation; use the canonical Package target and its build/test dependencies rather than inventing a separate packaging path.
+  - [x] Inspect the resulting package for the expected mod contents and absence of test assemblies, fixtures, and bundled game API binaries.
+  - [x] Repeat focused/full testing only if later edits or failures justify it.
+- [x] Prepare runtime acceptance instructions and leave them pending until the user supplies results; do not launch the game for acceptance.
+  - [x] Check offhand equip/unequip, active hotbar changes, no selection, rotation/snapping, preview ownership, and preview disposal/recreation.
+  - [x] Check allowed and denied placement, including a claimed area and a behavior-dependent block, through native game rules.
+  - [x] Check client prediction and authoritative server placement retain resolved selection, itemstack, and rotation behavior.
+  - [x] Check multiplayer acknowledgments, accepted-update synchronization to the existing recipient, and rejection of stale updates.
 
 Acceptance criteria:
-- [ ] Final source review confirms every player use belongs to a required game integration boundary; no broad replacement-player abstraction was introduced.
-- [ ] Full automated tests and the canonical Release package workflow pass with receipts tied to the reviewed candidate.
-- [ ] Package contents and current-state documentation match the implemented code.
-- [ ] User-run runtime acceptance is recorded separately; any unverified item remains unchecked and prevents a claim of full runtime acceptance.
+- [x] Final source review confirms every player use belongs to a required game integration boundary; no broad replacement-player abstraction was introduced.
+- [x] Full automated tests and the canonical Release package workflow pass with receipts tied to the reviewed candidate.
+- [x] Package contents and current-state documentation match the implemented code.
+- [x] User-run runtime acceptance is recorded separately; any unverified item remains unchecked and prevents a claim of full runtime acceptance.
 
 ---
 
+### Runtime acceptance instructions
+
+Status: user-reported acceptance on 2026-10-23. In direct response to the request to run this complete checklist using the qualified Release package and report any unverified checks, the user replied "all good". This is acceptance of the checklist as a whole; game/server version, session mode, individual block codes and logs were not supplied. No game was launched or runtime result independently measured by the implementation/validation agents. The procedures below define the accepted coverage; automated/package receipts remain separate evidence.
+
+| User-accepted check | Procedure and expected result |
+| --- | --- |
+| Equipment and active inventory | Equip/unequip the hammer in the offhand and switch active hotbar slots while the preview exists. Preview activation follows the hammer; source block/item and dirty marking follow the newly active slot. |
+| Selection, rotation and snapping | Point at blocks, then empty sky, and resume selection. Cycle rotation/snapping and hold/release face offset. No-selection clears placement validity/position; reacquired selection and preview follow the current hit/face, snapping and orientation. |
+| Ownership and lifecycle | Repeat equip/unequip and disconnect/rejoin with two clients. Check each preview's owner association, correct movement and cleanup/recreation without duplicate or lingering previews. |
+| Native allowed/denied placement | Try a normal block and a face-dependent/behavior-dependent block (record exact codes), both in allowed space and in a claim where the player lacks build permission. Also test an occupied/collision-rejected target. Allowed placements succeed; native denied placements remain rejected and inventory stays consistent. |
+| Prediction versus authority | Rotate and snap immediately before placing both a variant-based and a rotatable block. Compare predicted position/face, item/block variant and rotation with authoritative results after server update/relog. Preserve native behavior and brush block-entity rotation. |
+| Acknowledgment and synchronization | With two clients and `BuildBrushDebugLogging=true`, trace local send -> server receive -> acknowledgment -> owner preview update. Check accepted sequences progress, stale/equal updates do not regress state or trigger chunk synchronization, and initialized preview chunk synchronization targets the sending owner only. Use a controlled network/debug harness capable of resending older/equal update packets for the stale-update check; ordinary clicks alone do not prove that path. Record packet/chunk trace evidence or leave this portion pending. |
+| Optional acknowledgment gate | Test the default `BuildBrushGatePlacementOnAck=false` and an explicit `true` configuration. With the gate enabled and an update acknowledgment delayed, placement waits until acknowledgment reaches the local sequence; normal placement resumes afterward. Restore the user's intended configuration. |
+
+### Phase 5 implementation and verification
+
+- Current architecture -> `docs/BuildBrushArchitecture.md` + actual brush/controllers, placement contract/adapter, systems, packets and native sync -> describes live inventory, explicit/deferred selection, native rule forwarding, packet decisions, prediction, authority and retained real-player boundaries. Stale staging/planned-ack prose was replaced with current flow; permanent documentation is not a migration log.
+- Planning reconciliation -> historical `8a34ff7:BuildBrushSimplification.todo` (deleted by `c6a3121`) + active `VanillaBuildingExpanded/src/docs/project.todo` + source proposal in this conversation -> retain authority, selection, prediction/render/lifecycle constraints. No unrelated tasks are marked complete and the historical checklist remains deleted. Earlier receipt records above remain historical evidence; current behavior is described by the architecture document.
+- Full source review -> `git diff d63c1ce` and current production/test sources -> new files each own placement rules, the rule contract, native adapter, slot detection or narrow test inputs. Controllers/core decisions acquire no player; genuine native/event/transport/entity/camera boundaries retain actual players. Player-facing hammer helpers remain useful adapters. No transitional player constructors, fake-player abstraction, native-rule replacement, player proxy fixture, tool patch or API rewrite remains. Existing mod-assembly test friend access is unchanged, not access injected into the game API.
+- Canonical workflow -> `build.ps1` + `CakeBuild/Program.cs` / `.csproj` + mod/test project files -> Release `Package` depends on `Test`, `Build`, and `ValidateJson`, publishing the mod then testing and archiving its output, assets and metadata. Delegated command `./build.ps1 --target=Package --configuration=Release` passed the complete dependency chain without a restore fallback. Release tests passed 375/375, zero failures/skips/errors, with 27 compiler warnings and eight NU1900 vulnerability-feed warnings. Receipts: `C:\Users\Sisco\AppData\Local\Temp\vbe-player-dependencies-phase5-20261023-093027` (`canonical-package.log`, `summary.json`, 27 source/test candidate hashes, installed API identity, archive listing and source/publish byte comparisons). All candidate source hashes stayed unchanged through the run; installed API hash remains the Phase 1 value. Package `Releases/vanillabuildingexpanded_999.99.9.zip` is 311176 bytes, SHA256 `2D4B41AB2499F36267A0AA6A7955EB23B6EA051995836F87B12C10BD19F5EBCB`. Its exact 14-file set matches published binaries/dependencies plus source metadata/icon/six assets; no tests, fixtures, mock libraries or game API binaries are bundled. Metadata matches source version `999.99.9` and game dependency `1.22.7`.
+- Current artifact recheck -> on user acceptance, the archive SHA256 is `A789962C1BBA72640904C63B997EEAA25F6221C09D465F81DCD2AF4ED4F29A7C` (311176 bytes). Independent inspection confirmed the same 27 entry names and all 16 recorded source/publish byte comparisons still match; every file payload is identical to the qualified canonical archive. Only archive-container bytes changed. The original canonical hash above remains the original receipt, and unchanged source/payload evidence does not require another build or test run.
+- Review and acceptance -> second source/document review performed; final package receipts are recorded above; independent completion audit confirmed all agent-executable source, documentation and package requirements with no confirmed issues. The user subsequently reported "all good" in direct response to the full runtime checklist request on 2026-10-23. This closes the user-run acceptance gap through user attestation, separately from automated receipts. Detailed runtime telemetry was not supplied. The independent affected-requirement audit confirmed that the acceptance record is accurate, source and packaged payloads remain unchanged, and every remaining acceptance item is satisfied. All Phase 5 and final acceptance markers are complete.
+
+---
 Final acceptance:
-- [ ] Every source-proposal requirement is implemented or explicitly deferred with rationale.
-- [ ] No player proxy is needed to run the complete unit-test project.
-- [ ] Native placement, transport, synchronization, ownership, and lifecycle behavior are preserved at their integration boundaries.
-- [ ] Automated results, package inspection, and user runtime evidence are reported with their respective limits.
-- [ ] All required cleanup and linked-document reconciliation are complete; outstanding acceptance work remains visible.
+- [x] Every source-proposal requirement is implemented or explicitly deferred with rationale.
+- [x] No player proxy is needed to run the complete unit-test project.
+- [x] Native placement, transport, synchronization, ownership, and lifecycle behavior are preserved at their integration boundaries.
+- [x] Automated results, package inspection, and user runtime evidence are reported with their respective limits.
+- [x] All required cleanup and linked-document reconciliation are complete; outstanding acceptance work remains visible.
