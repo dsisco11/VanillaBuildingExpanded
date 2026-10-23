@@ -1,7 +1,7 @@
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>
 /// Pure brush state container (no side effects or API-side branching).

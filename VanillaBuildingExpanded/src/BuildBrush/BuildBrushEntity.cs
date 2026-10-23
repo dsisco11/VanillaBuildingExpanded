@@ -7,7 +7,7 @@ using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 using Vintagestory.API.Datastructures;
 
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>
 /// Custom entity for the build brush that uses our custom renderer.

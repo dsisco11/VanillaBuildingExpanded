@@ -6,7 +6,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>
 /// Central owner of all placement state for the build brush.
@@ -42,7 +42,7 @@ public class BuildBrushInstance
     private int? _currentPlacementBlockId;
     private EBuildBrushSnapping _snapping = BrushSnappingModes[0];
     private BrushSnappingState lastCheckedSnappingState = new();
-    private bool _isValidPlacementBlock = true;
+    private bool _isValidPlacementBlock;
     private bool _isActive = false;
 
     /// <summary>
@@ -711,6 +711,7 @@ public class BuildBrushInstance
     public void ExitBuildMode()
     {
         IsActive = false;
+        Snapping &= ~EBuildBrushSnapping.ApplyFaceNormalOffset;
         BlockId = 0;
         TryUpdate(null);
     }

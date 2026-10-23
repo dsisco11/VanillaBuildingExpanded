@@ -3,7 +3,7 @@ using System;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 #region Base Event Args
 

@@ -1,5 +1,5 @@
 using Moq;
-using VanillaBuildingExpanded.BuildHammer;
+using VanillaBuildingExpanded.BuildBrush;
 using VanillaBuildingExpanded.Networking;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;

@@ -3,7 +3,7 @@ using System;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>Resolves brush placement candidates and validates them without acquiring player state.</summary>
 internal sealed class BrushPlacementValidation

@@ -4,7 +4,7 @@ using VanillaBuildingExpanded.Networking;
 
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>
 /// Server-side brush controller: owns per-player state and side-effectful preview lifecycle.

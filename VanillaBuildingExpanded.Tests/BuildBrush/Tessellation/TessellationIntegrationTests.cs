@@ -2,7 +2,7 @@ using System;
 
 using Moq;
 
-using VanillaBuildingExpanded.BuildHammer;
+using VanillaBuildingExpanded.BuildBrush;
 using VanillaBuildingExpanded.Tests.BuildBrush;
 
 using Vintagestory.API.Common;

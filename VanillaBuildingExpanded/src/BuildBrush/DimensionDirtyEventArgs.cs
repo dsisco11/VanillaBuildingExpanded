@@ -1,6 +1,6 @@
 using System;
 
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>
 /// Event args for dimension dirty events.

@@ -3,8 +3,8 @@ using System.Reflection;
 
 using Moq;
 
-using VanillaBuildingExpanded.BuildHammer;
-using VanillaBuildingExpanded.BuildHammer.Tessellation;
+using VanillaBuildingExpanded.BuildBrush;
+using VanillaBuildingExpanded.BuildBrush.Tessellation;
 using VanillaBuildingExpanded.Tests.BuildBrush;
 
 using Vintagestory.API.Client;

@@ -5,7 +5,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.Util;
 
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>
 /// Client-side brush controller: owns local state + integrates with input/ticks without side-effects in the core state.
@@ -20,6 +20,10 @@ public sealed class BuildBrushControllerClient
 
     #region Properties
     public BuildBrushState State { get; } = new();
+
+    /// <summary>Allows brush controls for a supported held block, even before selecting a target.</summary>
+    public bool CanUseBrushControls => GetBrush().IsActive
+        && GetBrush().IsValidPlacementBlock(GetBrush().BlockUntransformed);
 
     #endregion
 
@@ -47,8 +51,10 @@ public sealed class BuildBrushControllerClient
     {
         var localBrush = GetBrush();
         localBrush.TryUpdateBlockId();
-        return localBrush.TryUpdate(localBrush.IsActive && localBrush.IsValidPlacementBlock(localBrush.BlockUntransformed)
-            ? selection : null);
+        // A suspended brush must not retain a held modifier when the player resumes building.
+        if (!CanUseBrushControls)
+            localBrush.Snapping &= ~EBuildBrushSnapping.ApplyFaceNormalOffset;
+        return localBrush.TryUpdate(CanUseBrushControls ? selection : null);
     }
 
     /// <summary>Rechecks the resolved preview placement against the supplied selection.</summary>
@@ -61,19 +67,37 @@ public sealed class BuildBrushControllerClient
     public bool RotateCursor(EModeCycleDirection direction)
     {
         var localBrush = GetBrush();
-        return localBrush.CycleOrientation(direction);
+        return CanUseBrushControls && localBrush.CycleOrientation(direction);
     }
 
     /// <summary>Cycles snapping flags and displays the resulting mode.</summary>
-    public void CycleSnappingMode(EModeCycleDirection direction)
+    public bool CycleSnappingMode(EModeCycleDirection direction)
     {
+        if (!CanUseBrushControls)
+            return false;
+
         var localBrush = GetBrush();
         int d = (int)direction;
-        EBuildBrushSnapping modeSearchFilter = EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical;
+        EBuildBrushSnapping modeSearchFilter = EBuildBrushSnapping.None | EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical;
         int snappingModeIndex = BuildBrushInstance.BrushSnappingModes.IndexOf(localBrush.Snapping & modeSearchFilter);
         snappingModeIndex = (snappingModeIndex + d + BuildBrushInstance.BrushSnappingModes.Length) % BuildBrushInstance.BrushSnappingModes.Length;
-        localBrush.Snapping = BuildBrushInstance.BrushSnappingModes[snappingModeIndex];
+        // Cycling preferences must not release a face-offset key that is still held.
+        localBrush.Snapping = BuildBrushInstance.BrushSnappingModes[snappingModeIndex]
+            | (localBrush.Snapping & EBuildBrushSnapping.ApplyFaceNormalOffset);
         DisplaySnappingModeNotice(localBrush);
+        return true;
+    }
+
+    /// <summary>Applies a held face offset only while usable; releases always clear any previous offset.</summary>
+    public bool SetFaceOffset(bool held)
+    {
+        var localBrush = GetBrush();
+        bool usable = CanUseBrushControls;
+        if (held && usable)
+            localBrush.Snapping |= EBuildBrushSnapping.ApplyFaceNormalOffset;
+        else
+            localBrush.Snapping &= ~EBuildBrushSnapping.ApplyFaceNormalOffset;
+        return usable;
     }
 
     #endregion
@@ -133,7 +157,7 @@ public sealed class BuildBrushControllerClient
     /// <summary>Shows the localized snapping-mode notice when mod information is available.</summary>
     private void DisplaySnappingModeNotice(BuildBrushInstance localBrush)
     {
-        ModInfo? modInfo = api.ModLoader.GetModSystem<VanillaBuildingExpandedModSystem>()?.Mod.Info;
+        ModInfo? modInfo = api.ModLoader?.GetModSystem<VanillaBuildingExpandedModSystem>()?.Mod.Info;
         if (modInfo is null)
         {
             return;

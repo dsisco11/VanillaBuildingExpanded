@@ -12,13 +12,11 @@ A Vintage Story mod that adds quality-of-life improvements for building while st
 
 ## Features
 
-### 🔨 Build Hammer
+### Build Mode
 
-The **Build Hammer** is the core tool introduced by this mod. It provides builders with precise control over block placement through an advanced preview and snapping system.
+Press the backtick key (`) to toggle **Build Mode**, then select a placeable block on your hotbar. The preview shows the target placement and orientation. Entering or leaving the mode displays a status notice.
 
-#### Using the build hammer
-
-Simply place the build hammer in your off-hand and then switch to a placeable block on your hotbar. The build preview will instantly appear!
+Build mode stays enabled when you change hotbar slots. Selecting a tool, an unsupported item, or an empty slot suspends the brush and restores ordinary interactions; selecting a supported block resumes it. Mode starts off when you join and turns off on death. Snapping preferences persist across toggles within the session; held face offset does not.
 
 #### Key Features
 
@@ -31,15 +29,11 @@ Simply place the build hammer in your off-hand and then switch to a placeable bl
   - **None** - Free placement without snapping constraints
 - **Visual Feedback** - Invalid placement positions are highlighted in red, valid positions render normally
 
-#### Crafting
-
-The Build Hammer can be crafted using simple materials available early in the game, just a log and a stick.
-Simply place a log above a stick in the crafting grid to create a Building Hammer.
-
 #### Controls
 
 | Action                       | Default Hotkey         |
 | ---------------------------- | ---------------------- |
+| Toggle Build Mode            | Backtick (`)           |
 | Rotate Build Cursor Forward  | `R`                    |
 | Rotate Build Cursor Backward | `Shift + R`            |
 | Cycle Snapping Mode Forward  | `Middle Mouse`         |
@@ -47,6 +41,8 @@ Simply place a log above a stick in the crafting grid to create a Building Hamme
 | Shift Placement              | `Shift`                |
 
 **NOTE:** The _"Shift placement"_ keybind will offset the block placement position by 1 block in the direction of the block face you are targeting, this is useful for placing roofing or stairs, for example.
+
+All controls are rebindable in the game controls settings. Backtick also opens WorldEdit in creative mode; rebind one of those actions if you use both. Brush hotkeys pass through while mode is off or brush use is suspended. Rotation passes through for blocks without rotation support; these blocks still support brush placement and snapping.
 
 ## Compatibility
 

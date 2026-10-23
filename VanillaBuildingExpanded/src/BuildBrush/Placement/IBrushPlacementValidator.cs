@@ -1,6 +1,6 @@
 using Vintagestory.API.Common;
 
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>Checks placement rules for a brush without exposing the owning player.</summary>
 public interface IBrushPlacementValidator

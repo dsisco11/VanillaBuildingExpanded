@@ -1,4 +1,4 @@
-using VanillaBuildingExpanded.BuildHammer;
+using VanillaBuildingExpanded.BuildBrush;
 using VanillaBuildingExpanded.Networking;
 using Vintagestory.API.MathTools;
 using Xunit;

@@ -1,4 +1,4 @@
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>
 /// Immutable struct representing a single orientation state for a block.

@@ -7,7 +7,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExpanded.BuildHammer.Tessellation;
+namespace VanillaBuildingExpanded.BuildBrush.Tessellation;
 
 /// <summary>
 /// Provides tessellation services for mini-dimensions, producing combined mesh data

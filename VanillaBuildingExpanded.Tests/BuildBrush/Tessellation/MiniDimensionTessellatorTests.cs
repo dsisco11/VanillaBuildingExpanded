@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 using Moq;
 
-using VanillaBuildingExpanded.BuildHammer.Tessellation;
+using VanillaBuildingExpanded.BuildBrush.Tessellation;
 using VanillaBuildingExpanded.Tests.BuildBrush;
 
 using Vintagestory.API.Client;

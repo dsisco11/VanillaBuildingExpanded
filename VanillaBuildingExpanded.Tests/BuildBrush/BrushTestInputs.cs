@@ -1,6 +1,6 @@
 using Moq;
 
-using VanillaBuildingExpanded.BuildHammer;
+using VanillaBuildingExpanded.BuildBrush;
 
 using Vintagestory.API.Common;
 

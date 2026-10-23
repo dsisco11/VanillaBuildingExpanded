@@ -13,7 +13,7 @@ using Vintagestory.API.Server;
 using Vintagestory.API.Util;
 using Vintagestory.Client;
 
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>
 /// Handles build brush logic on the client side.
@@ -244,12 +244,12 @@ public class BuildBrushSystem_Client : ModSystem
 
     #region API
     /// <summary>Cycles the local brush orientation and publishes successful changes.</summary>
-    public void RotateCursor(EModeCycleDirection direction = EModeCycleDirection.Forward)
+    public bool RotateCursor(EModeCycleDirection direction = EModeCycleDirection.Forward)
     {
         BuildBrushInstance? brush = GetBrush();
-        if (brush is null || !brush.IsActive)
+        if (brush is null || !controller!.CanUseBrushControls)
         {
-            return;
+            return false;
         }
 
         if (config?.BuildBrushDebugLogging == true)
@@ -264,6 +264,7 @@ public class BuildBrushSystem_Client : ModSystem
 
         if (controller!.RotateCursor(direction))
         {
+            controller.TryUpdate(Player.CurrentBlockSelection);
             SendToServer();
 
             if (config?.BuildBrushDebugHud == true && this.api is not null)
@@ -274,20 +275,21 @@ public class BuildBrushSystem_Client : ModSystem
                     $"BuildBrush seq={debugLocalSeq} ack={debugLastAckSeq} ori={brush.OrientationIndex} pos={brush.Position}"
                 );
             }
+            return true;
         }
+        return false;
     }
 
     /// <summary>Cycles snapping on the local controller when a client world exists.</summary>
-    public void CycleSnappingMode(EModeCycleDirection direction = EModeCycleDirection.Forward)
+    public bool CycleSnappingMode(EModeCycleDirection direction = EModeCycleDirection.Forward)
     {
-        if (api?.World is null)
-        {
-            return;
-        }
+        if (api?.World is null || !controller!.CycleSnappingMode(direction))
+            return false;
 
-        controller!.CycleSnappingMode(direction);
+        controller.TryUpdate(Player.CurrentBlockSelection);
+        SendToServer();
+        return true;
     }
-
     /// <summary>
     /// Sends the current build brush state to the server.
     /// </summary>
@@ -412,70 +414,43 @@ public class BuildBrushSystem_Client : ModSystem
     /// <summary>Updates face-offset snapping while the configured key is pressed.</summary>
     private bool Input_ToggleFaceOffsetPlacement(KeyCombination keys)
     {
-        BuildBrushInstance? brush = GetBrush();
-        if (brush is null)
-            return false;
-
-        if (keys.OnKeyUp)
+        bool handled = controller!.SetFaceOffset(!keys.OnKeyUp);
+        if (handled)
         {
-            brush.Snapping &= ~EBuildBrushSnapping.ApplyFaceNormalOffset;
+            controller.TryUpdate(Player.CurrentBlockSelection);
+            SendToServer();
         }
-        else
-        {
-            brush.Snapping |= EBuildBrushSnapping.ApplyFaceNormalOffset;
-        }
-
-        return true;
+        return handled;
     }
 
-    /// <summary>Rotates an active brush forward in response to the hotkey.</summary>
+    /// <summary>Consumes a forward rotation key only when an orientation actually changes.</summary>
     private bool Input_RotateBuildCursor_Forward(KeyCombination keys)
     {
-        BuildBrushInstance? brush = GetBrush();
-        if (brush is null || !brush.IsActive)
-            return false;
-
-        RotateCursor(EModeCycleDirection.Forward);
-        return true;
+        return !keys.OnKeyUp && RotateCursor(EModeCycleDirection.Forward);
     }
 
-    /// <summary>Rotates an active brush backward in response to the hotkey.</summary>
+    /// <summary>Consumes a backward rotation key only when an orientation actually changes.</summary>
     private bool Input_RotateBuildCursor_Backward(KeyCombination keys)
     {
-        BuildBrushInstance? brush = GetBrush();
-        if (brush is null || !brush.IsActive)
-            return false;
-
-        RotateCursor(EModeCycleDirection.Backward);
-        return true;
+        return !keys.OnKeyUp && RotateCursor(EModeCycleDirection.Backward);
     }
 
-    /// <summary>Cycles an active brush snapping mode forward.</summary>
+    /// <summary>Consumes forward snapping input only for a usable brush.</summary>
     private bool Input_CycleSnappingMode_Forward(KeyCombination keys)
     {
-        BuildBrushInstance? brush = GetBrush();
-        if (brush is null || !brush.IsActive)
-            return false;
-
-        CycleSnappingMode(EModeCycleDirection.Forward);
-        return true;
+        return !keys.OnKeyUp && CycleSnappingMode(EModeCycleDirection.Forward);
     }
 
-    /// <summary>Cycles an active brush snapping mode backward.</summary>
+    /// <summary>Consumes backward snapping input only for a usable brush.</summary>
     private bool Input_CycleSnappingMode_Backward(KeyCombination keys)
     {
-        BuildBrushInstance? brush = GetBrush();
-        if (brush is null || !brush.IsActive)
-            return false;
-
-        CycleSnappingMode(EModeCycleDirection.Backward);
-        return true;
+        return !keys.OnKeyUp && CycleSnappingMode(EModeCycleDirection.Backward);
     }
-
     /// <summary>Routes right-click input through brush placement while preserving default handling otherwise.</summary>
     private void InWorldAction(EnumEntityAction action, bool on, ref EnumHandling handling)
     {
-        handling = EnumHandling.PassThrough;
+        if (handling != EnumHandling.PassThrough)
+            return;
         if (action == EnumEntityAction.InWorldRightMouseDown && on)
         {
             TryPlaceBlock(ref handling);
@@ -493,8 +468,21 @@ public class BuildBrushSystem_Client : ModSystem
     protected void TryPlaceBlock(ref EnumHandling handling)
     {
         BuildBrushInstance? brush = GetBrush();
+        if (brush is null || !brush.IsActive)
+            return;
+
+        // Input may arrive between ticks: publish any refreshed source or target before native placement.
+        controller!.TryUpdate(Player.CurrentBlockSelection);
+        BuildBrushState sent = controller.State;
+        if (!Equals(brush.Position, sent.Position) || brush.BlockId != sent.BlockId
+            || brush.OrientationIndex != sent.OrientationIndex || brush.Snapping != sent.Snapping)
+            SendToServer();
+
         if (brush is null || brush.IsDisabled)
             return;
+
+        // An active brush owns this placement attempt, including native validation failures.
+        handling = EnumHandling.PreventSubsequent;
 
         if (!brush.TryBuildPlacementRequest(brush.Selection, out BuildBrushPlacementRequest? request) || request is null)
         {

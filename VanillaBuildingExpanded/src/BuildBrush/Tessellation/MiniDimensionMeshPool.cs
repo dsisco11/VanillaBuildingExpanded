@@ -3,7 +3,7 @@ using System;
 using Vintagestory.API.Client;
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExpanded.BuildHammer.Tessellation;
+namespace VanillaBuildingExpanded.BuildBrush.Tessellation;
 
 /// <summary>
 /// Implementation of ITerrainMeshPool that accumulates mesh data from multiple sources

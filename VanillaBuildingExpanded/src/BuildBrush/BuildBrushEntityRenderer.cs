@@ -4,9 +4,9 @@ using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 
-using VanillaBuildingExpanded.BuildHammer.Tessellation;
+using VanillaBuildingExpanded.BuildBrush.Tessellation;
 
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>
 /// Custom renderer for the build brush entity.

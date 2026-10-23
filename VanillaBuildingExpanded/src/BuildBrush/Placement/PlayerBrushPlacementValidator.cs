@@ -2,7 +2,7 @@ using System;
 
 using Vintagestory.API.Common;
 
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>Runs native block placement rules using the brush owner's real game context.</summary>
 internal sealed class PlayerBrushPlacementValidator : IBrushPlacementValidator

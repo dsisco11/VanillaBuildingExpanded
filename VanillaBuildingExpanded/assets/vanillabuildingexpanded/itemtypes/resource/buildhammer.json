@@ -3,6 +3,7 @@
   "class": "BuildHammer",
   "storageFlags": 257,
   "attributes": {
+    "handbook": { "exclude": true },
     "heldItemPitchFollow": 0.9,
     "toolrackTransform": {
       "rotation": {
@@ -85,11 +86,7 @@
   "attackpowerbytype": {
     "*": 0
   },
-  "creativeinventory": {
-    "general": [ "*" ],
-    "items": [ "*" ],
-    "tools": [ "*" ]
-  },
+  "creativeinventory": {},
   "fpHandTransform": {
     "translation": {
       "x": 0.0468,

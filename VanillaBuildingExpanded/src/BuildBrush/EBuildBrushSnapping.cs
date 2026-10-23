@@ -2,6 +2,7 @@
 
 namespace VanillaBuildingExpanded;
 
+/// <summary>Persistent snapping preferences and transient placement modifiers.</summary>
 [Flags]
 public enum EBuildBrushSnapping : byte
 {
@@ -16,11 +17,14 @@ public enum EBuildBrushSnapping : byte
     ApplyFaceNormalOffset = 1 << 4
 }
 
+/// <summary>Maps snapping preferences to localized notice identifiers.</summary>
 public static class EBuildBrushSnappingExtensions
 {
+    #region Public API
+    /// <summary>Ignores transient flags when identifying the selected snapping preference.</summary>
     public static string GetCode(this EBuildBrushSnapping mode)
     {
-        var sanitizedMode = mode & (EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical);
+        var sanitizedMode = mode & (EBuildBrushSnapping.None | EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical);
         return sanitizedMode switch
         {
             EBuildBrushSnapping.None => "none",
@@ -30,5 +34,6 @@ public static class EBuildBrushSnappingExtensions
             _ => "unknown",
         };
     }
+    #endregion
 }
 

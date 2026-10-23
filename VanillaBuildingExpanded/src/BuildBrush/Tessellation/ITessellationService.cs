@@ -5,7 +5,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
-namespace VanillaBuildingExpanded.BuildHammer.Tessellation;
+namespace VanillaBuildingExpanded.BuildBrush.Tessellation;
 
 /// <summary>
 /// Interface for tessellation services that produce mesh data from mini-dimensions.

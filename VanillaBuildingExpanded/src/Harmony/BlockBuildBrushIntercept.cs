@@ -1,14 +1,17 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 
-using VanillaBuildingExpanded.BuildHammer;
+using VanillaBuildingExpanded.BuildBrush;
 
 using Vintagestory.API.Common;
 
 namespace VanillaBuildingExpanded.src.Harmony;
 
+/// <summary>Routes native server placement through an enabled build brush.</summary>
 [Harmony]
-public static class BlockBuildHammerIntercept
+public static class BlockBuildBrushIntercept
 {
+    #region Public API
+    /// <summary>Preserves native handling unless the brush owns the placement attempt.</summary>
     [HarmonyPrefix]
     [HarmonyPatch(typeof(Block), nameof(Block.TryPlaceBlock))]
     public static bool Intercept_TryPlaceBlock(IWorldAccessor world, IPlayer byPlayer, ItemStack itemstack, BlockSelection blockSel, ref string failureCode, ref bool __result, bool __runOriginal)
@@ -30,4 +33,5 @@ public static class BlockBuildHammerIntercept
 
         return true;// dont skip original
     }
+    #endregion
 }

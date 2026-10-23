@@ -1,29 +1,27 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 
-using VanillaBuildingExpanded.BuildHammer;
+using VanillaBuildingExpanded.BuildBrush;
 using VanillaBuildingExpanded.Networking;
 
 using Vintagestory.API.Common;
 
 namespace VanillaBuildingExpanded;
 
+/// <summary>Registers build-mode services, preview types and saved-item compatibility.</summary>
 public class VanillaBuildingExpandedModSystem : ModSystem
 {
-    #region Constants
-    public static readonly string BuildHammerItemCode = "vanillabuildingexpanded:buildhammer";
-    public static readonly string BuildHammerGuiDialogId = "vanillabuildingexpanded:buildhammer-gui";
-    #endregion
-
     #region Fields
     internal Harmony? harmony;
     #endregion
 
-    #region Lifecycle
+    #region Public API
+    /// <summary>Removes native placement patches owned by this mod.</summary>
     public override void Dispose()
     {
         harmony?.UnpatchAll(Mod.Info.ModID);
     }
 
+    /// <summary>Registers the ordered brush update and acknowledgment channel.</summary>
     public override void StartPre(ICoreAPI api)
     {
         api.Network
@@ -32,8 +30,10 @@ public class VanillaBuildingExpandedModSystem : ModSystem
             .RegisterMessageType(typeof(Packet_BuildBrushAck));
     }
 
+    /// <summary>Registers collectible compatibility, the preview entity and native placement patches.</summary>
     public override void Start(ICoreAPI api)
     {
+        // Preserve the saved collectible class and codes without enabling equipment-driven behavior.
         api.RegisterItemClass("BuildHammer", typeof(ItemBuildHammer));
 
         // Register entity class (must be in Start, before entity types are loaded)

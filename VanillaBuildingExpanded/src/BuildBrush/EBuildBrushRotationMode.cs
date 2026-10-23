@@ -1,4 +1,4 @@
-namespace VanillaBuildingExpanded.BuildHammer;
+namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>
 /// Describes how a block supports rotation when used with the build brush.

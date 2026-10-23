@@ -22,8 +22,8 @@ Approved behavior:
     ☑ Test ordered mode updates, stale packets, and immediate placement around entry/exit; verify preview cleanup and return to normal placement.
 
 ## Phase 3: Integrate input and retire the hammer
-    ☐ Gate rotation, snapping, face-offset, and placement input appropriately; preserve normal interactions when brush use is suspended or mode is off, and clear transient held-key state on exit.
-    ☐ Remove hammer crafting/creative availability and equipment helpers; handle item registration/assets according to the saved-item decision and update affected names and user documentation.
+    ☑ Gate rotation, snapping, face-offset, and placement input appropriately; preserve normal interactions when brush use is suspended or mode is off, and clear transient held-key state on exit.
+    ☑ Remove hammer crafting/creative availability and equipment helpers; handle item registration/assets according to the saved-item decision and update affected names and user documentation.
 
 ## Phase 4: Add the build-mode active overlay
     ☐ Choose the icon artwork, screen position, and sizing; respect GUI scaling and avoid obstructing existing HUD elements.

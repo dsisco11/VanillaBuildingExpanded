@@ -1,4 +1,5 @@
 {
+  "vbe-hotkey-toggle-face-offset": "Hold Face Offset Placement",
   "vbe-hotkey-toggle-build-mode": "Toggle Build Mode",
   "build-mode-enabled": "Build mode enabled",
   "build-mode-disabled": "Build mode disabled",
@@ -15,5 +16,5 @@
   "brush-snapping-mode-changed-horizontal-vertical": "Snapping Mode: Horizontal & Vertical",
 
   "item-buildhammer-*": "Wooden Building Hammer",
-  "itemdesc-buildhammer-*": "A basic wooden building hammer used for controlled block placement.",
+  "itemdesc-buildhammer-*": "A keepsake wooden hammer. Build mode is available through its configurable hotkey.",
 }
