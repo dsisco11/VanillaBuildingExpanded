@@ -214,27 +214,36 @@ PHASE 4 — Separate server packet decisions from player transport
 Depends on: Phase 3.
 Outcome: Packet sequence and state tests no longer invoke an `IServerPlayer`-dependent handler.
 
-- [ ] Extract the existing sequence acceptance and state-application decision from `BuildBrushSystem_Server.HandlePacket_SetBuildBrush` into an owning, narrowly scoped operation.
-  - [ ] Accept client ID, packet, and only additional values required for the existing decision/logging behavior.
-  - [ ] Preserve controller lookup, last-applied tracking, older/equal rejection, accepted state application, and the acknowledgment sequence selected for each path.
-  - [ ] Keep operation policy with its owning server component; avoid a general network abstraction.
-- [ ] Keep the registered handler as the game-facing boundary.
-  - [ ] Extract identity from the real `IServerPlayer`, invoke the decision operation, and send the acknowledgment to that same player.
-  - [ ] Preserve no-controller behavior and the order of acknowledgment versus owner-only initialized-dimension synchronization.
-  - [ ] Do not move synchronization ahead of state application or perform it for rejected updates.
-- [ ] Rewrite `BrushSyncTests` around the player-independent operation, removing reflection-based invocation of the player handler.
-  - [ ] Cover unknown client, older/equal sequence, and accepted sequence with state/tracking and acknowledgment assertions.
-  - [ ] Retain transport and real-player synchronization as explicit integration acceptance items rather than claiming these unit tests cover them.
-- [ ] Search all test sources for player mocks and eliminate any remaining fixture dependency.
-- [ ] Have a subagent run the full unit-test project and investigate every remaining failure without dropping assertions or skipping tests to obtain a pass.
+- [x] Extract the existing sequence acceptance and state-application decision from `BuildBrushSystem_Server.HandlePacket_SetBuildBrush` into an owning, narrowly scoped operation.
+  - [x] Accept client ID, packet, and only additional values required for the existing decision/logging behavior.
+  - [x] Preserve controller lookup, last-applied tracking, older/equal rejection, accepted state application, and the acknowledgment sequence selected for each path.
+  - [x] Keep operation policy with its owning server component; avoid a general network abstraction.
+- [x] Keep the registered handler as the game-facing boundary.
+  - [x] Extract identity from the real `IServerPlayer`, invoke the decision operation, and send the acknowledgment to that same player.
+  - [x] Preserve no-controller behavior and the order of acknowledgment versus owner-only initialized-dimension synchronization.
+  - [x] Do not move synchronization ahead of state application or perform it for rejected updates.
+- [x] Rewrite `BrushSyncTests` around the player-independent operation, removing reflection-based invocation of the player handler.
+  - [x] Cover unknown client, older/equal sequence, and accepted sequence with state/tracking and acknowledgment assertions.
+  - [x] Retain transport and real-player synchronization as explicit integration acceptance items rather than claiming these unit tests cover them.
+- [x] Search all test sources for player mocks and eliminate any remaining fixture dependency.
+- [x] Have a subagent run the full unit-test project and investigate every remaining failure without dropping assertions or skipping tests to obtain a pass.
 
 Acceptance criteria:
-- [ ] No unit-test fixture creates a mock of `IPlayer`, `IClientPlayer`, or `IServerPlayer`.
-- [ ] Packet decision tests preserve sequence handling and state behavior without a player object.
-- [ ] The full test project passes, and retained real-player network/sync responsibilities are documented for integration verification.
+- [x] No unit-test fixture creates a mock of `IPlayer`, `IClientPlayer`, or `IServerPlayer`.
+- [x] Packet decision tests preserve sequence handling and state behavior without a player object.
+- [x] The full test project passes, and retained real-player network/sync responsibilities are documented for integration verification.
 
 ---
 
+### Phase 4 implementation and verification
+
+- Packet decisions -> Phase 1 packet behavior table + `BuildBrushSystem_Server.HandlePacket_SetBuildBrush` / `BuildBrushControllerServer.ApplyState` -> internal `ApplyBrushUpdate(clientId, packet, playerName)` remains on the owning server system. Its nullable result distinguishes unknown clients from ignored/applied updates and carries the owning controller and acknowledgment sequence. Lookup, zero default, older/equal rejection, logging, per-client tracking and write-before-application exception behavior remain intact; the controller's assignment order is unchanged.
+- Transport boundary -> registered `HandlePacket_SetBuildBrush` -> extracts identity from the actual sender, invokes the decision, returns without reply for unknown clients, sends the chosen acknowledgment to that sender, then synchronizes only accepted updates whose dimension is initialized, using the same one-player recipient list. Native transport recipient identity, acknowledgment delivery/order and actual owner-only chunk synchronization require user-run integration verification; these unit tests do not exercise transport or native chunk delivery. The multiplayer acceptance items in Phase 5 remain pending.
+- Decision coverage -> `BrushSyncTests` -> replaces the reflection/player-mock fixture with direct operation tests using the existing protected controller registry through a test subclass. Cases cover unknown clients without tracking, initial zero/negative sequences, older/equal rejection without state changes, increasing sequences and per-client independence, acknowledgment values, and application exceptions retaining the preceding tracking write. All test sources were searched for player interfaces/proxies; no player fixture dependency remains.
+- Linked-document reconciliation -> source proposal and authoritative scope above; current `docs/BuildBrushArchitecture.md` module/flow constraints; historical `8a34ff7:BuildBrushSimplification.todo`; active `VanillaBuildingExpanded/src/docs/project.todo` -> preserve authority, prediction, selection, ownership and lifecycle. The known stale architecture sequencing prose remains Phase 5 cleanup; no unrelated checklist work or networking framework was added.
+- Delegated verification -> `C:\Users\Sisco\AppData\Local\Temp\vbe-player-dependencies-phase4-20261023-091825` (`build-final.log`, focused/full logs and raw TRX, `summary.json`, `candidate-hashes.json`, `installed-api.json`) -> `dotnet build VanillaBuildingExpanded.Tests/VanillaBuildingExpanded.Tests.csproj --no-restore --no-incremental` succeeded with zero errors and 27 warnings; focused `BrushSyncTests` passed 7/7 and the full project passed 375/375, zero failures/skips, using `dotnet test` with `--no-build --no-restore` and process-local `NUGET_PACKAGES=C:\Users\Sisco\.nuget\packages`. The first build exposed a test-subclass IDisposable declaration error; that was corrected before these successful receipts. Installed API hash matches Phase 1. Reviewed server/test SHA256 values are recorded in the candidate manifest. No API/tool patch, package qualification or game launch was involved. Second review checked source behavior/order, assertion coverage, fixture searches and linked-document requirements; independent completion audit confirmed every Phase 4 requirement, matching source hashes and raw TRX, with no confirmed issues or evidence gaps. Later-phase items remain unchecked.
+
+---
 PHASE 5 — Reconcile documentation and qualify the final change
 
 Depends on: Phase 4.

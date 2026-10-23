@@ -137,6 +137,45 @@ public class BuildBrushSystem_Server : ModSystem
     }
     #endregion
 
+    #region Internal packet decisions
+    /// <summary>
+    /// Applies a client's ordered brush update without performing player transport.
+    /// Returns null for an unknown client; otherwise identifies the acknowledgment and whether state was applied.
+    /// </summary>
+    internal (BuildBrushControllerServer Controller, long AckSequence, bool Applied)? ApplyBrushUpdate(
+        int clientId, Packet_SetBuildBrush packet, string playerName)
+    {
+        if (!Controllers.TryGetValue(clientId, out BuildBrushControllerServer? controller))
+            return null;
+
+        lastAppliedSeqByClientId.TryGetValue(clientId, out long lastAppliedSeq);
+
+        // Rejected updates acknowledge the current sequence without changing state or requesting synchronization.
+        if (packet.seq <= lastAppliedSeq)
+        {
+            if (config?.BuildBrushDebugLogging == true)
+            {
+                Logger.Debug(
+                    "[BuildBrush][Debug][ServerRecvIgnored]: player={0} seq={1} lastAppliedSeq={2}",
+                    playerName, packet.seq, lastAppliedSeq);
+            }
+            return (controller, lastAppliedSeq, false);
+        }
+
+        if (config?.BuildBrushDebugLogging == true)
+        {
+            Logger.Debug(
+                "[BuildBrush][Debug][ServerRecv]: player={0} seq={1} isActive={2} orientationIndex={3} snapping={4} pos={5}",
+                playerName, packet.seq, packet.isActive, packet.orientationIndex, packet.snapping, packet.position);
+        }
+
+        // Keep the existing write-before-application behavior, including when application throws.
+        lastAppliedSeqByClientId[clientId] = packet.seq;
+        controller.ApplyState(packet);
+        return (controller, packet.seq, true);
+    }
+    #endregion
+
     #region Event Handlers
     /// <summary>
     /// Initializes the player's build brush instance on join.
@@ -240,52 +279,16 @@ public class BuildBrushSystem_Server : ModSystem
     /// </summary>
     private void HandlePacket_SetBuildBrush(IServerPlayer fromPlayer, Packet_SetBuildBrush packet)
     {
-        if (!Controllers.TryGetValue(fromPlayer.ClientId, out BuildBrushControllerServer? controller))
+        var result = ApplyBrushUpdate(fromPlayer.ClientId, packet, fromPlayer.PlayerName);
+        if (result is null)
             return;
+        var decision = result.Value;
+        serverChannel.SendPacket(new Packet_BuildBrushAck { lastAppliedSeq = decision.AckSequence }, fromPlayer);
 
-        long lastAppliedSeq = 0;
-        lastAppliedSeqByClientId.TryGetValue(fromPlayer.ClientId, out lastAppliedSeq);
-
-        // Ignore out-of-order brush updates.
-        if (packet.seq <= lastAppliedSeq)
+        // Only accepted updates synchronize the initialized preview, after acknowledging its owner.
+        if (decision.Applied && decision.Controller.Brush.Dimension?.IsInitialized == true)
         {
-            if (config?.BuildBrushDebugLogging == true)
-            {
-                Logger.Debug(
-                    "[BuildBrush][Debug][ServerRecvIgnored]: player={0} seq={1} lastAppliedSeq={2}",
-                    fromPlayer.PlayerName,
-                    packet.seq,
-                    lastAppliedSeq
-                );
-            }
-
-            serverChannel.SendPacket(new Packet_BuildBrushAck { lastAppliedSeq = lastAppliedSeq }, fromPlayer);
-            return;
-        }
-
-        if (config?.BuildBrushDebugLogging == true)
-        {
-            Logger.Debug(
-                "[BuildBrush][Debug][ServerRecv]: player={0} seq={1} isActive={2} orientationIndex={3} snapping={4} pos={5}",
-                fromPlayer.PlayerName,
-                packet.seq,
-                packet.isActive,
-                packet.orientationIndex,
-                packet.snapping,
-                packet.position
-            );
-        }
-
-        lastAppliedSeqByClientId[fromPlayer.ClientId] = packet.seq;
-
-        controller.ApplyState(packet);
-
-        serverChannel.SendPacket(new Packet_BuildBrushAck { lastAppliedSeq = packet.seq }, fromPlayer);
-
-        // Sync dimension changes to nearby players
-        if (controller.Brush.Dimension?.IsInitialized == true)
-        {
-            controller.Brush.SyncDimensionToPlayers([fromPlayer]);
+            decision.Controller.Brush.SyncDimensionToPlayers([fromPlayer]);
         }
     }
     #endregion
