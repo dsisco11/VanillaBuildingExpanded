@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 
@@ -136,6 +136,7 @@ public class BuildBrushInstance
             bool wasActive = _isActive;
             _isActive = value;
             IsDirty = true;
+            UpdatePreviewVisibility();
 
             // Raise activation changed event
             OnActivationChanged?.Invoke(this, new BrushActivationChangedEventArgs(wasActive, value));
@@ -216,6 +217,7 @@ public class BuildBrushInstance
 
             BlockPos? previousPosition = _position?.Copy();
             _position = value;
+            UpdatePreviewVisibility();
 
             // Raise position changed event with previous state
             OnPositionChanged?.Invoke(this, new PositionChangedEventArgs(previousPosition, _position));
@@ -290,6 +292,7 @@ public class BuildBrushInstance
                 _blockId = null;
                 _isValidPlacementBlock = false;
                 BlockUntransformed = null;
+                UpdatePreviewVisibility();
                 return;
             }
 
@@ -311,6 +314,7 @@ public class BuildBrushInstance
                 //_blockId = null; // we don't set to null here to preserve the attempted block id (for change detection)
                 BlockUntransformed = null;
             }
+            UpdatePreviewVisibility();
         }
     }
 
@@ -535,7 +539,7 @@ public class BuildBrushInstance
         World.UnregisterCallback(markedDirtyCallbackId);
         markedDirtyCallbackId = 0;
         // Resolve at callback time so a selection change after scheduling is observed.
-        TryUpdate(getCurrentSelection());
+        TryUpdate(IsActive && _isValidPlacementBlock ? getCurrentSelection() : null);
     }
 
     /// <summary>Updates placement from the supplied current selection, clearing position when it is absent.</summary>
@@ -545,6 +549,8 @@ public class BuildBrushInstance
         {// Player currently has no block selection
             IsValidPlacement = false;
             Position = null;
+            Selection = new BlockSelection();
+            IsDirty = false;
             return false;
         }
 
@@ -692,15 +698,21 @@ public class BuildBrushInstance
     #endregion
 
     #region Event Handlers
-    public void OnEquipped()
+    /// <summary>Enters build mode using the current held block and selection.</summary>
+    public void EnterBuildMode(BlockSelection? selection)
     {
+        // Resolve source orientation before evaluating the first placement target.
         TryUpdateBlockId();
+        IsActive = true;
+        TryUpdate(_isValidPlacementBlock ? selection : null, force: true);
     }
 
-    public void OnUnequipped()
+    /// <summary>Clears transient placement on exit while retaining snapping preferences.</summary>
+    public void ExitBuildMode()
     {
         IsActive = false;
         BlockId = 0;
+        TryUpdate(null);
     }
 
     /// <summary>Marks the current active slot dirty and refreshes the brush's source block.</summary>
@@ -790,6 +802,8 @@ public class BuildBrushInstance
 
         _entity = BuildBrushEntity.CreateAndLink(sapi, _dimension.Dimension, ownerUid);
         
+        UpdatePreviewVisibility();
+
         // Set initial position
         if (_position is not null)
         {
@@ -916,5 +930,18 @@ public class BuildBrushInstance
     {
         _dimension?.SyncToPlayers(players);
     }
+    #endregion
+
+    #region Private preview visibility
+    /// <summary>Publishes target availability for preview rendering on other clients.</summary>
+    private void UpdatePreviewVisibility()
+    {
+        if (_entity is null)
+            return;
+
+        _entity.WatchedAttributes.SetBool(BuildBrushEntity.BrushVisibleKey, !IsDisabled);
+        _entity.WatchedAttributes.MarkPathDirty(BuildBrushEntity.BrushVisibleKey);
+    }
+
     #endregion
 }

@@ -46,6 +46,9 @@ public class BuildBrushEntity : EntityChunky
     /// </summary>
     public const string BrushIsValidKey = "isValid";
 
+    /// <summary>Whether the server brush has an active, supported source and a target.</summary>
+    public const string BrushVisibleKey = "brushVisible";
+
     /// <summary>
     /// Watched attribute keys for preview bounds (min/max in mini-dimension space).
     /// </summary>

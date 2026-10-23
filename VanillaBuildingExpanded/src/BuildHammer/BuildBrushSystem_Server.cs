@@ -47,6 +47,8 @@ public class BuildBrushSystem_Server : ModSystem
         api.Event.AfterActiveSlotChanged += Event_AfterActiveSlotChanged;
         api.Event.PlayerJoin += Event_PlayerJoin;
         api.Event.PlayerDisconnect += Event_PlayerDisconnect;
+        api.Event.PlayerDeath += Event_PlayerDeath;
+        api.Event.PlayerRespawn += Event_PlayerRespawn;
     }
 
     /// <summary>Releases resources owned by this system.</summary>
@@ -193,13 +195,7 @@ public class BuildBrushSystem_Server : ModSystem
             hotbarInv.SlotModified += (int slot) => Event_HotbarSlotModified(byPlayer, slot);
         }
 
-        IInventory? offhandInventory = byPlayer.InventoryManager?.OffhandHotbarSlot.Inventory;
-        if (offhandInventory is not null)
-        {
-            offhandInventory.SlotModified += (int slot) => Event_OffhandSlotModified(byPlayer, slot);
-        }
-
-        controller.Brush.IsActive = byPlayer.IsHoldingBuildHammer();
+        controller.Brush.IsActive = false;
         controller.Brush.TryUpdateBlockId();
     }
 
@@ -213,32 +209,23 @@ public class BuildBrushSystem_Server : ModSystem
             controller.Destroy();
             controller.Dispose();
             Controllers.Remove(byPlayer.ClientId);
+            lastAppliedSeqByClientId.Remove(byPlayer.ClientId);
         }
     }
 
-    /// <summary>
-    /// Handles offhand slot modifications to update the brush's active state if the build hammer is equipped.
-    /// </summary>
-    private void Event_OffhandSlotModified(IServerPlayer byPlayer, int slot)
+    /// <summary>Clears server placement immediately on death without resetting packet ordering.</summary>
+    private void Event_PlayerDeath(IServerPlayer byPlayer, DamageSource damageSource)
     {
-        BuildBrushInstance? brush = GetBrush(byPlayer);
-        if (brush is null)
-            return;
-
-        bool oldState = brush.IsActive;
-        bool newState = byPlayer.IsHoldingBuildHammer();
-
-        brush.IsActive = newState;
-        if (oldState && !newState)
-        {
-            brush.OnUnequipped();
-        }
-        else if (!oldState && newState)
-        {
-            brush.OnEquipped();
-        }
+        if (Controllers.TryGetValue(byPlayer.ClientId, out var controller))
+            controller.ResetBuildMode();
     }
 
+    /// <summary>Ensures respawning never reactivates a previous brush session.</summary>
+    private void Event_PlayerRespawn(IServerPlayer byPlayer)
+    {
+        if (Controllers.TryGetValue(byPlayer.ClientId, out var controller))
+            controller.ResetBuildMode();
+    }
     /// <summary>
     /// Handles hotbar slot modifications to update the brush's block ID incase the contents of the active slot changes.
     /// </summary>
@@ -257,7 +244,9 @@ public class BuildBrushSystem_Server : ModSystem
         if (brush is null)
             return;
 
-        brush.BlockId = inventory.ActiveHotbarSlot?.Itemstack?.Block?.BlockId;
+        brush.TryUpdateBlockId();
+        if (!brush.IsValidPlacementBlock(brush.BlockUntransformed))
+            brush.TryUpdate(null);
     }
 
     /// <summary>
@@ -268,7 +257,9 @@ public class BuildBrushSystem_Server : ModSystem
         var brush = GetBrush(byPlayer);
         if (brush is not null)
         {
-            brush.BlockId = byPlayer!.InventoryManager.ActiveHotbarSlot?.Itemstack?.Block?.BlockId;
+            brush.TryUpdateBlockId();
+            if (!brush.IsValidPlacementBlock(brush.BlockUntransformed))
+                brush.TryUpdate(null);
         }
     }
     #endregion
@@ -279,6 +270,9 @@ public class BuildBrushSystem_Server : ModSystem
     /// </summary>
     private void HandlePacket_SetBuildBrush(IServerPlayer fromPlayer, Packet_SetBuildBrush packet)
     {
+        // A packet already in flight must not reactivate a dead player's brush.
+        if (fromPlayer.Entity?.Alive != true)
+            packet.isActive = false;
         var result = ApplyBrushUpdate(fromPlayer.ClientId, packet, fromPlayer.PlayerName);
         if (result is null)
             return;

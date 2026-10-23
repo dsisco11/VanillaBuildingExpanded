@@ -128,9 +128,11 @@ public class BuildBrushEntityRenderer : EntityRenderer
         meshRef = null;
     }
 
+    /// <summary>Renders an available preview, hiding it immediately when the local brush is disabled.</summary>
     public override void DoRender3DOpaque(float dt, bool isShadowPass)
     {
-        if (isShadowPass)
+        if (isShadowPass || brushEntity.BrushInstance?.IsDisabled == true
+            || !brushEntity.WatchedAttributes.GetBool(BuildBrushEntity.BrushVisibleKey))
             return;
 
         // Server-side preview updates are signaled via the watched dirty counter.

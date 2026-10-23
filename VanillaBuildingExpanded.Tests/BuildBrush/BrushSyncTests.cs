@@ -135,7 +135,11 @@ public sealed class BrushSyncTests
     /// <summary>Creates an inactive controller from narrow test inputs.</summary>
     private static BuildBrushControllerServer CreateController()
     {
-        return new BuildBrushControllerServer(TestHelpers.CreateTestInstance(TestHelpers.CreateMockWorld()));
+        var world = TestHelpers.CreateMockWorld();
+        var block = TestHelpers.CreateAndRegisterBlock(world, 10);
+        BrushTestInputs inputs = new();
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(new Vintagestory.API.Common.DummySlot(new Vintagestory.API.Common.ItemStack(block)));
+        return new BuildBrushControllerServer(inputs.CreateBrush(world.Object));
     }
 
     /// <summary>Creates a packet with distinguishable state fields.</summary>

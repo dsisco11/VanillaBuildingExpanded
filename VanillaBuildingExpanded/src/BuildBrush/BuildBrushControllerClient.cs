@@ -20,6 +20,7 @@ public sealed class BuildBrushControllerClient
 
     #region Properties
     public BuildBrushState State { get; } = new();
+
     #endregion
 
     #region Public API
@@ -44,7 +45,10 @@ public sealed class BuildBrushControllerClient
     /// <summary>Updates brush placement from the caller's current selection.</summary>
     public bool TryUpdate(BlockSelection? selection)
     {
-        return GetBrush().TryUpdate(selection);
+        var localBrush = GetBrush();
+        localBrush.TryUpdateBlockId();
+        return localBrush.TryUpdate(localBrush.IsActive && localBrush.IsValidPlacementBlock(localBrush.BlockUntransformed)
+            ? selection : null);
     }
 
     /// <summary>Rechecks the resolved preview placement against the supplied selection.</summary>
@@ -74,21 +78,27 @@ public sealed class BuildBrushControllerClient
 
     #endregion
 
-    #region Equipment and placement events
+    #region Mode and placement events
 
-    /// <summary>Refreshes the equipped brush and displays its snapping mode.</summary>
-    public void OnEquipped()
+    /// <summary>Raised synchronously after refreshed mode state is ready to send.</summary>
+    public event Action? ModeChanged;
+
+    /// <summary>Changes mode and publishes the transition immediately, even without a target.</summary>
+    public bool SetBuildMode(bool enabled, BlockSelection? selection)
     {
         var localBrush = GetBrush();
-        localBrush.OnEquipped();
-        DisplaySnappingModeNotice(localBrush);
-    }
+        if (localBrush.IsActive == enabled)
+            return false;
 
-    /// <summary>Clears the local brush's equipped state.</summary>
-    public void OnUnequipped()
-    {
-        var localBrush = GetBrush();
-        localBrush.OnUnequipped();
+        // Complete local entry/cleanup before notifying the transport boundary.
+        if (enabled)
+            localBrush.EnterBuildMode(selection);
+        else
+            localBrush.ExitBuildMode();
+
+        SyncStateFromBrush();
+        ModeChanged?.Invoke();
+        return true;
     }
 
     /// <summary>Refreshes the active item and placement after prediction or a block-change notification.</summary>

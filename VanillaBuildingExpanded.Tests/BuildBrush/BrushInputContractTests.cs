@@ -68,7 +68,10 @@ public sealed class BrushInputContractTests
     {
         var world = TestHelpers.CreateMockWorld();
         BrushTestInputs inputs = new() { Selection = SelectionAt(10) };
+        Block block = TestHelpers.CreateAndRegisterBlock(world, 10);
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(new DummySlot(new ItemStack(block)));
         BuildBrushInstance brush = inputs.CreateBrush(world.Object);
+        brush.EnterBuildMode(inputs.Selection);
         Action<float>? pending = null;
         world.Setup(w => w.RegisterCallback(It.IsAny<Action<float>>(), 1))
             .Callback<Action<float>, int>((callback, _) => pending = callback).Returns(42);

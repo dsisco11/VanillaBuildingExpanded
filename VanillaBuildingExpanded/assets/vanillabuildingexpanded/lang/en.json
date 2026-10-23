@@ -1,4 +1,7 @@
 {
+  "vbe-hotkey-toggle-build-mode": "Toggle Build Mode",
+  "build-mode-enabled": "Build mode enabled",
+  "build-mode-disabled": "Build mode disabled",
   "vbe-hotkey-rotate-build-cursor": "Rotate Build Cursor",
   "vbe-hotkey-cycle-snapping-mode": "Cycle Snapping Mode",
   "vbe-hotkey-rotate-build-cursor-forward": "Rotate Build Cursor Forward",

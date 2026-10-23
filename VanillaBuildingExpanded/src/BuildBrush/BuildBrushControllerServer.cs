@@ -40,11 +40,24 @@ public sealed class BuildBrushControllerServer : IDisposable
             lastAppliedSeq: packet.seq
         );
 
+        // Refresh the held source before applying its orientation, including on immediate entry.
+        brush.TryUpdateBlockId();
         brush.IsActive = State.IsActive;
         brush.Snapping = State.Snapping;
         brush.OrientationIndex = State.OrientationIndex;
-        brush.Position = State.Position;
+        if (!State.IsActive)
+            brush.ExitBuildMode();
+        else
+            brush.Position = brush.IsValidPlacementBlock(brush.BlockUntransformed) ? State.Position : null;
         brush.LastAppliedSeq = State.LastAppliedSeq;
+    }
+
+    /// <summary>Clears mode on death or respawn while retaining the sequence watermark and preferences.</summary>
+    public void ResetBuildMode()
+    {
+        brush.ExitBuildMode();
+        State.Apply(false, brush.OrientationIndex, null, null, brush.Snapping,
+            brush.BlockId, brush.LastAppliedSeq);
     }
 
     /// <summary>Destroys the owned brush's preview resources.</summary>

@@ -51,6 +51,7 @@ public class BuildBrushSystem_Client : ModSystem
         this.api = api;
 
         controller = new BuildBrushControllerClient(api, CreateBrush);
+        controller.ModeChanged += SendToServer;
 
         config = VbeConfig.Get(api);
 
@@ -69,6 +70,7 @@ public class BuildBrushSystem_Client : ModSystem
         api.Event.RegisterGameTickListener(Thunk_Client, 50);
         api.Event.RegisterGameTickListener(Thunk_Client_Slow, 150);
         api.Event.PlayerJoin += Event_PlayerJoin;
+        api.Event.PlayerDeath += Event_PlayerDeath;
         api.Event.BlockChanged += Event_BlockChanged;
         api.Event.AfterActiveSlotChanged += Event_AfterActiveSlotChanged;
     }
@@ -131,10 +133,12 @@ public class BuildBrushSystem_Client : ModSystem
         ItemSlot? activeSlot = inv.GetHotbarInventory()[e.ToSlot];
         if (activeSlot is not null)
         {
-            brush.BlockId = activeSlot.Itemstack?.Block?.BlockId;
+            controller!.TryUpdate(Player.CurrentBlockSelection);
+            SendToServer();
         }
     }
 
+    /// <summary>Subscribes local inventory refresh and initializes mode off.</summary>
     private void Event_PlayerJoin(IClientPlayer byPlayer)
     {
         if (byPlayer != Player)
@@ -147,44 +151,17 @@ public class BuildBrushSystem_Client : ModSystem
             hotbarInv.SlotModified += Event_HotbarSlotModified;
         }
 
-        IInventory? offhandInventory = byPlayer.InventoryManager?.OffhandHotbarSlot.Inventory;
-        if (offhandInventory is not null)
-        {
-            offhandInventory.SlotModified += (int slot) => Event_OffhandSlotModified(byPlayer, slot);
-        }
-
-        BuildBrushInstance? brush = GetBrush();
-        if (brush is null)
-            return;
-
-        brush.IsActive = byPlayer.IsHoldingBuildHammer();
+        // New sessions start with mode disabled, regardless of equipment.
+        controller!.SetBuildMode(false, null);
         Logger.Audit("[BuildBrush][OnPlayerJoin]: Initializing build brush for player.");
     }
 
-    /// <summary>
-    /// Handles offhand slot modifications to update the brush's active state if the build hammer is equipped.
-    /// </summary>
-    private void Event_OffhandSlotModified(IClientPlayer byPlayer, int slot)
+    /// <summary>Disables the local mode on death and publishes the transition before respawning.</summary>
+    private void Event_PlayerDeath(IClientPlayer byPlayer)
     {
-        BuildBrushInstance brush = GetBrush();
-        if (brush is null)
-            return;
-
-        bool oldState = brush.IsActive;
-        bool newState = byPlayer.IsHoldingBuildHammer();
-
-        brush.IsActive = newState;
-        //brushManager.SendToServer();
-        if (oldState && !newState)
-        {
-            controller!.OnUnequipped();
-        }
-        else if (!oldState && newState)
-        {
-            controller!.OnEquipped();
-        }
+        if (byPlayer == Player)
+            controller!.SetBuildMode(false, null);
     }
-
     /// <summary>
     /// Handles hotbar slot modifications to update the brush's block ID if the contents of the active slot changes.
     /// </summary>
@@ -201,7 +178,8 @@ public class BuildBrushSystem_Client : ModSystem
         if (brush is null)
             return;
 
-        brush.BlockId = inventory.ActiveHotbarSlot?.Itemstack?.Block?.BlockId;
+        controller!.TryUpdate(Player.CurrentBlockSelection);
+        SendToServer();
     }
 
     /// <summary>Updates local placement from the live selection and sends changed positions.</summary>
@@ -221,10 +199,10 @@ public class BuildBrushSystem_Client : ModSystem
             return;
 
         BlockSelection? currentSelection = this.api!.World?.Player?.CurrentBlockSelection;
-        bool positionChanged = controller!.TryUpdate(currentSelection);
+        controller!.TryUpdate(currentSelection);
 
         // Send position updates to server when position changes
-        if (positionChanged && brush.Position is not null && !brush.Position.Equals(lastSentPosition))
+        if (!Equals(brush.Position, lastSentPosition))
         {
             lastSentPosition = brush.Position?.Copy();
             SendToServer();
@@ -398,6 +376,9 @@ public class BuildBrushSystem_Client : ModSystem
     private void RegisterInputHandlers()
     {
         api.Input.InWorldAction += this.InWorldAction;
+        api.Input.TryRegisterHotKey("vbe.ToggleBuildMode", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-toggle-build-mode"),
+            GlKeys.Tilde, HotkeyType.CharacterControls);
+        api.Input.SetHotKeyHandler("vbe.ToggleBuildMode", Input_ToggleBuildMode);
         api.Input.TryRegisterHotKey("vbe.ToggleFaceOffsetPlacement", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-toggle-face-offset"), GlKeys.LShift, HotkeyType.CharacterControls);
         api.Input.SetHotKeyHandler("vbe.ToggleFaceOffsetPlacement", this.Input_ToggleFaceOffsetPlacement);
         api.Input.GetHotKeyByCode("vbe.ToggleFaceOffsetPlacement").TriggerOnUpAlso = true;
@@ -413,6 +394,19 @@ public class BuildBrushSystem_Client : ModSystem
 
         api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Backward", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-cycle-snapping-mode-backward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.CharacterControls, shiftPressed: true);
         api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Backward", this.Input_CycleSnappingMode_Backward);
+    }
+
+    /// <summary>Toggles build mode for a living player and reports the resulting state.</summary>
+    private bool Input_ToggleBuildMode(KeyCombination keys)
+    {
+        if (keys.OnKeyUp || Player?.Entity?.Alive != true)
+            return false;
+
+        bool enabled = !GetBrush().IsActive;
+        controller!.SetBuildMode(enabled, Player.CurrentBlockSelection);
+        api!.TriggerIngameError(this, $"{Mod.Info.ModID}:build-mode-status",
+            Lang.Get($"{Mod.Info.ModID}:build-mode-{(enabled ? "enabled" : "disabled")}"));
+        return true;
     }
 
     /// <summary>Updates face-offset snapping while the configured key is pressed.</summary>
@@ -498,9 +492,6 @@ public class BuildBrushSystem_Client : ModSystem
     /// </param>
     protected void TryPlaceBlock(ref EnumHandling handling)
     {
-        if (!Player.IsHoldingBuildHammer())
-            return;
-
         BuildBrushInstance? brush = GetBrush();
         if (brush is null || brush.IsDisabled)
             return;

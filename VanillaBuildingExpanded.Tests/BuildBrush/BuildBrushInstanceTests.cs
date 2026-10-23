@@ -761,11 +761,11 @@ public class BuildBrushInstanceTests
 
     #endregion
 
-    #region OnEquipped Tests
+    #region EnterBuildMode Tests
 
-    /// <summary>Checks On Equipped Calls Try Update Block Id.</summary>
+    /// <summary>Checks Enter Build Mode Calls Try Update Block Id.</summary>
     [Fact]
-    public void OnEquipped_CallsTryUpdateBlockId()
+    public void EnterBuildMode_CallsTryUpdateBlockId()
     {
         // Arrange - use Server side to avoid DisplaySnappingModeNotice needing ModLoader mock
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Server);
@@ -782,7 +782,7 @@ public class BuildBrushInstanceTests
         instance.BlockId = null; // Clear any initial value
 
         // Act
-        instance.OnEquipped();
+        instance.EnterBuildMode(null);
 
         // Assert - BlockId should be set from hotbar
         Assert.Equal(100, instance.BlockId);
@@ -790,13 +790,13 @@ public class BuildBrushInstanceTests
 
     #endregion
 
-    #region OnUnequipped Tests
+    #region ExitBuildMode Tests
 
-    /// <summary>Checks On Unequipped Sets Is Active To False.</summary>
+    /// <summary>Checks Exit Build Mode Sets Is Active To False.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
-    public void OnUnequipped_SetsIsActiveToFalse(EnumAppSide side)
+    public void ExitBuildMode_SetsIsActiveToFalse(EnumAppSide side)
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
@@ -805,17 +805,17 @@ public class BuildBrushInstanceTests
         instance.IsActive = true;
 
         // Act
-        instance.OnUnequipped();
+        instance.ExitBuildMode();
 
         // Assert
         Assert.False(instance.IsActive);
     }
 
-    /// <summary>Checks On Unequipped Sets Block Id To Zero.</summary>
+    /// <summary>Checks Exit Build Mode Sets Block Id To Zero.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
-    public void OnUnequipped_SetsBlockIdToZero(EnumAppSide side)
+    public void ExitBuildMode_SetsBlockIdToZero(EnumAppSide side)
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
@@ -827,7 +827,7 @@ public class BuildBrushInstanceTests
         instance.BlockId = 100;
 
         // Act
-        instance.OnUnequipped();
+        instance.ExitBuildMode();
 
         // Assert
         Assert.Equal(0, instance.BlockId);
