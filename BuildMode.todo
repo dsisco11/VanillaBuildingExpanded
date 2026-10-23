@@ -4,9 +4,15 @@ Replace offhand build-hammer activation with a rebindable build-mode toggle,
 reusing the existing brush, placement, preview, and ordered state synchronization.
 
 ## Phase 1: Settle behavior
-    ☐ Choose the default toggle key and enabled/disabled feedback.
-    ☐ Confirm lifecycle behavior: proposed default is off on join, retain mode across hotbar changes, suspend brush use for unsupported items, and preserve snapping preferences across toggles; define death/respawn behavior.
-    ☐ Decide how existing saved hammers are handled: migrate/remove them or retain a hidden, inert legacy item.
+    ☑ Choose the default toggle key and enabled/disabled feedback.
+    ☑ Confirm lifecycle behavior, including hotbar changes, unsupported items, snapping preferences, and death/respawn.
+    ☑ Decide how existing saved hammers are handled.
+
+Approved behavior:
+    - Toggle: Ctrl+B, rebindable through game controls; localized "Build mode enabled" / "Build mode disabled" notices. No persistent HUD indicator in this change. Check the default against game bindings before implementation.
+    - Lifecycle: off on join and death/respawn; retain mode across hotbar changes, suspend brush use for unsupported items, and retain snapping preferences across toggles within the session.
+    - Suspended brush use: keep build mode enabled, hide the preview, and preserve ordinary tool/item interactions while the selected hotbar slot is empty or fails existing brush block eligibility rules. Resume brush use automatically when a supported block is selected. Lack of rotation support does not make a block unsupported.
+    - Existing hammers: retain a hidden legacy item with no build-mode activation; remove crafting and creative availability.
 
 ## Phase 2: Implement mode activation and synchronization
     ☐ Add the localized, rebindable toggle and explicit enter/exit handling; refresh the source item and selection on entry and clear the preview on exit.
