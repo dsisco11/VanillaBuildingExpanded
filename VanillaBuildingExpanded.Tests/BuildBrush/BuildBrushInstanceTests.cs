@@ -20,6 +20,7 @@ public class BuildBrushInstanceTests
 {
     #region IsActive Tests
 
+    /// <summary>Checks Is Active When Changed Raises On Activation Changed.</summary>
     [Fact]
     public void IsActive_WhenChanged_RaisesOnActivationChanged()
     {
@@ -38,6 +39,7 @@ public class BuildBrushInstanceTests
         Assert.True(capturedArgs.IsActive);
     }
 
+    /// <summary>Checks Is Active When Changed To Same Value Does Not Raise Event.</summary>
     [Fact]
     public void IsActive_WhenChangedToSameValue_DoesNotRaiseEvent()
     {
@@ -54,6 +56,7 @@ public class BuildBrushInstanceTests
         Assert.Equal(0, eventCount);
     }
 
+    /// <summary>Checks Is Active When Deactivated Raises With Correct Previous State.</summary>
     [Fact]
     public void IsActive_WhenDeactivated_RaisesWithCorrectPreviousState()
     {
@@ -77,6 +80,7 @@ public class BuildBrushInstanceTests
 
     #region Position Tests
 
+    /// <summary>Checks Position When Changed Raises On Position Changed.</summary>
     [Fact]
     public void Position_WhenChanged_RaisesOnPositionChanged()
     {
@@ -104,6 +108,7 @@ public class BuildBrushInstanceTests
         Assert.Equal(newPos.Z, capturedArgs.CurrentPosition.Z);
     }
 
+    /// <summary>Checks Position Event Args Contains Copied Positions.</summary>
     [Fact]
     public void Position_EventArgsContainsCopiedPositions()
     {
@@ -129,6 +134,7 @@ public class BuildBrushInstanceTests
 
     #region Snapping Tests
 
+    /// <summary>Checks Snapping When Changed Raises On Snapping Mode Changed.</summary>
     [Fact]
     public void Snapping_WhenChanged_RaisesOnSnappingModeChanged()
     {
@@ -152,6 +158,7 @@ public class BuildBrushInstanceTests
         Assert.Equal(newSnapping, capturedArgs.CurrentMode);
     }
 
+    /// <summary>Checks Snapping When Changed To Same Value Does Not Raise Event.</summary>
     [Fact]
     public void Snapping_WhenChangedToSameValue_DoesNotRaiseEvent()
     {
@@ -174,17 +181,18 @@ public class BuildBrushInstanceTests
 
     #region Placement Block Tests
 
+    /// <summary>Checks Block Transformed Raises On Block Transformed Changed Via Block Id.</summary>
     [Fact]
     public void BlockTransformed_RaisesOnBlockTransformedChanged_ViaBlockId()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
 
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         BlockChangedEventArgs? capturedArgs = null;
         instance.OnPlacementBlockChanged += (sender, args) => capturedArgs = args;
@@ -203,17 +211,18 @@ public class BuildBrushInstanceTests
 
     #region BlockUntransformed Tests
 
+    /// <summary>Checks Block Untransformed Raises On Block Untransformed Changed Via Block Id.</summary>
     [Fact]
     public void BlockUntransformed_RaisesOnBlockUntransformedChanged_ViaBlockId()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
 
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         BlockChangedEventArgs? capturedArgs = null;
         instance.OnBlockUntransformedChanged += (sender, args) => capturedArgs = args;
@@ -228,17 +237,18 @@ public class BuildBrushInstanceTests
         Assert.Same(testBlock, capturedArgs.CurrentBlock);
     }
 
+    /// <summary>Checks Block Untransformed Raises On Rotation Info Changed Via Block Id.</summary>
     [Fact]
     public void BlockUntransformed_RaisesOnRotationInfoChanged_ViaBlockId()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
 
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         RotationInfoChangedEventArgs? capturedArgs = null;
         instance.OnRotationInfoChanged += (sender, args) => capturedArgs = args;
@@ -253,17 +263,18 @@ public class BuildBrushInstanceTests
         Assert.Same(testBlock, capturedArgs.SourceBlock);
     }
 
+    /// <summary>Checks Block Untransformed Subscribes To Rotation Info Events.</summary>
     [Fact]
     public void BlockUntransformed_SubscribesToRotationInfoEvents()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
 
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Create a rotation info with multiple orientations so rotation can work
@@ -297,6 +308,7 @@ public class BuildBrushInstanceTests
     // Note: Full lifecycle tests require server-side initialization which is
     // difficult to mock. These tests verify the event is properly wired.
 
+    /// <summary>Checks On Dimension Lifecycle Is Defined And Accessible.</summary>
     [Fact]
     public void OnDimensionLifecycle_IsDefinedAndAccessible()
     {
@@ -315,6 +327,7 @@ public class BuildBrushInstanceTests
 
     #region IsValidPlacementBlock Tests
 
+    /// <summary>Checks Is Valid Placement Block Null Block Returns False.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -322,8 +335,8 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // Act
         bool result = instance.IsValidPlacementBlock(null);
@@ -332,6 +345,7 @@ public class BuildBrushInstanceTests
         Assert.False(result);
     }
 
+    /// <summary>Checks Is Valid Placement Block Block Id Zero Returns False.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -339,8 +353,8 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var block = TestHelpers.CreateTestBlock(0);
 
         // Act
@@ -350,6 +364,7 @@ public class BuildBrushInstanceTests
         Assert.False(result);
     }
 
+    /// <summary>Checks Is Valid Placement Block Is Missing True Returns False.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -357,8 +372,8 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var block = TestHelpers.CreateTestBlock(100);
         block.IsMissing = true;
 
@@ -369,6 +384,7 @@ public class BuildBrushInstanceTests
         Assert.False(result);
     }
 
+    /// <summary>Checks Is Valid Placement Block Valid Block Returns True.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -376,8 +392,8 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var block = TestHelpers.CreateTestBlock(100);
 
         // Act
@@ -391,6 +407,7 @@ public class BuildBrushInstanceTests
 
     #region BlockId Property Tests
 
+    /// <summary>Checks Block Id Set To Null Clears Block Untransformed.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -398,11 +415,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
         Assert.NotNull(instance.BlockUntransformed);
 
@@ -414,6 +431,7 @@ public class BuildBrushInstanceTests
         Assert.Null(instance.BlockUntransformed);
     }
 
+    /// <summary>Checks Block Id Set To Invalid Block Block Untransformed Is Null.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -421,12 +439,12 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var invalidBlock = TestHelpers.CreateTestBlock(100);
         invalidBlock.IsMissing = true;
         mockWorld.Setup(w => w.GetBlock(100)).Returns(invalidBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // Act
         instance.BlockId = 100;
@@ -436,6 +454,7 @@ public class BuildBrushInstanceTests
         Assert.Null(instance.BlockUntransformed); // But untransformed block is null
     }
 
+    /// <summary>Checks Block Id Set To Same Value Does Not Raise Event.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -443,11 +462,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         int eventCount = 0;
@@ -464,6 +483,7 @@ public class BuildBrushInstanceTests
 
     #region IsDisabled Tests
 
+    /// <summary>Checks Is Disabled When Not Active Returns True.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -471,11 +491,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
         instance.Position = new BlockPos(0, 0, 0);
         instance.IsActive = false;
@@ -484,6 +504,7 @@ public class BuildBrushInstanceTests
         Assert.True(instance.IsDisabled);
     }
 
+    /// <summary>Checks Is Disabled When Position Is Null Returns True.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -491,11 +512,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
         instance.IsActive = true;
         instance.Position = null;
@@ -504,6 +525,7 @@ public class BuildBrushInstanceTests
         Assert.True(instance.IsDisabled);
     }
 
+    /// <summary>Checks Is Disabled When Invalid Placement Block Returns True.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -511,12 +533,12 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var invalidBlock = TestHelpers.CreateTestBlock(100);
         invalidBlock.IsMissing = true;
         mockWorld.Setup(w => w.GetBlock(100)).Returns(invalidBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100; // Invalid block
         instance.IsActive = true;
         instance.Position = new BlockPos(0, 0, 0);
@@ -529,6 +551,7 @@ public class BuildBrushInstanceTests
 
     #region OrientationIndex Tests
 
+    /// <summary>Checks Orientation Index When Rotation Is Null Returns Zero.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -536,14 +559,15 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var instance = inputs.CreateBrush(mockWorld.Object);
         // No block set, so no rotation info
 
         // Assert
         Assert.Equal(0, instance.OrientationIndex);
     }
 
+    /// <summary>Checks Orientation Index When Set Updates Block Transformed.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -551,11 +575,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange - need a block that supports rotation (has multiple orientation definitions)
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Act & Assert - if rotation supports it, changing index should trigger block transformed change
@@ -574,6 +598,7 @@ public class BuildBrushInstanceTests
         }
     }
 
+    /// <summary>Checks Orientation Index Set To Same Value Does Not Raise Event.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -581,11 +606,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         int eventCount = 0;
@@ -602,6 +627,7 @@ public class BuildBrushInstanceTests
 
     #region CycleOrientation Tests
 
+    /// <summary>Checks Cycle Orientation When Rotation Is Null Returns False.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -609,8 +635,8 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var instance = inputs.CreateBrush(mockWorld.Object);
         // No block set
 
         // Act
@@ -620,6 +646,7 @@ public class BuildBrushInstanceTests
         Assert.False(result);
     }
 
+    /// <summary>Checks Cycle Orientation When Cannot Rotate Returns False.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -627,11 +654,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange - basic block without rotation support
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // If block doesn't support rotation
@@ -645,6 +672,7 @@ public class BuildBrushInstanceTests
         }
     }
 
+    /// <summary>Checks Cycle Orientation Forward Increments Orientation Index.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -652,11 +680,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Only test if rotation is supported
@@ -678,6 +706,7 @@ public class BuildBrushInstanceTests
 
     #region OrientationCount Tests
 
+    /// <summary>Checks Orientation Count When Rotation Is Null Returns Zero.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -685,13 +714,14 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // Assert
         Assert.Equal(0, instance.OrientationCount);
     }
 
+    /// <summary>Checks Orientation Count When Block Set Returns Rotation Orientation Count.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -699,11 +729,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Assert
@@ -714,6 +744,7 @@ public class BuildBrushInstanceTests
 
     #region RotationMode Tests
 
+    /// <summary>Checks Rotation Mode When Rotation Is Null Returns None.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -721,8 +752,8 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // Assert
         Assert.Equal(EBuildBrushRotationMode.None, instance.RotationMode);
@@ -732,21 +763,22 @@ public class BuildBrushInstanceTests
 
     #region OnEquipped Tests
 
+    /// <summary>Checks On Equipped Calls Try Update Block Id.</summary>
     [Fact]
     public void OnEquipped_CallsTryUpdateBlockId()
     {
         // Arrange - use Server side to avoid DisplaySnappingModeNotice needing ModLoader mock
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Server);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         // Setup hotbar slot with a block using DummySlot (real class, ItemSlot is not mockable)
         var itemStack = new ItemStack(testBlock);
         var dummySlot = new DummySlot(itemStack);
-        mockPlayer.Setup(p => p.InventoryManager.ActiveHotbarSlot).Returns(dummySlot);
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(dummySlot);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = null; // Clear any initial value
 
         // Act
@@ -760,6 +792,7 @@ public class BuildBrushInstanceTests
 
     #region OnUnequipped Tests
 
+    /// <summary>Checks On Unequipped Sets Is Active To False.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -767,8 +800,8 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.IsActive = true;
 
         // Act
@@ -778,6 +811,7 @@ public class BuildBrushInstanceTests
         Assert.False(instance.IsActive);
     }
 
+    /// <summary>Checks On Unequipped Sets Block Id To Zero.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -785,11 +819,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Act
@@ -803,6 +837,7 @@ public class BuildBrushInstanceTests
 
     #region OnBlockPlaced Tests
 
+    /// <summary>Checks On Block Placed Server Calls Try Update Block Id.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -810,7 +845,7 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var block1 = TestHelpers.CreateTestBlock(100);
         var block2 = TestHelpers.CreateTestBlock(200);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(block1);
@@ -819,9 +854,9 @@ public class BuildBrushInstanceTests
         // Use DummySlot with block1 initially
         var itemStack1 = new ItemStack(block1);
         var dummySlot = new DummySlot(itemStack1);
-        mockPlayer.Setup(p => p.InventoryManager.ActiveHotbarSlot).Returns(dummySlot);
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(dummySlot);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Change the hotbar item by updating the DummySlot's itemstack
@@ -839,6 +874,7 @@ public class BuildBrushInstanceTests
 
     #region TryUpdateBlockId Tests
 
+    /// <summary>Checks Try Update Block Id When Block Changes Returns True.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -846,7 +882,7 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var block1 = TestHelpers.CreateTestBlock(100);
         var block2 = TestHelpers.CreateTestBlock(200);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(block1);
@@ -854,9 +890,9 @@ public class BuildBrushInstanceTests
 
         var itemStack1 = new ItemStack(block1);
         var dummySlot = new DummySlot(itemStack1);
-        mockPlayer.Setup(p => p.InventoryManager.ActiveHotbarSlot).Returns(dummySlot);
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(dummySlot);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Change hotbar item
@@ -871,6 +907,7 @@ public class BuildBrushInstanceTests
         Assert.Equal(200, instance.BlockId);
     }
 
+    /// <summary>Checks Try Update Block Id When Block Same Returns False.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -878,15 +915,15 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var itemStack = new ItemStack(testBlock);
         var dummySlot = new DummySlot(itemStack);
-        mockPlayer.Setup(p => p.InventoryManager.ActiveHotbarSlot).Returns(dummySlot);
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(dummySlot);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Act
@@ -896,6 +933,7 @@ public class BuildBrushInstanceTests
         Assert.False(result);
     }
 
+    /// <summary>Checks Try Update Block Id When Hotbar Empty Sets Block Id To Null.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -903,15 +941,15 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         // Create empty DummySlot
         var dummySlot = new DummySlot(null);
-        mockPlayer.Setup(p => p.InventoryManager.ActiveHotbarSlot).Returns(dummySlot);
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(dummySlot);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Act
@@ -926,6 +964,7 @@ public class BuildBrushInstanceTests
 
     #region MarkDirty Tests
 
+    /// <summary>Checks Mark Dirty Sets Is Dirty To True.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -933,11 +972,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var instance = inputs.CreateBrush(mockWorld.Object);
         
         // Clear IsDirty first (constructor may set it)
-        instance.TryUpdate(); // This clears IsDirty
+        instance.TryUpdate(inputs.Selection); // This clears IsDirty
 
         // Act
         instance.MarkDirty();
@@ -946,6 +985,7 @@ public class BuildBrushInstanceTests
         Assert.True(instance.IsDirty);
     }
 
+    /// <summary>Checks Mark Dirty When Already Dirty Does Not Register Callback.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -953,8 +993,8 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // First call to MarkDirty
         instance.MarkDirty();
@@ -967,6 +1007,7 @@ public class BuildBrushInstanceTests
         Assert.True(instance.IsDirty);
     }
 
+    /// <summary>Checks Mark Dirty Registers Callback.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -974,8 +1015,8 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // Act
         instance.MarkDirty();
@@ -988,6 +1029,7 @@ public class BuildBrushInstanceTests
 
     #region Event Forwarding Tests
 
+    /// <summary>Checks On Orientation Changed Forwards From Rotation Info.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -995,11 +1037,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         int eventCount = 0;
@@ -1016,6 +1058,7 @@ public class BuildBrushInstanceTests
         }
     }
 
+    /// <summary>Checks On Rotation Info Changed Fired When Block Changes.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -1023,13 +1066,13 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var block1 = TestHelpers.CreateTestBlock(100);
         var block2 = TestHelpers.CreateTestBlock(200);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(block1);
         mockWorld.Setup(w => w.GetBlock(200)).Returns(block2);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         int eventCount = 0;
@@ -1049,6 +1092,7 @@ public class BuildBrushInstanceTests
         Assert.Same(block2, lastArgs.SourceBlock);
     }
 
+    /// <summary>Checks On Placement Block Changed Contains Is Transformed Block True.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -1056,11 +1100,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         BlockChangedEventArgs? capturedArgs = null;
         instance.OnPlacementBlockChanged += (sender, args) => capturedArgs = args;
@@ -1073,6 +1117,7 @@ public class BuildBrushInstanceTests
         Assert.True(capturedArgs.IsTransformedBlock);
     }
 
+    /// <summary>Checks On Block Untransformed Changed Contains Is Transformed Block False.</summary>
     [Theory]
     [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
@@ -1080,11 +1125,11 @@ public class BuildBrushInstanceTests
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(side);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         BlockChangedEventArgs? capturedArgs = null;
         instance.OnBlockUntransformedChanged += (sender, args) => capturedArgs = args;

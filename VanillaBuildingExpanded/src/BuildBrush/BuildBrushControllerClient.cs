@@ -14,6 +14,7 @@ public sealed class BuildBrushControllerClient
 {
     #region Fields
     private readonly ICoreClientAPI api;
+    private readonly Func<BuildBrushInstance> createBrush;
     private BuildBrushInstance? brush;
     #endregion
 
@@ -21,40 +22,48 @@ public sealed class BuildBrushControllerClient
     public BuildBrushState State { get; } = new();
     #endregion
 
-    #region Constructor
-    public BuildBrushControllerClient(ICoreClientAPI api)
+    #region Public API
+    #region Construction and brush acquisition
+
+    /// <summary>Retains client services and a factory that creates the local brush only when first needed.</summary>
+    public BuildBrushControllerClient(ICoreClientAPI api, Func<BuildBrushInstance> createBrush)
     {
         this.api = api;
+        this.createBrush = createBrush;
     }
     #endregion
 
-    #region Public
-    /// <summary>Gets the local brush, binding native placement rules when it is first created.</summary>
-    public BuildBrushInstance GetBrush(IPlayer player)
+    #region Brush updates
+    /// <summary>Gets the session brush, constructing it once through the game-facing factory.</summary>
+    public BuildBrushInstance GetBrush()
     {
-        brush ??= new BuildBrushInstance(player, api.World, new PlayerBrushPlacementValidator(api.World, player));
+        brush ??= createBrush();
         return brush;
     }
 
+    /// <summary>Updates brush placement from the caller's current selection.</summary>
     public bool TryUpdate(BlockSelection? selection)
     {
-        return GetBrush(api.World.Player).TryUpdate(selection);
+        return GetBrush().TryUpdate(selection);
     }
 
+    /// <summary>Rechecks the resolved preview placement against the supplied selection.</summary>
     public void TryUpdatePlacementValidity(BlockSelection selection)
     {
-        GetBrush(api.World.Player).TryUpdatePlacementValidity(selection);
+        GetBrush().TryUpdatePlacementValidity(selection);
     }
 
+    /// <summary>Cycles the local brush orientation in the requested direction.</summary>
     public bool RotateCursor(EModeCycleDirection direction)
     {
-        var localBrush = GetBrush(api.World.Player);
+        var localBrush = GetBrush();
         return localBrush.CycleOrientation(direction);
     }
 
+    /// <summary>Cycles snapping flags and displays the resulting mode.</summary>
     public void CycleSnappingMode(EModeCycleDirection direction)
     {
-        var localBrush = GetBrush(api.World.Player);
+        var localBrush = GetBrush();
         int d = (int)direction;
         EBuildBrushSnapping modeSearchFilter = EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical;
         int snappingModeIndex = BuildBrushInstance.BrushSnappingModes.IndexOf(localBrush.Snapping & modeSearchFilter);
@@ -63,29 +72,41 @@ public sealed class BuildBrushControllerClient
         DisplaySnappingModeNotice(localBrush);
     }
 
+    #endregion
+
+    #region Equipment and placement events
+
+    /// <summary>Refreshes the equipped brush and displays its snapping mode.</summary>
     public void OnEquipped()
     {
-        var localBrush = GetBrush(api.World.Player);
+        var localBrush = GetBrush();
         localBrush.OnEquipped();
         DisplaySnappingModeNotice(localBrush);
     }
 
+    /// <summary>Clears the local brush's equipped state.</summary>
     public void OnUnequipped()
     {
-        var localBrush = GetBrush(api.World.Player);
+        var localBrush = GetBrush();
         localBrush.OnUnequipped();
     }
 
-    public void OnBlockPlacedClient()
+    /// <summary>Refreshes the active item and placement after prediction or a block-change notification.</summary>
+    public void OnBlockPlacedClient(BlockSelection? selection)
     {
-        var localBrush = GetBrush(api.World.Player);
+        var localBrush = GetBrush();
         localBrush.OnBlockPlacedServer();
-        localBrush.TryUpdate();
+        localBrush.TryUpdate(selection);
     }
 
+    #endregion
+
+    #region State publication
+
+    /// <summary>Copies current brush values into the state used for outgoing updates.</summary>
     public void SyncStateFromBrush()
     {
-        var localBrush = GetBrush(api.World.Player);
+        var localBrush = GetBrush();
         State.Apply(
             localBrush.IsActive,
             localBrush.OrientationIndex,
@@ -96,8 +117,10 @@ public sealed class BuildBrushControllerClient
         );
     }
     #endregion
+    #endregion
 
     #region Private
+    /// <summary>Shows the localized snapping-mode notice when mod information is available.</summary>
     private void DisplaySnappingModeNotice(BuildBrushInstance localBrush)
     {
         ModInfo? modInfo = api.ModLoader.GetModSystem<VanillaBuildingExpandedModSystem>()?.Mod.Info;

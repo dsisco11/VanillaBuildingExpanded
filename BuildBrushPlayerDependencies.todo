@@ -167,35 +167,45 @@ PHASE 3 — Narrow brush inputs, controller construction, and fixtures
 Depends on: Phase 2.
 Outcome: Brush/controller tests can run without player mocks, while client/server callers supply current game inputs.
 
-- [ ] Remove `BuildBrushInstance.Player` and its player-dependent constructor contract.
-  - [ ] Supply `IPlayerInventoryManager`, owner UID, logging name, and the placement-validation dependency as needed.
-  - [ ] Preserve constructor initialization from the current active hotbar item and source-itemstack handling.
-  - [ ] Read `ActiveHotbarSlot` at use time for block refresh and dirty marking; verify switching slots after brush construction still works.
-  - [ ] Preserve preview entity ownership and initialization-warning information.
-- [ ] Make selection input explicit in brush updates.
-  - [ ] Update every former parameterless caller to resolve its intended current selection at the appropriate integration boundary.
-  - [ ] Preserve no-selection clearing, explicit selection overrides, forced updates, and placement validity behavior.
-  - [ ] Review both controllers and the client tick/post-placement paths so no fallback silently reads a stored player.
-- [ ] Update `BuildBrushControllerClient` and `BuildBrushControllerServer` construction/brush acquisition to receive narrow dependencies.
-  - [ ] Keep game player extraction and adapter creation in the owning client/server integration code.
-  - [ ] Preserve lazy client brush creation, per-client server ownership, event subscriptions, destruction, and disposal.
-  - [ ] Keep current player-based game APIs at native placement and dimension-sync boundaries.
-- [ ] Narrow build-hammer detection to the effective offhand `ItemSlot`.
-  - [ ] Resolve `InventoryManager.OffhandHotbarSlot ?? Entity.LeftHandItemSlot` at the game boundary to preserve existing fallback semantics.
-  - [ ] Verify hammer, non-hammer, and empty-slot results without player mocks.
-- [ ] Remove redundant player parameters from internal client operations where only the local brush/direction is needed, after checking all callers.
-- [ ] Migrate `TestHelpers.CreateMockPlayer` / `CreateTestInstance` consumers to narrow fixtures.
-  - [ ] Migrate brush, dimension, placement, tessellation, and `E2E/BrushToTessellationFlowTests` construction and setups.
-  - [ ] Migrate `BrushDirtyCounterTests` to construct the server controller without `IServerPlayer`.
-  - [ ] Keep real `ItemSlot` test doubles and mock only the inventory/validation contracts actually needed.
-  - [ ] Remove obsolete shared player fixture APIs once their consumers have migrated; identify `BrushSyncTests` as the remaining packet-boundary migration if applicable.
-- [ ] Add or adapt meaningful coverage for live slot changes, dirty marking, explicit selection/no-selection behavior, and preview-owner UID.
-- [ ] Have a subagent build and run the migrated focused tests.
+- [x] Remove `BuildBrushInstance.Player` and its player-dependent constructor contract.
+  - [x] Supply `IPlayerInventoryManager`, owner UID, logging name, and the placement-validation dependency as needed.
+  - [x] Preserve constructor initialization from the current active hotbar item and source-itemstack handling.
+  - [x] Read `ActiveHotbarSlot` at use time for block refresh and dirty marking; verify switching slots after brush construction still works.
+  - [x] Preserve preview entity ownership and initialization-warning information.
+- [x] Make selection input explicit in brush updates.
+  - [x] Update every former parameterless caller to resolve its intended current selection at the appropriate integration boundary.
+  - [x] Preserve no-selection clearing, explicit selection overrides, forced updates, and placement validity behavior.
+  - [x] Review both controllers and the client tick/post-placement paths so no fallback silently reads a stored player.
+- [x] Update `BuildBrushControllerClient` and `BuildBrushControllerServer` construction/brush acquisition to receive narrow dependencies.
+  - [x] Keep game player extraction and adapter creation in the owning client/server integration code.
+  - [x] Preserve lazy client brush creation, per-client server ownership, event subscriptions, destruction, and disposal.
+  - [x] Keep current player-based game APIs at native placement and dimension-sync boundaries.
+- [x] Narrow build-hammer detection to the effective offhand `ItemSlot`.
+  - [x] Resolve `InventoryManager.OffhandHotbarSlot ?? Entity.LeftHandItemSlot` at the game boundary to preserve existing fallback semantics.
+  - [x] Verify hammer, non-hammer, and empty-slot results without player mocks.
+- [x] Remove redundant player parameters from internal client operations where only the local brush/direction is needed, after checking all callers.
+- [x] Migrate `TestHelpers.CreateMockPlayer` / `CreateTestInstance` consumers to narrow fixtures.
+  - [x] Migrate brush, dimension, placement, tessellation, and `E2E/BrushToTessellationFlowTests` construction and setups.
+  - [x] Migrate `BrushDirtyCounterTests` to construct the server controller without `IServerPlayer`.
+  - [x] Keep real `ItemSlot` test doubles and mock only the inventory/validation contracts actually needed.
+  - [x] Remove obsolete shared player fixture APIs once their consumers have migrated; identify `BrushSyncTests` as the remaining packet-boundary migration if applicable.
+- [x] Add or adapt meaningful coverage for live slot changes, dirty marking, explicit selection/no-selection behavior, and preview-owner UID.
+- [x] Have a subagent build and run the migrated focused tests.
 
 Acceptance criteria:
-- [ ] Brush state/placement decisions and controller construction require no player interface or player mock.
-- [ ] Migrated fixtures preserve the behavior they previously asserted, including dimension and tessellation flows.
-- [ ] Focused migrated tests pass; packet-handler migration remains explicitly pending until Phase 4.
+- [x] Brush state/placement decisions and controller construction require no player interface or player mock.
+- [x] Migrated fixtures preserve the behavior they previously asserted, including dimension and tessellation flows.
+- [x] Focused migrated tests pass; packet-handler migration remains explicitly pending until Phase 4.
+
+### Phase 3 implementation and verification
+
+- Brush inputs -> Phase 1 inventory/identity/selection contract + `BuildBrushInstance` constructor, `TryUpdateBlockId`, `OnBlockPlacedServer`, `DoDirtyUpdate`, `SpawnEntity` -> replaced the stored player with `IPlayerInventoryManager`, owner UID/name values, a validator and a callback-time selection getter. Active slots are reread on refresh/dirty marking. `TryUpdate` now requires an explicit selection; the deferred callback unregisters first and resolves its supplied getter at execution time. Initialization, source-itemstack handling, missing-selection clearing, force/dirty guards and entity validity assignments retain their established behavior.
+- Composition/lifecycle -> both controllers + `BuildBrushSystem_Client/Server` + entity linkage -> the client system supplies a lazy brush factory, and the server system constructs its owner's brush before handing it to the server controller. Controllers no longer acquire or accept players; native adapters are created only at the game-facing construction sites. Client lookup/rotation/snapping no longer take redundant player arguments; tick and post-placement callers pass current selections, and entity linkage uses the local lookup without a player parameter. Existing event handling, ownership, controller disposal and native placement/sync boundaries remain intact.
+- Equipment -> `src/Extensions/Player.cs` retains the player-facing `TryGetBuildHammer` / `IsHoldingBuildHammer` adapters at game integration sites. They preserve the short-circuit `InventoryManager?.OffhandHotbarSlot ?? Entity.LeftHandItemSlot` resolution and delegate detection to `src/Extensions/BuildHammerSlotExtensions.cs`, which inspects only an effective `ItemSlot?`. The shared player mock helper remains removed; brush/controller tests use narrow inputs.
+- Fixtures -> `TestHelpers`, brush/dimension/placement/intercept fixtures, tessellation fixtures and `E2E/BrushToTessellationFlowTests` -> `BrushTestInputs` supplies inventory/rule mocks, a mutable selection and real slots to construct actual brushes. Ordinary component fixtures explicitly default to accepted validation; native rules are isolated behind the production adapter, and the Phase 2 decision tests still cover rejection/fallback. Existing assertions were retained, including rotation itemstack and dirty/tessellation flows. `BrushDirtyCounterTests` constructs a narrow controller. `BrushSyncTests` only changes its controller construction to compile; its actual sender/handler proxy dependency is intentionally left for Phase 4.
+- New contract coverage -> `BrushInputContractTests` (seven cases) and `BuildHammerSlotTests` (three cases) -> checks active-slot replacement/dirty marking, initial/current source block, explicit versus absent selection, callback-time selection/unregistration, forced validity refresh, lazy client construction/post-placement update, controller unsubscription, actual preview-entity owner UID, and hammer/non-hammer/empty slots. These are headless component receipts, not live appearance, permissions or multiplayer acceptance.
+- Final delegated validation -> source candidate based on `6550a11` plus this working diff; receipts at `C:\Users\Sisco\AppData\Local\Temp\vbe-player-dependencies-phase3-final-20261023-081621` (`build-final.log`, `focused-final.log/.trx`, `full-final.log/.trx`, `summary.json`, installed API/environment details and `candidate-hashes.json`). Using process-local `NUGET_PACKAGES=C:\Users\Sisco\.nuget\packages`, `dotnet build VanillaBuildingExpanded.Tests/VanillaBuildingExpanded.Tests.csproj --no-restore --no-incremental` succeeded with zero errors and 28 warnings. `dotnet test` on that project with `--no-build --no-restore --filter "FullyQualifiedName!~BrushSyncTests"` and TRX output passed all 368 migrated tests, zero skipped. The full run without the filter passed 368 of 369, zero skipped; its sole failure remains `BrushSyncTests.Server_Ignores_Older_Seq_Packets` with the known `IServerPlayerProxy.IsInInteractionRangeOf` missing-implementation `TypeLoadException`. No test was removed or skipped to obtain the focused pass.
+- Documentation scope -> current architecture module/flow constraints, the historical `8a34ff7:BuildBrushSimplification.todo`, and the active general project checklist were consulted/reconciled as in Phase 1. No unrelated feature work, packet decision extraction, native API change, tool patch, game launch or package qualification was included. Permanent architecture cleanup remains Phase 5; Phase 4 remains responsible for the final packet-handler fixture and full-suite pass.
 
 ---
 

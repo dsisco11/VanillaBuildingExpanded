@@ -55,6 +55,7 @@ public class BuildBrushPlacementTests
 
     #region Test Helpers
 
+    /// <summary>Checks Create Mock World.</summary>
     private static Mock<IWorldAccessor> CreateMockWorld()
     {
         var mockWorld = new Mock<IWorldAccessor>();
@@ -73,6 +74,7 @@ public class BuildBrushPlacementTests
         return mockWorld;
     }
 
+    /// <summary>Checks Create Variant Block.</summary>
     private static Block CreateVariantBlock(int blockId, string code, string variantKey, string variantValue)
     {
         var block = new Block
@@ -84,6 +86,7 @@ public class BuildBrushPlacementTests
         return block;
     }
 
+    /// <summary>Checks Create Rotatable Block.</summary>
     private static Block CreateRotatableBlock(int blockId, string code, string entityClass, string interval)
     {
         var block = new Block
@@ -99,6 +102,7 @@ public class BuildBrushPlacementTests
         return block;
     }
 
+    /// <summary>Checks Create Hybrid Block.</summary>
     private static Block CreateHybridBlock(int blockId, string code, string variantKey, string variantValue, string entityClass, string interval)
     {
         var block = new Block
@@ -135,6 +139,7 @@ public class BuildBrushPlacementTests
         return blocks;
     }
 
+    /// <summary>Checks Setup Block Lookup.</summary>
     private static void SetupBlockLookup(Mock<IWorldAccessor> mockWorld, params Block[] blocks)
     {
         foreach (var block in blocks)
@@ -143,11 +148,13 @@ public class BuildBrushPlacementTests
         }
     }
 
+    /// <summary>Checks Setup Variant Search.</summary>
     private static void SetupVariantSearch(Mock<IWorldAccessor> mockWorld, Block[] variants)
     {
         mockWorld.Setup(w => w.SearchBlocks(It.IsAny<AssetLocation>())).Returns(variants);
     }
 
+    /// <summary>Checks Setup Rotatable Entity.</summary>
     private static void SetupRotatableEntity(Mock<IWorldAccessor> mockWorld, string entityClass)
     {
         var mockClassRegistry = new Mock<IClassRegistryAPI>();
@@ -162,6 +169,7 @@ public class BuildBrushPlacementTests
 
     private class TestRotatableBlockEntity : BlockEntity, IRotatable
     {
+        /// <summary>Checks On Transformed.</summary>
         public void OnTransformed(IWorldAccessor worldAccessor, ITreeAttribute tree, int degreeRotation,
             Dictionary<int, AssetLocation> oldBlockIdMapping, Dictionary<int, AssetLocation> oldItemIdMapping,
             EnumAxis? flipAxis)
@@ -185,15 +193,13 @@ public class BuildBrushPlacementTests
     {
         // Arrange
         var mockWorld = CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var block = CreateRotatableBlock(100, "game:rotatableblock", "TestRotatable", intervalString);
         SetupBlockLookup(mockWorld, block);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
-        {
-            BlockId = 100
-        };
+        var instance = inputs.CreateBrush(mockWorld.Object);
+        instance.BlockId = 100;
 
         // Verify rotation is detected
         Assert.NotNull(instance.Rotation);
@@ -223,7 +229,7 @@ public class BuildBrushPlacementTests
     {
         // Arrange
         var mockWorld = CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
 
         // Create multiple variants, all with rotatable interval configured
         var variants = CreateHybridVariantBlocks("game:variantplusrotatable", "rot", variantCount: 4, startBlockId: 100, entityClass: "TestRotatable", interval: intervalString);
@@ -231,10 +237,8 @@ public class BuildBrushPlacementTests
         SetupVariantSearch(mockWorld, variants);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
-        {
-            BlockId = 100
-        };
+        var instance = inputs.CreateBrush(mockWorld.Object);
+        instance.BlockId = 100;
 
         Assert.NotNull(instance.Rotation);
         Assert.True(instance.Rotation.CanRotate);
@@ -268,15 +272,13 @@ public class BuildBrushPlacementTests
     {
         // Arrange
         var mockWorld = CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var variants = CreateVariantBlocks("game:testblock", variantKey, variantValues, startBlockId);
         SetupBlockLookup(mockWorld, variants);
         SetupVariantSearch(mockWorld, variants);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
-        {
-            BlockId = startBlockId
-        };
+        var instance = inputs.CreateBrush(mockWorld.Object);
+        instance.BlockId = startBlockId;
 
         // Verify rotation is detected
         Assert.NotNull(instance.Rotation);
@@ -309,17 +311,15 @@ public class BuildBrushPlacementTests
         }
 
         var mockWorld = CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
 
         var variants = CreateHybridVariantBlocks("game:variantplusrotatable", "rot", variantCount: 4, startBlockId: 100, entityClass: "TestRotatable", interval: intervalString);
         SetupBlockLookup(mockWorld, variants);
         SetupVariantSearch(mockWorld, variants);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
-        {
-            BlockId = 100
-        };
+        var instance = inputs.CreateBrush(mockWorld.Object);
+        instance.BlockId = 100;
 
         Assert.NotNull(instance.Rotation);
         Assert.Equal(EBuildBrushRotationMode.Rotatable, instance.Rotation.Mode);

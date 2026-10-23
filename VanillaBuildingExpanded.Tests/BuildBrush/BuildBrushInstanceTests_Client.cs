@@ -18,14 +18,15 @@ public class BuildBrushInstanceTests_Client
 {
     #region Client-Side Activation Tests
 
+    /// <summary>Checks Is Active When Set To True On Client Does Not Create Dimension.</summary>
     [Fact]
     public void IsActive_WhenSetToTrueOnClient_DoesNotCreateDimension()
     {
         // Arrange - On client side, dimension activation is skipped (server creates dimensions)
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // Act
         instance.IsActive = true;
@@ -35,14 +36,15 @@ public class BuildBrushInstanceTests_Client
         Assert.True(instance.IsActive);
     }
 
+    /// <summary>Checks Is Active When Set To False On Client Does Not Destroy Dimension.</summary>
     [Fact]
     public void IsActive_WhenSetToFalseOnClient_DoesNotDestroyDimension()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.IsActive = true;
 
         // Act
@@ -59,14 +61,15 @@ public class BuildBrushInstanceTests_Client
     // Note: AssociateEntity requires a real BuildBrushEntity which needs game infrastructure.
     // These tests verify the behavior without the full entity setup.
 
+    /// <summary>Checks Associate Entity Sets Entity Property.</summary>
     [Fact]
     public void AssociateEntity_SetsEntityProperty()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // We can't easily create a real BuildBrushEntity without game infrastructure
         // Just verify the method exists and the Entity property works
@@ -77,21 +80,22 @@ public class BuildBrushInstanceTests_Client
 
     #region OnBlockPlaced Client Behavior Tests
 
+    /// <summary>Checks On Block Placed Server On Client With No Block Selection Does Not Throw.</summary>
     [Fact]
     public void OnBlockPlacedServer_OnClient_WithNoBlockSelection_DoesNotThrow()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var itemStack = new ItemStack(testBlock);
         var dummySlot = new DummySlot(itemStack);
-        mockPlayer.Setup(p => p.InventoryManager.ActiveHotbarSlot).Returns(dummySlot);
-        mockPlayer.Setup(p => p.CurrentBlockSelection).Returns((BlockSelection?)null);
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(dummySlot);
+        inputs.Selection = (BlockSelection?)null;
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Act & Assert - should not throw even without block selection
@@ -99,12 +103,13 @@ public class BuildBrushInstanceTests_Client
         Assert.Null(exception);
     }
 
+    /// <summary>Checks On Block Placed Server On Client Updates Block Id From Hotbar.</summary>
     [Fact]
     public void OnBlockPlacedServer_OnClient_UpdatesBlockIdFromHotbar()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var block1 = TestHelpers.CreateTestBlock(100);
         var block2 = TestHelpers.CreateTestBlock(200);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(block1);
@@ -112,10 +117,10 @@ public class BuildBrushInstanceTests_Client
 
         var itemStack1 = new ItemStack(block1);
         var dummySlot = new DummySlot(itemStack1);
-        mockPlayer.Setup(p => p.InventoryManager.ActiveHotbarSlot).Returns(dummySlot);
-        mockPlayer.Setup(p => p.CurrentBlockSelection).Returns((BlockSelection?)null);
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(dummySlot);
+        inputs.Selection = (BlockSelection?)null;
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Change hotbar item
@@ -133,30 +138,32 @@ public class BuildBrushInstanceTests_Client
 
     #region TryUpdate Client Tests
 
+    /// <summary>Checks Try Update When No Block Selection Sets Is Valid Placement False.</summary>
     [Fact]
     public void TryUpdate_WhenNoBlockSelection_SetsIsValidPlacementFalse()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
-        mockPlayer.Setup(p => p.CurrentBlockSelection).Returns((BlockSelection?)null);
+        var inputs = TestHelpers.CreateBrushInputs();
+        inputs.Selection = (BlockSelection?)null;
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // Act
-        bool result = instance.TryUpdate();
+        bool result = instance.TryUpdate(inputs.Selection);
 
         // Assert
         Assert.False(result);
         Assert.False(instance.IsValidPlacement);
     }
 
+    /// <summary>Checks Try Update When No Block Sets Position From Selection.</summary>
     [Fact]
     public void TryUpdate_WhenNoBlock_SetsPositionFromSelection()
     {
         // Arrange - no block set, so snapping just returns selection position
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
 
         var blockSelection = new BlockSelection
         {
@@ -164,9 +171,9 @@ public class BuildBrushInstanceTests_Client
             Face = BlockFacing.UP,
             HitPosition = new Vec3d(0.5, 1.0, 0.5)
         };
-        mockPlayer.Setup(p => p.CurrentBlockSelection).Returns(blockSelection);
+        inputs.Selection = blockSelection;
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         // No BlockId set
 
         // Act
@@ -180,14 +187,15 @@ public class BuildBrushInstanceTests_Client
 
     #region Selection Property Tests
 
+    /// <summary>Checks Selection When Try Update Updates Selection Position.</summary>
     [Fact]
     public void Selection_WhenTryUpdate_UpdatesSelectionPosition()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var selection = new BlockSelection
         {
             Position = new BlockPos(1, 2, 3),
@@ -206,14 +214,15 @@ public class BuildBrushInstanceTests_Client
         Assert.Equal(instance.Position?.Z, instance.Selection.Position?.Z);
     }
 
+    /// <summary>Checks Selection When Try Update Preserves Face And Hit Position.</summary>
     [Fact]
     public void Selection_WhenTryUpdate_PreservesFaceAndHitPosition()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Client);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var selection = new BlockSelection
         {
             Position = new BlockPos(1, 2, 3),

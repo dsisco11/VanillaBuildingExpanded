@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.CompilerServices;
 
 using VanillaBuildingExpanded.Config;
@@ -43,12 +43,14 @@ public class BuildBrushSystem_Client : ModSystem
     #endregion
 
     #region Hooks
+    /// <summary>Loads this system only on its owning game side.</summary>
     public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Client;
+    /// <summary>Registers client input, networking and brush update callbacks.</summary>
     public override void StartClientSide(ICoreClientAPI api)
     {
         this.api = api;
 
-        controller = new BuildBrushControllerClient(api);
+        controller = new BuildBrushControllerClient(api, CreateBrush);
 
         config = VbeConfig.Get(api);
 
@@ -71,6 +73,7 @@ public class BuildBrushSystem_Client : ModSystem
         api.Event.AfterActiveSlotChanged += Event_AfterActiveSlotChanged;
     }
 
+    /// <summary>Releases resources owned by this system.</summary>
     public override void Dispose()
     {
         // Resolver caches are managed per-instance, no global cleanup needed
@@ -78,21 +81,34 @@ public class BuildBrushSystem_Client : ModSystem
     #endregion
 
     #region Public
-    public BuildBrushInstance GetBrush(in IPlayer? player)
+    /// <summary>Gets the brush owned by the current player session.</summary>
+    public BuildBrushInstance GetBrush()
     {
         if(Player is null || api?.World is null)
         {
             throw new InvalidOperationException("Cannot get build brush instance: Player or World is null.");
         }
 
-        return controller!.GetBrush(Player!);
+        return controller!.GetBrush();
+    }
+    #endregion
+
+    #region Private brush construction
+    /// <summary>Creates the local session brush from live game inputs at its first use.</summary>
+    private BuildBrushInstance CreateBrush()
+    {
+        IClientPlayer player = Player;
+        // Bind the same session owner to native validation and deferred selection reads.
+        return new BuildBrushInstance(api!.World, player.InventoryManager, player.PlayerUID, player.PlayerName,
+            new PlayerBrushPlacementValidator(api.World, player), () => player.CurrentBlockSelection);
     }
     #endregion
 
     #region Event Handlers
+    /// <summary>Refreshes placement when the block at the preview position changes.</summary>
     private void Event_BlockChanged(BlockPos pos, Block oldBlock)
     {
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         // When a block is changed, we need to re-validate the placement
         if (brush is null || !brush.IsActive)
             return;
@@ -101,12 +117,13 @@ public class BuildBrushSystem_Client : ModSystem
         if (brush.Position != pos)
             return;
 
-        controller!.OnBlockPlacedClient();
+        controller!.OnBlockPlacedClient(Player.CurrentBlockSelection);
     }
 
+    /// <summary>Refreshes the source block from the newly active inventory slot.</summary>
     private void Event_AfterActiveSlotChanged(ActiveSlotChangeEventArgs e)
     {
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null)
             return;
 
@@ -136,7 +153,7 @@ public class BuildBrushSystem_Client : ModSystem
             offhandInventory.SlotModified += (int slot) => Event_OffhandSlotModified(byPlayer, slot);
         }
 
-        BuildBrushInstance? brush = GetBrush(byPlayer);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null)
             return;
 
@@ -149,7 +166,7 @@ public class BuildBrushSystem_Client : ModSystem
     /// </summary>
     private void Event_OffhandSlotModified(IClientPlayer byPlayer, int slot)
     {
-        BuildBrushInstance brush = GetBrush(byPlayer);
+        BuildBrushInstance brush = GetBrush();
         if (brush is null)
             return;
 
@@ -180,13 +197,14 @@ public class BuildBrushSystem_Client : ModSystem
         if (slotId != inventory.ActiveHotbarSlotNumber)
             return;
 
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null)
             return;
 
         brush.BlockId = inventory.ActiveHotbarSlot?.Itemstack?.Block?.BlockId;
     }
 
+    /// <summary>Updates local placement from the live selection and sends changed positions.</summary>
     private void Thunk_Client(float dt)
     {
         if (Player is null)
@@ -195,7 +213,7 @@ public class BuildBrushSystem_Client : ModSystem
         if (api?.World is null)
             return;
 
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null)
             return;
 
@@ -222,6 +240,7 @@ public class BuildBrushSystem_Client : ModSystem
         }
     }
 
+    /// <summary>Rechecks active preview validity using the current selection.</summary>
     private void Thunk_Client_Slow(float dt)
     {
         if (Player is null)
@@ -230,7 +249,7 @@ public class BuildBrushSystem_Client : ModSystem
         if (api?.World is null)
             return;
 
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null)
             return;
 
@@ -246,9 +265,10 @@ public class BuildBrushSystem_Client : ModSystem
     #endregion
 
     #region API
-    public void RotateCursor(in IPlayer player, EModeCycleDirection direction = EModeCycleDirection.Forward)
+    /// <summary>Cycles the local brush orientation and publishes successful changes.</summary>
+    public void RotateCursor(EModeCycleDirection direction = EModeCycleDirection.Forward)
     {
-        BuildBrushInstance? brush = GetBrush(player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null || !brush.IsActive)
         {
             return;
@@ -279,7 +299,8 @@ public class BuildBrushSystem_Client : ModSystem
         }
     }
 
-    public void CycleSnappingMode(in IPlayer player, EModeCycleDirection direction = EModeCycleDirection.Forward)
+    /// <summary>Cycles snapping on the local controller when a client world exists.</summary>
+    public void CycleSnappingMode(EModeCycleDirection direction = EModeCycleDirection.Forward)
     {
         if (api?.World is null)
         {
@@ -294,7 +315,7 @@ public class BuildBrushSystem_Client : ModSystem
     /// </summary>
     public void SendToServer()
     {
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null)
         {
             return;
@@ -337,10 +358,11 @@ public class BuildBrushSystem_Client : ModSystem
     #endregion
 
     #region Network Handlers
+    /// <summary>Handles a received brush-state packet at the game network boundary.</summary>
     private void HandlePacket_SetBuildBrush(Packet_SetBuildBrush packet)
     {
         Logger.Audit("[BuildBrush][OnSetBuildBrushPacket]: Received brush update from server - this should not happen.");
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null)
             return;
 
@@ -348,6 +370,7 @@ public class BuildBrushSystem_Client : ModSystem
         //brush.Position = packet.position;
     }
 
+    /// <summary>Records the latest server acknowledgment for client placement gating.</summary>
     private void HandlePacket_BuildBrushAck(Packet_BuildBrushAck packet)
     {
         debugLastAckSeq = Math.Max(debugLastAckSeq, packet.lastAppliedSeq);
@@ -359,7 +382,7 @@ public class BuildBrushSystem_Client : ModSystem
 
         if (config?.BuildBrushDebugHud == true && this.api is not null)
         {
-            var brush = GetBrush(Player);
+            var brush = GetBrush();
             this.api.TriggerIngameError(
                 this,
                 $"{Mod.Info.ModID}:buildbrush-debug-status",
@@ -371,6 +394,7 @@ public class BuildBrushSystem_Client : ModSystem
 
     #region Input Handling
 
+    /// <summary>Registers brush hotkeys and right-click handling with client input.</summary>
     private void RegisterInputHandlers()
     {
         api.Input.InWorldAction += this.InWorldAction;
@@ -391,9 +415,10 @@ public class BuildBrushSystem_Client : ModSystem
         api.Input.SetHotKeyHandler("vbe.CycleSnappingMode_Backward", this.Input_CycleSnappingMode_Backward);
     }
 
+    /// <summary>Updates face-offset snapping while the configured key is pressed.</summary>
     private bool Input_ToggleFaceOffsetPlacement(KeyCombination keys)
     {
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null)
             return false;
 
@@ -409,46 +434,51 @@ public class BuildBrushSystem_Client : ModSystem
         return true;
     }
 
+    /// <summary>Rotates an active brush forward in response to the hotkey.</summary>
     private bool Input_RotateBuildCursor_Forward(KeyCombination keys)
     {
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null || !brush.IsActive)
             return false;
 
-        RotateCursor(Player, EModeCycleDirection.Forward);
+        RotateCursor(EModeCycleDirection.Forward);
         return true;
     }
 
+    /// <summary>Rotates an active brush backward in response to the hotkey.</summary>
     private bool Input_RotateBuildCursor_Backward(KeyCombination keys)
     {
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null || !brush.IsActive)
             return false;
 
-        RotateCursor(Player, EModeCycleDirection.Backward);
+        RotateCursor(EModeCycleDirection.Backward);
         return true;
     }
 
+    /// <summary>Cycles an active brush snapping mode forward.</summary>
     private bool Input_CycleSnappingMode_Forward(KeyCombination keys)
     {
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null || !brush.IsActive)
             return false;
 
-        CycleSnappingMode(Player, EModeCycleDirection.Forward);
+        CycleSnappingMode(EModeCycleDirection.Forward);
         return true;
     }
 
+    /// <summary>Cycles an active brush snapping mode backward.</summary>
     private bool Input_CycleSnappingMode_Backward(KeyCombination keys)
     {
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null || !brush.IsActive)
             return false;
 
-        CycleSnappingMode(Player, EModeCycleDirection.Backward);
+        CycleSnappingMode(EModeCycleDirection.Backward);
         return true;
     }
 
+    /// <summary>Routes right-click input through brush placement while preserving default handling otherwise.</summary>
     private void InWorldAction(EnumEntityAction action, bool on, ref EnumHandling handling)
     {
         handling = EnumHandling.PassThrough;
@@ -471,7 +501,7 @@ public class BuildBrushSystem_Client : ModSystem
         if (!Player.IsHoldingBuildHammer())
             return;
 
-        BuildBrushInstance? brush = GetBrush(Player);
+        BuildBrushInstance? brush = GetBrush();
         if (brush is null || brush.IsDisabled)
             return;
 
@@ -484,7 +514,7 @@ public class BuildBrushSystem_Client : ModSystem
         if (!CheckBlockPlacement(request.Position, request.ItemStack, out string precheckFailure))
             return;
 
-        // Phase 2: Optional correctness gate. Disabled by default to avoid behavior changes.
+        // Optional correctness gate. Disabled by default to avoid behavior changes.
         // When enabled, prevents placement until the server has acknowledged the latest brush state.
         if (config?.BuildBrushGatePlacementOnAck == true && debugLastAckSeq < debugLocalSeq)
         {
@@ -544,7 +574,7 @@ public class BuildBrushSystem_Client : ModSystem
             World.BlockAccessor.TriggerNeighbourBlockUpdate(request.Position);
             handling = EnumHandling.PreventSubsequent;
             brush.MarkDirty();
-            controller!.OnBlockPlacedClient();
+            controller!.OnBlockPlacedClient(Player.CurrentBlockSelection);
         }
         else
         {

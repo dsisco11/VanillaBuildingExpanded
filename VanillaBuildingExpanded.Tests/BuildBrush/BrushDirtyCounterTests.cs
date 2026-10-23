@@ -6,30 +6,23 @@ using VanillaBuildingExpanded.BuildHammer;
 
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
-using Vintagestory.API.Server;
 
 using Xunit;
 
 namespace VanillaBuildingExpanded.Tests.BuildBrush;
 
+/// <summary>Checks preview dirty-event handling without a server player dependency.</summary>
 public class BrushDirtyCounterTests
 {
+    #region Public API
+    /// <summary>Verifies that a dimension-dirty notification increments the preview entity counter.</summary>
     [Fact]
     public void DirtyCounter_Increments_When_DimensionDirty_Event_Raised()
     {
         // Arrange
         var mockServerApi = TestHelpers.CreateMockSapi();
         var mockWorld = TestHelpers.CreateMockServerWorld(mockServerApi);
-        var mockPlayer = new Mock<IServerPlayer>();
-        var mockInventoryManager = new Mock<IPlayerInventoryManager>();
-        mockInventoryManager.Setup(m => m.ActiveHotbarSlot).Returns(new DummySlot((ItemStack?)null));
-
-        mockPlayer.Setup(p => p.PlayerUID).Returns("uid-test");
-        mockPlayer.Setup(p => p.ClientId).Returns(1);
-        mockPlayer.Setup(p => p.PlayerName).Returns("Tester");
-        mockPlayer.Setup(p => p.InventoryManager).Returns(mockInventoryManager.Object);
-
-        var controller = new BuildBrushControllerServer(mockServerApi.Object, mockPlayer.Object);
+        using var controller = new BuildBrushControllerServer(TestHelpers.CreateTestInstance(mockWorld));
         var brush = controller.Brush;
 
         var entity = new BuildBrushEntity();
@@ -49,10 +42,15 @@ public class BrushDirtyCounterTests
         Assert.True(after > before);
     }
 
+    #endregion
+
+    #region Private
+    /// <summary>Sets the retained preview entity field needed by the dirty-event test.</summary>
     private static void SetPrivateField(object target, string fieldName, object value)
     {
         var field = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(field);
         field!.SetValue(target, value);
     }
+    #endregion
 }

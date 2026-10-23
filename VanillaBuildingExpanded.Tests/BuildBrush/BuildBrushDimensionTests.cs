@@ -20,6 +20,7 @@ public class BuildBrushDimensionTests
 {
     #region Subscription Tests    #region SubscribeTo Tests
 
+    /// <summary>Checks Subscribe To Sets Subscribed Instance.</summary>
     [Fact]
     public void SubscribeTo_SetsSubscribedInstance()
     {
@@ -34,6 +35,7 @@ public class BuildBrushDimensionTests
         Assert.Same(instance, dimension.SubscribedInstance);
     }
 
+    /// <summary>Checks Subscribe To Called Twice With Same Instance Does Nothing.</summary>
     [Fact]
     public void SubscribeTo_CalledTwiceWithSameInstance_DoesNothing()
     {
@@ -49,6 +51,7 @@ public class BuildBrushDimensionTests
         Assert.Same(instance, dimension.SubscribedInstance);
     }
 
+    /// <summary>Checks Subscribe To Called With Different Instance Unsubscribes From Previous.</summary>
     [Fact]
     public void SubscribeTo_CalledWithDifferentInstance_UnsubscribesFromPrevious()
     {
@@ -69,6 +72,7 @@ public class BuildBrushDimensionTests
 
     #region Unsubscribe Tests
 
+    /// <summary>Checks Unsubscribe Clears Subscribed Instance.</summary>
     [Fact]
     public void Unsubscribe_ClearsSubscribedInstance()
     {
@@ -84,6 +88,7 @@ public class BuildBrushDimensionTests
         Assert.Null(dimension.SubscribedInstance);
     }
 
+    /// <summary>Checks Unsubscribe When Not Subscribed Does Not Throw.</summary>
     [Fact]
     public void Unsubscribe_WhenNotSubscribed_DoesNotThrow()
     {
@@ -95,16 +100,17 @@ public class BuildBrushDimensionTests
         Assert.Null(exception);
     }
 
+    /// <summary>Checks Unsubscribe Stops Receiving Events.</summary>
     [Fact]
     public void Unsubscribe_StopsReceivingEvents()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension();
 
         int blockChangedCount = 0;
@@ -127,6 +133,7 @@ public class BuildBrushDimensionTests
 
     #region Destroy Tests
 
+    /// <summary>Checks Destroy Unsubscribes From Instance.</summary>
     [Fact]
     public void Destroy_UnsubscribesFromInstance()
     {
@@ -146,16 +153,17 @@ public class BuildBrushDimensionTests
 
     #region Event Handler Tests
 
+    /// <summary>Checks Instance On Block Transformed Changed Updates Dimension.</summary>
     [Fact]
     public void Instance_OnBlockTransformedChanged_UpdatesDimension()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension();
 
         // Track if dimension received the event
@@ -173,19 +181,20 @@ public class BuildBrushDimensionTests
         Assert.True(eventReceived || dimension.SubscribedInstance == instance);
     }
 
+    /// <summary>Checks Subscribe To Automatic Resubscription On Instance Change.</summary>
     [Fact]
     public void SubscribeTo_AutomaticResubscription_OnInstanceChange()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock1 = TestHelpers.CreateTestBlock(100);
         var testBlock2 = TestHelpers.CreateTestBlock(200);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock1);
         mockWorld.Setup(w => w.GetBlock(200)).Returns(testBlock2);
 
-        var instance1 = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var instance2 = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance1 = inputs.CreateBrush(mockWorld.Object);
+        var instance2 = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension();
 
         int eventCount = 0;
@@ -216,16 +225,17 @@ public class BuildBrushDimensionTests
 
     #region Event Args Propagation Tests
 
+    /// <summary>Checks Instance On Orientation Changed Is Received.</summary>
     [Fact]
     public void Instance_OnOrientationChanged_IsReceived()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension();
 
         // We need to verify the dimension's event handler is connected
@@ -280,6 +290,7 @@ public class BuildBrushDimensionTests
         return field?.GetValue(dimension) as Block;
     }
 
+    /// <summary>Checks Apply Rotation Rotatable Mode When Block Id Differs Updates Current Block.</summary>
     [Fact]
     public void ApplyRotation_RotatableMode_WhenBlockIdDiffers_UpdatesCurrentBlock()
     {
@@ -320,6 +331,7 @@ public class BuildBrushDimensionTests
         Assert.Same(blockEast, currentBlock);
     }
 
+    /// <summary>Checks Apply Rotation Rotatable Mode When Block Id Same Does Not Replace Block.</summary>
     [Fact]
     public void ApplyRotation_RotatableMode_WhenBlockIdSame_DoesNotReplaceBlock()
     {
@@ -358,6 +370,7 @@ public class BuildBrushDimensionTests
         Assert.Same(blockNorth, currentBlock);
     }
 
+    /// <summary>Checks Apply Rotation Variant Based Mode When Variant Block Differs Updates Current Block.</summary>
     [Fact]
     public void ApplyRotation_VariantBasedMode_WhenVariantBlockDiffers_UpdatesCurrentBlock()
     {
@@ -398,6 +411,7 @@ public class BuildBrushDimensionTests
         Assert.Same(blockEast, currentBlock);
     }
 
+    /// <summary>Checks Apply Rotation Rotatable Mode When No Variant Change Does Not Crash.</summary>
     [Fact]
     public void ApplyRotation_RotatableMode_WhenNoVariantChange_DoesNotCrash()
     {
@@ -433,6 +447,7 @@ public class BuildBrushDimensionTests
         Assert.Null(exception);
     }
 
+    /// <summary>Checks Apply Rotation None Mode Does Not Change Block.</summary>
     [Fact]
     public void ApplyRotation_NoneMode_DoesNotChangeBlock()
     {
@@ -476,17 +491,18 @@ public class BuildBrushDimensionTests
 
     #region Instance_OnOrientationChanged Handler Tests
 
+    /// <summary>Checks Instance On Orientation Changed Rotatable Mode Passes Correct Angle No Variant Change.</summary>
     [Fact]
     public void Instance_OnOrientationChanged_RotatableMode_PassesCorrectAngle_NoVariantChange()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
 
         var block = TestHelpers.CreateTestBlock(100, "game:rotatable");
         mockWorld.Setup(w => w.GetBlock(100)).Returns(block);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = new BrushDimension(mockWorld.Object);
 
         // Initialize dimension with mock mini-dimension
@@ -550,19 +566,20 @@ public class BuildBrushDimensionTests
         Assert.False(capturedEvents[2].VariantChanged);
     }
 
+    /// <summary>Checks Instance On Orientation Changed Variant Based Mode Event Args Contain Correct New Block Id.</summary>
     [Fact]
     public void Instance_OnOrientationChanged_VariantBasedMode_EventArgsContainCorrectNewBlockId()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
 
         var blockNorth = TestHelpers.CreateTestBlock(100, "game:variant-north");
         var blockEast = TestHelpers.CreateTestBlock(101, "game:variant-east");
         mockWorld.Setup(w => w.GetBlock(100)).Returns(blockNorth);
         mockWorld.Setup(w => w.GetBlock(101)).Returns(blockEast);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = new BrushDimension(mockWorld.Object);
 
         // Initialize dimension with mock mini-dimension

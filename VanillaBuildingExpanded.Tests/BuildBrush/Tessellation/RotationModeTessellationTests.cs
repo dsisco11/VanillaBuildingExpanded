@@ -20,16 +20,17 @@ public class RotationModeTessellationTests
 {
     #region Rotation Mode: None
 
+    /// <summary>Checks Rotation Mode None Set Block Raises Dirty Event.</summary>
     [Fact]
     public void RotationModeNone_SetBlock_RaisesDirtyEvent()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100, "game:simpleblock");
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         dimension.SubscribeTo(instance);
@@ -46,16 +47,17 @@ public class RotationModeTessellationTests
         // Note: Most simple blocks will have None rotation mode
     }
 
+    /// <summary>Checks Rotation Mode None Can Rotate Is False.</summary>
     [Fact]
     public void RotationModeNone_CanRotate_IsFalse()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100, "game:simpleblock");
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // Act
         instance.BlockId = 100;
@@ -70,16 +72,17 @@ public class RotationModeTessellationTests
 
     #region Rotation Mode Detection
 
+    /// <summary>Checks Rotation Info Is Created For Every Block.</summary>
     [Fact]
     public void RotationInfo_IsCreatedForEveryBlock()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         RotationInfoChangedEventArgs? capturedArgs = null;
         instance.OnRotationInfoChanged += (s, e) => capturedArgs = e;
@@ -93,16 +96,17 @@ public class RotationModeTessellationTests
         Assert.NotNull(instance.Rotation);
     }
 
+    /// <summary>Checks Rotation Info Mode Is Set Correctly.</summary>
     [Fact]
     public void RotationInfo_ModeIsSetCorrectly()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // Act
         instance.BlockId = 100;
@@ -121,16 +125,17 @@ public class RotationModeTessellationTests
 
     #region Orientation Index Changes
 
+    /// <summary>Checks Orientation Index When Block Supports Rotation Can Be Changed.</summary>
     [Fact]
     public void OrientationIndex_WhenBlockSupportsRotation_CanBeChanged()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Act & Assert
@@ -151,16 +156,17 @@ public class RotationModeTessellationTests
         }
     }
 
+    /// <summary>Checks Orientation Index When Changed Raises Orientation Changed Event.</summary>
     [Fact]
     public void OrientationIndex_WhenChanged_RaisesOrientationChangedEvent()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         OrientationIndexChangedEventArgs? capturedArgs = null;
@@ -182,16 +188,17 @@ public class RotationModeTessellationTests
 
     #region Placement Block Updates
 
+    /// <summary>Checks Orientation Index When Changed Updates Placement Block.</summary>
     [Fact]
     public void OrientationIndex_WhenChanged_UpdatesPlacementBlock()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         BlockChangedEventArgs? lastBlockTransformedEvent = null;
         instance.OnPlacementBlockChanged += (s, e) => lastBlockTransformedEvent = e;
@@ -220,16 +227,17 @@ public class RotationModeTessellationTests
 
     #region Rotation Event Args Properties
 
+    /// <summary>Checks Orientation Changed Event Args Contains Mesh Angle.</summary>
     [Fact]
     public void OrientationChangedEventArgs_ContainsMeshAngle()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         OrientationIndexChangedEventArgs? capturedArgs = null;
@@ -248,16 +256,17 @@ public class RotationModeTessellationTests
         }
     }
 
+    /// <summary>Checks Orientation Changed Event Args Variant Changed Reflects Mode.</summary>
     [Fact]
     public void OrientationChangedEventArgs_VariantChanged_ReflectsMode()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         OrientationIndexChangedEventArgs? capturedArgs = null;
@@ -289,16 +298,17 @@ public class RotationModeTessellationTests
 
     #region Dimension Subscription with Rotation
 
+    /// <summary>Checks Dimension Subscribed Receives Orientation Changes.</summary>
     [Fact]
     public void DimensionSubscribed_ReceivesOrientationChanges()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         dimension.SubscribeTo(instance);
@@ -318,16 +328,17 @@ public class RotationModeTessellationTests
         }
     }
 
+    /// <summary>Checks Dimension Subscribed Receives Block Transformed On Rotation.</summary>
     [Fact]
     public void DimensionSubscribed_ReceivesBlockTransformedOnRotation()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         dimension.SubscribeTo(instance);
@@ -355,16 +366,17 @@ public class RotationModeTessellationTests
 
     #region Edge Cases
 
+    /// <summary>Checks Setting Same Orientation Index Does Not Raise Event.</summary>
     [Fact]
     public void SettingSameOrientationIndex_DoesNotRaiseEvent()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         int eventCount = 0;
@@ -378,17 +390,18 @@ public class RotationModeTessellationTests
         Assert.Equal(0, eventCount);
     }
 
+    /// <summary>Checks Clearing Block Resets Rotation Info.</summary>
     [Fact]
     public void ClearingBlock_ResetsRotationInfo()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
         mockWorld.Setup(w => w.GetBlock(0)).Returns((Block?)null);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         Assert.NotNull(instance.Rotation);

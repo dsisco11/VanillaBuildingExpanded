@@ -207,7 +207,7 @@ public class BuildBrushEntity : EntityChunky
         if (brushSystem == null)
             return;
 
-        var brushInstance = brushSystem.GetBrush(capi.World.Player);
+        var brushInstance = brushSystem.GetBrush();
         if (brushInstance != null)
         {
             SetBrushInstance(brushInstance);

@@ -19,6 +19,7 @@ public class BuildBrushInstanceTests_Server
 {
     #region Dimension Activation Event Tests
 
+    /// <summary>Checks Is Active When Set To True On Server Attempts To Activate Dimension.</summary>
     [Fact]
     public void IsActive_WhenSetToTrueOnServer_AttemptsToActivateDimension()
     {
@@ -26,9 +27,9 @@ public class BuildBrushInstanceTests_Server
         // The activation will attempt to create dimension but may fail on entity spawn
         // We verify the activation flow starts correctly
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Server);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         bool activationChanged = false;
         instance.OnActivationChanged += (sender, args) =>
@@ -46,14 +47,15 @@ public class BuildBrushInstanceTests_Server
         Assert.True(instance.IsActive);
     }
 
+    /// <summary>Checks Is Active When Set To False On Server Raises Deactivation Event.</summary>
     [Fact]
     public void IsActive_WhenSetToFalseOnServer_RaisesDeactivationEvent()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Server);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.IsActive = true; // Activate first (will fail dimension but set flag)
 
         bool deactivationFired = false;
@@ -79,20 +81,21 @@ public class BuildBrushInstanceTests_Server
 
     #region Server-Side Behavior Tests
 
+    /// <summary>Checks On Block Placed Server On Server Does Not Call Try Update.</summary>
     [Fact]
     public void OnBlockPlacedServer_OnServer_DoesNotCallTryUpdate()
     {
         // Arrange - OnBlockPlaced only calls TryUpdate on client
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Server);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
         var itemStack = new ItemStack(testBlock);
         var dummySlot = new DummySlot(itemStack);
-        mockPlayer.Setup(p => p.InventoryManager.ActiveHotbarSlot).Returns(dummySlot);
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(dummySlot);
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         instance.BlockId = 100;
 
         // Set up position tracking
@@ -111,14 +114,15 @@ public class BuildBrushInstanceTests_Server
 
     #region DestroyDimension Tests
 
+    /// <summary>Checks Destroy Dimension When No Dimension Does Not Throw.</summary>
     [Fact]
     public void DestroyDimension_WhenNoDimension_DoesNotThrow()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Server);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         // No dimension created
 
         // Act & Assert - should not throw
@@ -126,14 +130,15 @@ public class BuildBrushInstanceTests_Server
         Assert.Null(exception);
     }
 
+    /// <summary>Checks Destroy Dimension Sets Entity And Dimension To Null.</summary>
     [Fact]
     public void DestroyDimension_SetsEntityAndDimensionToNull()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Server);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // Act
         instance.DestroyDimension();
@@ -147,16 +152,17 @@ public class BuildBrushInstanceTests_Server
 
     #region Dimension Block Update Tests
 
+    /// <summary>Checks Block Id When Changed On Server Marks Instance Dirty.</summary>
     [Fact]
     public void BlockId_WhenChangedOnServer_MarksInstanceDirty()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld(EnumAppSide.Server);
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
         
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         // Act
         instance.BlockId = 100;

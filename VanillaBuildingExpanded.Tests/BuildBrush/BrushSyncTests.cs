@@ -13,8 +13,10 @@ using Xunit;
 
 namespace VanillaBuildingExpanded.Tests.BuildBrush;
 
+/// <summary>Checks server packet sequencing at the existing transport boundary.</summary>
 public class BrushSyncTests
 {
+    /// <summary>Checks Server Ignores Older Seq Packets.</summary>
     [Fact]
     public void Server_Ignores_Older_Seq_Packets()
     {
@@ -38,7 +40,7 @@ public class BrushSyncTests
 
         var controllers = new Dictionary<int, BuildBrushControllerServer>
         {
-            [1] = new BuildBrushControllerServer(mockServerApi.Object, mockPlayer.Object)
+            [1] = new BuildBrushControllerServer(TestHelpers.CreateTestInstance(mockWorld))
         };
         SetPrivateField(system, "Controllers", controllers);
 
@@ -66,6 +68,7 @@ public class BrushSyncTests
         Assert.Equal(5, lastAppliedMap[1]);
     }
 
+    /// <summary>Checks Set Private Field.</summary>
     private static void SetPrivateField(object target, string fieldName, object value)
     {
         var field = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Public);

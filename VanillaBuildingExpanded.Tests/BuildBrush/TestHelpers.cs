@@ -16,7 +16,7 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 /// </summary>
 public static class TestHelpers
 {
-    #region World and Player Mocks
+    #region World Mocks
 
     /// <summary>
     /// Creates a mock IWorldAccessor configured for testing.
@@ -48,15 +48,11 @@ public static class TestHelpers
     }
 
     /// <summary>
-    /// Creates a mock IPlayer with basic setup.
+    /// Creates independent inventory, selection and placement inputs for brush tests.
     /// </summary>
-    public static Mock<IPlayer> CreateMockPlayer()
+    public static BrushTestInputs CreateBrushInputs()
     {
-        var mockPlayer = new Mock<IPlayer>();
-        var mockInventoryManager = new Mock<IPlayerInventoryManager>();
-        mockPlayer.Setup(p => p.InventoryManager).Returns(mockInventoryManager.Object);
-        mockPlayer.Setup(p => p.CurrentBlockSelection).Returns((BlockSelection?)null);
-        return mockPlayer;
+        return new BrushTestInputs();
     }
 
     #endregion
@@ -280,11 +276,11 @@ public static class TestHelpers
     /// <summary>
     /// Creates a BuildBrushInstance with default mocks.
     /// </summary>
-    public static BuildBrushInstance CreateTestInstance(Mock<IWorldAccessor>? mockWorld = null, Mock<IPlayer>? mockPlayer = null)
+    public static BuildBrushInstance CreateTestInstance(Mock<IWorldAccessor>? mockWorld = null, BrushTestInputs? inputs = null)
     {
         mockWorld ??= CreateMockWorld();
-        mockPlayer ??= CreateMockPlayer();
-        return new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        inputs ??= CreateBrushInputs();
+        return inputs.CreateBrush(mockWorld.Object);
     }
 
     /// <summary>

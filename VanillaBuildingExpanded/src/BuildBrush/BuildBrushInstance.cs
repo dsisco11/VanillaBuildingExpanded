@@ -25,9 +25,12 @@ public class BuildBrushInstance
 
     #region Fields
     /// <summary>
-    /// The player this brush instance belongs to.
+    /// The owner's live inventory, resolved at each item refresh rather than caching an active slot.
     /// </summary>
-    public IPlayer Player { get; internal set; }
+    private readonly IPlayerInventoryManager inventory;
+    private readonly string ownerUid;
+    private readonly string ownerName;
+    private readonly Func<BlockSelection?> getCurrentSelection;
     public IWorldAccessor World { get; internal set; }
     private readonly BrushPlacementValidation placementValidation;
     private int? _blockId = null;
@@ -490,20 +493,23 @@ public class BuildBrushInstance
     #endregion
 
     #region Constructors
-    /// <summary>Creates a brush whose placement checks use its owner's native game rules.</summary>
-    public BuildBrushInstance(IPlayer player, IWorldAccessor world)
-        : this(player, world, new PlayerBrushPlacementValidator(world, player))
-    {
-    }
-
-    /// <summary>Creates a brush for its owner using the supplied placement-rule boundary.</summary>
-    /// <param name="player">The owning player, also used for inventory and selection access.</param>
+    /// <summary>Creates a brush from the owner's inventory, identity and placement-rule boundary.</summary>
     /// <param name="world">The world containing the brush.</param>
+    /// <param name="inventory">The owner's inventory; the active slot is read at use time.</param>
+    /// <param name="ownerUid">The session owner's UID used by the preview entity.</param>
+    /// <param name="ownerName">The owner's name for initialization warnings.</param>
     /// <param name="placementValidator">The rule boundary used for resolved brush candidates.</param>
-    public BuildBrushInstance(IPlayer player, IWorldAccessor world, IBrushPlacementValidator placementValidator)
+    /// <param name="getCurrentSelection">Reads the current selection when a deferred dirty refresh executes.</param>
+    public BuildBrushInstance(IWorldAccessor world, IPlayerInventoryManager inventory, string ownerUid,
+        string ownerName, IBrushPlacementValidator placementValidator, Func<BlockSelection?> getCurrentSelection)
     {
-        Player = player;
+        ArgumentNullException.ThrowIfNull(inventory);
+        ArgumentNullException.ThrowIfNull(getCurrentSelection);
         World = world;
+        this.inventory = inventory;
+        this.ownerUid = ownerUid;
+        this.ownerName = ownerName;
+        this.getCurrentSelection = getCurrentSelection;
         placementValidation = new BrushPlacementValidation(placementValidator);
 
         // Initialize with the block in the player's active hotbar slot
@@ -523,16 +529,18 @@ public class BuildBrushInstance
         markedDirtyCallbackId = World.RegisterCallback(this.DoDirtyUpdate, 1);
     }
 
+    /// <summary>Refreshes from the current selection after removing the scheduled callback.</summary>
     private void DoDirtyUpdate(float dt)
     {
         World.UnregisterCallback(markedDirtyCallbackId);
         markedDirtyCallbackId = 0;
-        TryUpdate();
+        // Resolve at callback time so a selection change after scheduling is observed.
+        TryUpdate(getCurrentSelection());
     }
 
-    public bool TryUpdate(BlockSelection? blockSelection = null, bool force = false)
+    /// <summary>Updates placement from the supplied current selection, clearing position when it is absent.</summary>
+    public bool TryUpdate(BlockSelection? blockSelection, bool force = false)
     {
-        blockSelection ??= Player.CurrentBlockSelection;
         if (blockSelection is null)
         {// Player currently has no block selection
             IsValidPlacement = false;
@@ -564,7 +572,7 @@ public class BuildBrushInstance
     /// <returns> True if the BlockId was updated; otherwise, false. </returns>
     public bool TryUpdateBlockId()
     {
-        var hotbarSlot = Player.InventoryManager.ActiveHotbarSlot;
+        var hotbarSlot = inventory.ActiveHotbarSlot;
         var currentItemStack = hotbarSlot?.Itemstack;
         var currentBlockId = currentItemStack?.Block?.Id;
         if (currentBlockId != BlockId)
@@ -695,10 +703,10 @@ public class BuildBrushInstance
         BlockId = 0;
     }
 
+    /// <summary>Marks the current active slot dirty and refreshes the brush's source block.</summary>
     public void OnBlockPlacedServer()
     {
-        //Logger.Audit($"[{nameof(BuildBrushInstance)}][{nameof(OnBlockPlacedServer)}]: Block placed by player '{Player.PlayerName}'.");
-        Player.InventoryManager.ActiveHotbarSlot?.MarkDirty();
+        inventory.ActiveHotbarSlot?.MarkDirty();
         TryUpdateBlockId();
     }
     #endregion
@@ -720,7 +728,7 @@ public class BuildBrushInstance
         }
         else
         {
-            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(ActivateDimension)}]: Failed to initialize dimension for player {Player.PlayerName}");
+            Logger.Warning($"[{nameof(BuildBrushInstance)}][{nameof(ActivateDimension)}]: Failed to initialize dimension for player {ownerName}");
         }
     }
 
@@ -780,7 +788,7 @@ public class BuildBrushInstance
         if (sapi is null)
             return false;
 
-        _entity = BuildBrushEntity.CreateAndLink(sapi, _dimension.Dimension, Player.PlayerUID);
+        _entity = BuildBrushEntity.CreateAndLink(sapi, _dimension.Dimension, ownerUid);
         
         // Set initial position
         if (_position is not null)

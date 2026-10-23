@@ -46,6 +46,7 @@ public class BlockPlacementInterceptTests
 
     #region Test Helpers
 
+    /// <summary>Checks Create Mock World.</summary>
     private static Mock<IWorldAccessor> CreateMockWorld()
     {
         var mockWorld = new Mock<IWorldAccessor>();
@@ -64,6 +65,7 @@ public class BlockPlacementInterceptTests
         return mockWorld;
     }
 
+    /// <summary>Checks Create Rotatable Block.</summary>
     private static Block CreateRotatableBlock(int blockId, string code, string entityClass, string interval)
     {
         var block = new Block
@@ -79,6 +81,7 @@ public class BlockPlacementInterceptTests
         return block;
     }
 
+    /// <summary>Checks Create Variant Block.</summary>
     private static Block CreateVariantBlock(int blockId, string code, string variantKey, string variantValue)
     {
         var block = new Block
@@ -100,6 +103,7 @@ public class BlockPlacementInterceptTests
         return blocks;
     }
 
+    /// <summary>Checks Setup Block Lookup.</summary>
     private static void SetupBlockLookup(Mock<IWorldAccessor> mockWorld, params Block[] blocks)
     {
         foreach (var block in blocks)
@@ -108,11 +112,13 @@ public class BlockPlacementInterceptTests
         }
     }
 
+    /// <summary>Checks Setup Variant Search.</summary>
     private static void SetupVariantSearch(Mock<IWorldAccessor> mockWorld, Block[] variants)
     {
         mockWorld.Setup(w => w.SearchBlocks(It.IsAny<AssetLocation>())).Returns(variants);
     }
 
+    /// <summary>Checks Setup Rotatable Entity.</summary>
     private static void SetupRotatableEntity(Mock<IWorldAccessor> mockWorld, string entityClass)
     {
         var mockClassRegistry = new Mock<IClassRegistryAPI>();
@@ -127,6 +133,7 @@ public class BlockPlacementInterceptTests
 
     private class TestRotatableBlockEntity : BlockEntity, IRotatable
     {
+        /// <summary>Checks On Transformed.</summary>
         public void OnTransformed(IWorldAccessor worldAccessor, ITreeAttribute tree, int degreeRotation,
             Dictionary<int, AssetLocation> oldBlockIdMapping, Dictionary<int, AssetLocation> oldItemIdMapping,
             EnumAxis? flipAxis)
@@ -152,16 +159,14 @@ public class BlockPlacementInterceptTests
     {
         // Arrange
         var mockWorld = CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var block = CreateRotatableBlock(100, "game:rotatableblock", "TestRotatable", "90deg");
         SetupBlockLookup(mockWorld, block);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
-        {
-            BlockId = 100,
-            OrientationIndex = orientationIndex
-        };
+        var instance = inputs.CreateBrush(mockWorld.Object);
+        instance.BlockId = 100;
+        instance.OrientationIndex = orientationIndex;
 
         // Act - Get the ItemStack that SHOULD be passed to DoPlaceBlock
         var expectedItemStack = instance.ItemStack;
@@ -184,16 +189,14 @@ public class BlockPlacementInterceptTests
     {
         // Arrange
         var mockWorld = CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var variants = CreateVariantBlocks("game:stair", "rot", ["0", "90", "180", "270"], 100);
         SetupBlockLookup(mockWorld, variants);
         SetupVariantSearch(mockWorld, variants);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
-        {
-            BlockId = 100,
-            OrientationIndex = orientationIndex
-        };
+        var instance = inputs.CreateBrush(mockWorld.Object);
+        instance.BlockId = 100;
+        instance.OrientationIndex = orientationIndex;
 
         // Act - Get the block that SHOULD be placed
         var expectedBlock = instance.CurrentPlacementBlock;
@@ -213,16 +216,14 @@ public class BlockPlacementInterceptTests
     {
         // Arrange
         var mockWorld = CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var variants = CreateVariantBlocks("game:stair", "rot", ["0", "90", "180", "270"], 100);
         SetupBlockLookup(mockWorld, variants);
         SetupVariantSearch(mockWorld, variants);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
-        {
-            BlockId = 100,
-            OrientationIndex = orientationIndex
-        };
+        var instance = inputs.CreateBrush(mockWorld.Object);
+        instance.BlockId = 100;
+        instance.OrientationIndex = orientationIndex;
 
         // Assert - ItemStack.Block should match CurrentPlacementBlock
         Assert.NotNull(instance.ItemStack);
@@ -248,16 +249,14 @@ public class BlockPlacementInterceptTests
     {
         // Arrange
         var mockWorld = CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var block = CreateRotatableBlock(100, "game:rotatableblock", "TestRotatable", "90deg");
         SetupBlockLookup(mockWorld, block);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
-        {
-            BlockId = 100,
-            OrientationIndex = 1 // 90 degrees
-        };
+        var instance = inputs.CreateBrush(mockWorld.Object);
+        instance.BlockId = 100;
+        instance.OrientationIndex = 1; // 90 degrees
 
         // Simulate the hotbar itemstack (what the harmony hook passes)
         var hotbarItemStack = new ItemStack(block);
@@ -288,16 +287,14 @@ public class BlockPlacementInterceptTests
     {
         // Arrange
         var mockWorld = CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var variants = CreateVariantBlocks("game:stair", "rot", ["0", "90", "180", "270"], 100);
         SetupBlockLookup(mockWorld, variants);
         SetupVariantSearch(mockWorld, variants);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
-        {
-            BlockId = 100, // Original block (rot=0)
-            OrientationIndex = 2 // Rotate to 180 degrees (block ID 102)
-        };
+        var instance = inputs.CreateBrush(mockWorld.Object);
+        instance.BlockId = 100; // Original block (rot=0)
+        instance.OrientationIndex = 2; // Rotate to 180 degrees (block ID 102)
 
         // Simulate the hotbar itemstack (what the harmony hook passes)
         var hotbarItemStack = new ItemStack(variants[0]); // Block ID 100
@@ -328,16 +325,14 @@ public class BlockPlacementInterceptTests
     {
         // Arrange
         var mockWorld = CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var block = CreateRotatableBlock(100, "game:rotatableblock", "TestRotatable", "90deg");
         SetupBlockLookup(mockWorld, block);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
-        {
-            BlockId = 100,
-            OrientationIndex = orientationIndex
-        };
+        var instance = inputs.CreateBrush(mockWorld.Object);
+        instance.BlockId = 100;
+        instance.OrientationIndex = orientationIndex;
 
         // Assert - brush.ItemStack should be fully prepared for DoPlaceBlock
         var brushItemStack = instance.ItemStack;
@@ -364,15 +359,13 @@ public class BlockPlacementInterceptTests
     {
         // Arrange
         var mockWorld = CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var block = CreateRotatableBlock(100, "game:rotatableblock", "TestRotatable", "90deg");
         SetupBlockLookup(mockWorld, block);
         SetupRotatableEntity(mockWorld, "TestRotatable");
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object)
-        {
-            BlockId = 100
-        };
+        var instance = inputs.CreateBrush(mockWorld.Object);
+        instance.BlockId = 100;
         // Don't change OrientationIndex - test the initial state (index 0)
 
         // Assert - Even at initial orientation, meshAngle should be set (to 0 radians)

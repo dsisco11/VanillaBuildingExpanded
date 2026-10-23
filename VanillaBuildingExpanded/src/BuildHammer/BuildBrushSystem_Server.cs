@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 using VanillaBuildingExpanded.Config;
@@ -30,7 +30,9 @@ public class BuildBrushSystem_Server : ModSystem
     #endregion
 
     #region Hooks
+    /// <summary>Loads this system only on its owning game side.</summary>
     public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Server;
+    /// <summary>Registers server networking and player lifecycle callbacks.</summary>
     public override void StartServerSide(ICoreServerAPI api)
     {
         this.api = api;
@@ -47,6 +49,7 @@ public class BuildBrushSystem_Server : ModSystem
         api.Event.PlayerDisconnect += Event_PlayerDisconnect;
     }
 
+    /// <summary>Releases resources owned by this system.</summary>
     public override void Dispose()
     {
         // Destroy all brush dimensions before clearing
@@ -60,6 +63,7 @@ public class BuildBrushSystem_Server : ModSystem
     #endregion
 
     #region Public
+    /// <summary>Gets the brush owned by the current player session.</summary>
     public BuildBrushInstance? GetBrush(in IPlayer? player)
     {
         if (player is null || api.World is null)
@@ -76,6 +80,7 @@ public class BuildBrushSystem_Server : ModSystem
     #endregion
 
     #region Block Placement
+    /// <summary>Applies the current brush placement through native game block rules.</summary>
     public bool TryPlaceBrushBlock(in IWorldAccessor world, in IPlayer? byPlayer, in ItemStack? itemstack, in BlockSelection blockSel)
     {
         var brush = GetBrush(byPlayer);
@@ -138,7 +143,9 @@ public class BuildBrushSystem_Server : ModSystem
     /// </summary>
     private void Event_PlayerJoin(IServerPlayer byPlayer)
     {
-        BuildBrushControllerServer controller = new(api, byPlayer);
+        BuildBrushInstance brush = new(api.World, byPlayer.InventoryManager, byPlayer.PlayerUID, byPlayer.PlayerName,
+            new PlayerBrushPlacementValidator(api.World, byPlayer), () => byPlayer.CurrentBlockSelection);
+        BuildBrushControllerServer controller = new(brush);
         Controllers.Add(byPlayer.ClientId, controller);
 
         IInventory? hotbarInv = byPlayer.InventoryManager?.GetHotbarInventory();

@@ -2,9 +2,7 @@ using System;
 
 using VanillaBuildingExpanded.Networking;
 
-using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
-using Vintagestory.API.Server;
 
 namespace VanillaBuildingExpanded.BuildHammer;
 
@@ -22,17 +20,15 @@ public sealed class BuildBrushControllerServer : IDisposable
     public BuildBrushInstance Brush => brush;
     #endregion
 
-    #region Constructor
-    /// <summary>Creates the owner's server brush and subscribes to preview lifecycle events.</summary>
-    public BuildBrushControllerServer(ICoreServerAPI api, IServerPlayer player)
+    #region Public API
+    /// <summary>Owns the supplied session brush and subscribes to preview lifecycle events.</summary>
+    public BuildBrushControllerServer(BuildBrushInstance brush)
     {
-        brush = new BuildBrushInstance(player, api.World, new PlayerBrushPlacementValidator(api.World, player));
+        this.brush = brush;
         brush.OnActivationChanged += Brush_OnActivationChanged;
         brush.OnDimensionDirty += Brush_OnDimensionDirty;
     }
-    #endregion
-
-    #region Public
+    /// <summary>Applies accepted network state in the established brush update order.</summary>
     public void ApplyState(Packet_SetBuildBrush packet)
     {
         State.Apply(
@@ -51,13 +47,21 @@ public sealed class BuildBrushControllerServer : IDisposable
         brush.LastAppliedSeq = State.LastAppliedSeq;
     }
 
+    /// <summary>Destroys the owned brush's preview resources.</summary>
     public void Destroy()
     {
         brush.DestroyDimension();
     }
+    /// <summary>Removes the controller's brush-event subscriptions.</summary>
+    public void Dispose()
+    {
+        brush.OnActivationChanged -= Brush_OnActivationChanged;
+        brush.OnDimensionDirty -= Brush_OnDimensionDirty;
+    }
     #endregion
 
-    #region Events
+    #region Private
+    /// <summary>Creates or destroys preview resources when brush activation changes.</summary>
     private void Brush_OnActivationChanged(object? sender, BrushActivationChangedEventArgs e)
     {
         if (e.IsActive)
@@ -70,6 +74,7 @@ public sealed class BuildBrushControllerServer : IDisposable
         }
     }
 
+    /// <summary>Updates preview bounds and increments the renderer's dirty counter after dimension changes.</summary>
     private void Brush_OnDimensionDirty(object? sender, DimensionDirtyEventArgs e)
     {
         if (brush.Entity is null)
@@ -88,11 +93,4 @@ public sealed class BuildBrushControllerServer : IDisposable
     }
     #endregion
 
-    #region IDisposable
-    public void Dispose()
-    {
-        brush.OnActivationChanged -= Brush_OnActivationChanged;
-        brush.OnDimensionDirty -= Brush_OnDimensionDirty;
-    }
-    #endregion
 }

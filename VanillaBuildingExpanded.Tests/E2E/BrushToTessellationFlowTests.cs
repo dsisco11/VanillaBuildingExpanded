@@ -32,7 +32,7 @@ public class BrushToTessellationFlowTests
     private class BrushTestHarness
     {
         public Mock<IWorldAccessor> MockWorld { get; }
-        public Mock<IPlayer> MockPlayer { get; }
+        public BrushTestInputs BrushInputs { get; }
         public Mock<ICoreClientAPI> MockCapi { get; }
         public Mock<ITesselatorManager> MockTesselatorManager { get; }
         public Mock<ITessellationService> MockTessellationService { get; }
@@ -55,7 +55,7 @@ public class BrushToTessellationFlowTests
         {
             // Create mocks
             MockWorld = TestHelpers.CreateMockWorld();
-            MockPlayer = TestHelpers.CreateMockPlayer();
+            BrushInputs = TestHelpers.CreateBrushInputs();
             MockCapi = TestHelpers.CreateMockCapi();
             MockTesselatorManager = new Mock<ITesselatorManager>();
             MockTessellationService = new Mock<ITessellationService>();
@@ -64,7 +64,7 @@ public class BrushToTessellationFlowTests
             MockCapi.Setup(c => c.TesselatorManager).Returns(MockTesselatorManager.Object);
 
             // Create real components
-            Instance = new BuildBrushInstance(MockPlayer.Object, MockWorld.Object);
+            Instance = BrushInputs.CreateBrush(MockWorld.Object);
             Dimension = new BrushDimension(MockWorld.Object);
 
             // Initialize the dimension with a mock IMiniDimension so it's considered "initialized"
@@ -293,6 +293,7 @@ public class BrushToTessellationFlowTests
         {
             private float _meshAngleRadians;
 
+            /// <summary>Checks On Transformed.</summary>
             public void OnTransformed(
                 IWorldAccessor worldAccessor,
                 ITreeAttribute tree,
@@ -331,6 +332,7 @@ public class BrushToTessellationFlowTests
 
     #region Block Change Flow Tests
 
+    /// <summary>Checks Set Block Id Raises Block Transformed Changed.</summary>
     [Fact]
     public void SetBlockId_RaisesBlockTransformedChanged()
     {
@@ -348,6 +350,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(100, harness.LastBlockTransformedArgs.CurrentBlock?.BlockId);
     }
 
+    /// <summary>Checks Set Block Id Multiple Times Raises Event Each Time.</summary>
     [Fact]
     public void SetBlockId_MultipleTimes_RaisesEventEachTime()
     {
@@ -367,6 +370,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(3, harness.BlockTransformedChangedCount);
     }
 
+    /// <summary>Checks Set Block Id Same Block Does Not Raise Event.</summary>
     [Fact]
     public void SetBlockId_SameBlock_DoesNotRaiseEvent()
     {
@@ -385,6 +389,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(0, harness.BlockTransformedChangedCount);
     }
 
+    /// <summary>Checks Clear Block Raises Block Transformed Changed With Null Block.</summary>
     [Fact]
     public void ClearBlock_RaisesBlockTransformedChanged_WithNullBlock()
     {
@@ -407,6 +412,7 @@ public class BrushToTessellationFlowTests
 
     #region Orientation Change Flow Tests - VariantBased Mode
 
+    /// <summary>Checks Variant Based Orientation Change Raises Orientation Changed.</summary>
     [Fact]
     public void VariantBased_OrientationChange_RaisesOrientationChanged()
     {
@@ -427,6 +433,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(1, harness.LastOrientationArgs.CurrentIndex);
     }
 
+    /// <summary>Checks Variant Based Orientation Change Triggers Tessellation.</summary>
     [Fact]
     public void VariantBased_OrientationChange_TriggersTessellation()
     {
@@ -446,6 +453,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(1, harness.TessellationCallCount);
     }
 
+    /// <summary>Checks Variant Based Multiple Orientation Changes Each Triggers Tessellation.</summary>
     [Fact]
     public void VariantBased_MultipleOrientationChanges_EachTriggersTessellation()
     {
@@ -472,6 +480,7 @@ public class BrushToTessellationFlowTests
 
     #region Orientation Change Flow Tests - Rotatable Mode
 
+    /// <summary>Checks Rotatable Orientation Change Raises Orientation Changed.</summary>
     [Fact]
     public void Rotatable_OrientationChange_RaisesOrientationChanged()
     {
@@ -492,6 +501,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(1, harness.LastOrientationArgs.CurrentIndex);
     }
 
+    /// <summary>Checks Rotatable Orientation Change Triggers Tessellation.</summary>
     [Fact]
     public void Rotatable_OrientationChange_TriggersTessellation()
     {
@@ -511,6 +521,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(1, harness.TessellationCallCount);
     }
 
+    /// <summary>Checks Rotatable Multiple Orientation Changes Each Triggers Tessellation.</summary>
     [Fact]
     public void Rotatable_MultipleOrientationChanges_EachTriggersTessellation()
     {
@@ -537,6 +548,7 @@ public class BrushToTessellationFlowTests
 
     #region Orientation Change Flow Tests - None Mode
 
+    /// <summary>Checks None Single Orientation Cannot Rotate.</summary>
     [Fact]
     public void None_SingleOrientation_CannotRotate()
     {
@@ -552,6 +564,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(1, harness.Instance.Rotation?.OrientationCount);
     }
 
+    /// <summary>Checks None Set Same Orientation Index Does Not Raise Event.</summary>
     [Fact]
     public void None_SetSameOrientationIndex_DoesNotRaiseEvent()
     {
@@ -575,6 +588,7 @@ public class BrushToTessellationFlowTests
 
     #region Same Orientation Index Tests
 
+    /// <summary>Checks Set Same Orientation Index Does Not Raise Event.</summary>
     [Fact]
     public void SetSameOrientationIndex_DoesNotRaiseEvent()
     {
@@ -601,6 +615,7 @@ public class BrushToTessellationFlowTests
 
     #region Dimension Subscription Flow Tests
 
+    /// <summary>Checks Dimension Receives Block Transformed Changes.</summary>
     [Fact]
     public void Dimension_ReceivesBlockTransformedChanges()
     {
@@ -616,6 +631,7 @@ public class BrushToTessellationFlowTests
         Assert.Same(harness.Instance, harness.Dimension.SubscribedInstance);
     }
 
+    /// <summary>Checks Dimension Unsubscribed Does Not Receive Events.</summary>
     [Fact]
     public void Dimension_Unsubscribed_DoesNotReceiveEvents()
     {
@@ -635,6 +651,7 @@ public class BrushToTessellationFlowTests
         Assert.Null(harness.Dimension.SubscribedInstance);
     }
 
+    /// <summary>Checks Switching Dimension Subscription Old Dimension Stops Receiving.</summary>
     [Fact]
     public void SwitchingDimensionSubscription_OldDimensionStopsReceiving()
     {
@@ -661,6 +678,7 @@ public class BrushToTessellationFlowTests
 
     #region Full Event Chain Tests
 
+    /// <summary>Checks Block Change Triggers Full Event Chain.</summary>
     [Fact]
     public void BlockChange_TriggersFullEventChain()
     {
@@ -687,6 +705,7 @@ public class BrushToTessellationFlowTests
         Assert.True(rotationInfoChanged, "OnRotationInfoChanged should fire");
     }
 
+    /// <summary>Checks Event Chain Events Fire In Correct Order.</summary>
     [Fact]
     public void EventChain_EventsFireInCorrectOrder()
     {
@@ -718,6 +737,7 @@ public class BrushToTessellationFlowTests
 
     #region Rotation Mode Property Tests
 
+    /// <summary>Checks Rotation Mode None Has Correct Properties.</summary>
     [Fact]
     public void RotationModeNone_HasCorrectProperties()
     {
@@ -734,6 +754,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(1, rotation.OrientationCount);
     }
 
+    /// <summary>Checks Rotation Mode Variant Based Has Correct Properties.</summary>
     [Fact]
     public void RotationModeVariantBased_HasCorrectProperties()
     {
@@ -752,6 +773,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(4, rotation.OrientationCount);
     }
 
+    /// <summary>Checks Rotation Mode Rotatable Has Correct Properties.</summary>
     [Fact]
     public void RotationModeRotatable_HasCorrectProperties()
     {
@@ -774,6 +796,7 @@ public class BrushToTessellationFlowTests
 
     #region Edge Cases
 
+    /// <summary>Checks Null Block Id Handled Gracefully.</summary>
     [Fact]
     public void NullBlockId_HandledGracefully()
     {
@@ -786,6 +809,7 @@ public class BrushToTessellationFlowTests
         Assert.Null(harness.Instance.BlockUntransformed);
     }
 
+    /// <summary>Checks Unregistered Block Id Handled Gracefully.</summary>
     [Fact]
     public void UnregisteredBlockId_HandledGracefully()
     {
@@ -801,6 +825,7 @@ public class BrushToTessellationFlowTests
         Assert.Null(harness.Instance.BlockUntransformed);
     }
 
+    /// <summary>Checks Rapid Block Changes All Events Fire Correctly.</summary>
     [Fact]
     public void RapidBlockChanges_AllEventsFireCorrectly()
     {
@@ -826,6 +851,7 @@ public class BrushToTessellationFlowTests
 
     #region Tessellation Trigger Tests - Block Changes
 
+    /// <summary>Checks Block Change Triggers Single Tessellation.</summary>
     [Fact]
     public void BlockChange_TriggersSingleTessellation()
     {
@@ -843,6 +869,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(1, harness.TessellationCallCount);
     }
 
+    /// <summary>Checks Three Block Changes Trigger Three Tessellations.</summary>
     [Fact]
     public void ThreeBlockChanges_TriggerThreeTessellations()
     {
@@ -864,6 +891,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(3, harness.TessellationCallCount);
     }
 
+    /// <summary>Checks Ten Block Changes Trigger Ten Tessellations.</summary>
     [Fact]
     public void TenBlockChanges_TriggerTenTessellations()
     {
@@ -891,6 +919,7 @@ public class BrushToTessellationFlowTests
 
     #region Tessellation Trigger Tests - Orientation Changes
 
+    /// <summary>Checks Variant Based Four Orientation Changes Trigger Four Tessellations.</summary>
     [Fact]
     public void VariantBased_FourOrientationChanges_TriggerFourTessellations()
     {
@@ -913,6 +942,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(4, harness.TessellationCallCount);
     }
 
+    /// <summary>Checks Rotatable Four Orientation Changes Trigger Four Tessellations.</summary>
     [Fact]
     public void Rotatable_FourOrientationChanges_TriggerFourTessellations()
     {
@@ -935,6 +965,7 @@ public class BrushToTessellationFlowTests
         Assert.Equal(4, harness.TessellationCallCount);
     }
 
+    /// <summary>Checks None Zero Orientation Changes Zero Tessellations.</summary>
     [Fact]
     public void None_ZeroOrientationChanges_ZeroTessellations()
     {
@@ -958,6 +989,7 @@ public class BrushToTessellationFlowTests
 
     #region Tessellation Service Parameter Tests
 
+    /// <summary>Checks Tessellation Service Received Valid Parameters.</summary>
     [Fact]
     public void TessellationService_ReceivedValidParameters()
     {

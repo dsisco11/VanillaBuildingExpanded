@@ -20,16 +20,17 @@ public class TessellationIntegrationTests
 {
     #region Block Change → Dimension Subscription Tests
 
+    /// <summary>Checks Block Change When Dimension Subscribed Triggers Event Handler.</summary>
     [Fact]
     public void BlockChange_WhenDimensionSubscribed_TriggersEventHandler()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         bool blockTransformedEventReceived = false;
@@ -45,16 +46,17 @@ public class TessellationIntegrationTests
         Assert.Same(instance, dimension.SubscribedInstance);
     }
 
+    /// <summary>Checks Block Change When Dimension Not Subscribed Does Not Trigger Dimension Handler.</summary>
     [Fact]
     public void BlockChange_WhenDimensionNotSubscribed_DoesNotTriggerDimensionHandler()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         // Don't subscribe dimension to instance
@@ -66,18 +68,19 @@ public class TessellationIntegrationTests
         Assert.Null(dimension.SubscribedInstance);
     }
 
+    /// <summary>Checks Multiple Block Changes When Subscribed All Trigger Events.</summary>
     [Fact]
     public void MultipleBlockChanges_WhenSubscribed_AllTriggerEvents()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock1 = TestHelpers.CreateTestBlock(100, "game:block1");
         var testBlock2 = TestHelpers.CreateTestBlock(200, "game:block2");
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock1);
         mockWorld.Setup(w => w.GetBlock(200)).Returns(testBlock2);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         int eventCount = 0;
@@ -98,16 +101,17 @@ public class TessellationIntegrationTests
 
     #region Orientation Change → Dimension Subscription Tests
 
+    /// <summary>Checks Orientation Change When Dimension Subscribed Triggers Event Handler.</summary>
     [Fact]
     public void OrientationChange_WhenDimensionSubscribed_TriggersEventHandler()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         dimension.SubscribeTo(instance);
@@ -136,16 +140,17 @@ public class TessellationIntegrationTests
 
     #region Rotation Info Change → Dimension Subscription Tests
 
+    /// <summary>Checks Rotation Info Change When Block Changes Triggers Rotation Info Changed Event.</summary>
     [Fact]
     public void RotationInfoChange_WhenBlockChanges_TriggersRotationInfoChangedEvent()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         dimension.SubscribeTo(instance);
@@ -166,16 +171,17 @@ public class TessellationIntegrationTests
 
     #region Dimension OnDirty Flow Tests
 
+    /// <summary>Checks Dimension Dirty When Instance Raises Dimension Dirty Event Propagates.</summary>
     [Fact]
     public void DimensionDirty_WhenInstanceRaisesDimensionDirty_EventPropagates()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
 
         bool dimensionDirtyReceived = false;
         instance.OnDimensionDirty += (sender, args) => dimensionDirtyReceived = true;
@@ -196,18 +202,19 @@ public class TessellationIntegrationTests
 
     #region Event Unsubscription Tests
 
+    /// <summary>Checks After Unsubscribe Block Changes Do Not Trigger Dimension Handler.</summary>
     [Fact]
     public void AfterUnsubscribe_BlockChanges_DoNotTriggerDimensionHandler()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock1 = TestHelpers.CreateTestBlock(100);
         var testBlock2 = TestHelpers.CreateTestBlock(200);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock1);
         mockWorld.Setup(w => w.GetBlock(200)).Returns(testBlock2);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         int eventCountWhileSubscribed = 0;
@@ -228,19 +235,20 @@ public class TessellationIntegrationTests
         Assert.Null(dimension.SubscribedInstance);
     }
 
+    /// <summary>Checks Switching Subscription Only New Instance Triggers Handler.</summary>
     [Fact]
     public void SwitchingSubscription_OnlyNewInstanceTriggersHandler()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock1 = TestHelpers.CreateTestBlock(100);
         var testBlock2 = TestHelpers.CreateTestBlock(200);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock1);
         mockWorld.Setup(w => w.GetBlock(200)).Returns(testBlock2);
 
-        var instance1 = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
-        var instance2 = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance1 = inputs.CreateBrush(mockWorld.Object);
+        var instance2 = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         // Subscribe to first instance
@@ -265,16 +273,17 @@ public class TessellationIntegrationTests
 
     #region Full Event Chain Tests
 
+    /// <summary>Checks Full Event Chain Block Change Triggers All Expected Events.</summary>
     [Fact]
     public void FullEventChain_BlockChange_TriggersAllExpectedEvents()
     {
         // Arrange
         var mockWorld = TestHelpers.CreateMockWorld();
-        var mockPlayer = TestHelpers.CreateMockPlayer();
+        var inputs = TestHelpers.CreateBrushInputs();
         var testBlock = TestHelpers.CreateTestBlock(100);
         mockWorld.Setup(w => w.GetBlock(100)).Returns(testBlock);
 
-        var instance = new BuildBrushInstance(mockPlayer.Object, mockWorld.Object);
+        var instance = inputs.CreateBrush(mockWorld.Object);
         var dimension = TestHelpers.CreateTestDimension(mockWorld);
 
         bool blockUntransformedChanged = false;
