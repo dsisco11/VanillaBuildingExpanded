@@ -7,6 +7,7 @@ using VanillaBuildingExpanded.BuildBrush;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using Vintagestory.GameContent;
@@ -21,6 +22,55 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 /// </summary>
 public class BuildBrushDimensionTests
 {
+    [Theory]
+    [InlineData(EnumAppSide.Client)]
+    [InlineData(EnumAppSide.Server)]
+    public void Preview_PlacesPackedDirtBeforeQuernWithoutIncludingSupportInBounds(EnumAppSide side)
+    {
+        var world = TestHelpers.CreateMockWorld(side);
+        Block support = world.Object.GetBlock(new AssetLocation("game:packeddirt"));
+        support.SideSolid[BlockFacing.UP.Index] = true;
+        var quern = new BlockQuern { BlockId = 100, Code = new AssetLocation("game:quern-basalt"), EntityClass = "Quern" };
+        var fallingBehavior = new BlockBehaviorUnstableFalling(quern);
+        fallingBehavior.Initialize(JsonObject.FromJson("{}"));
+        quern.BlockBehaviors = [fallingBehavior];
+        var miniDimension = TestHelpers.CreateMockDimension();
+        miniDimension.SetupGet(d => d.subDimensionId).Returns(1);
+        miniDimension.Setup(d => d.AdjustPosForSubDimension(It.IsAny<BlockPos>()))
+            .Callback<BlockPos>(pos => pos.Set(100, 100, 100));
+        Dictionary<BlockPos, Block> blocks = [];
+        var accessor = new Mock<IBlockAccessor>();
+        world.Setup(w => w.BlockAccessor).Returns(accessor.Object);
+        accessor.Setup(a => a.GetBlock(It.IsAny<BlockPos>()))
+            .Returns((BlockPos pos) => blocks.TryGetValue(pos, out Block? block) ? block : null!);
+        miniDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>()))
+            .Returns((BlockPos pos) => blocks.TryGetValue(pos, out Block? block) ? block : null!);
+        miniDimension.Setup(d => d.SetBlock(support.BlockId, It.IsAny<BlockPos>()))
+            .Callback<int, BlockPos>((_, pos) => blocks[pos.Copy()] = support);
+        miniDimension.Setup(d => d.SetBlock(quern.BlockId, It.IsAny<BlockPos>(), It.IsAny<ItemStack>()))
+            .Callback<int, BlockPos, ItemStack>((_, pos, _) =>
+            {
+                Assert.Same(support, blocks[pos.DownCopy()]);
+                Assert.True(fallingBehavior.IsAttached(accessor.Object, pos));
+                blocks[pos.Copy()] = quern;
+                EnumHandling handling = EnumHandling.PassThrough;
+                fallingBehavior.OnBlockPlaced(world.Object, pos, ref handling);
+                Assert.Equal(EnumHandling.PassThrough, handling);
+            });
+        var dimension = new BrushDimension(world.Object);
+        dimension.InitializeClientSide(miniDimension.Object);
+
+        dimension.SetBlock(quern);
+
+        Assert.True(dimension.GetActiveBounds(out BlockPos min, out BlockPos max));
+        Assert.Equal(new BlockPos(100, 100, 100, Dimensions.MiniDimensions), min);
+        Assert.Equal(min, max);
+        Assert.Equal(2, blocks.Count);
+        miniDimension.Verify(d => d.SetBlock(support.BlockId, min.DownCopy()), Times.Once);
+        dimension.Clear();
+        miniDimension.Verify(d => d.ClearChunks(), Times.Exactly(2));
+    }
+
     [Fact]
     public void InitializeClientSide_DesignatesReceivedDimensionAsPreviewBeforeReadingBlocks()
     {

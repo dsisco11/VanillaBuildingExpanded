@@ -331,6 +331,13 @@ public class BrushDimension
         internalBlockPos = new BlockPos(0, 0, 0, Dimensions.MiniDimensions);
         dimension.AdjustPosForSubDimension(internalBlockPos);
 
+        Block? support = world.GetBlock(new AssetLocation("game:packeddirt"));
+        if (support is null || support.BlockId == 0 || support.IsMissing)
+            throw new InvalidOperationException("Cannot create build-brush preview: game:packeddirt support block is unavailable.");
+
+        // Native placement checks need support immediately; keep it outside the rendered bounds.
+        dimension.SetBlock(support.BlockId, internalBlockPos.DownCopy());
+
         ItemStack? source = _subscribedInstance?.ItemStack;
         dimension.SetBlock(currentBlock.BlockId, internalBlockPos, source?.Clone());
 
