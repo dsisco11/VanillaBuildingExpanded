@@ -6,7 +6,9 @@ using Moq;
 using VanillaBuildingExpanded.BuildBrush;
 
 using Vintagestory.API.Common;
+using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
+using Vintagestory.GameContent;
 
 using Xunit;
 
@@ -18,6 +20,557 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 /// </summary>
 public class BuildBrushDimensionTests
 {
+    [Theory]
+    [InlineData(EnumAppSide.Client, false)]
+    [InlineData(EnumAppSide.Server, false)]
+    [InlineData(EnumAppSide.Client, true)]
+    [InlineData(EnumAppSide.Server, true)]
+    public void SlotSwitch_RecreatesPreviewEvenForIdenticalStacks(EnumAppSide side, bool hasEntity)
+    {
+        var world = TestHelpers.CreateMockWorld(side);
+        var inputs = TestHelpers.CreateBrushInputs();
+        int selectedSlot = 0;
+        DummySlot[] slots = [new(), new(), new(), new()];
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlotNumber).Returns(() => selectedSlot);
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(() => slots[selectedSlot]);
+        var block = new Block
+        {
+            BlockId = 100,
+            Code = new AssetLocation("game:slotpreview"),
+            EntityClass = hasEntity ? "PlacementHookPreview" : null
+        };
+        var otherBlock = new Block
+        {
+            BlockId = 101,
+            Code = new AssetLocation("game:otherslotpreview"),
+            EntityClass = block.EntityClass
+        };
+        world.Setup(w => w.GetBlock(100)).Returns(block);
+        world.Setup(w => w.GetBlock(101)).Returns(otherBlock);
+        var brush = inputs.CreateBrush(world.Object);
+        var miniDimension = new Mock<IMiniDimension>();
+        miniDimension.Setup(d => d.subDimensionId).Returns(1);
+        Block? previewBlock = null;
+        PlacementHookPreviewEntity? entity = null;
+        int clearCount = 0;
+        miniDimension.Setup(d => d.ClearChunks()).Callback(() =>
+        {
+            clearCount++;
+            previewBlock = null;
+            entity = null;
+        });
+        miniDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>())).Returns(() => previewBlock!);
+        miniDimension.Setup(d => d.GetBlockEntity(It.IsAny<BlockPos>())).Returns(() => entity!);
+        miniDimension.Setup(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>(), It.IsAny<ItemStack>()))
+            .Callback<int, BlockPos, ItemStack>((id, pos, stack) =>
+            {
+                previewBlock = world.Object.GetBlock(id);
+                if (hasEntity)
+                {
+                    entity = new PlacementHookPreviewEntity { Block = previewBlock, Pos = pos.Copy() };
+                    entity.OnBlockPlaced(stack);
+                }
+            });
+        var dimension = new BrushDimension(world.Object);
+        Assert.True(dimension.InitializeClientSide(miniDimension.Object));
+        dimension.SubscribeTo(brush);
+        int dirtyCount = 0;
+        dimension.OnDirty += (_, _) => dirtyCount++;
+        slots[0].Itemstack = new ItemStack(block);
+        slots[0].Itemstack.Attributes["inventory"] = new TreeAttribute();
+        slots[1].Itemstack = slots[0].Itemstack.Clone();
+        slots[2].Itemstack = new ItemStack(otherBlock);
+        slots[2].Itemstack.Attributes["inventory"] = new TreeAttribute();
+        Assert.True(brush.TryUpdateBlockId());
+        var originalEntity = entity;
+        int initialClears = clearCount;
+        int initialDirtyCount = dirtyCount;
+
+        selectedSlot = 1;
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.Same(block, previewBlock);
+        Assert.Equal(initialClears + 1, clearCount);
+        Assert.Equal(initialDirtyCount + 1, dirtyCount);
+        if (hasEntity)
+        {
+            Assert.NotNull(entity);
+            Assert.NotSame(originalEntity, entity);
+            Assert.Equal(1, entity.PlacementCount);
+        }
+        Assert.True(dimension.HasActiveBounds);
+        Assert.False(brush.TryUpdateBlockId());
+        Assert.Equal(initialClears + 1, clearCount);
+        Assert.Equal(initialDirtyCount + 1, dirtyCount);
+
+        selectedSlot = 2;
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.Same(otherBlock, previewBlock);
+        Assert.Equal(initialClears + 2, clearCount);
+        miniDimension.Verify(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>(), It.IsAny<ItemStack>()),
+            Times.Exactly(3));
+
+        selectedSlot = 3;
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.Null(previewBlock);
+        Assert.Null(entity);
+        Assert.False(dimension.HasActiveBounds);
+    }
+
+    [Theory]
+    [InlineData(EnumAppSide.Client, false)]
+    [InlineData(EnumAppSide.Server, false)]
+    [InlineData(EnumAppSide.Client, true)]
+    [InlineData(EnumAppSide.Server, true)]
+    public void LanternPreview_CombinesNativeHooksAndSerializedStackProperties(
+        EnumAppSide side, bool automaticEntitySpawn)
+    {
+        var world = TestHelpers.CreateMockWorld(side);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var slot = new DummySlot();
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(slot);
+        var lanterns = new BlockLantern[2];
+        string[] orientations = ["up", "north"];
+        for (int i = 0; i < lanterns.Length; i++)
+        {
+            lanterns[i] = new BlockLantern
+            {
+                BlockId = 100 + i,
+                Code = new AssetLocation($"game:lantern-{orientations[i]}"),
+                EntityClass = "Lantern"
+            };
+            lanterns[i].VariantStrict["orientation"] = orientations[i];
+            world.Setup(w => w.GetBlock(lanterns[i].BlockId)).Returns(lanterns[i]);
+        }
+        world.Setup(w => w.SearchBlocks(It.IsAny<AssetLocation>())).Returns(lanterns);
+        var brush = inputs.CreateBrush(world.Object);
+        var miniDimension = new Mock<IMiniDimension>();
+        miniDimension.Setup(d => d.subDimensionId).Returns(1);
+        Block? previewBlock = null;
+        PlacementTrackingLantern? previewEntity = null;
+        miniDimension.Setup(d => d.ClearChunks()).Callback(() =>
+        {
+            previewBlock = null;
+            previewEntity = null;
+        });
+        miniDimension.Setup(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>(), It.IsAny<ItemStack>()))
+            .Callback<int, BlockPos, ItemStack>((id, pos, stack) =>
+            {
+                previewBlock = world.Object.GetBlock(id);
+                previewEntity = automaticEntitySpawn
+                    ? new PlacementTrackingLantern { Block = previewBlock, Pos = pos.Copy() }
+                    : null;
+                previewEntity?.OnBlockPlaced(stack);
+            });
+        miniDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>())).Returns(() => previewBlock!);
+        miniDimension.Setup(d => d.GetBlockEntity(It.IsAny<BlockPos>())).Returns(() => previewEntity!);
+        miniDimension.Setup(d => d.SpawnBlockEntity("Lantern", It.IsAny<BlockPos>(), It.IsAny<ItemStack>()))
+            .Callback<string, BlockPos, ItemStack>((_, pos, stack) =>
+            {
+                previewEntity = new PlacementTrackingLantern { Block = previewBlock!, Pos = pos.Copy() };
+                previewEntity.OnBlockPlaced(stack);
+            });
+        var dimension = new BrushDimension(world.Object);
+        Assert.True(dimension.InitializeClientSide(miniDimension.Object));
+        dimension.SubscribeTo(brush);
+        int dirtyCount = 0;
+        dimension.OnDirty += (_, _) => dirtyCount++;
+        slot.Itemstack = new ItemStack(lanterns[0]);
+        slot.Itemstack.Attributes.SetString("material", "tinbronze");
+        slot.Itemstack.Attributes.SetString("lining", "gold");
+        slot.Itemstack.Attributes.SetString("glass", "blue");
+
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.NotNull(previewEntity);
+        Assert.Equal("tinbronze", previewEntity.material);
+        Assert.Equal("gold", previewEntity.lining);
+        Assert.Equal("blue", previewEntity.glass);
+        Assert.Equal(1, previewEntity.PlacementCount);
+        Assert.NotNull(previewEntity.LastPlacementStack);
+        Assert.Equal("tinbronze", previewEntity.LastPlacementStack.Attributes.GetString("material"));
+        Assert.True(dirtyCount > 0);
+
+        brush.CycleOrientation();
+        Assert.Same(lanterns[1], previewBlock);
+        Assert.NotNull(previewEntity);
+        Assert.Equal("tinbronze", previewEntity.material);
+        Assert.Equal("gold", previewEntity.lining);
+        Assert.Equal("blue", previewEntity.glass);
+        Assert.Equal(1, previewEntity.PlacementCount);
+        Assert.NotNull(previewEntity.LastPlacementStack);
+        Assert.Same(lanterns[1], previewEntity.LastPlacementStack.Block);
+        Assert.Equal("tinbronze", previewEntity.LastPlacementStack.Attributes.GetString("material"));
+
+        var rotatedEntity = previewEntity;
+        rotatedEntity.MeshAngle = 0.75f;
+        slot.Itemstack = new ItemStack(lanterns[0]);
+        slot.Itemstack.Attributes.SetString("material", "brass");
+        slot.Itemstack.Attributes.SetString("lining", "plain");
+        slot.Itemstack.Attributes.SetString("glass", "green");
+        int beforeSourceChange = dirtyCount;
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.NotNull(previewEntity);
+        Assert.NotSame(rotatedEntity, previewEntity);
+        Assert.Equal("brass", previewEntity.material);
+        Assert.Equal("plain", previewEntity.lining);
+        Assert.Equal("green", previewEntity.glass);
+        Assert.Equal(1, previewEntity.PlacementCount);
+        Assert.Equal("brass", previewEntity.LastPlacementStack.Attributes.GetString("material"));
+        Assert.Equal("green", previewEntity.LastPlacementStack.Attributes.GetString("glass"));
+        Assert.Equal(0f, previewEntity.MeshAngle);
+        Assert.Equal(1, brush.OrientationIndex);
+        Assert.True(dirtyCount > beforeSourceChange);
+
+        var brassEntity = previewEntity;
+        slot.Itemstack.Attributes.SetString("material", "copper");
+        int beforeInPlaceChange = dirtyCount;
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.NotNull(previewEntity);
+        Assert.NotSame(brassEntity, previewEntity);
+        Assert.Equal("copper", previewEntity.material);
+        Assert.Equal(1, previewEntity.PlacementCount);
+        Assert.True(dirtyCount > beforeInPlaceChange);
+        miniDimension.VerifySet(d => d.Dirty = true, Times.AtLeastOnce);
+        miniDimension.Verify(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>(), It.IsAny<ItemStack>()), Times.Exactly(4));
+        miniDimension.Verify(d => d.SpawnBlockEntity("Lantern", It.IsAny<BlockPos>(), It.IsAny<ItemStack>()),
+            automaticEntitySpawn ? Times.Never() : Times.Exactly(4));
+
+        var tree = new TreeAttribute();
+        previewEntity.ToTreeAttributes(tree);
+        Assert.Equal("copper", tree.GetString("material"));
+        Assert.Equal("plain", tree.GetString("lining"));
+        Assert.Equal("green", tree.GetString("glass"));
+        int beforeUnchangedRefresh = dirtyCount;
+        Assert.False(brush.TryUpdateBlockId());
+        Assert.Equal(beforeUnchangedRefresh, dirtyCount);
+        Assert.Equal(1, previewEntity.PlacementCount);
+        Assert.Same(lanterns[0], slot.Itemstack.Block);
+        Assert.False(slot.Itemstack.Attributes.HasAttribute("meshAngle"));
+
+        var linedEntity = previewEntity;
+        slot.Itemstack.Attributes.RemoveAttribute("lining");
+        slot.Itemstack.Attributes.RemoveAttribute("glass");
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.NotNull(previewEntity);
+        Assert.NotSame(linedEntity, previewEntity);
+        Assert.Equal("copper", previewEntity.material);
+        Assert.Equal("plain", previewEntity.lining);
+        Assert.Equal("quartz", previewEntity.glass);
+        Assert.Equal(0f, previewEntity.MeshAngle);
+        Assert.Equal(1, previewEntity.PlacementCount);
+        beforeUnchangedRefresh = dirtyCount;
+
+        dimension.Unsubscribe();
+        slot.Itemstack.Attributes.SetString("material", "silver");
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.Equal("copper", previewEntity.material);
+        Assert.Equal(beforeUnchangedRefresh, dirtyCount);
+        Assert.Equal(1, previewEntity.PlacementCount);
+    }
+
+    private sealed class PlacementTrackingLantern : BELantern
+    {
+        public int PlacementCount;
+        public ItemStack? LastPlacementStack;
+
+        public override void OnBlockPlaced(ItemStack byItemStack)
+        {
+            base.OnBlockPlaced(byItemStack);
+            PlacementCount++;
+            LastPlacementStack = byItemStack;
+        }
+    }
+
+    [Theory]
+    [InlineData(EnumAppSide.Client, false)]
+    [InlineData(EnumAppSide.Server, false)]
+    [InlineData(EnumAppSide.Client, true)]
+    [InlineData(EnumAppSide.Server, true)]
+    public void PlacementHookPreview_SupplementsOnlyPropertiesNotInitializedByHooks(
+        EnumAppSide side, bool needsProjection)
+    {
+        var world = TestHelpers.CreateMockWorld(side);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var slot = new DummySlot();
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(slot);
+        var block = new Block
+        {
+            BlockId = 100,
+            Code = new AssetLocation("game:placementhookpreview"),
+            EntityClass = "PlacementHookPreview"
+        };
+        world.Setup(w => w.GetBlock(100)).Returns(block);
+        var brush = inputs.CreateBrush(world.Object);
+        var miniDimension = new Mock<IMiniDimension>();
+        miniDimension.Setup(d => d.subDimensionId).Returns(1);
+        PlacementHookPreviewEntity? entity = null;
+        miniDimension.Setup(d => d.SetBlock(100, It.IsAny<BlockPos>(), It.IsAny<ItemStack>()))
+            .Callback<int, BlockPos, ItemStack>((_, pos, stack) =>
+            {
+                entity = new PlacementHookPreviewEntity { Block = block, Pos = pos.Copy() };
+                entity.OnBlockPlaced(stack);
+            });
+        miniDimension.Setup(d => d.GetBlockEntity(It.IsAny<BlockPos>())).Returns(() => entity!);
+        var dimension = new BrushDimension(world.Object);
+        Assert.True(dimension.InitializeClientSide(miniDimension.Object));
+        dimension.SubscribeTo(brush);
+        int dirtyCount = 0;
+        dimension.OnDirty += (_, _) => dirtyCount++;
+        slot.Itemstack = new ItemStack(block);
+        var attributes = slot.Itemstack.Attributes;
+        attributes.SetString("finish", "painted");
+        attributes.SetInt("count", 7);
+        if (needsProjection)
+            attributes.SetString("tint", "blue");
+        attributes.SetInt("posx", 111);
+        attributes.SetInt("posy", 222);
+        attributes.SetInt("posz", 333);
+        attributes.SetString("blockCode", "game:wrong");
+        attributes.SetFloat("meshAngle", 99f);
+        attributes.SetString("unknown", "ignored");
+        var inventory = new TreeAttribute();
+        inventory.SetString("contents", "not preview data");
+        attributes["inventory"] = inventory;
+        var metadata = new TreeAttribute();
+        metadata.SetString("owner", "not preview metadata");
+        attributes["metadata"] = metadata;
+        attributes.SetBytes("bytes", [9]);
+        var itemApi = new Mock<ICoreAPI>();
+        itemApi.Setup(a => a.World).Returns(world.Object);
+        var storedItem = new Item { ItemId = 200, Code = new AssetLocation("game:testitem") };
+        storedItem.OnLoadedNative(itemApi.Object);
+        attributes.SetItemstack("stored", new ItemStack(storedItem));
+
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.NotNull(entity);
+        Assert.Equal("painted", entity.Finish);
+        Assert.Equal(7, entity.Count);
+        Assert.Equal(0.75f, entity.MeshAngle);
+        Assert.Equal(0, entity.Pos.X);
+        Assert.Equal(0, entity.Pos.Y);
+        Assert.Equal(0, entity.Pos.Z);
+        Assert.Equal("not preview data", entity.Inventory.GetString("contents"));
+        Assert.Equal(1, entity.PlacementCount);
+        Assert.Equal(needsProjection ? 1 : 0, entity.LoadCount);
+        Assert.Equal(needsProjection ? "blue" : "neutral", entity.Tint);
+        Assert.Equal("preview", entity.Metadata.GetString("owner"));
+        Assert.NotNull(entity.LastPlacementStack);
+        Assert.NotSame(brush.ItemStack, entity.LastPlacementStack);
+        Assert.Equal(new byte[] { 9 }, entity.LastPlacementStack.Attributes.GetBytes("bytes"));
+        Assert.NotNull(entity.LastPlacementStack.Attributes.GetItemstack("stored"));
+        Assert.Equal(99f, attributes.GetFloat("meshAngle"));
+        Assert.Equal("not preview data", inventory.GetString("contents"));
+        if (needsProjection)
+        {
+            Assert.NotNull(entity.LastLoadedTree);
+            Assert.Equal(block.Code.ToShortString(), entity.LastLoadedTree.GetString("blockCode"));
+            Assert.False(entity.LastLoadedTree.HasAttribute("unknown"));
+            Assert.Equal(new byte[] { 1 }, entity.LastLoadedTree.GetBytes("bytes"));
+            Assert.Null(entity.LastLoadedTree.GetItemstack("stored"));
+        }
+
+        var originalEntity = entity;
+        entity.MeshAngle = 1.25f;
+        entity.RuntimeCounter = 42;
+        int beforeRemoval = dirtyCount;
+        attributes.RemoveAttribute("finish");
+        attributes.RemoveAttribute("count");
+        attributes.RemoveAttribute("tint");
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.NotNull(entity);
+        Assert.NotSame(originalEntity, entity);
+        Assert.Equal("default", entity.Finish);
+        Assert.Equal(1, entity.Count);
+        Assert.Equal(1, entity.PlacementCount);
+        Assert.Equal(0, entity.LoadCount);
+        Assert.Equal("neutral", entity.Tint);
+        Assert.Equal(0.75f, entity.MeshAngle);
+        Assert.Equal(0, entity.RuntimeCounter);
+        Assert.True(dirtyCount > beforeRemoval);
+        entity.LastPlacementStack.Attributes.SetString("finish", "mutated by hook");
+        Assert.False(attributes.HasAttribute("finish"));
+        Assert.False(brush.ItemStack!.Attributes.HasAttribute("finish"));
+        int beforeUnchangedRefresh = dirtyCount;
+        Assert.False(brush.TryUpdateBlockId());
+        Assert.Equal(beforeUnchangedRefresh, dirtyCount);
+        Assert.Equal(1, entity.PlacementCount);
+
+        var defaultEntity = entity;
+        attributes.SetInt("tint", 123);
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.NotNull(entity);
+        Assert.NotSame(defaultEntity, entity);
+        Assert.Equal("neutral", entity.Tint);
+        Assert.Equal(0, entity.LoadCount);
+        Assert.Equal(1, entity.PlacementCount);
+    }
+
+    [Fact]
+    public void PlacementHookPreview_RestoresTargetRotationWithoutApplyingItTwice()
+    {
+        var world = TestHelpers.CreateMockWorld();
+        var registry = new Mock<IClassRegistryAPI>();
+        registry.Setup(r => r.GetBlockEntity("HookRotatable")).Returns(typeof(HookRotatableEntity));
+        registry.Setup(r => r.CreateBlockEntity("HookRotatable")).Returns(() => new HookRotatableEntity());
+        var api = new Mock<ICoreAPI>();
+        api.Setup(a => a.ClassRegistry).Returns(registry.Object);
+        world.Setup(w => w.Api).Returns(api.Object);
+        world.Setup(w => w.ClassRegistry).Returns(registry.Object);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var slot = new DummySlot();
+        int selectedSlot = 0;
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlotNumber).Returns(() => selectedSlot);
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(slot);
+        var block = new Block
+        {
+            BlockId = 100,
+            Code = new AssetLocation("game:hookrotatable"),
+            EntityClass = "HookRotatable",
+            Attributes = new JsonObject(Newtonsoft.Json.Linq.JObject.Parse(
+                "{\"rotatatableInterval\":\"90deg\"}"))
+        };
+        world.Setup(w => w.GetBlock(100)).Returns(block);
+        var brush = inputs.CreateBrush(world.Object);
+        var miniDimension = new Mock<IMiniDimension>();
+        miniDimension.Setup(d => d.subDimensionId).Returns(1);
+        HookRotatableEntity? entity = null;
+        miniDimension.Setup(d => d.SetBlock(100, It.IsAny<BlockPos>(), It.IsAny<ItemStack>()))
+            .Callback<int, BlockPos, ItemStack>((_, pos, stack) =>
+            {
+                entity = new HookRotatableEntity { Block = block, Pos = pos.Copy() };
+                entity.OnBlockPlaced(stack);
+            });
+        miniDimension.Setup(d => d.GetBlockEntity(It.IsAny<BlockPos>())).Returns(() => entity!);
+        var dimension = new BrushDimension(world.Object);
+        Assert.True(dimension.InitializeClientSide(miniDimension.Object));
+        dimension.SubscribeTo(brush);
+        slot.Itemstack = new ItemStack(block);
+
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.NotNull(entity);
+        Assert.Equal(1, entity.PlacementCount);
+        Assert.Equal(0f, entity.MeshAngle, 4);
+        var rotatingEntity = entity;
+        brush.OrientationIndex = 1;
+        Assert.Same(rotatingEntity, entity);
+        Assert.Equal(1, entity.PlacementCount);
+        Assert.Equal(GameMath.PIHALF, entity.MeshAngle, 4);
+        brush.OrientationIndex = 2;
+        Assert.Same(rotatingEntity, entity);
+        Assert.Equal(1, entity.PlacementCount);
+        Assert.Equal(GameMath.PI, entity.MeshAngle, 4);
+
+        slot.Itemstack.Attributes.SetString("type", "changed");
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.NotNull(entity);
+        Assert.NotSame(rotatingEntity, entity);
+        Assert.Equal(1, entity.PlacementCount);
+        Assert.Equal(GameMath.PI, entity.MeshAngle, 4);
+        Assert.Equal(2, brush.OrientationIndex);
+        Assert.False(slot.Itemstack.Attributes.HasAttribute("meshAngle"));
+        miniDimension.Verify(d => d.SetBlock(100, It.IsAny<BlockPos>(), It.IsAny<ItemStack>()), Times.Exactly(2));
+
+        var originalEntity = entity;
+        selectedSlot = 1;
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.NotNull(entity);
+        Assert.NotSame(originalEntity, entity);
+        Assert.Equal(1, entity.PlacementCount);
+        Assert.Equal(GameMath.PI, entity.MeshAngle, 4);
+        Assert.Equal(2, brush.OrientationIndex);
+        Assert.Equal(180, dimension.RotationAngle);
+        miniDimension.Verify(d => d.SetBlock(100, It.IsAny<BlockPos>(), It.IsAny<ItemStack>()), Times.Exactly(3));
+    }
+
+    private sealed class HookRotatableEntity : BlockEntity, IRotatable
+    {
+        public float MeshAngle;
+        public int PlacementCount;
+
+        public override void OnBlockPlaced(ItemStack byItemStack)
+        {
+            base.OnBlockPlaced(byItemStack);
+            MeshAngle = 0f;
+            PlacementCount++;
+        }
+
+        public override void ToTreeAttributes(ITreeAttribute tree)
+        {
+            base.ToTreeAttributes(tree);
+            tree.SetFloat("meshAngle", MeshAngle);
+        }
+
+        public override void FromTreeAttributes(ITreeAttribute tree, IWorldAccessor worldForResolving)
+        {
+            base.FromTreeAttributes(tree, worldForResolving);
+            MeshAngle = tree.GetFloat("meshAngle");
+        }
+
+        public void OnTransformed(IWorldAccessor worldAccessor, ITreeAttribute tree, int degreeRotation,
+            Dictionary<int, AssetLocation> oldBlockIdMapping, Dictionary<int, AssetLocation> oldItemIdMapping,
+            EnumAxis? flipAxis)
+        {
+            tree.SetFloat("meshAngle", tree.GetFloat("meshAngle") - degreeRotation * GameMath.DEG2RAD);
+        }
+    }
+
+    private sealed class PlacementHookPreviewEntity : BlockEntity
+    {
+        public string Finish = "default";
+        public int Count = 1;
+        public float MeshAngle = 0.75f;
+        public int RuntimeCounter;
+        public string Tint = "neutral";
+        public ITreeAttribute Inventory = new TreeAttribute();
+        public ITreeAttribute Metadata = new TreeAttribute();
+        public ITreeAttribute? LastLoadedTree;
+        public ItemStack? LastPlacementStack;
+        public int PlacementCount;
+        public int LoadCount;
+
+        public PlacementHookPreviewEntity()
+        {
+            Metadata.SetString("owner", "preview");
+        }
+
+        public override void OnBlockPlaced(ItemStack byItemStack)
+        {
+            base.OnBlockPlaced(byItemStack);
+            Finish = byItemStack.Attributes.GetString("finish", "default");
+            Count = byItemStack.Attributes.GetInt("count", 1);
+            Inventory = byItemStack.Attributes.GetTreeAttribute("inventory").Clone();
+            LastPlacementStack = byItemStack;
+            PlacementCount++;
+        }
+
+        public override void ToTreeAttributes(ITreeAttribute tree)
+        {
+            base.ToTreeAttributes(tree);
+            tree.SetString("finish", Finish);
+            tree.SetInt("count", Count);
+            tree.SetString("tint", Tint);
+            tree.SetFloat("meshAngle", MeshAngle);
+            tree.SetInt("runtimeCounter", RuntimeCounter);
+            tree["inventory"] = Inventory.Clone();
+            tree["metadata"] = Metadata.Clone();
+            tree.SetBytes("bytes", [1]);
+            tree.SetItemstack("stored", null);
+        }
+
+        public override void FromTreeAttributes(ITreeAttribute tree, IWorldAccessor worldForResolving)
+        {
+            base.FromTreeAttributes(tree, worldForResolving);
+            Finish = tree.GetString("finish", "default");
+            Count = tree.GetInt("count", 1);
+            Tint = tree.GetString("tint", "neutral");
+            MeshAngle = tree.GetFloat("meshAngle");
+            RuntimeCounter = tree.GetInt("runtimeCounter");
+            Inventory = tree.GetTreeAttribute("inventory");
+            Metadata = tree.GetTreeAttribute("metadata");
+            LastLoadedTree = tree;
+            LoadCount++;
+        }
+    }
+
     #region Subscription Tests    #region SubscribeTo Tests
 
     /// <summary>Checks Subscribe To Sets Subscribed Instance.</summary>

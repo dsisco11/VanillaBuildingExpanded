@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -40,6 +39,9 @@ public class BrushDimension
     /// The position within the mini-dimension where the block is placed.
     /// </summary>
     private BlockPos? internalBlockPos;
+
+    private ItemStack? placementInitializedStack;
+    private int? placementInitializedSlotNumber;
 
     /// <summary>
     /// Minimum corner of the active bounds (blocks that have been placed).
@@ -193,6 +195,8 @@ public class BrushDimension
         currentBlock = null;
         originalBlock = null;
         internalBlockPos = null;
+        placementInitializedStack = null;
+        placementInitializedSlotNumber = null;
         activeBoundsMin = null;
         activeBoundsMax = null;
         RotationAngle = 0;
@@ -291,15 +295,20 @@ public class BrushDimension
             {
                 RotationMode = rotationMode.Value;
             }
+            RefreshBlockEntityPlacement();
             return;
         }
 
-        // Clear existing block
+        RecreatePreviewBlock(block, rotationMode ?? EBuildBrushRotationMode.None);
+    }
+
+    private void RecreatePreviewBlock(Block block, EBuildBrushRotationMode rotationMode)
+    {
         Clear();
 
         originalBlock = block;
         currentBlock = block;
-        RotationMode = rotationMode ?? EBuildBrushRotationMode.None;
+        RotationMode = rotationMode;
 
         // Place the block in the dimension
         PlaceBlockInDimension();
@@ -318,8 +327,8 @@ public class BrushDimension
         internalBlockPos = new BlockPos(0, 0, 0, Dimensions.MiniDimensions);
         dimension.AdjustPosForSubDimension(internalBlockPos);
 
-        // Set the block
-        dimension.SetBlock(currentBlock.BlockId, internalBlockPos);
+        ItemStack? source = _subscribedInstance?.ItemStack;
+        dimension.SetBlock(currentBlock.BlockId, internalBlockPos, source?.Clone());
 
         // Update active bounds to include this position
         UpdateActiveBounds(internalBlockPos);
@@ -330,11 +339,93 @@ public class BrushDimension
             var existingBe = dimension.GetBlockEntity(internalBlockPos);
             if (existingBe is null)
             {
-                dimension.SpawnBlockEntity(currentBlock.EntityClass, internalBlockPos);
+                dimension.SpawnBlockEntity(currentBlock.EntityClass, internalBlockPos, source?.Clone());
             }
         }
 
+        // Native SetBlock/SpawnBlockEntity already invoke OnBlockPlaced on newly created entities.
+        var blockEntity = dimension.GetBlockEntity(internalBlockPos);
+        if (blockEntity is not null && source is not null && CopyStackPropertiesToBlockEntity(blockEntity, source))
+        {
+            blockEntity.MarkDirty(true);
+            dimension.Dirty = true;
+        }
+        placementInitializedStack = source?.Clone();
+        placementInitializedSlotNumber = _subscribedInstance?.SourceHotbarSlotNumber;
         MarkDirty(nameof(PlaceBlockInDimension));
+    }
+
+    private void RefreshBlockEntityPlacement()
+    {
+        if (dimension is null || internalBlockPos is null ||
+            _subscribedInstance?.ItemStack is not { } source ||
+            currentBlock is null || source.Block?.Id != currentBlock.Id)
+            return;
+
+        // Brush rotation changes the prepared stack, not its held source, and does not require a new entity.
+        string[] ignoredAttributes = _subscribedInstance.Rotation?.RotationAttribute is { } rotationAttribute
+            ? [rotationAttribute]
+            : [];
+        if (placementInitializedSlotNumber == _subscribedInstance.SourceHotbarSlotNumber &&
+            placementInitializedStack is not null &&
+            source.Attributes.Equals(world, placementInitializedStack.Attributes, ignoredAttributes))
+            return;
+
+        // Start from native defaults on any slot or source-property change instead of cleaning up stale overrides.
+        BeginUpdate();
+        try
+        {
+            var sourceRotation = _subscribedInstance.Rotation;
+            RecreatePreviewBlock(currentBlock, RotationMode);
+            if (sourceRotation is not null)
+            {
+                var definition = sourceRotation.Current;
+                ApplyRotation(new OrientationIndexChangedEventArgs(
+                    sourceRotation.CurrentIndex, sourceRotation.CurrentIndex, definition, definition), sourceRotation);
+            }
+            dimension.Dirty = true;
+        }
+        finally
+        {
+            EndUpdate();
+        }
+    }
+
+    /// <summary>
+    /// Supplements native placement initialization using matching item-stack and serialized entity properties.
+    /// Matching names and types are a compatibility heuristic, not a guaranteed shared schema.
+    /// </summary>
+    private bool CopyStackPropertiesToBlockEntity(BlockEntity blockEntity, ItemStack source)
+    {
+        // Start from current entity state so properties owned by native hooks survive deserialization.
+        TreeAttribute tree = new();
+        blockEntity.ToTreeAttributes(tree);
+        bool changed = false;
+        foreach (var entry in source.Attributes)
+        {
+            // Preserve preview identity and brush-controlled rotation. Restrict copying to scalar values:
+            // structured data such as inventories may have different item and entity representations.
+            // The key already exists in the source (this loop); require it in the entity tree too,
+            // with the exact same attribute type, rather than adding unknown or incompatible fields.
+            if (entry.Key is "posx" or "posy" or "posz" or "blockCode" ||
+                BlockOrientationResolver.IsMeshRotationAttribute(entry.Key) ||
+                entry.Key == _subscribedInstance?.Rotation?.RotationAttribute ||
+                entry.Value is not (StringAttribute or BoolAttribute or IntAttribute or LongAttribute or FloatAttribute or DoubleAttribute) ||
+                tree[entry.Key] is not { } target ||
+                target.GetType() != entry.Value.GetType())
+                continue;
+
+            if (!target.Equals(world, entry.Value))
+            {
+                tree[entry.Key] = entry.Value.Clone();
+                changed = true;
+            }
+        }
+
+        // Deserialize only when needed to apply values to the entity and refresh its derived state.
+        if (changed)
+            blockEntity.FromTreeAttributes(tree, world);
+        return changed;
     }
 
     /// <summary>
@@ -402,7 +493,6 @@ public class BrushDimension
         }
 
         // Extract definitions from event args
-        BlockOrientation previousDef = eventArgs.PreviousDefinition;
         BlockOrientation currentDef = eventArgs.CurrentDefinition;
 
         // Normalize angle
@@ -438,7 +528,7 @@ public class BrushDimension
         {
             case EBuildBrushRotationMode.Rotatable:
                 // Apply rotation via IRotatable
-                ApplyRotatableRotation(orientationInfo, previousDef, currentDef);
+                ApplyRotatableRotation(orientationInfo, currentDef);
                 break;
         }
     }
@@ -447,14 +537,10 @@ public class BrushDimension
     /// Applies rotation to IRotatable block entities using orientation info.
     /// </summary>
     /// <param name="orientationInfo">The orientation info containing current state.</param>
-    /// <param name="previousDefinition">The previous orientation definition for delta computation.</param>
     /// <param name="currentDefinition">The current/target orientation definition to apply.</param>
-    /// <param name="forceReplacement">If true, forces full block replacement (e.g., when variant changed).</param>
     private void ApplyRotatableRotation(
         BrushOrientation orientationInfo,
-        BlockOrientation previousDefinition,
-        BlockOrientation currentDefinition,
-        bool forceReplacement = false)
+        BlockOrientation currentDefinition)
     {
         if (dimension is null || currentBlock is null || internalBlockPos is null || orientationInfo is null)
             return;
@@ -462,19 +548,13 @@ public class BrushDimension
         if (string.IsNullOrEmpty(currentBlock.EntityClass))
             return;
 
-        // If variant changed, re-place the block first
-        if (forceReplacement)
-        {
-            PlaceBlockInDimension();
-        }
-
         // Get the live block entity
         var existingBe = dimension.GetBlockEntity(internalBlockPos);
         if (existingBe is null)
             return;
 
         // Use the new centralized method from BuildBrushOrientationInfo
-        if (!orientationInfo.ApplyToBlockEntity(existingBe, previousDefinition, currentDefinition))
+        if (!orientationInfo.ApplyToPlacedBlockEntity(existingBe, currentDefinition, _subscribedInstance?.ItemStack))
         {
             world.Logger.Error("Failed to apply rotatable rotation to block entity at {0} in BuildBrushDimension.", internalBlockPos);
         }
@@ -514,6 +594,7 @@ public class BrushDimension
         // Subscribe to relevant events
         instance.OnOrientationChanged += Instance_OnOrientationChanged;
         instance.OnRotationInfoChanged += Instance_OnRotationInfoChanged;
+        instance.OnPlacementItemStackChanged += Instance_OnPlacementItemStackChanged;
     }
 
     /// <summary>
@@ -527,6 +608,7 @@ public class BrushDimension
 
         _subscribedInstance.OnOrientationChanged -= Instance_OnOrientationChanged;
         _subscribedInstance.OnRotationInfoChanged -= Instance_OnRotationInfoChanged;
+        _subscribedInstance.OnPlacementItemStackChanged -= Instance_OnPlacementItemStackChanged;
 
         _subscribedInstance = null;
     }
@@ -538,6 +620,11 @@ public class BrushDimension
     #endregion
 
     #region Event Handlers
+    private void Instance_OnPlacementItemStackChanged(object? sender, EventArgs e)
+    {
+        RefreshBlockEntityPlacement();
+    }
+
     /// <summary>
     /// Handles orientation changes from the subscribed instance.
     /// Applies rotation based on the new orientation.

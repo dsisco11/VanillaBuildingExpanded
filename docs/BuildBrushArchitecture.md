@@ -40,7 +40,7 @@ Death and join reset mode and hide the badge. World departure and system disposa
 
 Ordinary updates receive the current `BlockSelection?` explicitly. An absent selection clears resolved position and validity. The one-millisecond dirty callback unregisters itself before reading its supplied selection getter, so it observes the selection at callback execution time. Client and server composition bind that getter to the owning session player. Inventory refreshes and placement dirty marking reread the current active slot.
 
-Placement stacks retain the selected orientation's block ID and deep-clone all held-stack attributes before applying brush rotation. This preserves attribute-based properties such as lantern material, lining and glass without modifying the inventory stack. Source refreshes detect attribute changes even when the block ID is unchanged, replacing stale attributes while retaining the selected orientation.
+Placement stacks retain the selected orientation's block ID and deep-clone all held-stack attributes before applying brush rotation. This preserves attribute-based properties such as lantern material, lining and glass without modifying the inventory stack. Source refreshes detect attribute changes even when the block ID is unchanged, replacing stale attributes while retaining the selected orientation. They also track the selected hotbar slot number: switching slots recreates the preview block and entity even for identical stacks, while retaining brush orientation. Unchanged sources in the same slot do not recreate the preview.
 
 Resolved selections preserve the source face, hit position and other raycast data. Placement validation and placement requests use the same cloning rule. Missing block/position paths retain their own early-return semantics; native rules run only when there is a placement candidate.
 
@@ -51,6 +51,12 @@ Resolved selections preserve the source face, hit position and other raycast dat
 3. An accepted update writes sequence tracking first, then calls the controller's `ApplyState`: state copy, source refresh, brush activation, snapping, orientation, eligible position (or exit cleanup) and last-applied sequence. Exceptions retain preceding writes and prevent a reply from that handler invocation.
 4. The handler sends the [acknowledgment](../VanillaBuildingExpanded/src/Networking/BuildBrushAck.packet.cs) to the actual sender. Only an accepted update with an initialized preview dimension then synchronizes chunks to that same owner.
 5. Preview mutations update the entity dirty counter and bounds. Position changes move the preview; the renderer uses dirty state to rebuild its mesh when required.
+
+Preview creation passes a cloned prepared placement stack to the mini-dimension's `SetBlock` and, if needed, fallback `SpawnBlockEntity`. Native creation invokes the block/entity placement hooks; the brush does not repeat the entity hook on newly spawned entities. Slot changes and source-attribute edits recreate the preview from native defaults, restore brush-controlled rotation and mark the preview dirty. Orientation notifications expose the updated placement stack before preview creation.
+
+After native initialization, a serialize-modify-deserialize pass supplements properties not initialized by the hooks, including lantern material, lining and glass. It copies only top-level scalar attributes already exposed by the entity's serialized state with the same attribute type. Coordinates, block identity and recognized rotation fields are protected; nested trees, arrays and item stacks are left to native hooks. Each changed source receives a fresh entity, so removed properties naturally use native defaults without tracking or removing earlier overrides.
+
+Both stages run on initial preview creation and changed sources. Unchanged sources and mesh-angle-only brush rotation reuse the preview entity. There is no lantern-specific branch or `DoPlaceBlock` call. Matching serialized names/types remains a compatibility heuristic, not a universal conversion contract for differently named, nested or derived properties.
 
 `ApplyBrushUpdate` stays on the server system. Its nullable result identifies unknown clients or returns the controller, acknowledgment sequence and whether state was applied. It performs no transport.
 

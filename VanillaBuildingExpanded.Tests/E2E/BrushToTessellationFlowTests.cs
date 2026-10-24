@@ -80,8 +80,8 @@ public class BrushToTessellationFlowTests
                 .Callback<BlockPos>(_ => { });
 
             MockMiniDimension
-                .Setup(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>()))
-                .Callback<int, BlockPos>((blockId, _) => placedBlockId = blockId);
+                .Setup(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>(), It.IsAny<ItemStack>()))
+                .Callback<int, BlockPos, ItemStack>((blockId, _, _) => placedBlockId = blockId);
 
             MockMiniDimension
                 .Setup(d => d.GetBlock(It.IsAny<BlockPos>()))

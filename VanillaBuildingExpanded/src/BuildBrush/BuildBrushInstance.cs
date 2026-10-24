@@ -98,6 +98,9 @@ public class BuildBrushInstance
     /// </summary>
     public event EventHandler<OrientationIndexChangedEventArgs>? OnOrientationChanged;
 
+    /// <summary>Raised after the prepared placement stack is replaced, including attribute-only changes.</summary>
+    public event EventHandler? OnPlacementItemStackChanged;
+
     /// <summary>
     /// Raised when the brush activation state changes.
     /// </summary>
@@ -116,6 +119,8 @@ public class BuildBrushInstance
     #endregion
 
     #region Properties
+    internal int SourceHotbarSlotNumber { get; private set; } = -1;
+
     public long LastAppliedSeq { get; internal set; } = 0;
 
     public bool IsDirty { get; private set; } = false;
@@ -247,9 +252,6 @@ public class BuildBrushInstance
             // Setting CurrentIndex raises _rotation.OnOrientationChanged
             // which we forward via Rotation_OnOrientationChanged.
             _rotation.CurrentIndex = value;
-
-            // Update ItemStack and notify placement-block change if the underlying block-id changed.
-            RebuildPlacementItemStackAndNotify();
         }
     }
 
@@ -489,6 +491,7 @@ public class BuildBrushInstance
         {
             _itemStack = value;
             DummySlot.Itemstack = value;
+            OnPlacementItemStackChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -575,9 +578,12 @@ public class BuildBrushInstance
     /// <summary>
     /// Updates the placement source from the player's currently active hotbar slot.
     /// </summary>
-    /// <returns> True if the block ID or source attributes changed; otherwise, false. </returns>
+    /// <returns> True if the block ID, held source slot or source attributes changed; otherwise, false. </returns>
     public bool TryUpdateBlockId()
     {
+        int currentSlotNumber = inventory.ActiveHotbarSlotNumber;
+        bool slotChanged = currentSlotNumber != SourceHotbarSlotNumber;
+        SourceHotbarSlotNumber = currentSlotNumber;
         var hotbarSlot = inventory.ActiveHotbarSlot;
         var currentItemStack = hotbarSlot?.Itemstack;
         var currentBlockId = currentItemStack?.Block?.Id;
@@ -589,7 +595,7 @@ public class BuildBrushInstance
         }
 
         if (currentItemStack is not null &&
-            (_sourceItemStack is null ||
+            (slotChanged || _sourceItemStack is null ||
              !currentItemStack.Attributes.Equals(World, _sourceItemStack.Attributes)))
         {
             // Snapshot attributes so in-place inventory edits can be detected on the next refresh.
@@ -915,6 +921,7 @@ public class BuildBrushInstance
     /// </summary>
     private void Rotation_OnOrientationChanged(object? sender, OrientationIndexChangedEventArgs e)
     {
+        RebuildPlacementItemStackAndNotify();
         OnOrientationChanged?.Invoke(this, e);
     }
 

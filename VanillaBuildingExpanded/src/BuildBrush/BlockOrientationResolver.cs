@@ -67,6 +67,11 @@ public class BlockOrientationResolver
 
         return KnownMeshRotationAttributes.TryGetValue(attributeName, out var config) && config.IsDegrees;
     }
+
+    internal static bool IsMeshRotationAttribute(string attributeName)
+    {
+        return KnownMeshRotationAttributes.ContainsKey(attributeName);
+    }
     #endregion
 
     #region Fields
