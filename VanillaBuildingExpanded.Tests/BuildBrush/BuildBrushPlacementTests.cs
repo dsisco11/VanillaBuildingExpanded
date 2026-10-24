@@ -7,6 +7,7 @@ using VanillaBuildingExpanded.BuildBrush;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
+using Vintagestory.GameContent;
 
 using Xunit;
 
@@ -181,6 +182,116 @@ public class BuildBrushPlacementTests
     #endregion
 
     #region BuildBrushInstance ItemStack MeshAngle Tests
+
+    [Theory]
+    [InlineData(EnumAppSide.Client)]
+    [InlineData(EnumAppSide.Server)]
+    public void LanternPlacementRequest_PreservesMaterialLiningAndGlass(EnumAppSide side)
+    {
+        var world = CreateMockWorld();
+        world.Setup(w => w.Side).Returns(side);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var lanterns = new BlockLantern[2];
+        string[] orientations = ["up", "north"];
+        for (int i = 0; i < lanterns.Length; i++)
+        {
+            lanterns[i] = new BlockLantern
+            {
+                BlockId = 100 + i,
+                Code = new AssetLocation($"game:lantern-{orientations[i]}")
+            };
+            lanterns[i].VariantStrict["orientation"] = orientations[i];
+        }
+        SetupBlockLookup(world, lanterns);
+        SetupVariantSearch(world, lanterns);
+        var source = new ItemStack(lanterns[0]);
+        source.Attributes.SetString("material", "tinbronze");
+        source.Attributes.SetString("lining", "silver");
+        source.Attributes.SetString("glass", "quartz");
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(new DummySlot(source));
+        var brush = inputs.CreateBrush(world.Object);
+        brush.OrientationIndex = 1;
+        brush.Position = new BlockPos(1, 2, 3);
+        var selection = new BlockSelection
+        {
+            Position = brush.Position.Copy(),
+            Face = BlockFacing.UP,
+            HitPosition = new Vec3d(0.5, 0.5, 0.5)
+        };
+        Assert.True(brush.TryBuildPlacementRequest(selection, out var request));
+        Assert.NotNull(request);
+        Assert.Equal(lanterns[1], request.PlacementBlock);
+        Assert.Same(lanterns[1], request.ItemStack.Block);
+        Assert.Equal("tinbronze", request.ItemStack.Attributes.GetString("material"));
+        Assert.Equal("silver", request.ItemStack.Attributes.GetString("lining"));
+        Assert.Equal("quartz", request.ItemStack.Attributes.GetString("glass"));
+        Assert.Same(lanterns[0], source.Block);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SourceAttributesChanged_WithSameBlockId_RefreshesWithoutResettingOrientation(bool mutateInPlace)
+    {
+        var world = CreateMockWorld();
+        var inputs = TestHelpers.CreateBrushInputs();
+        var variants = CreateVariantBlocks("game:lantern", "orientation", ["up", "north"], 100);
+        SetupBlockLookup(world, variants);
+        SetupVariantSearch(world, variants);
+        var source = new ItemStack(variants[0]);
+        source.Attributes.SetString("material", "copper");
+        source.Attributes.SetString("lining", "gold");
+        var details = new TreeAttribute();
+        details.SetString("value", "original");
+        source.Attributes["details"] = details;
+        var slot = new DummySlot(source);
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(slot);
+        var brush = inputs.CreateBrush(world.Object);
+        brush.OrientationIndex = 1;
+
+        if (!mutateInPlace)
+            slot.Itemstack = source.Clone();
+        slot.Itemstack.Attributes.SetString("material", "brass");
+        slot.Itemstack.Attributes.RemoveAttribute("lining");
+        slot.Itemstack.Attributes.GetTreeAttribute("details").SetString("value", "updated");
+
+        Assert.True(brush.TryUpdateBlockId());
+        Assert.Equal(1, brush.OrientationIndex);
+        Assert.NotNull(brush.ItemStack);
+        Assert.Same(variants[1], brush.ItemStack.Block);
+        Assert.Equal("brass", brush.ItemStack.Attributes.GetString("material"));
+        Assert.False(brush.ItemStack.Attributes.HasAttribute("lining"));
+        Assert.Equal("updated", brush.ItemStack.Attributes.GetTreeAttribute("details").GetString("value"));
+        Assert.False(brush.TryUpdateBlockId());
+    }
+
+    [Fact]
+    public void PreparedStack_ClonesAllSourceAttributesBeforeApplyingRotation()
+    {
+        var world = CreateMockWorld();
+        var block = CreateRotatableBlock(100, "game:testblock", "TestRotatable", "90deg");
+        SetupBlockLookup(world, block);
+        SetupRotatableEntity(world, "TestRotatable");
+        var source = new ItemStack(block);
+        source.Attributes.SetString("type", "oak");
+        source.Attributes.SetFloat("meshAngle", -1f);
+        var details = new TreeAttribute();
+        details.SetString("value", "original");
+        source.Attributes["details"] = details;
+        var target = new ItemStack(block);
+        var rotation = BrushOrientation.Create(block, new BlockOrientationResolver(world.Object), source);
+
+        var prepared = rotation.PrepareItemStackForPlacement(target, rotation.Definitions[1], source);
+        Assert.NotNull(prepared.Attributes.GetTreeAttribute("details"));
+        prepared.Attributes.GetTreeAttribute("details").SetString("value", "changed");
+
+        Assert.Equal("oak", prepared.Attributes.GetString("type"));
+        Assert.Equal(GameMath.PIHALF, prepared.Attributes.GetFloat(rotation.Definitions[1].RotationAttribute), 4);
+        Assert.Equal(-1f, source.Attributes.GetFloat("meshAngle"));
+        Assert.Equal("original", details.GetString("value"));
+        Assert.False(target.Attributes.HasAttribute("type"));
+        Assert.False(target.Attributes.HasAttribute("details"));
+    }
 
     /// <summary>
     /// Verifies that after setting OrientationIndex on BuildBrushInstance,

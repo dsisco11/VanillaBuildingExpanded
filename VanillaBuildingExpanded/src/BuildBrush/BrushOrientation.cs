@@ -398,18 +398,9 @@ public class BrushOrientation
         // Clone the target stack to avoid mutating the original
         ItemStack prepared = target.Clone();
 
-        // Ensure attributes exist
-        if (prepared.Attributes is null)
-        {
-            prepared.Attributes = new TreeAttribute();
-        }
-
-        // Copy type attribute from source (for typed containers like crates/chests)
-        string? type = source?.Attributes?.GetString("type");
-        if (!string.IsNullOrEmpty(type))
-        {
-            prepared.Attributes.SetString("type", type);
-        }
+        prepared.Attributes = source is not null
+            ? source.Attributes?.Clone() ?? new TreeAttribute()
+            : prepared.Attributes ?? new TreeAttribute();
 
         // Set meshAngle for IRotatable blocks
         if (HasRotatableEntity)

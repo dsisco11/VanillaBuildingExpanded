@@ -573,9 +573,9 @@ public class BuildBrushInstance
     }
 
     /// <summary>
-    /// Updates the BlockId based on the player's currently active hotbar slot.
+    /// Updates the placement source from the player's currently active hotbar slot.
     /// </summary>
-    /// <returns> True if the BlockId was updated; otherwise, false. </returns>
+    /// <returns> True if the block ID or source attributes changed; otherwise, false. </returns>
     public bool TryUpdateBlockId()
     {
         var hotbarSlot = inventory.ActiveHotbarSlot;
@@ -583,9 +583,19 @@ public class BuildBrushInstance
         var currentBlockId = currentItemStack?.Block?.Id;
         if (currentBlockId != BlockId)
         {
-            // Store source ItemStack for type resolution (e.g., for typed containers like crates/chests)
-            _sourceItemStack = currentItemStack;
+            _sourceItemStack = currentItemStack?.Clone();
             BlockId = currentBlockId;
+            return true;
+        }
+
+        if (currentItemStack is not null &&
+            (_sourceItemStack is null ||
+             !currentItemStack.Attributes.Equals(World, _sourceItemStack.Attributes)))
+        {
+            // Snapshot attributes so in-place inventory edits can be detected on the next refresh.
+            _sourceItemStack = currentItemStack.Clone();
+            RebuildPlacementItemStackAndNotify();
+            MarkDirty();
             return true;
         }
         return false;
