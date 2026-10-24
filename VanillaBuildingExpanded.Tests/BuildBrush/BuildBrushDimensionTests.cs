@@ -5,6 +5,7 @@ using Moq;
 
 using VanillaBuildingExpanded.BuildBrush;
 
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
@@ -20,6 +21,26 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 /// </summary>
 public class BuildBrushDimensionTests
 {
+    [Fact]
+    public void InitializeClientSide_DesignatesReceivedDimensionAsPreviewBeforeReadingBlocks()
+    {
+        var world = new Mock<IClientWorldAccessor>();
+        var miniDimension = TestHelpers.CreateMockDimension();
+        miniDimension.SetupGet(d => d.subDimensionId).Returns(42);
+        bool designated = false;
+        world.Setup(w => w.SetBlocksPreviewDimension(42)).Callback(() => designated = true);
+        miniDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>()))
+            .Callback(() => Assert.True(designated));
+        var dimension = new BrushDimension(world.Object);
+
+        Assert.True(dimension.InitializeClientSide(miniDimension.Object));
+
+        Assert.Same(miniDimension.Object, dimension.Dimension);
+        Assert.Equal(42, dimension.DimensionId);
+        world.Verify(w => w.SetBlocksPreviewDimension(42), Times.Once);
+        miniDimension.Verify(d => d.GetBlock(It.IsAny<BlockPos>()), Times.Once);
+    }
+
     [Theory]
     [InlineData(EnumAppSide.Client, false)]
     [InlineData(EnumAppSide.Server, false)]

@@ -50,6 +50,8 @@ Resolved selections preserve the source face, hit position and other raycast dat
 
 ## Update and preview flow
 
+Client initialization designates the received brush mini-dimension as the native blocks-preview dimension through `SetBlocksPreviewDimension`, before scanning its contents. This enables native preview-aware tick suppression; it does not suppress placement callbacks or every physics operation.
+
 1. Client ticks update the brush from the current selection; state changes send a [brush update packet](../VanillaBuildingExpanded/src/Networking/SetBuildBrush.packet.cs) with an increasing sequence.
 2. The server handler extracts client ID/name and calls `ApplyBrushUpdate`. An unknown client has no acknowledgment or tracking write. Absent sequence tracking defaults to zero; older/equal packets preserve state and select the existing sequence for acknowledgment.
 3. An accepted update writes sequence tracking first, then calls the controller's `ApplyState`: state copy, source refresh, brush activation, snapping, orientation, eligible position (or exit cleanup) and last-applied sequence. Exceptions retain preceding writes and prevent a reply from that handler invocation.

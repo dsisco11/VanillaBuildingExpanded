@@ -1,5 +1,6 @@
 using System;
 
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
@@ -157,6 +158,9 @@ public class BrushDimension
 
         dimension = existingDimension;
         dimensionId = existingDimension.subDimensionId;
+
+        if (world is IClientWorldAccessor clientWorld)
+            clientWorld.SetBlocksPreviewDimension(dimensionId);
 
         // Try to detect active bounds from existing blocks
         UpdateActiveBoundsFromDimension();
