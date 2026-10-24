@@ -28,6 +28,8 @@ Brush controls require enabled mode and an eligible held block. Rotation additio
 
 Each successful local rotation, by hotkey or mouse wheel, plays the native GUI button hover sound (`menubutton`) non-positionally through the client world audio API. Rejected rotations and preview refreshes do not play it.
 
+The rebindable rotation hotkeys (R forward, Shift + R backward by default) are registered ahead of ordinary hotkeys. Their handlers consume input only when the active brush successfully rotates; otherwise other actions can handle the key.
+
 The saved hammer collectible retains its class and material variant codes, with no crafting recipe, creative inventory entries, or activation behavior.
 
 Shift + mouse wheel provides an additional orientation control using either Shift key: wheel up cycles forward and wheel down cycles backward. The client refreshes the source before rotation, publishes successful changes through the existing brush update, and consumes only successful rotations during grabbed-mouse gameplay. Previously handled events and menu scrolling pass through.

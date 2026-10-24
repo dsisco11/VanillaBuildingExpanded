@@ -423,10 +423,10 @@ public class BuildBrushSystem_Client : ModSystem
         api.Input.SetHotKeyHandler("vbe.ToggleFaceOffsetPlacement", this.Input_ToggleFaceOffsetPlacement);
         api.Input.GetHotKeyByCode("vbe.ToggleFaceOffsetPlacement").TriggerOnUpAlso = true;
 
-        api.Input.TryRegisterHotKey("vbe.RotateBuildCursor_Forward", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-rotate-build-cursor-forward"), GlKeys.R, HotkeyType.CharacterControls);
+        api.Input.TryRegisterHotKeyFirst("vbe.RotateBuildCursor_Forward", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-rotate-build-cursor-forward"), GlKeys.R, HotkeyType.CharacterControls);
         api.Input.SetHotKeyHandler("vbe.RotateBuildCursor_Forward", this.Input_RotateBuildCursor_Forward);
 
-        api.Input.TryRegisterHotKey("vbe.RotateBuildCursor_Backward", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-rotate-build-cursor-backward"), GlKeys.R, HotkeyType.CharacterControls, shiftPressed: true);
+        api.Input.TryRegisterHotKeyFirst("vbe.RotateBuildCursor_Backward", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-rotate-build-cursor-backward"), GlKeys.R, HotkeyType.CharacterControls, shiftPressed: true);
         api.Input.SetHotKeyHandler("vbe.RotateBuildCursor_Backward", this.Input_RotateBuildCursor_Backward);
 
         api.Input.TryRegisterHotKeyFirst("vbe.CycleSnappingMode_Forward", Lang.Get($"{Mod.Info.ModID}:vbe-hotkey-cycle-snapping-mode-forward"), (GlKeys)(KeyCombination.MouseStart + (int)EnumMouseButton.Middle), HotkeyType.CharacterControls, shiftPressed: false);
