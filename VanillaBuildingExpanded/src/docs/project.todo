@@ -1,11 +1,5 @@
 # Short-Term:
-    ☑ Allow Shift + MouseWheel for cycling through orientations.
-    ☑ Rotating the build-brush should play the gui button hover SFX, providing auditory feedback for orientation changes.
     ☐ BUG: cant place small lanterns.
-    ☑ BUG: 'R' key rotation not working because it doesnt take priority over other input actions. FIX: it should take priority when build-brush is active.
-    ☑ Move build-mode symbol to the top-left corner of screen.
-    ☑ Introduce build-info panel at top-left screen corner, which displays current build-mode information, such as snapping mode and rotation state.
-    ☐ Display to build-info panel that shows keybinds.
     ☐ TESTS: create an exhaustive test suite that enumerates all placeable items and blocks from the base game assets and runs their definitions through the build-brush system to ensure compatibility.
         - Test placement logic.
         - Test preview mesh tessellation.
