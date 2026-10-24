@@ -1,6 +1,6 @@
 # Short-Term:
     ☑ Allow Shift + MouseWheel for cycling through orientations.
-    ☐ Rotating the build-brush should play the gui button hover SFX, providing auditory feedback for orientation changes.
+    ☑ Rotating the build-brush should play the gui button hover SFX, providing auditory feedback for orientation changes.
     ☐ BUG: cant place small lanterns.
     ☐ BUG: 'R' key rotation not working because it doesnt take priority over other input actions. FIX: it should take priority when build-brush is active.
     ☐ Move build-mode symbol to the top-left corner of screen.

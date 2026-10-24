@@ -67,7 +67,11 @@ public sealed class BuildBrushControllerClient
     public bool RotateCursor(EModeCycleDirection direction)
     {
         var localBrush = GetBrush();
-        return CanUseBrushControls && localBrush.CycleOrientation(direction);
+        if (!CanUseBrushControls || !localBrush.CycleOrientation(direction))
+            return false;
+
+        api.World.PlaySound(new SoundAttributes(new AssetLocation("game:sounds/menubutton"), false));
+        return true;
     }
 
     /// <summary>Cycles snapping flags and displays the resulting mode.</summary>

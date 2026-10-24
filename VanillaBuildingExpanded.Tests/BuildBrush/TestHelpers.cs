@@ -72,6 +72,7 @@ public static class TestHelpers
         mockCapi.Setup(c => c.Logger).Returns(mockLogger.Object);
         mockCapi.Setup(c => c.Tesselator).Returns(mockTesselator.Object);
         mockCapi.Setup(c => c.TesselatorManager).Returns(mockTesselatorManager.Object);
+        mockCapi.Setup(c => c.World).Returns(new Mock<IClientWorldAccessor>().Object);
         mockCapi.Setup(c => c.Side).Returns(EnumAppSide.Client);
 
         return mockCapi;

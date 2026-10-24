@@ -26,6 +26,8 @@ The local mode toggle uses the rebindable backtick key. Mode transitions refresh
 
 Brush controls require enabled mode and an eligible held block. Rotation additionally requires orientation support; snapping and held face offset can be adjusted without a target. Suspended or disabled brushes leave ordinary input handling intact. Exit and suspension clear held face offset while preserving snapping preferences. Supported brush placement owns its native validation failures so a failed brush attempt cannot fall through to an unrelated vanilla placement.
 
+Each successful local rotation, by hotkey or mouse wheel, plays the native GUI button hover sound (`menubutton`) non-positionally through the client world audio API. Rejected rotations and preview refreshes do not play it.
+
 The saved hammer collectible retains its class and material variant codes, with no crafting recipe, creative inventory entries, or activation behavior.
 
 Shift + mouse wheel provides an additional orientation control using either Shift key: wheel up cycles forward and wheel down cycles backward. The client refreshes the source before rotation, publishes successful changes through the existing brush update, and consumes only successful rotations during grabbed-mouse gameplay. Previously handled events and menu scrolling pass through.

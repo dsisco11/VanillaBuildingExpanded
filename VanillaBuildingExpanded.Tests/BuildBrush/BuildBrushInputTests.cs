@@ -23,16 +23,22 @@ public sealed class BuildBrushInputTests
         world.Setup(w => w.SearchBlocks(It.IsAny<AssetLocation>())).Returns([north, east]);
         BrushTestInputs inputs = new();
         inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(new DummySlot(new ItemStack(north)));
-        BuildBrushControllerClient client = new(TestHelpers.CreateMockCapi().Object, () => inputs.CreateBrush(world.Object));
+        var api = TestHelpers.CreateMockCapi();
+        var clientWorld = Mock.Get(api.Object.World);
+        BuildBrushControllerClient client = new(api.Object, () => inputs.CreateBrush(world.Object));
         Assert.False(client.RotateCursor(EModeCycleDirection.Forward));
+        clientWorld.Verify(w => w.PlaySound(It.IsAny<SoundAttributes>()), Times.Never);
         Assert.Equal(10, client.GetBrush().CurrentPlacementBlock!.Id);
         client.SetBuildMode(true, Selection());
         Assert.True(client.RotateCursor(EModeCycleDirection.Forward));
+        clientWorld.Verify(w => w.PlaySound(new SoundAttributes(new AssetLocation("game:sounds/menubutton"), false)), Times.Once);
         Assert.Equal(11, client.GetBrush().CurrentPlacementBlock!.Id);
         Assert.True(client.RotateCursor(EModeCycleDirection.Backward));
+        clientWorld.Verify(w => w.PlaySound(new SoundAttributes(new AssetLocation("game:sounds/menubutton"), false)), Times.Exactly(2));
         Assert.Equal(10, client.GetBrush().CurrentPlacementBlock!.Id);
         client.SetBuildMode(false, null);
         Assert.False(client.RotateCursor(EModeCycleDirection.Forward));
+        clientWorld.Verify(w => w.PlaySound(new SoundAttributes(new AssetLocation("game:sounds/menubutton"), false)), Times.Exactly(2));
     }
 
     /// <summary>Disabled mode and unsupported sources never consume brush hotkeys or allow placement.</summary>
@@ -76,12 +82,14 @@ public sealed class BuildBrushInputTests
         var block = TestHelpers.CreateAndRegisterBlock(world, 10);
         BrushTestInputs inputs = new();
         inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(new DummySlot(new ItemStack(block)));
-        BuildBrushControllerClient client = new(TestHelpers.CreateMockCapi().Object, () => inputs.CreateBrush(world.Object));
+        var api = TestHelpers.CreateMockCapi();
+        BuildBrushControllerClient client = new(api.Object, () => inputs.CreateBrush(world.Object));
         client.SetBuildMode(true, null);
         var brush = client.GetBrush();
 
         Assert.True(client.CanUseBrushControls);
         Assert.False(client.RotateCursor(EModeCycleDirection.Forward));
+        Mock.Get(api.Object.World).Verify(w => w.PlaySound(It.IsAny<SoundAttributes>()), Times.Never);
         Assert.True(client.SetFaceOffset(true));
         Assert.True(client.CycleSnappingMode(EModeCycleDirection.Forward));
         Assert.Equal(EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.ApplyFaceNormalOffset, brush.Snapping);
