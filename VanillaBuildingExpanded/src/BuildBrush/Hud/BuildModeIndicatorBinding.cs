@@ -8,6 +8,7 @@ internal sealed class BuildModeIndicatorBinding : IDisposable
     private readonly BuildBrushControllerClient controller;
     private readonly Func<IBuildModeIndicator> createIndicator;
     private IBuildModeIndicator? indicator;
+    private BuildBrushInstance? brush;
     private bool disposed;
 
     #region Public API
@@ -26,6 +27,12 @@ internal sealed class BuildModeIndicatorBinding : IDisposable
         if (disposed) return;
         disposed = true;
         controller.ModeChanged -= OnModeChanged;
+        if (brush is not null)
+        {
+            brush.OnSnappingModeChanged -= OnInfoChanged;
+            brush.OnRotationInfoChanged -= OnInfoChanged;
+            brush.OnOrientationChanged -= OnInfoChanged;
+        }
         indicator?.Dispose();
         indicator = null;
     }
@@ -37,8 +44,27 @@ internal sealed class BuildModeIndicatorBinding : IDisposable
     {
         if (disposed) return;
         bool active = controller.State.IsActive;
-        if (active) indicator ??= createIndicator();
+        if (active)
+        {
+            indicator ??= createIndicator();
+            if (brush is null)
+            {
+                brush = controller.GetBrush();
+                brush.OnSnappingModeChanged += OnInfoChanged;
+                brush.OnRotationInfoChanged += OnInfoChanged;
+                brush.OnOrientationChanged += OnInfoChanged;
+            }
+            RefreshInfo();
+        }
         indicator?.SetVisible(active);
+    }
+
+    private void OnInfoChanged(object? sender, EventArgs args) => RefreshInfo();
+
+    private void RefreshInfo()
+    {
+        if (!disposed && brush?.IsActive == true)
+            indicator?.Update(BuildModeInfo.FromBrush(brush));
     }
     #endregion
 }

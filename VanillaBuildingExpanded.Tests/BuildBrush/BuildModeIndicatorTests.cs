@@ -2,6 +2,7 @@ using Moq;
 using VanillaBuildingExpanded.BuildBrush;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Datastructures;
 using Xunit;
 
 namespace VanillaBuildingExpanded.Tests.BuildBrush;
@@ -109,6 +110,111 @@ public sealed class BuildModeIndicatorTests
         Assert.Equal(1, next.Shown);
         Assert.Equal(1, previous.Shown);
     }
+
+    [Fact]
+    public void Info_TracksSnappingOffsetSuspensionAndResumeWithoutTarget()
+    {
+        var world = TestHelpers.CreateMockWorld();
+        var block = TestHelpers.CreateAndRegisterBlock(world, 10);
+        ItemSlot slot = new DummySlot(new ItemStack(block));
+        BrushTestInputs inputs = new();
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(() => slot);
+        var client = new BuildBrushControllerClient(TestHelpers.CreateMockCapi().Object, () => inputs.CreateBrush(world.Object));
+        var view = new Indicator();
+        using var binding = new BuildModeIndicatorBinding(client, () => view);
+
+        client.SetBuildMode(true, null);
+        Assert.False(view.Updates[^1].IsSuspended);
+        Assert.Equal(0, view.Updates[^1].OrientationCount);
+        Assert.Null(view.Updates[^1].RotationAngleDegrees);
+        foreach (var expected in new[] { EBuildBrushSnapping.Horizontal, EBuildBrushSnapping.Vertical,
+            EBuildBrushSnapping.None, EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical })
+        {
+            Assert.True(client.CycleSnappingMode(EModeCycleDirection.Forward));
+            Assert.Equal(expected, view.Updates[^1].Snapping);
+        }
+        client.SetFaceOffset(true);
+        Assert.True(view.Updates[^1].Snapping.HasFlag(EBuildBrushSnapping.ApplyFaceNormalOffset));
+        slot = new DummySlot();
+        client.TryUpdate(null);
+        Assert.True(view.Updates[^1].IsSuspended);
+        Assert.False(view.Updates[^1].Snapping.HasFlag(EBuildBrushSnapping.ApplyFaceNormalOffset));
+        Assert.Equal(0, view.Hidden);
+        slot = new DummySlot(new ItemStack(block));
+        client.TryUpdate(null);
+        Assert.False(view.Updates[^1].IsSuspended);
+        Assert.True(client.GetBrush().IsDisabled);
+
+        binding.Dispose();
+        int count = view.Updates.Count;
+        client.CycleSnappingMode(EModeCycleDirection.Backward);
+        slot = new DummySlot();
+        client.TryUpdate(null);
+        Assert.Equal(count, view.Updates.Count);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Info_TracksRotationsAndBlockChanges(bool meshRotation)
+    {
+        var world = TestHelpers.CreateMockWorld();
+        var block = TestHelpers.CreateAndRegisterBlock(world, 10, "game:test-north");
+        var other = TestHelpers.CreateAndRegisterBlock(world, 11, "game:test-south");
+        if (meshRotation)
+        {
+            block.EntityClass = "TestRotatable";
+            block.Attributes = JsonObject.FromJson("{\"rotatatableInterval\":\"90deg\"}");
+            var entity = new Mock<BlockEntity>();
+            entity.As<IRotatable>();
+            var registry = new Mock<IClassRegistryAPI>();
+            registry.Setup(r => r.GetBlockEntity(block.EntityClass)).Returns(entity.Object.GetType());
+            registry.Setup(r => r.CreateBlockEntity(block.EntityClass)).Returns(entity.Object);
+            var api = new Mock<ICoreAPI>();
+            api.Setup(a => a.ClassRegistry).Returns(registry.Object);
+            world.Setup(w => w.Api).Returns(api.Object);
+        }
+        else
+        {
+            block.VariantStrict["horizontalorientation"] = "north";
+            other.VariantStrict["horizontalorientation"] = "south";
+            world.Setup(w => w.SearchBlocks(It.IsAny<AssetLocation>())).Returns([block, other]);
+        }
+        ItemSlot slot = new DummySlot(new ItemStack(block));
+        BrushTestInputs inputs = new();
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(() => slot);
+        var client = new BuildBrushControllerClient(TestHelpers.CreateMockCapi().Object, () => inputs.CreateBrush(world.Object));
+        var view = new Indicator();
+        using var binding = new BuildModeIndicatorBinding(client, () => view);
+        client.SetBuildMode(true, null);
+        int orientations = meshRotation ? 4 : 2;
+        Assert.Equal(orientations, view.Updates[^1].OrientationCount);
+        Assert.Equal(0, view.Updates[^1].OrientationIndex);
+        Assert.Equal(meshRotation ? 0f : (float?)null, view.Updates[^1].RotationAngleDegrees);
+
+        Assert.True(client.RotateCursor(EModeCycleDirection.Backward));
+        Assert.Equal(orientations - 1, view.Updates[^1].OrientationIndex);
+        Assert.Equal(meshRotation ? 270f : (float?)null, view.Updates[^1].RotationAngleDegrees);
+        Assert.True(client.RotateCursor(EModeCycleDirection.Forward));
+        Assert.Equal(0, view.Updates[^1].OrientationIndex);
+
+        var unrotatable = TestHelpers.CreateAndRegisterBlock(world, 20, "game:plain");
+        slot = new DummySlot(new ItemStack(unrotatable));
+        client.TryUpdate(null);
+        Assert.Equal(0, view.Updates[^1].OrientationCount);
+        Assert.Null(view.Updates[^1].RotationAngleDegrees);
+        slot = new DummySlot();
+        client.TryUpdate(null);
+        Assert.True(view.Updates[^1].IsSuspended);
+
+        client.SetBuildMode(false, null);
+        int count = view.Updates.Count;
+        client.GetBrush().Snapping = EBuildBrushSnapping.Horizontal;
+        Assert.Equal(count, view.Updates.Count);
+        client.SetBuildMode(true, null);
+        Assert.Equal(EBuildBrushSnapping.Horizontal, view.Updates[^1].Snapping);
+        Assert.True(view.Updates[^1].IsSuspended);
+    }
     #endregion
 
     #region Private
@@ -118,8 +224,11 @@ public sealed class BuildModeIndicatorTests
         public int Shown;
         public int Hidden;
         public int Disposals;
+        public List<BuildModeInfo> Updates = new();
 
         #region Public API
+        public void Update(BuildModeInfo info) => Updates.Add(info);
+
         /// <summary>Records the requested visibility transition.</summary>
         public void SetVisible(bool visible)
         {
