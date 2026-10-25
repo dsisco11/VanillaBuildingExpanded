@@ -54,7 +54,7 @@ internal sealed class TableCell
     /// <param name="element">The child to supply to a row.</param>
     /// <param name="key">An optional nonblank table-local lookup key.</param>
     /// <param name="preferredSize">Optional logical dimensions including fixed padding.</param>
-    /// <param name="input">Input eligibility flags; routing is implemented in a later phase.</param>
+    /// <param name="input">Explicit pointer/keyboard eligibility; passive content receives no routed input.</param>
     /// <param name="cancelInput">Non-activating cancellation, required when pointer input is enabled.</param>
     public TableCell(GuiElement element, string? key = null, TableSize? preferredSize = null,
         TableInput input = TableInput.None, Action? cancelInput = null)

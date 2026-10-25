@@ -1,6 +1,6 @@
 # GUI table implementation TODO
 
-Status: Phases 1 through 4 complete (contracts, layout, ownership, divider strategies, composer registration, and cached composition/rendering). Phases 5 onward are not started; input/focus routing and HUD integration remain pending. Actual GPU display verification remains part of P7.
+Status: Phases 1 through 5 complete (contracts, layout, ownership, divider strategies, composer registration, cached composition/rendering, and opt-in input/nested focus). Phases 6 onward are not started; HUD integration remains pending. Actual GPU display verification remains part of P7.
 
 Design source: [GUI table proposal](GuiElementTable.proposal.md).
 
@@ -172,17 +172,28 @@ P4 evidence and implementation notes:
 
 ## P5 - Implementing input and focus
 
-- [ ] Route events only to input-eligible children, respecting clipping, handled flags, and visual ordering.
-- [ ] Preserve pass-through over empty cells, table gaps, and passive children; avoid native base-handler fallbacks that consume those events.
-- [ ] Track active pointer interaction so release/cancellation reaches its child outside the original bounds.
-- [ ] Propagate hovered-child cursors and clear stale cursor state.
-- [ ] Keep tables with no eligible focusable children non-focusable.
-- [ ] Expose a focusable group when appropriate and implement nested focus, stable tab order, forward/reverse traversal, and exit to the outer composer.
-- [ ] Propagate focus loss and cancel active interaction using the capability defined in P1.
-- [ ] Leave the host HUD/dialog in control of whether it routes input to the table.
-- [ ] Add tests for passive text, non-focusable clickable controls, handled events, clipping, outside release, focus loss, cursor reset, and traversal boundaries.
+- [x] Route events only to input-eligible children, respecting clipping, handled flags, and visual ordering.
+- [x] Preserve pass-through over empty cells, table gaps, and passive children; avoid native base-handler fallbacks that consume those events.
+- [x] Track active pointer interaction so release/cancellation reaches its child outside the original bounds.
+- [x] Propagate hovered-child cursors and clear stale cursor state.
+- [x] Keep tables with no eligible focusable children non-focusable.
+- [x] Expose a focusable group when appropriate and implement nested focus, stable tab order, forward/reverse traversal, and exit to the outer composer.
+- [x] Propagate focus loss and cancel active interaction using the capability defined in P1.
+- [x] Leave the host HUD/dialog in control of whether it routes input to the table.
+- [x] Add tests for passive text, non-focusable clickable controls, handled events, clipping, outside release, focus loss, cursor reset, and traversal boundaries.
 
-Exit gate: ownership does not cause input capture by passive content, and interactive children behave correctly as a nested group.
+Exit gate passed in automated coverage: passive content remains input-transparent, opted-in controls receive capture-safe routing, and the concrete native composer correctly enters, traverses, and exits nested focus in both directions.
+
+P5 evidence and implementation notes:
+
+- [GuiElementTable.Input.cs](../VanillaBuildingExpanded/src/UI/GuiElementTable.Input.cs) keeps substantial input/focus lifecycle code separate from layout/composition while remaining part of the same owning component. Pointer hit order is reverse visual order; keyboard traversal remains row-major.
+- Track all down recipients by mouse button, even when they do not mark handled. Release outside bounds is forwarded once, then safely cancelled. Handled releases only cancel. Captured movement is deduplicated and precedes hover-only recipients; outgoing hover receives an exit notification.
+- CancelInput clears group/nested focus, cursor, pending selection, and capture before callbacks. The host must invoke it when hiding or disabling input routing or returning the pointer to gameplay. Cleanup is non-activating, reentrancy-guarded, and reports aggregated failures without skipping other recipients.
+- Group focusability is available before registration and requires Keyboard eligibility plus native Focusable. Pointer selection survives native group focus assignment; clicking pointer-only content does not select an unrelated keyboard child. Internal focus changes safely cancel outgoing pointer capture.
+- Native composer forward/reverse entry, internal Tab handling, boundary exit, and single-outer-group focus preservation are verified. No base mouse-down fallback consumes passive table content.
+- Cursor propagation also runs after child rendering, verified through native GuiComposer.Render without mouse movement. Clip changes, pointer exit, cancellation, and disposal clear stale cursor state.
+- [TableInputTests.cs](../VanillaBuildingExpanded.Tests/UI/TableInputTests.cs) adds 41 cases; [TableCompositionTests.cs](../VanillaBuildingExpanded.Tests/UI/TableCompositionTests.cs) adds one native-composer cursor case. The combined UI suite passes 190 tests with zero failures or skips and builds production/test projects. Existing unrelated compiler warnings remain.
+- No HUD, collapse-section, or gameplay-input routing changes were made. Controls-content migration remains P6; actual in-game verification remains P7.
 
 ## P6 - Migrating controls content
 

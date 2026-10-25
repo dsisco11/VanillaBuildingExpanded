@@ -267,6 +267,32 @@ public sealed class TableCompositionTests
     }
 
     [Fact]
+    public void NativeComposer_RenderReadsHoveredChildCursorWithoutMouseMoveOrRecomposition()
+    {
+        using var fixture = new Fixture();
+        var input = new Mock<IInputAPI>();
+        int mouseX = 1;
+        input.SetupGet(api => api.MouseX).Returns(() => mouseX);
+        input.SetupGet(api => api.MouseY).Returns(1);
+        fixture.Api.SetupGet(api => api.Input).Returns(input.Object);
+        using var composer = fixture.Composer();
+        var table = fixture.Table();
+        var child = fixture.Cell("child");
+        child.CursorToRender = "linkselect";
+        table.AddRowCells([new TableCell(child, input: TableInput.Pointer, cancelInput: () => { })]);
+        composer.TryAddTable(table, "table");
+        composer.Compose(false);
+        composer.Render(0.1f);
+        Assert.Equal("linkselect", composer.MouseOverCursor);
+        mouseX = 100;
+        composer.Render(0.1f);
+        Assert.Null(composer.MouseOverCursor);
+        Assert.Null(table.MouseOverCursor);
+        Assert.Equal(1, child.ComposeCalls);
+        Assert.Equal(2, fixture.Uploads.Count);
+    }
+
+    [Fact]
     public void NativeStaticAndDynamicText_ComposeAndUpdateThroughTheOwnedLifecycle()
     {
         using var fixture = new Fixture();
@@ -750,6 +776,7 @@ public sealed class TableCompositionTests
         public bool ThrowOnRender { get; set; }
         public bool ThrowOnPostRender { get; set; }
         public bool ThrowOnDispose { get; set; }
+        public string? CursorToRender { get; set; }
         public (double X, double Y) DrawPosition { get; private set; }
         public Action? Before { get; set; }
         public Action<Context, ImageSurface>? Paint { get; set; }
@@ -784,6 +811,7 @@ public sealed class TableCompositionTests
         public override void RenderInteractiveElements(float deltaTime)
         {
             RenderedValue = Value;
+            MouseOverCursor = CursorToRender;
             events.Add($"render:{name}");
             if (ThrowOnRender) throw new InvalidOperationException("Render failed.");
         }

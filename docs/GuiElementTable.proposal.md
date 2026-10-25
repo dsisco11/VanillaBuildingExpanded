@@ -1,6 +1,6 @@
 # GUI table layout component proposal
 
-Status: Design direction approved: row-oriented content, child ownership, direct inheritance from `GuiElement`, and interface-based divider rendering. Phases 1 through 4 are complete: contracts, layout, validation, ownership, divider strategies, composer registration, and cached child composition/rendering are implemented. Input routing and HUD integration remain pending; actual GPU display verification remains part of the in-game pass.
+Status: Design direction approved: row-oriented content, child ownership, direct inheritance from `GuiElement`, and interface-based divider rendering. Phases 1 through 5 are complete: contracts, layout, validation, ownership, divider strategies, composer registration, cached child composition/rendering, and opt-in input/nested focus are implemented. HUD integration remains pending; actual GPU display verification remains part of the in-game pass.
 
 Implementation progress is tracked in the [implementation TODO](GuiElementTable.implementation.todo).
 
@@ -394,6 +394,18 @@ The table must be non-focusable when it has no keyboard-enabled focusable childr
 Mouse release and cancellation must reach an active child even when the pointer moves outside its bounds, so controls cannot remain pressed. Do not make informational content capture pointer input merely because its native base handler marks events handled; input eligibility must distinguish passive cells from interactive controls. This policy is separate from child rendering, and must not use `Focusable` alone as a clickability test.
 
 The containing HUD or dialog retains the final say over whether the table receives input at all. Apply the explicit passive-default flags and cancellation-callback contract above; do not infer input eligibility from child type.
+
+#### Phase 5 implementation evidence
+
+- [GuiElementTable.Input.cs](../VanillaBuildingExpanded/src/UI/GuiElementTable.Input.cs) contains the table's input lifecycle as a partial class, separate from layout and texture composition. Production routing uses only native element APIs and immutable input metadata, without control-type switches or reflection.
+- Press/wheel hit testing uses reverse visual order, including reversed insertion order for equal draw orders. Passive cells, gaps, clipped content, and outside points do not consume events. Captured movement precedes hover-only movement, and the previous hover recipient receives an exit move to clear hover state.
+- Every press recipient is tracked by button, including children that leave the press unhandled. Matching release reaches captured children outside bounds. Already-handled releases cancel without forwarding activation; once a recipient handles release, remaining recipients only receive cancellation. Repeated presses cancel the previous interaction, and a move is not duplicated for a child captured under multiple buttons.
+- `CancelInput()` clears capture, cursor, group focus, nested focus, and pending entry selection before invoking cleanup. Cancellation callbacks cannot reenter routing to create new captures. Cleanup processes remaining recipients after failures and surfaces aggregate errors. Event delivery stops appropriately when a child cancels or disposes its owning table.
+- Keyboard focus eligibility is independent of pointer eligibility. Traversal stays row-major regardless of draw order; the focused child gets first opportunity to handle Tab. Unhandled boundary Tab remains available to the native composer, preserving current child focus if no other outer target exists.
+- Pointer activation selects only an eligible clicked child before native composer group-focus assignment. Clicking a pointer-only control does not select an unrelated keyboard child; Tab can subsequently enter the group's keyboard participants. Focus loss and internal focus changes cancel outgoing capture without fabricating mouse-up.
+- Cursor propagation runs after dynamic child rendering as well as during pointer routing, so the native composer sees current child cursors without requiring a mouse-move event. Leaving eligible content, clip changes, cancellation, and disposal clear stale cursor state.
+- [TableInputTests.cs](../VanillaBuildingExpanded.Tests/UI/TableInputTests.cs) adds 41 cases, with another native composer cursor case in [TableCompositionTests.cs](../VanillaBuildingExpanded.Tests/UI/TableCompositionTests.cs). Coverage includes real collapse-button activation/cancellation, concrete native composer forward/reverse entry and exit, scaled world-coordinate hits, handled input, captures, failure cleanup, and reentrant cancellation/disposal.
+- The combined UI suite passes 190 tests with zero failures or skips and builds both projects. Existing unrelated compiler warnings remain. HUD pointer/keyboard routing is unchanged; its controls-content migration is still Phase 6, and in-game verification remains Phase 7.
 
 ### Disposal and validation
 

@@ -12,9 +12,10 @@ namespace VanillaBuildingExpanded.UI;
 /// <summary>Owns GUI elements supplied as rows and arranges them into shared, content-sized or fixed columns.</summary>
 /// <remarks>
 /// Sizes use unscaled logical GUI units. Accepted children must not be registered, reparented, or disposed independently.
-/// Static artwork is cached in an owned texture; dynamic rendering stays with each child. Input routing is pending.
+/// Static artwork is cached in an owned texture; dynamic rendering stays with each child.
+/// Input is opt-in, with nested keyboard focus and explicit non-activating pointer cancellation.
 /// </remarks>
-internal sealed class GuiElementTable : GuiElement
+internal sealed partial class GuiElementTable : GuiElement
 {
     /// <summary>Retains accepted bounds and preferred footprints independently of later arrangement.</summary>
     private sealed class CellEntry(TableCell cell, TableSize size)
@@ -59,6 +60,8 @@ internal sealed class GuiElementTable : GuiElement
         {
             if (disposed) return;
             base.InsideClipBounds = value;
+            hoveredChild = null;
+            MouseOverCursor = null;
             foreach (var entry in rows.SelectMany(row => row))
                 entry.Cell.Element.InsideClipBounds = value;
         }
@@ -175,6 +178,7 @@ internal sealed class GuiElementTable : GuiElement
         var layout = CalculateLayout();
         ApplyLayout(layout);
         arrangedLayout = layout;
+        UpdateDrawOrder();
         childrenPrepared = false;
         InvalidateArtwork();
         invalidationNotified = false;
@@ -231,6 +235,7 @@ internal sealed class GuiElementTable : GuiElement
         if (disposed) return;
         EnsureArtwork();
         RenderFrame(deltaTime, postRender: false);
+        if (!disposed) UpdateCursorFromClient();
     }
 
     /// <summary>Forwards the native post-render stage in the same stable order and clipping scope.</summary>
@@ -240,9 +245,6 @@ internal sealed class GuiElementTable : GuiElement
         RequireSettledLayout();
         RenderFrame(deltaTime, postRender: true);
     }
-
-    /// <summary>Leaves pointer input unhandled until explicit child routing is implemented.</summary>
-    public override void OnMouseDown(ICoreClientAPI api, MouseEvent args) { }
 
     /// <summary>Checks predictable registration failures before native maps can acquire ownership.</summary>
     internal void ValidateRegistration(GuiComposer composer)
@@ -298,9 +300,12 @@ internal sealed class GuiElementTable : GuiElement
         // Validate native sizing/graph changes, then restore the agreed fixed cell footprints.
         CalculateLayout();
         ApplyLayout(layout);
-        drawOrder = rows.SelectMany(row => row).OrderBy(entry => entry.Cell.Element.DrawOrder).ToArray();
+        UpdateDrawOrder();
         childrenPrepared = true;
     }
+
+    private void UpdateDrawOrder() =>
+        drawOrder = rows.SelectMany(row => row).OrderBy(entry => entry.Cell.Element.DrawOrder).ToArray();
 
     /// <summary>Rebuilds dirty CPU artwork and uploads through the native texture-reuse API at a safe entry point.</summary>
     private void EnsureArtwork()
@@ -548,6 +553,8 @@ internal sealed class GuiElementTable : GuiElement
     {
         if (disposed) return;
         disposed = true;
+        // Disposal already cancels every configured child below, including idle controls.
+        ClearInputTracking();
         List<Exception>? errors = null;
         foreach (var entry in rows.SelectMany(row => row))
         {
