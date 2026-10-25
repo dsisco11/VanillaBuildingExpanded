@@ -1,6 +1,6 @@
 # GUI table implementation TODO
 
-Status: Phases 1 and 2 complete (contracts, layout, and ownership). Phases 3 onward are not started; the component is not yet integrated or renderable.
+Status: Phases 1 through 3 complete (contracts, layout, ownership, and divider strategies). Phases 4 onward are not started; native texture/composer integration and input routing remain pending.
 
 Design source: [GUI table proposal](GuiElementTable.proposal.md).
 
@@ -118,21 +118,31 @@ dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj
 
 ## P3 - Implementing divider geometry and strategies
 
-- [ ] Add `ITableDividerRenderer` and a read-only divider-geometry snapshot.
-- [ ] Generate each row boundary once across table width, at the midpoint of its row gap.
-- [ ] Generate cell boundaries only between adjacent populated cells in each row, spanning that row's allocated height.
-- [ ] Handle zero gaps, empty tables, single rows, and single-cell rows without phantom segments.
-- [ ] Convert segment coordinates to table-local device units once and expose GUI scale for logical stroke/dash sizing.
-- [ ] Implement the no-op default renderer.
-- [ ] Implement solid and dashed renderers as separate strategies to exercise the extension point; keep their artwork configurable rather than treating it as approved HUD styling.
-- [ ] Put boundary-kind selection, colors, widths, dashes, pixel alignment, and intersection handling in renderer implementations or immutable options, not the table.
-- [ ] Validate renderer settings explicitly; allow sharing immutable resource-free renderer instances.
-- [ ] Add recording-renderer geometry tests and focused Cairo tests where the existing environment supports them.
-- [ ] Verify that injecting an additional test renderer requires no concrete-style checks or style switches in the table.
+- [x] Add `ITableDividerRenderer` and a read-only divider-geometry snapshot.
+- [x] Generate each row boundary once across table width, at the midpoint of its row gap.
+- [x] Generate cell boundaries only between adjacent populated cells in each row, spanning that row's allocated height.
+- [x] Handle zero gaps, empty tables, single rows, and single-cell rows without phantom segments.
+- [x] Convert segment coordinates to table-local device units once and expose GUI scale for logical stroke/dash sizing.
+- [x] Implement the no-op default renderer.
+- [x] Implement solid and dashed renderers as separate strategies to exercise the extension point; keep their artwork configurable rather than treating it as approved HUD styling.
+- [x] Put boundary-kind selection, colors, widths, dashes, pixel alignment, and intersection handling in renderer implementations or immutable options, not the table.
+- [x] Validate renderer settings explicitly; allow sharing immutable resource-free renderer instances.
+- [x] Add recording-renderer geometry tests and focused Cairo tests where the existing environment supports them.
+- [x] Verify that injecting an additional test renderer requires no concrete-style checks or style switches in the table.
 
 For the P2 fixture, expect one horizontal boundary at `y = 22` across width 302 and one vertical boundary at `x = 96` spanning the first row's height of 20, before GUI scaling. The shorter second row contributes no vertical divider.
 
 Exit gate: styles are independently replaceable, geometry is exact, and styles do not affect layout.
+
+Completion evidence:
+
+- Added [TableDividerGeometry.cs](../VanillaBuildingExpanded/src/UI/TableDividerGeometry.cs) and [TableDividerRenderers.cs](../VanillaBuildingExpanded/src/UI/TableDividerRenderers.cs), including XML API documentation.
+- The table exposes `GetDividerGeometry(guiScale)` for settled-layout snapshots, a non-null `DividerRenderer`, and artwork invalidation. Its internal `DrawDividers` entry point delegates through the interface with clipping and drawing-state/path restoration; P4 will connect it to child composition and texture upload.
+- No-op, solid, and dashed strategies use immutable settings and retain no native drawing resources. Boundary selection and line mechanics remain outside the table.
+- [TableDividerTests.cs](../VanillaBuildingExpanded.Tests/UI/TableDividerTests.cs) covers exact geometry at scales 1, 1.25, 1.5, and 2; collection snapshots; renderer injection; clipping; state/path restoration after errors; dash phase; single-blend intersections; and invalid settings.
+- A 100-row fractional-track regression exposed differing accumulation orders in measurement and placement. Both now use the same computed track origins/extents, also used by divider geometry; no tolerance or clipping fallback hides inconsistent layout.
+- The focused UI run passed 110 tests with zero failures or skips and built production/test projects. Offscreen Cairo pixels were verified using the installed native library and the P2 validation command. Unrelated existing compiler warnings remain.
+- No composer registration helper, child texture composition, dynamic child forwarding, or HUD changes were added in P3.
 
 ## P4 - Implementing composition and rendering
 

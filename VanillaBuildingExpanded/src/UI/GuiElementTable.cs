@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Cairo;
 using Vintagestory.API.Client;
 
 namespace VanillaBuildingExpanded.UI;
@@ -9,7 +10,7 @@ namespace VanillaBuildingExpanded.UI;
 /// <summary>Owns GUI elements supplied as rows and arranges them into shared, content-sized or fixed columns.</summary>
 /// <remarks>
 /// Sizes use unscaled logical GUI units. Accepted children must not be registered, reparented, or disposed independently.
-/// This phase implements layout and ownership only; composition, divider rendering, and input routing are pending.
+/// Layout, ownership, and divider strategies are implemented; texture composition and input routing are pending.
 /// </remarks>
 internal sealed class GuiElementTable : GuiElement
 {
@@ -23,18 +24,38 @@ internal sealed class GuiElementTable : GuiElement
         public TableSize Size { get; set; } = size;
     }
 
-    private sealed record Layout(double[] ColumnWidths, double[] RowHeights, TableSize Size);
+    private sealed record Layout(double[] ColumnWidths, double[] RowHeights,
+        double[] ColumnStarts, double[] RowStarts, TableSize Size);
 
     private readonly ElementBounds tableBounds;
     private readonly TableOptions options;
     private readonly List<CellEntry[]> rows = [];
     private readonly Dictionary<GuiElement, CellEntry> elements = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<string, GuiElement> keyedElements = new(StringComparer.Ordinal);
+    private Layout? arrangedLayout;
+    private ITableDividerRenderer dividerRenderer = NoTableDividerRenderer.Instance;
     private bool invalidationNotified;
     private bool disposed;
 
     /// <summary>Whether the registration transition has frozen row structure; it does not itself register the table.</summary>
     public bool IsRegistered { get; private set; }
+
+    /// <summary>Whether static artwork needs composition; cleared by the future texture-composition lifecycle.</summary>
+    internal bool IsArtworkDirty { get; private set; } = true;
+
+    /// <summary>The injected divider strategy; replacing it dirties artwork without invalidating layout.</summary>
+    public ITableDividerRenderer DividerRenderer
+    {
+        get => dividerRenderer;
+        set
+        {
+            ThrowIfDisposed();
+            ArgumentNullException.ThrowIfNull(value);
+            if (ReferenceEquals(dividerRenderer, value)) return;
+            dividerRenderer = value;
+            InvalidateArtwork();
+        }
+    }
 
     /// <summary>Signals a layout change once until <see cref="Arrange"/> consumes the pending invalidation.</summary>
     /// <remarks>The owner must settle measurement and arrangement at a safe GUI composition boundary.</remarks>
@@ -130,16 +151,14 @@ internal sealed class GuiElementTable : GuiElement
         var layout = CalculateLayout();
         tableBounds.fixedWidth = layout.Size.Width;
         tableBounds.fixedHeight = layout.Size.Height;
-        double y = 0;
         for (int rowIndex = 0; rowIndex < rows.Count; rowIndex++)
         {
-            double x = 0;
             for (int columnIndex = 0; columnIndex < rows[rowIndex].Length; columnIndex++)
             {
                 var entry = rows[rowIndex][columnIndex];
                 var bounds = entry.Bounds;
-                bounds.fixedX = x;
-                bounds.fixedY = y;
+                bounds.fixedX = layout.ColumnStarts[columnIndex];
+                bounds.fixedY = layout.RowStarts[rowIndex];
                 // Native fixed dimensions exclude padding; preferred footprints already include it.
                 bounds.fixedWidth = entry.Size.Width - 2 * entry.PaddingX;
                 bounds.fixedHeight = entry.Size.Height - 2 * entry.PaddingY;
@@ -148,12 +167,80 @@ internal sealed class GuiElementTable : GuiElement
                 bounds.absMarginX = bounds.absMarginY = 0;
                 bounds.LeftOfBounds = null;
                 bounds.Alignment = EnumDialogArea.FixedTop;
-                x += layout.ColumnWidths[columnIndex] + options.ColumnGap;
             }
-            y += layout.RowHeights[rowIndex] + options.RowGap;
         }
         tableBounds.MarkDirtyRecursive();
+        arrangedLayout = layout;
+        IsArtworkDirty = true;
         invalidationNotified = false;
+    }
+
+    /// <summary>Snapshots the last settled layout's divider boundaries in device units without touching child bounds.</summary>
+    /// <param name="guiScale">A finite positive scale applied once to logical boundary coordinates.</param>
+    /// <exception cref="InvalidOperationException">Layout has not been arranged, or a later change invalidated it.</exception>
+    public TableDividerGeometry GetDividerGeometry(double guiScale)
+    {
+        ThrowIfDisposed();
+        TableDividerGeometry.ValidateScale(guiScale);
+        var layout = arrangedLayout ?? throw new InvalidOperationException("Arrange the table before requesting divider geometry.");
+        double width = layout.Size.Width * guiScale;
+        double height = layout.Size.Height * guiScale;
+        TableSize.ValidateDimension(width, nameof(guiScale));
+        TableSize.ValidateDimension(height, nameof(guiScale));
+        var segments = new List<TableDividerSegment>();
+        if (width == 0 || height == 0)
+            return new TableDividerGeometry(width, height, guiScale, segments);
+        for (int rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            double y = layout.RowStarts[rowIndex];
+            double rowHeight = layout.RowHeights[rowIndex];
+            for (int columnIndex = 0; columnIndex < rows[rowIndex].Length - 1; columnIndex++)
+            {
+                double x = layout.ColumnStarts[columnIndex] + layout.ColumnWidths[columnIndex];
+                double boundaryX = (x + options.ColumnGap / 2) * guiScale;
+                if (rowHeight > 0)
+                    segments.Add(new TableDividerSegment(TableDividerKind.Cell,
+                        boundaryX, y * guiScale, boundaryX, (y + rowHeight) * guiScale));
+            }
+            if (rowIndex < rows.Count - 1)
+            {
+                double boundaryY = (y + rowHeight + options.RowGap / 2) * guiScale;
+                if (width > 0)
+                    segments.Add(new TableDividerSegment(TableDividerKind.Row, 0, boundaryY, width, boundaryY));
+            }
+        }
+        return new TableDividerGeometry(width, height, guiScale, segments);
+    }
+
+    /// <summary>Draws the injected strategy into a local surface without composing children or uploading a texture.</summary>
+    /// <remarks>The future composition lifecycle calls this before static children. Drawing state and paths are restored.</remarks>
+    internal void DrawDividers(Context context, double guiScale)
+    {
+        if (disposed) return;
+        ArgumentNullException.ThrowIfNull(context);
+        var geometry = GetDividerGeometry(guiScale);
+        using var originalPath = context.CopyPath();
+        context.Save();
+        try
+        {
+            context.NewPath();
+            context.Rectangle(0, 0, geometry.Width, geometry.Height);
+            context.Clip();
+            dividerRenderer.Draw(context, geometry);
+        }
+        finally
+        {
+            context.Restore();
+            context.NewPath();
+            context.AppendPath(originalPath);
+        }
+    }
+
+    /// <summary>Defers static artwork rebuilding without changing layout or drawing immediately.</summary>
+    public void InvalidateArtwork()
+    {
+        ThrowIfDisposed();
+        IsArtworkDirty = true;
     }
 
     /// <summary>Finds an owned child by its case-sensitive, table-local key.</summary>
@@ -212,6 +299,7 @@ internal sealed class GuiElementTable : GuiElement
         rows.Clear();
         elements.Clear();
         keyedElements.Clear();
+        arrangedLayout = null;
         LayoutInvalidated = null;
         base.Dispose();
         if (errors is not null) throw new AggregateException("Table child cleanup failed.", errors);
@@ -300,11 +388,25 @@ internal sealed class GuiElementTable : GuiElement
                 rowHeights[rowIndex] = Math.Max(rowHeights[rowIndex], entry.Size.Height);
             }
         }
-        var size = new TableSize(
-            columnWidths.Sum() + options.ColumnGap * Math.Max(0, columnCount - 1),
-            rowHeights.Sum() + options.RowGap * Math.Max(0, layoutRows.Count - 1));
+        var (columnStarts, width) = MeasureTracks(columnWidths, options.ColumnGap);
+        var (rowStarts, height) = MeasureTracks(rowHeights, options.RowGap);
+        var size = new TableSize(width, height);
         size.Validate(nameof(size));
-        return new Layout(columnWidths, rowHeights, size);
+        return new Layout(columnWidths, rowHeights, columnStarts, rowStarts, size);
+    }
+
+    /// <summary>Uses one accumulation order for extents, child origins, and divider endpoints to avoid rounding drift.</summary>
+    private static (double[] Starts, double Extent) MeasureTracks(double[] sizes, double gap)
+    {
+        var starts = new double[sizes.Length];
+        double extent = 0;
+        for (int index = 0; index < sizes.Length; index++)
+        {
+            if (index > 0) extent += gap;
+            starts[index] = extent;
+            extent += sizes[index];
+        }
+        return (starts, extent);
     }
 
     private void ValidateColumnIndices(int columnCount)
@@ -385,6 +487,8 @@ internal sealed class GuiElementTable : GuiElement
 
     private void NotifyLayoutInvalidated()
     {
+        arrangedLayout = null;
+        IsArtworkDirty = true;
         if (invalidationNotified) return;
         invalidationNotified = true;
         LayoutInvalidated?.Invoke();

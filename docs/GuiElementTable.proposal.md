@@ -1,6 +1,6 @@
 # GUI table layout component proposal
 
-Status: Design direction approved: row-oriented content, child ownership, direct inheritance from `GuiElement`, and interface-based divider rendering. Phases 1 and 2 are complete: contracts, layout, validation, and ownership are implemented. Divider rendering, composition, input routing, and HUD integration remain pending.
+Status: Design direction approved: row-oriented content, child ownership, direct inheritance from `GuiElement`, and interface-based divider rendering. Phases 1 through 3 are complete: contracts, layout, validation, ownership, divider geometry, and rendering strategies are implemented. Native texture/composer integration, input routing, and HUD integration remain pending.
 
 Implementation progress is tracked in the [implementation TODO](GuiElementTable.implementation.todo).
 
@@ -94,13 +94,13 @@ Child footprints include native fixed padding once. Table bounds themselves requ
 
 External replacement, detachment, shared bounds, cycles, and changes to accepted root padding are rejected rather than repaired silently. Native percentage/fit-to-children sizing and dynamic-text auto-height are rejected. Custom children must honor the fixed-size contract; the table cannot infer arbitrary custom wrapping logic.
 
-The internal `MarkRegistered()` transition freezes row structure and is covered by tests. It is reserved for the P4 registration helper; the component is not yet ready for native composer registration or HUD use. Divider, artwork-invalidation, and public input-routing APIs listed below are contracts for later phases, not implemented stubs.
+The internal `MarkRegistered()` transition freezes row structure and is covered by tests. It is reserved for the P4 registration helper; the component is not yet ready for native composer registration or HUD use. Divider and artwork-invalidation APIs are implemented in Phase 3 as described below; public input-routing APIs remain contracts for later phases, not implemented stubs.
 
 The focused UI suite passed 61 tests, including existing section/button regressions. See the TODO for the command and native Cairo test prerequisite.
 
 ### Component surface
 
-The following surface spans the full design; only the Phase 2 subset described above is implemented:
+The following surface spans the full design; the Phase 2 layout/ownership and Phase 3 divider subsets are implemented:
 
 ```csharp
 GuiElementTable(ICoreClientAPI api, ElementBounds bounds,
@@ -116,6 +116,7 @@ TableSize Measure();
 void Arrange();
 GuiElement GetElement(string key);
 void SetPreferredSize(GuiElement element, TableSize size);
+TableDividerGeometry GetDividerGeometry(double guiScale);
 void InvalidateArtwork();
 void CancelInput();
 
@@ -309,13 +310,37 @@ The architecture must allow separate implementations such as:
 - A solid-line renderer: draws selected row and/or cell boundaries with configured color and logical stroke width.
 - A dashed-line renderer: encapsulates its own dash pattern, stroke setup, and drawing.
 
-Solid and dashed lines are initial style candidates, not a restriction on future implementations or approved final artwork. A custom implementation may draw a different treatment without modifying `GuiElementTable`.
+Solid and dashed implementations demonstrate the extension point; they are not a restriction on future implementations or approved final HUD artwork. A custom implementation may draw a different treatment without modifying `GuiElementTable`.
 
 Choosing row-only, cell-only, or both boundary kinds, and configuring colors, stroke widths, and dash patterns belong to the renderer or its immutable options. The table must not interpret those style settings. Any selection UI or style-name-to-renderer mapping belongs outside the table.
 
 Renderer implementations are immutable configuration objects with no retained Cairo surfaces, contexts, or GPU resources, so they may be shared between tables. The table owns the resulting texture, not the injected renderer's lifetime.
 
 Replacing the renderer invalidates the table's static artwork but does not require layout remeasurement. Recompose through the existing safe lifecycle rather than drawing or uploading immediately from an input callback. Invalid renderer configuration must fail explicitly; do not silently fall back to a different style.
+
+### Phase 3 implementation status
+
+[TableDividerGeometry.cs](../VanillaBuildingExpanded/src/UI/TableDividerGeometry.cs) provides immutable device-space segments, boundary kinds, drawing extents, and GUI scale. `GetDividerGeometry(guiScale)` snapshots the last settled arrangement; requesting it before arrangement or after layout invalidation fails explicitly. Existing snapshots remain independent of subsequent layout changes.
+
+[TableDividerRenderers.cs](../VanillaBuildingExpanded/src/UI/TableDividerRenderers.cs) implements `ITableDividerRenderer`, `TableDividerOptions`, and no-op, solid, and dashed strategies. Options validate RGBA components, boundary masks, positive logical stroke/dash dimensions, finite offsets, and representable scaled dimensions and dash periods. Renderers retain no Cairo or GPU resources.
+
+For example, selecting solid row dividers requires no table-specific style branch:
+
+```csharp
+table.DividerRenderer = new SolidTableDividerRenderer(
+    new TableDividerOptions(
+        new Color(1, 1, 1, 0.25),
+        strokeWidth: 1,
+        boundaries: TableDividerKind.Row));
+```
+
+The table's internal `DrawDividers(context, guiScale)` supplies clipping and state/path isolation and calls only the injected interface. Line strategies align stroke edges to device pixels and paint selected segments in one Cairo stroke so translucent intersections do not accumulate alpha. Colors, boundary selection, dash phase, and line mechanics remain outside the main table class.
+
+Measured extents, child positions, and divider endpoints now share one track-origin calculation, avoiding rounding drift in long fractional layouts. Zero drawable extent produces no divider segments.
+
+Replacing the renderer or calling `InvalidateArtwork()` marks static artwork dirty without changing child positions or raising layout invalidation. P4 will consume that dirty state, call divider drawing before child composition, and upload the resulting texture; this phase does not yet render a complete table through the native composer.
+
+[TableDividerTests.cs](../VanillaBuildingExpanded.Tests/UI/TableDividerTests.cs) verifies geometry, strategy replacement, fractional scaling, offscreen pixel output, dash phase, intersection alpha, clipping, and state/path restoration. The combined UI suite passed 110 tests; no live GPU or in-game visual claim is made for this phase.
 
 ## Composer integration and lifecycle
 
