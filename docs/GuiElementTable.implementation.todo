@@ -1,6 +1,6 @@
 # GUI table implementation TODO
 
-Status: Phases 1 through 5 complete (contracts, layout, ownership, divider strategies, composer registration, cached composition/rendering, and opt-in input/nested focus). Phases 6 onward are not started; HUD integration remains pending. Actual GPU display verification remains part of P7.
+Status: Phases 1 through 6 complete (owning table, divider strategies, composer/render lifecycle, opt-in input/nested focus, and controls-only HUD adoption). P7 acceptance remains pending, including actual GPU display and in-game visual/input checks.
 
 Design source: [GUI table proposal](GuiElementTable.proposal.md).
 
@@ -197,17 +197,27 @@ P5 evidence and implementation notes:
 
 ## P6 - Migrating controls content
 
-- [ ] Build one row per keybinding hint with an action label and custom keybinding-drawing element.
-- [ ] Keep keycap drawing and preferred keybinding measurement in the HUD.
-- [ ] Use auto-column minimums 88 and 200, column gap 12, minimum row height 20, row gap zero, and the no-op divider renderer.
-- [ ] Replace controls-column maxima, manual row positioning, and separate row-count height arithmetic with table measurements.
-- [ ] Wire the table through existing section content callbacks in the HUD; add no table-specific behavior to `CollapsibleSection`.
-- [ ] Preserve expanded-width measurement while collapsed without leaking an unregistered table or disposing children still owned by a live table.
-- [ ] Handle table creation, composer clearing, keybinding refresh, GUI-scale changes, close/reopen, and HUD disposal with explicit ownership.
-- [ ] Preserve pointer routing exclusively to collapse buttons; do not broaden HUD keyboard or mouse handling.
-- [ ] Add focused HUD/content tests for row construction and sizing where practical, and retain existing section/button regression coverage.
+- [x] Build one row per keybinding hint with an action label and custom keybinding-drawing element.
+- [x] Keep keycap drawing and preferred keybinding measurement in the HUD.
+- [x] Use auto-column minimums 88 and 200, column gap 12, minimum row height 20, row gap zero, and the no-op divider renderer.
+- [x] Replace controls-column maxima, manual row positioning, and separate row-count height arithmetic with table measurements.
+- [x] Wire the table through existing section content callbacks in the HUD; add no table-specific behavior to `CollapsibleSection`.
+- [x] Preserve expanded-width measurement while collapsed without leaking an unregistered table or disposing children still owned by a live table.
+- [x] Handle table creation, composer clearing, keybinding refresh, GUI-scale changes, close/reopen, and HUD disposal with explicit ownership.
+- [x] Preserve pointer routing exclusively to collapse buttons; do not broaden HUD keyboard or mouse handling.
+- [x] Add focused HUD/content tests for row construction and sizing where practical, and retain existing section/button regression coverage.
 
-Exit gate: controls use the table with no intended visual or gameplay-input change. Snapping and rotation remain untouched in this phase.
+Exit gate passed in automated coverage: controls use the table with the previous dimensions and native label pixels, unchanged keycap drawing, and no intended gameplay-input change. Snapping/rotation remain untouched. Actual in-game appearance and interaction acceptance are still pending in P7.
+
+P6 evidence and implementation notes:
+
+- [BuildModeHud.cs](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs) builds passive custom-drawing row children and delegates all column/row sizing and placement to the table. Section width and height callbacks both consume table measurements.
+- Label fonts are scoped to drawing, with no retained child font resources. Native text drawing uses the table-allocated shared label-column width derived from the binding child's arranged origin; this avoids new per-cell line breaks while preserving prior native origin rounding and label behavior. Keycap measurement and drawing remain in the HUD.
+- Each ComposeHud build creates one measurement table. Expanded content registers only that table; collapsed content measures expanded width and disposes the unregistered table. Successful tables remain composer-owned; failed builds dispose the local composer and any unregistered table, clear the pending reference, and propagate errors.
+- Existing collapse/expand, rebinding, GUI-scale, close/reopen, and shutdown paths are tested. Controls cells remain passive; only section collapse buttons receive free-cursor pointer routing, and HUD keyboard/move/wheel policy is unchanged.
+- [BuildModeHudControlsTests.cs](../VanillaBuildingExpanded.Tests/UI/BuildModeHudControlsTests.cs) adds 20 cases, including legacy dimension comparisons and native label pixel equivalence at scales 1, 1.25, 1.33, 1.5, and 2, plus concrete native HUD lifecycle and ownership tests. GPU APIs/icon bitmap are mocked; Cairo rasterization and native GUI composition are real.
+- Validation command: set process PATH to include the installed game's Lib directory, then run dotnet test against VanillaBuildingExpanded.Tests.csproj with --no-restore and filter "FullyQualifiedName~VanillaBuildingExpanded.Tests.UI|FullyQualifiedName~BuildModeKeybindsTests". It passes 216 tests with zero failures or skips and builds production/test projects. Existing unrelated compiler warnings remain.
+- No changes to table infrastructure, CollapsibleSection, snapping/rotation content, or gameplay input routing were needed. P7 manual checks remain unchecked.
 
 ## P7 - Verifying and closing the first delivery
 

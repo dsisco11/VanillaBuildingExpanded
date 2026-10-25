@@ -1,6 +1,6 @@
 # GUI table layout component proposal
 
-Status: Design direction approved: row-oriented content, child ownership, direct inheritance from `GuiElement`, and interface-based divider rendering. Phases 1 through 5 are complete: contracts, layout, validation, ownership, divider strategies, composer registration, cached child composition/rendering, and opt-in input/nested focus are implemented. HUD integration remains pending; actual GPU display verification remains part of the in-game pass.
+Status: Design direction approved: row-oriented content, child ownership, direct inheritance from `GuiElement`, and interface-based divider rendering. Phases 1 through 6 are complete: the owning table, divider strategies, composer/render lifecycle, opt-in input/nested focus, and controls-only HUD adoption are implemented and covered by focused automated tests. Phase 7 acceptance, including actual GPU display and in-game appearance/input checks, remains pending.
 
 Implementation progress is tracked in the [implementation TODO](GuiElementTable.implementation.todo).
 
@@ -21,7 +21,7 @@ The [build-mode HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.
 - Snapping and rotation use manually positioned label/value pairs.
 - Controls use measured action-label and keybinding columns, with manually positioned rows.
 
-The controls implementation calculates column widths in `MeasureControlsColumns()`, total content height separately, and row coordinates in `ComposeControlsContent()`. Labels have a minimum width of 88 logical units, bindings have a minimum width of 200, the column gap is 12, and each row is 20 units high.
+Before Phase 6 adoption, the controls implementation calculated column widths in `MeasureControlsColumns()`, total content height separately, and row coordinates in `ComposeControlsContent()`. The replacement table preserves the minimum widths of 88 and 200 logical units, column gap of 12, and 20-unit rows without duplicating that layout arithmetic in the HUD.
 
 This distributes related layout rules across measurement and composition. The proposed table centralizes those rules while leaving label creation, keybinding measurement, and keycap drawing with the caller.
 
@@ -495,6 +495,16 @@ The HUD wires table measurements and composition into the section's existing con
 After controls are verified, migrate snapping and rotation into another two-column table, preserving update behavior. Move their dynamic element keys into table-local lookup or retain typed references, and update the HUD's existing composer lookups accordingly. Leave the icon, title, panel background, and section chrome outside the table.
 
 The HUD currently routes pointer input only to collapse buttons. Preserve that restriction; registering the owning table for rendering must not make the entire panel consume gameplay input.
+
+### Phase 6 implementation evidence
+
+- [BuildModeHud.cs](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs) now builds a passive two-cell row per keybinding hint through `CreateControlsTable()`. Both dimensions come from the table's measurement through the existing section callbacks. The section and table classes were not changed for this integration.
+- Auto-column minimums are 88/200, column gap 12, minimum row height 20, and row gap zero. The default no-op divider renderer adds no new artwork. The HUD retains text/keybinding preferred-footprint measurement and the existing keycap/alternate-binding drawing logic.
+- Action labels use resource-free custom-drawing children with composition-scoped fonts. Since cells retain their preferred widths rather than stretching, label artwork reads the table-arranged binding origin to obtain the allocated shared label-column width. This preserves native static-text drawing, origin rounding, and existing line-breaking behavior instead of introducing narrower per-cell wrapping or changing text appearance. No column maxima or row placement are calculated by the HUD.
+- `ComposeHud()` scopes the measurement table to a single build. Expanded content transfers ownership through `TryAddTable()`; collapsed content is measured for stable expanded width and then disposed unregistered. The pending reference is cleared after every build. If composition fails, the local composer and any still-unregistered table are disposed before propagating the error.
+- Successful tables remain composer-owned across hide/reopen; the existing composer-clear paths release them on toggles, rebinding, GUI-scale changes, and HUD disposal. No input flags are enabled for controls cells. HUD routing remains exclusively to collapse buttons with a free cursor; keyboard, mouse movement, wheel, and passive controls still pass through to gameplay.
+- [BuildModeHudControlsTests.cs](../VanillaBuildingExpanded.Tests/UI/BuildModeHudControlsTests.cs) adds 20 cases covering row layout, legacy dimension formulas, native label pixel equivalence at scales 1, 1.25, 1.33, 1.5, and 2, section wiring, collapsed measurement ownership, native HUD composition/cleanup, rebinding, scale changes, collapse/expand, hide/reopen, and passive input. Upload/render APIs and the icon bitmap are mocked; native GUI lifecycle and Cairo drawing are exercised.
+- The combined UI and keybinding command passes 216 tests with zero failures or skips and builds both projects. Existing unrelated compiler warnings remain. Actual GPU display and in-game appearance/input acceptance are still Phase 7, not claimed by these automated results. Snapping/rotation content and update lookups remain unchanged.
 
 Future room-information content can use the same row-oriented API without adding room-specific behavior to the table.
 

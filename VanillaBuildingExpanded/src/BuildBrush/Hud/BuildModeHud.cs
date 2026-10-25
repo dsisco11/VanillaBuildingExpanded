@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Cairo;
@@ -22,8 +23,11 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
     private bool disposed;
     private BuildModeInfo info;
     private BuildModeKeybindHint[] keybindHints = [];
+    private GuiElementTable? controlsTable;
     private float keybindRefreshElapsed;
     private bool RotationUnavailable => info.IsSuspended || info.OrientationCount <= 1;
+    private GuiElementTable ControlsTable => controlsTable
+        ?? throw new InvalidOperationException("Controls content is only available during HUD composition.");
 
     #region Public API
     /// <summary>Retains client GUI services; composition is deferred until first activation.</summary>
@@ -32,7 +36,7 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
         sections =
         [
             new CollapsibleSection("controls", "vanillabuildingexpanded:build-info-controls",
-                MeasureControlsWidth, _ => keybindHints.Length * 20, ComposeControlsContent)
+                () => ControlsTable.Measure().Width, _ => ControlsTable.Measure().Height, ComposeControlsContent)
         ];
         api.Settings.Float.AddWatcher("guiScale", OnGuiScaleChanged);
     }
@@ -125,14 +129,24 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
             keybindHints = currentHints;
             ClearComposers();
         }
-        if (SingleComposer is null)
+        if (SingleComposer is null) ComposeHud();
+        if (!IsOpened()) TryOpen(false);
+    }
+
+    /// <summary>Measures one controls table per build and transfers it only when expanded content is registered.</summary>
+    private void ComposeHud()
+    {
+        GuiComposer? composer = null;
+        try
         {
+            controlsTable = CreateControlsTable(capi, keybindHints);
             double width = Math.Max(320, sections.Max(section => section.MeasureWidth()));
             double height = SectionsTop + sections.Sum(section => section.MeasureHeight(width))
                 + (sections.Length - 1) * SectionSpacing + BottomPadding;
             var bounds = ElementBounds.Fixed(0, 0, width, height)
                 .WithAlignment(EnumDialogArea.LeftTop).WithFixedOffset(12, 12);
-            var composer = capi.Gui.CreateCompo("vbe-build-mode", bounds)
+            composer = capi.Gui.CreateCompo("vbe-build-mode", bounds);
+            composer
                 .AddStaticCustomDraw(ElementBounds.Fixed(0, 0, width, height),
                     (ctx, surface, backgroundBounds) => DrawBackground(ctx, surface, backgroundBounds, width, height))
                 .AddStaticCustomDraw(ElementBounds.Fixed(12, 10, 36, 36), DrawIcon)
@@ -155,8 +169,19 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
                 sectionY += section.Compose(capi, composer, sectionY, width) + SectionSpacing;
             }
             SingleComposer = composer.Compose();
+            composer = null;
         }
-        if (!IsOpened()) TryOpen(false);
+        finally
+        {
+            var table = controlsTable;
+            controlsTable = null;
+            try { composer?.Dispose(); }
+            finally
+            {
+                // Collapsed measurement never registers the table; registered tables remain composer-owned.
+                if (table is { IsRegistered: false }) table.Dispose();
+            }
+        }
     }
 
     /// <summary>Closes native registration and releases the composer's texture exactly once.</summary>
@@ -185,37 +210,62 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
                     ? Lang.Get("vanillabuildingexpanded:build-info-angle", angle)
                     : Lang.Get("vanillabuildingexpanded:build-info-orientation", info.OrientationIndex + 1, info.OrientationCount);
 
-    private (double LabelWidth, double BindingWidth) MeasureControlsColumns()
+    /// <summary>Builds passive rows with measured footprints; table tracks determine both controls dimensions.</summary>
+    /// <remarks>Drawing stays in the HUD, while accepted child ownership and all layout belong to the table.</remarks>
+    internal static GuiElementTable CreateControlsTable(ICoreClientAPI api, IReadOnlyList<BuildModeKeybindHint> hints)
     {
-        using var measureFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize);
-        using var measureKeyFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.KeybindFontSize);
-        double labelWidth = Math.Ceiling(Math.Max(88,
-            keybindHints.Max(hint => measureFont.GetTextExtents(hint.Action).Width / RuntimeEnv.GUIScale)));
-        double bindingWidth = Math.Ceiling(Math.Max(200,
-            keybindHints.Max(hint => MeasureKeybindWidth(measureKeyFont, hint))));
-        return (labelWidth, bindingWidth);
-    }
-
-    private double MeasureControlsWidth()
-    {
-        var (labelWidth, bindingWidth) = MeasureControlsColumns();
-        return labelWidth + 12 + bindingWidth;
-    }
-
-    private void ComposeControlsContent(GuiComposer composer, ElementBounds bounds)
-    {
-        var (labelWidth, bindingWidth) = MeasureControlsColumns();
-        for (int i = 0; i < keybindHints.Length; i++)
+        ArgumentNullException.ThrowIfNull(api);
+        ArgumentNullException.ThrowIfNull(hints);
+        if (hints.Count == 0) throw new ArgumentException("Controls require at least one keybinding hint.", nameof(hints));
+        if (!float.IsFinite(RuntimeEnv.GUIScale) || RuntimeEnv.GUIScale <= 0)
+            throw new InvalidOperationException("GUI scale must be finite and positive before measuring controls.");
+        var table = new GuiElementTable(api, ElementBounds.Fixed(0, 0, 0, 0),
+            new TableOptions(new Dictionary<int, TableColumn>
+            {
+                [0] = TableColumn.Auto(88),
+                [1] = TableColumn.Auto(200)
+            }, columnGap: 12, minimumRowHeight: 20));
+        bool complete = false;
+        try
         {
-            var hint = keybindHints[i];
-            double y = i * 20;
-            composer
-                .AddStaticText(hint.Action,
-                    CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor]),
-                    ElementBounds.Fixed(0, y, labelWidth, 20))
-                .AddStaticCustomDraw(ElementBounds.Fixed(labelWidth + 12, y, bindingWidth, 20),
-                    (ctx, surface, keyBounds) => DrawKeybind(ctx, keyBounds, hint));
+            using var measureFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize);
+            using var measureKeyFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.KeybindFontSize);
+            foreach (var hint in hints)
+            {
+                double labelWidth = Math.Ceiling(measureFont.GetTextExtents(hint.Action).Width / RuntimeEnv.GUIScale);
+                double bindingWidth = Math.Ceiling(MeasureKeybindWidth(measureKeyFont, hint));
+                var binding = new GuiElementCustomDraw(api, ElementBounds.Fixed(0, 0, bindingWidth, 20),
+                    (ctx, _, bounds) => DrawKeybind(api, ctx, bounds, hint));
+                table.AddRow(
+                    new GuiElementCustomDraw(api, ElementBounds.Fixed(0, 0, labelWidth, 20),
+                        (ctx, _, bounds) => DrawControlLabel(ctx, bounds, hint.Action,
+                            GuiElement.scaled(binding.Bounds.fixedX - 12))),
+                    binding);
+            }
+            complete = true;
+            return table;
         }
+        finally
+        {
+            if (!complete) table.Dispose();
+        }
+    }
+
+    /// <summary>Preserves native label drawing against the allocated column without retaining font resources.</summary>
+    private static void DrawControlLabel(Context ctx, ElementBounds bounds, string action, double columnWidth)
+    {
+        using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor]);
+        font.SetupContext(ctx);
+        // Cells retain preferred widths; the table-arranged binding origin gives the shared label track's width.
+        new TextDrawUtil().AutobreakAndDrawMultilineTextAt(ctx, font, action,
+            bounds.drawX, bounds.drawY, columnWidth);
+    }
+
+    /// <summary>Registers the already measured table within the section's existing content parent.</summary>
+    private void ComposeControlsContent(GuiComposer composer, ElementBounds _)
+    {
+        if (!composer.TryAddTable(ControlsTable, "controls-table"))
+            throw new InvalidOperationException("The controls table was unexpectedly skipped during HUD composition.");
     }
 
     private static double MeasureKeybindWidth(CairoFont font, BuildModeKeybindHint hint)
@@ -238,7 +288,7 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
         return width;
     }
 
-    private void DrawKeybind(Context ctx, ElementBounds bounds, BuildModeKeybindHint hint)
+    private static void DrawKeybind(ICoreClientAPI api, Context ctx, ElementBounds bounds, BuildModeKeybindHint hint)
     {
         using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.KeybindFontSize).WithColor([.. UiPalette.ValueColor]);
         double textHeight = font.GetFontExtents().Height;
@@ -258,7 +308,7 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
                         width += gap;
                     }
                     // A translated origin suppresses the native '+' separator without changing the keycap styling.
-                    double keyWidth = HotkeyComponent.DrawHotkey(capi, key, 0, 0, ctx, font,
+                    double keyWidth = HotkeyComponent.DrawHotkey(api, key, 0, 0, ctx, font,
                         (int)textHeight, textHeight, 0, 0, 4, color);
                     ctx.Translate(keyWidth, 0);
                     width += keyWidth;
