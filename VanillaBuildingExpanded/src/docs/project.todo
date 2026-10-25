@@ -1,18 +1,30 @@
 # Short-Term:
-    ☐ BUG: cant place small lanterns.
+    ☐ Add room info section to build-overlay.
+    ☐ Snapping indicators to visualize which edges the "build brush" is snapping to.
+    ☐ Placement restriction modes (e.g. only placing blocks along a specific plane, such as when you are building a long straight wall or flooring).
+    ☐ ISSUE: cant place doors with the build-brush.
+    ☐ ISSUE: build-brush cant handle ground-storage item placement, which means certai items like small lanterns cannot be placed via the build-brush.
     ☐ TESTS: create an exhaustive test suite that enumerates all placeable items and blocks from the base game assets and runs their definitions through the build-brush system to ensure compatibility.
         - Test placement logic.
         - Test preview mesh tessellation.
         - Test rotation logic.
         - Test snapping behavior.
         - Test placement restrictions.
-    ☐ Snapping indicators to visualize which edges the "build brush" is snapping to.
-    ☐ Placement restriction modes (e.g. only placing blocks along a specific plane, such as when you are building a long straight wall or flooring).
 
 # Mid-Term:
-    ☐ Support for "block-entities" (e.g. crates, chests, double-chests, doors, etc).
-    ☐ Mini-dimension based build-brush.
+    ✔ Support for "block-entities" (e.g. crates, chests, double-chests, etc). @done(26-10-25 11:31)
+    ✔ Mini-dimension based build-brush. @done(26-10-25 11:30)
     ☐ Check if chiseled blocks can be rotated and implement if not.
+    ☐ Add a "design mode" for more advanced building features and visualizations.
+        - This mode is effectively used to construct build schematics for complex structures.
+        - Allows for a semi-free orbital-cam around the building area for better visualization and placement of blocks.
+        - Provides additional visual aids such as grid overlays and snapping guides to assist with precise block placement.
+        - Provides interactible handles and controls for manipulating blocks and structures within the design mode, such as:
+           - mass selection/placement/deletion/copy & paste.
+           - rotation handles.
+           - scaling handles.
+           - translation handles.
+           - mirroring handles.
 
 # Long-Term:
     ☐ Support for duplicating chiseled blocks.
