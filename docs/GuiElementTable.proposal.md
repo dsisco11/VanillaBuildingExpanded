@@ -1,6 +1,8 @@
 # GUI table layout component proposal
 
-Status: Design direction approved: row-oriented content, child ownership, direct inheritance from `GuiElement`, and interface-based divider rendering. The component is not implemented.
+Status: Design direction approved: row-oriented content, child ownership, direct inheritance from `GuiElement`, and interface-based divider rendering. Phases 1 and 2 are complete: contracts, layout, validation, and ownership are implemented. Divider rendering, composition, input routing, and HUD integration remain pending.
+
+Implementation progress is tracked in the [implementation TODO](GuiElementTable.implementation.todo).
 
 ## Purpose
 
@@ -82,9 +84,23 @@ Ownership transfers when a row is successfully accepted. Validate the complete r
 
 Phase 1 finalizes the contracts below without implementing the component. Passive defaults, explicit input flags, and caller-supplied cancellation callbacks were selected during Phase 1. Later implementation must preserve these contracts or document and obtain approval for a material change.
 
+### Phase 2 implementation status
+
+[GuiElementTable](../VanillaBuildingExpanded/src/UI/GuiElementTable.cs) implements row acceptance, measurement, arrangement, preferred-size updates, ordinal child lookup, coalesced layout-invalidated notifications, and idempotent child cleanup. [TableLayout.cs](../VanillaBuildingExpanded/src/UI/TableLayout.cs) contains the immutable metadata and option snapshots.
+
+The constructor accepting all rows validates the complete layout, including aggregate dimension overflow, before accepting any element. Incremental additions validate each row atomically; complete column-index configuration is validated during measurement so rows can be built progressively.
+
+Child footprints include native fixed padding once. Table bounds themselves require fixed sizing, no existing children, and zero padding; use an enclosing layout for outer padding. Arrangement owns child positioning: it clears offsets, margins, and sibling-relative positioning and sets top-left alignment while preserving preferred footprints and internal child bounds.
+
+External replacement, detachment, shared bounds, cycles, and changes to accepted root padding are rejected rather than repaired silently. Native percentage/fit-to-children sizing and dynamic-text auto-height are rejected. Custom children must honor the fixed-size contract; the table cannot infer arbitrary custom wrapping logic.
+
+The internal `MarkRegistered()` transition freezes row structure and is covered by tests. It is reserved for the P4 registration helper; the component is not yet ready for native composer registration or HUD use. Divider, artwork-invalidation, and public input-routing APIs listed below are contracts for later phases, not implemented stubs.
+
+The focused UI suite passed 61 tests, including existing section/button regressions. See the TODO for the command and native Cairo test prerequisite.
+
 ### Component surface
 
-Use the following operations; signatures describe the intended API, not implemented declarations:
+The following surface spans the full design; only the Phase 2 subset described above is implemented:
 
 ```csharp
 GuiElementTable(ICoreClientAPI api, ElementBounds bounds,

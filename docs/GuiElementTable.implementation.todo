@@ -1,6 +1,6 @@
 # GUI table implementation TODO
 
-Status: Phase 1 complete (contracts finalized). Phases 2 onward are not started; the component is not implemented.
+Status: Phases 1 and 2 complete (contracts, layout, and ownership). Phases 3 onward are not started; the component is not yet integrated or renderable.
 
 Design source: [GUI table proposal](GuiElementTable.proposal.md).
 
@@ -63,20 +63,20 @@ Completion evidence: see the proposal's "Phase 1 contracts" section for finalize
 
 ## P2 - Implementing layout and ownership
 
-- [ ] Add the sealed `GuiElementTable : GuiElement` and minimal row/cell/column data types.
-- [ ] Snapshot supplied row collections and validate each entire row before accepting ownership.
-- [ ] Reject empty rows, null elements, duplicate instances or keys, conflicting parentage, and self-referencing bounds.
-- [ ] Validate finite, nonnegative sizes and gaps; reject unsupported percentage sizing, wrapping-dependent measurement, and automatic text height.
-- [ ] Preserve preferred sizes separately from arranged child coordinates.
-- [ ] Infer column count from the longest row and preserve row/element order.
-- [ ] Implement auto widths with optional minimums and fixed widths with explicit overflow errors.
-- [ ] Calculate row heights from tallest preferred content and minimum row height.
-- [ ] Arrange top-left-aligned cells using logical units, with no trailing gaps, implicit spanning, or phantom cells.
-- [ ] Ensure empty tables measure zero by zero and repeated layout is stable.
-- [ ] Expose table-local child lookup without exposing a mutable flat child collection.
-- [ ] Freeze structural mutation after composer registration for the first version.
-- [ ] Implement idempotent ownership cleanup for accepted rows and unregistered tables; ensure complete-row constructor validation failure transfers no children and leaks no resources.
-- [ ] Add dimension-only and instrumented-child tests for layout, validation, lookup, atomic row acceptance, and disposal.
+- [x] Add the sealed `GuiElementTable : GuiElement` and minimal row/cell/column data types.
+- [x] Snapshot supplied row collections and validate each entire row before accepting ownership.
+- [x] Reject empty rows, null elements, duplicate instances or keys, conflicting parentage, and self-referencing bounds.
+- [x] Validate finite, nonnegative sizes and gaps; reject unsupported percentage sizing, wrapping-dependent measurement, and automatic text height.
+- [x] Preserve preferred sizes separately from arranged child coordinates.
+- [x] Infer column count from the longest row and preserve row/element order.
+- [x] Implement auto widths with optional minimums and fixed widths with explicit overflow errors.
+- [x] Calculate row heights from tallest preferred content and minimum row height.
+- [x] Arrange top-left-aligned cells using logical units, with no trailing gaps, implicit spanning, or phantom cells.
+- [x] Ensure empty tables measure zero by zero and repeated layout is stable.
+- [x] Expose table-local child lookup without exposing a mutable flat child collection.
+- [x] Freeze structural mutation after composer registration for the first version.
+- [x] Implement idempotent ownership cleanup for accepted rows and unregistered tables; ensure complete-row constructor validation failure transfers no children and leaks no resources.
+- [x] Add dimension-only and instrumented-child tests for layout, validation, lookup, atomic row acceptance, and disposal.
 
 Required exact layout fixture:
 
@@ -99,6 +99,22 @@ Row 2: (0, 24)
 ```
 
 Exit gate: exact dimensions, short-row behavior, failure ownership, and repeatability pass without a live GPU.
+
+Completion evidence:
+
+- Implementation: [GuiElementTable.cs](../VanillaBuildingExpanded/src/UI/GuiElementTable.cs) and [TableLayout.cs](../VanillaBuildingExpanded/src/UI/TableLayout.cs).
+- Tests: [GuiElementTableTests.cs](../VanillaBuildingExpanded.Tests/UI/GuiElementTableTests.cs), including the exact fixture above, complete-constructor enumeration/validation failures, non-finite totals, and cleanup failures.
+- The focused UI test run passed 61 tests with zero failures or skips, including existing section and collapse-button regressions. It also built the production and test projects; unrelated existing compiler warnings remain.
+- The auto-height rejection test constructs a native text/font object, requiring the installed game's Cairo library on the test process's DLL path. It uses no live GPU.
+- The internal registration marker and row freeze are implemented and tested. The actual composer registration helper remains P4 work; do not register this partial component directly.
+- No textures, divider drawing, input routing, or HUD migration were implemented in P2.
+
+Validation command, run from the repository root using the existing `VINTAGE_STORY` environment setting:
+
+```powershell
+$env:PATH = "$env:VINTAGE_STORY\Lib;$env:PATH"
+dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj --no-restore --filter "FullyQualifiedName~VanillaBuildingExpanded.Tests.UI" --verbosity minimal
+```
 
 ## P3 - Implementing divider geometry and strategies
 
