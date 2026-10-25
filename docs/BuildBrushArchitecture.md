@@ -58,6 +58,8 @@ Client initialization designates the received brush mini-dimension as the native
 4. The handler sends the [acknowledgment](../VanillaBuildingExpanded/src/Networking/BuildBrushAck.packet.cs) to the actual sender. Only an accepted update with an initialized preview dimension then synchronizes chunks to that same owner.
 5. Preview mutations update the entity dirty counter and bounds. Position changes move the preview; the renderer uses dirty state to rebuild its mesh when required.
 
+The preview entity has no physics behaviors on either side. Brush position updates, not physical simulation, control its position, so water cannot push it or trigger physics-driven splash effects. Its inherited `EntityChunky` behavior also disables gravity and interaction. The existing hitbox remains configured independently of physics; preview rendering uses entity position and mesh data, not that hitbox.
+
 Preview creation passes a cloned prepared placement stack to the mini-dimension's `SetBlock` and, if needed, fallback `SpawnBlockEntity`. Native creation invokes the block/entity placement hooks; the brush does not repeat the entity hook on newly spawned entities. Slot changes and source-attribute edits recreate the preview from native defaults, restore brush-controlled rotation and mark the preview dirty. Orientation notifications expose the updated placement stack before preview creation.
 
 A `game:packeddirt` block is placed directly below the preview before native placement hooks run, providing support for blocks such as querns without modifying their falling behavior. The support stays outside the published active bounds so the brush renderer does not include it, and is cleared with the rest of the mini-dimension.

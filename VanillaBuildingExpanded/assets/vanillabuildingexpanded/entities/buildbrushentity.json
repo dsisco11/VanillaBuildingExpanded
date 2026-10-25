@@ -5,9 +5,9 @@
 	hitboxSize: { x: 1, y: 1 },
 	client: {
 		renderer: "BuildBrushRenderer",
-		behaviors: [{ code: "passivephysics" }],
+		behaviors: [],
 	},
 	server: {
-		behaviors: [{ code: "passivephysics" }]
+		behaviors: []
 	},
 }
