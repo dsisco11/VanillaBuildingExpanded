@@ -9,12 +9,16 @@ using Vintagestory.API.Config;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-/// <summary>Draws a passive, GUI-scaled build information panel.</summary>
+/// <summary>Draws a non-focusing, GUI-scaled build information panel.</summary>
 internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
 {
     private const double KeycapSpacing = 3;
     private const double KeybindDividerPadding = 6;
     private const double KeybindDividerWidth = 1;
+    private const double SectionsTop = 116;
+    private const double SectionSpacing = 8;
+    private const double BottomPadding = 20;
+    private readonly CollapsibleSection[] sections;
     private bool disposed;
     private BuildModeInfo info;
     private BuildModeKeybindHint[] keybindHints = [];
@@ -25,6 +29,11 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
     /// <summary>Retains client GUI services; composition is deferred until first activation.</summary>
     public BuildModeHud(ICoreClientAPI api) : base(api)
     {
+        sections =
+        [
+            new CollapsibleSection("controls", "vanillabuildingexpanded:build-info-controls",
+                MeasureControlsWidth, _ => keybindHints.Length * 20, ComposeControlsContent)
+        ];
         api.Settings.Float.AddWatcher("guiScale", OnGuiScaleChanged);
     }
 
@@ -32,16 +41,44 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
     public override bool Focusable => false;
     /// <summary>Removes the closed HUD from native dialog routing.</summary>
     public override bool UnregisterOnClose => true;
-    /// <summary>Leaves mouse input entirely to gameplay and existing dialogs.</summary>
-    public override bool ShouldReceiveMouseEvents() => false;
+    /// <summary>Only section collapse buttons receive pointer input, and only with a free cursor.</summary>
+    public override bool ShouldReceiveMouseEvents() => !disposed && IsOpened() && !capi.Input.MouseGrabbed
+        && sections.Any(section => section.ToggleButton is { } button && (button.IsPressed
+            || button.IsPositionInside(capi.Input.MouseX, capi.Input.MouseY)));
     /// <summary>Leaves keyboard input entirely to gameplay and existing dialogs.</summary>
     public override bool ShouldReceiveKeyboardEvents() => false;
+
+    public override void OnMouseDown(MouseEvent args)
+    {
+        if (!disposed && IsOpened() && !capi.Input.MouseGrabbed)
+            foreach (var section in sections)
+                section.ToggleButton?.OnMouseDown(capi, args);
+    }
+
+    public override void OnMouseUp(MouseEvent args)
+    {
+        if (!disposed && IsOpened())
+            foreach (var section in sections)
+                section.ToggleButton?.OnMouseUp(capi, args);
+    }
+
+    // Do not call the dialog defaults: they consume events over the entire panel.
+    public override void OnMouseMove(MouseEvent args) { }
+    public override void OnMouseWheel(MouseWheelEventArgs args) { }
 
     public override void OnRenderGUI(float deltaTime)
     {
         if (disposed) return;
         if (IsOpened())
         {
+            bool sectionsChanged = false;
+            foreach (var section in sections)
+                sectionsChanged |= section.ApplyPendingToggle();
+            if (sectionsChanged)
+            {
+                ClearComposers();
+                SetVisible(true);
+            }
             keybindRefreshElapsed += deltaTime;
             if (keybindRefreshElapsed >= 0.5f)
             {
@@ -74,6 +111,8 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
         if (disposed) return;
         if (!visible)
         {
+            foreach (var section in sections)
+                section.CancelInput();
             TryClose();
             return;
         }
@@ -88,15 +127,9 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
         }
         if (SingleComposer is null)
         {
-            using var measureFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize);
-            using var measureKeyFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.KeybindFontSize);
-            double labelWidth = Math.Ceiling(Math.Max(88,
-                keybindHints.Max(hint => measureFont.GetTextExtents(hint.Action).Width / RuntimeEnv.GUIScale)));
-            double bindingWidth = Math.Ceiling(Math.Max(200,
-                keybindHints.Max(hint => MeasureKeybindWidth(measureKeyFont, hint))));
-            double bindingX = 12 + labelWidth + 12;
-            double width = Math.Max(320, bindingX + bindingWidth + 24);
-            double height = 144 + keybindHints.Length * 20 + 28;
+            double width = Math.Max(320, sections.Max(section => section.MeasureWidth()));
+            double height = SectionsTop + sections.Sum(section => section.MeasureHeight(width))
+                + (sections.Length - 1) * SectionSpacing + BottomPadding;
             var bounds = ElementBounds.Fixed(0, 0, width, height)
                 .WithAlignment(EnumDialogArea.LeftTop).WithFixedOffset(12, 12);
             var composer = capi.Gui.CreateCompo("vbe-build-mode", bounds)
@@ -115,20 +148,11 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
                     ElementBounds.Fixed(12, 78, 88, 24))
                 .AddDynamicText(GetRotation(),
                     CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. (RotationUnavailable ? UiPalette.UnavailableColor : UiPalette.ValueColor)]),
-                    ElementBounds.Fixed(108, 78, 200, 24), "rotation")
-                .AddStaticText(Lang.Get("vanillabuildingexpanded:build-info-controls"),
-                    CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.ValueColor]),
-                    ElementBounds.Fixed(12, 116, width - 36, 24));
-            for (int i = 0; i < keybindHints.Length; i++)
+                    ElementBounds.Fixed(108, 78, 200, 24), "rotation");
+            double sectionY = SectionsTop;
+            foreach (var section in sections)
             {
-                var hint = keybindHints[i];
-                double y = 144 + i * 20;
-                composer
-                    .AddStaticText(hint.Action,
-                        CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor]),
-                        ElementBounds.Fixed(12, y, labelWidth, 20))
-                    .AddStaticCustomDraw(ElementBounds.Fixed(bindingX, y, bindingWidth, 20),
-                        (ctx, surface, keyBounds) => DrawKeybind(ctx, keyBounds, hint));
+                sectionY += section.Compose(capi, composer, sectionY, width) + SectionSpacing;
             }
             SingleComposer = composer.Compose();
         }
@@ -160,6 +184,39 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
                 : info.RotationAngleDegrees is float angle
                     ? Lang.Get("vanillabuildingexpanded:build-info-angle", angle)
                     : Lang.Get("vanillabuildingexpanded:build-info-orientation", info.OrientationIndex + 1, info.OrientationCount);
+
+    private (double LabelWidth, double BindingWidth) MeasureControlsColumns()
+    {
+        using var measureFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize);
+        using var measureKeyFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.KeybindFontSize);
+        double labelWidth = Math.Ceiling(Math.Max(88,
+            keybindHints.Max(hint => measureFont.GetTextExtents(hint.Action).Width / RuntimeEnv.GUIScale)));
+        double bindingWidth = Math.Ceiling(Math.Max(200,
+            keybindHints.Max(hint => MeasureKeybindWidth(measureKeyFont, hint))));
+        return (labelWidth, bindingWidth);
+    }
+
+    private double MeasureControlsWidth()
+    {
+        var (labelWidth, bindingWidth) = MeasureControlsColumns();
+        return labelWidth + 12 + bindingWidth;
+    }
+
+    private void ComposeControlsContent(GuiComposer composer, ElementBounds bounds)
+    {
+        var (labelWidth, bindingWidth) = MeasureControlsColumns();
+        for (int i = 0; i < keybindHints.Length; i++)
+        {
+            var hint = keybindHints[i];
+            double y = i * 20;
+            composer
+                .AddStaticText(hint.Action,
+                    CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor]),
+                    ElementBounds.Fixed(0, y, labelWidth, 20))
+                .AddStaticCustomDraw(ElementBounds.Fixed(labelWidth + 12, y, bindingWidth, 20),
+                    (ctx, surface, keyBounds) => DrawKeybind(ctx, keyBounds, hint));
+        }
+    }
 
     private static double MeasureKeybindWidth(CairoFont font, BuildModeKeybindHint hint)
     {

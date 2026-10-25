@@ -11,9 +11,9 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 public sealed class BuildModeIndicatorTests
 {
     #region Public API
-    /// <summary>The actual native HUD stays passive and detaches its scale watcher on disposal.</summary>
+    /// <summary>The native HUD stays unfocused, ignores input while closed and detaches its scale watcher.</summary>
     [Fact]
-    public void Hud_DoesNotCaptureInputAndRetiresScaleWatcher()
+    public void Hud_RemainsUnfocusedAndRetiresScaleWatcher()
     {
         var api = new Mock<ICoreClientAPI> { DefaultValue = DefaultValue.Mock };
         var settings = Mock.Get(api.Object.Settings.Float);
