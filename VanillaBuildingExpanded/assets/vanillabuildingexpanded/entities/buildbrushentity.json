@@ -2,7 +2,7 @@
 	code: "buildbrushentity",
 	class: "BuildBrushEntity",
 	tags: ["inanimate"],
-	hitboxSize: { x: 1, y: 1 },
+	hitboxSize: { x: 0, y: 0 },
 	client: {
 		renderer: "BuildBrushRenderer",
 		behaviors: [],
