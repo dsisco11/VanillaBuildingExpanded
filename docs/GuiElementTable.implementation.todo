@@ -1,0 +1,188 @@
+# GUI table implementation TODO
+
+Status: Not started. This document plans implementation; no unchecked item implies implemented behavior.
+
+Design source: [GUI table proposal](GuiElementTable.proposal.md).
+
+## Delivery scope
+
+First deliver the reusable owning table, divider-rendering strategies, automated coverage, and migration of the build-mode controls content.
+
+Keep snapping/rotation migration as a separate follow-up after the first delivery passes its verification gates. Room information is a future consumer, not part of this implementation.
+
+Approved constraints:
+
+- Derive `GuiElementTable` directly from `GuiElement`.
+- Accept collections of elements grouped by row; infer columns without requiring placeholders.
+- Own accepted children and manage their composition, rendering, input, focus, and disposal.
+- Register only the table with the outer composer.
+- Keep table code independent of the HUD and collapsible sections.
+- Delegate all style-specific divider drawing through `ITableDividerRenderer`.
+- Preserve existing HUD appearance and input behavior during the initial migration.
+
+## Working locations
+
+- Component and supporting types: [UI source](../VanillaBuildingExpanded/src/UI/).
+- Component tests: [UI tests](../VanillaBuildingExpanded.Tests/UI/).
+- Initial integration: [BuildModeHud.cs](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs).
+- Existing section contract: [CollapsibleSection.cs](../VanillaBuildingExpanded/src/UI/CollapsibleSection.cs).
+- Existing regressions: [section tests](../VanillaBuildingExpanded.Tests/UI/CollapsibleSectionTests.cs) and [collapse-button tests](../VanillaBuildingExpanded.Tests/UI/GuiElementCollapseButtonTests.cs).
+
+Supporting type and test-file names below are tentative. Keep related small types together where appropriate; do not add a generic container framework or test-only production abstractions.
+
+## Dependencies
+
+| Phase | Prerequisites |
+| --- | --- |
+| P1: Finalizing contracts | None |
+| P2: Implementing layout and ownership | P1 |
+| P3: Implementing divider strategies | P1, P2 layout geometry |
+| P4: Implementing composition and rendering | P2, P3 |
+| P5: Implementing input and focus | P1, P2 |
+| P6: Migrating controls content | P4, P5 |
+| P7: Verifying the first delivery | P3, P4, P5, P6 |
+| F1: Migrating snapping and rotation | P7 |
+
+Write focused tests with each phase rather than deferring all coverage to P7. Rendering and input work may proceed independently once layout and ownership contracts are established.
+
+## P1 - Finalizing contracts
+
+- [ ] Define the smallest public/internal surface for row addition, preferred measurements, column configuration, measured size, arrangement, and table-local lookup.
+- [ ] Support element-array and enumerable row overloads, plus construction from a collection of rows, without ambiguous overloads.
+- [ ] Specify optional cell descriptors for explicit preferred sizes and child keys.
+- [ ] Resolve the remaining input-policy API before writing event routing: ordinary rows must be convenient for passive information, while callers must be able to explicitly opt controls into input. Do not infer clickability solely from `Focusable` or concrete element types.
+- [ ] Specify how eligible focusable children join nested tab traversal and how passive children are excluded.
+- [ ] Define ownership transfer precisely for successful row acceptance, failed additions, constructor failure, abandoned tables, and failed composer registration.
+- [ ] Define how preferred-size changes and renderer replacement request safe deferred recomposition without forcing a full HUD rebuild for value-only changes.
+- [ ] Confirm cancellation/focus-loss mechanisms available on arbitrary native child elements; document any required child capability rather than assuming every element exposes `CancelPress()`.
+- [ ] Record finalized contracts in the proposal before implementation depends on them; seek approval for any material behavior change.
+
+Exit gate: API and ownership rules are unambiguous, including passive/interactive behavior and failure paths.
+
+## P2 - Implementing layout and ownership
+
+- [ ] Add the sealed `GuiElementTable : GuiElement` and minimal row/cell/column data types.
+- [ ] Snapshot supplied row collections and validate each entire row before accepting ownership.
+- [ ] Reject empty rows, null elements, duplicate instances or keys, conflicting parentage, and self-referencing bounds.
+- [ ] Validate finite, nonnegative sizes and gaps; reject unsupported percentage sizing, wrapping-dependent measurement, and automatic text height.
+- [ ] Preserve preferred sizes separately from arranged child coordinates.
+- [ ] Infer column count from the longest row and preserve row/element order.
+- [ ] Implement auto widths with optional minimums and fixed widths with explicit overflow errors.
+- [ ] Calculate row heights from tallest preferred content and minimum row height.
+- [ ] Arrange top-left-aligned cells using logical units, with no trailing gaps, implicit spanning, or phantom cells.
+- [ ] Ensure empty tables measure zero by zero and repeated layout is stable.
+- [ ] Expose table-local child lookup without exposing a mutable flat child collection.
+- [ ] Freeze structural mutation after composer registration for the first version.
+- [ ] Implement idempotent ownership cleanup, including unregistered tables and accepted children on construction failure.
+- [ ] Add dimension-only and instrumented-child tests for layout, validation, lookup, atomic row acceptance, and disposal.
+
+Required exact layout fixture:
+
+```text
+Preferred cell sizes:
+Row 1: (40 x 12), (100 x 16)
+Row 2: (90 x 30)
+
+Auto-column minimums: 88, 200
+Column gap: 12
+Row gap: 4
+Minimum row height: 20
+
+Expected columns: 90, 200
+Expected rows: 20, 30
+Expected table size: 302 x 54
+Expected cell origins:
+Row 1: (0, 0), (102, 0)
+Row 2: (0, 24)
+```
+
+Exit gate: exact dimensions, short-row behavior, failure ownership, and repeatability pass without a live GPU.
+
+## P3 - Implementing divider geometry and strategies
+
+- [ ] Add `ITableDividerRenderer` and a read-only divider-geometry snapshot.
+- [ ] Generate each row boundary once across table width, at the midpoint of its row gap.
+- [ ] Generate cell boundaries only between adjacent populated cells in each row, spanning that row's allocated height.
+- [ ] Handle zero gaps, empty tables, single rows, and single-cell rows without phantom segments.
+- [ ] Convert segment coordinates to table-local device units once and expose GUI scale for logical stroke/dash sizing.
+- [ ] Implement the no-op default renderer.
+- [ ] Implement solid and dashed renderers as separate strategies to exercise the extension point; keep their artwork configurable rather than treating it as approved HUD styling.
+- [ ] Put boundary-kind selection, colors, widths, dashes, pixel alignment, and intersection handling in renderer implementations or immutable options, not the table.
+- [ ] Validate renderer settings explicitly; allow sharing immutable resource-free renderer instances.
+- [ ] Add recording-renderer geometry tests and focused Cairo tests where the existing environment supports them.
+- [ ] Verify that injecting an additional test renderer requires no concrete-style checks or style switches in the table.
+
+For the P2 fixture, expect one horizontal boundary at `y = 22` across width 302 and one vertical boundary at `x = 96` spanning the first row's height of 20, before GUI scaling. The shorter second row contributes no vertical divider.
+
+Exit gate: styles are independently replaceable, geometry is exact, and styles do not affect layout.
+
+## P4 - Implementing composition and rendering
+
+- [ ] Add composer integration that registers only the table as an interactive element, including when its content is passive.
+- [ ] Complete measurement and arrangement before composer world-bound calculation and surface allocation.
+- [ ] Mark table bounds as a drawing surface and compose children in the correct local coordinate system.
+- [ ] Allocate/update the table-owned static texture; skip allocation when either drawable dimension is zero.
+- [ ] Draw dividers through the interface before static child artwork, with clipping and Cairo save/restore around the call.
+- [ ] Compose every child and forward dynamic rendering in stable draw order without registering children with the composer.
+- [ ] Match native alpha conventions and propagate clip-bound changes to existing children.
+- [ ] Implement deferred artwork invalidation and texture reuse/release through the normal lifecycle.
+- [ ] Verify renderer replacement rebuilds artwork only, while child value updates fitting reserved bounds do not trigger table reflow.
+- [ ] Guard repeated disposal and post-disposal callbacks; release texture and children once even when the composer disposes the table through multiple collections.
+- [ ] Add lifecycle tests using counters/mocks and offscreen drawing where practical; reserve actual GPU upload/render verification for the in-game pass.
+
+Exit gate: static and dynamic children render through the table, no lifecycle calls are duplicated, and scale/clipping behavior is correct.
+
+## P5 - Implementing input and focus
+
+- [ ] Route events only to input-eligible children, respecting clipping, handled flags, and visual ordering.
+- [ ] Preserve pass-through over empty cells, table gaps, and passive children; avoid native base-handler fallbacks that consume those events.
+- [ ] Track active pointer interaction so release/cancellation reaches its child outside the original bounds.
+- [ ] Propagate hovered-child cursors and clear stale cursor state.
+- [ ] Keep tables with no eligible focusable children non-focusable.
+- [ ] Expose a focusable group when appropriate and implement nested focus, stable tab order, forward/reverse traversal, and exit to the outer composer.
+- [ ] Propagate focus loss and cancel active interaction using the capability defined in P1.
+- [ ] Leave the host HUD/dialog in control of whether it routes input to the table.
+- [ ] Add tests for passive text, non-focusable clickable controls, handled events, clipping, outside release, focus loss, cursor reset, and traversal boundaries.
+
+Exit gate: ownership does not cause input capture by passive content, and interactive children behave correctly as a nested group.
+
+## P6 - Migrating controls content
+
+- [ ] Build one row per keybinding hint with an action label and custom keybinding-drawing element.
+- [ ] Keep keycap drawing and preferred keybinding measurement in the HUD.
+- [ ] Use auto-column minimums 88 and 200, column gap 12, minimum row height 20, row gap zero, and the no-op divider renderer.
+- [ ] Replace controls-column maxima, manual row positioning, and separate row-count height arithmetic with table measurements.
+- [ ] Wire the table through existing section content callbacks in the HUD; add no table-specific behavior to `CollapsibleSection`.
+- [ ] Preserve expanded-width measurement while collapsed without leaking an unregistered table or disposing children still owned by a live table.
+- [ ] Handle table creation, composer clearing, keybinding refresh, GUI-scale changes, close/reopen, and HUD disposal with explicit ownership.
+- [ ] Preserve pointer routing exclusively to collapse buttons; do not broaden HUD keyboard or mouse handling.
+- [ ] Add focused HUD/content tests for row construction and sizing where practical, and retain existing section/button regression coverage.
+
+Exit gate: controls use the table with no intended visual or gameplay-input change. Snapping and rotation remain untouched in this phase.
+
+## P7 - Verifying and closing the first delivery
+
+- [ ] Build the affected production project using the repository's existing .NET 10 setup and game references.
+- [ ] Run new table layout, ownership, divider, rendering-lifecycle, and input tests together with existing UI section/button tests and keybinding tests.
+- [ ] Use existing xUnit/VSTest tooling; confirm `VINTAGE_STORY` resolves the required installed game assemblies. Do not introduce a new test runner or renderer dependency.
+- [ ] Expand test scope only if focused failures or shared lifecycle changes justify it.
+- [ ] In game, compare controls appearance and panel dimensions before/after at identical settings.
+- [ ] Exercise fractional GUI scales, long labels, alternate key combinations, changed bindings, and repeated collapse/expand and close/reopen cycles.
+- [ ] Verify dynamic child values, clipping, no-op dividers, solid/dashed styles, and runtime style replacement in a suitable test host without changing the production HUD's no-op default.
+- [ ] Verify empty and partially populated tables, varying row heights, nested focus, and release outside the table.
+- [ ] Confirm panel non-button areas still pass input to gameplay and collapse buttons retain their existing behavior.
+- [ ] Check for duplicate disposal, stale child references, retained textures, and runtime exceptions during rebuilding and shutdown.
+- [ ] Update the proposal with finalized API details and verified implementation status; mark TODO items complete only with supporting evidence.
+- [ ] Record automated results separately from in-game checks. Leave unavailable manual checks explicitly pending rather than declaring them passed.
+
+First-delivery completion gate: the owning table and divider extension point are implemented and tested, controls are migrated, and required in-game behavior is verified.
+
+## F1 - Follow-up: migrating snapping and rotation
+
+- [ ] After P7, replace the remaining label/value coordinates with another table.
+- [ ] Move snapping/rotation lookups to table-local keys or typed non-owning references.
+- [ ] Preserve title handling, unavailable-state colors, dynamic updates, and reserved cell dimensions.
+- [ ] Keep the title, icon, panel background, and section chrome outside the table.
+- [ ] Repeat targeted regression and visual/input checks for this separate migration.
+
+Do not add room information, wrapping, spanning, outer borders, scrolling, selection, or other deferred features as part of either migration.
