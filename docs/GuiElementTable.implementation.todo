@@ -1,6 +1,6 @@
 # GUI table implementation TODO
 
-Status: Not started. This document plans implementation; no unchecked item implies implemented behavior.
+Status: Phase 1 complete (contracts finalized). Phases 2 onward are not started; the component is not implemented.
 
 Design source: [GUI table proposal](GuiElementTable.proposal.md).
 
@@ -47,17 +47,19 @@ Write focused tests with each phase rather than deferring all coverage to P7. Re
 
 ## P1 - Finalizing contracts
 
-- [ ] Define the smallest public/internal surface for row addition, preferred measurements, column configuration, measured size, arrangement, and table-local lookup.
-- [ ] Support element-array and enumerable row overloads, plus construction from a collection of rows, without ambiguous overloads.
-- [ ] Specify optional cell descriptors for explicit preferred sizes and child keys.
-- [ ] Resolve the remaining input-policy API before writing event routing: ordinary rows must be convenient for passive information, while callers must be able to explicitly opt controls into input. Do not infer clickability solely from `Focusable` or concrete element types.
-- [ ] Specify how eligible focusable children join nested tab traversal and how passive children are excluded.
-- [ ] Define ownership transfer precisely for successful row acceptance, failed additions, constructor failure, abandoned tables, and failed composer registration.
-- [ ] Define how preferred-size changes and renderer replacement request safe deferred recomposition without forcing a full HUD rebuild for value-only changes.
-- [ ] Confirm cancellation/focus-loss mechanisms available on arbitrary native child elements; document any required child capability rather than assuming every element exposes `CancelPress()`.
-- [ ] Record finalized contracts in the proposal before implementation depends on them; seek approval for any material behavior change.
+- [x] Define the smallest public/internal surface for row addition, preferred measurements, column configuration, measured size, arrangement, and table-local lookup.
+- [x] Support element-array and enumerable row overloads, plus construction from a collection of rows, without ambiguous overloads.
+- [x] Specify optional cell descriptors for explicit preferred sizes and child keys.
+- [x] Resolve the remaining input-policy API before writing event routing: ordinary rows must be convenient for passive information, while callers must be able to explicitly opt controls into input. Do not infer clickability solely from `Focusable` or concrete element types.
+- [x] Specify how eligible focusable children join nested tab traversal and how passive children are excluded.
+- [x] Define ownership transfer precisely for successful row acceptance, failed additions, constructor failure, abandoned tables, and failed composer registration.
+- [x] Define how preferred-size changes and renderer replacement request safe deferred recomposition without forcing a full HUD rebuild for value-only changes.
+- [x] Confirm cancellation/focus-loss mechanisms available on arbitrary native child elements; document any required child capability rather than assuming every element exposes `CancelPress()`.
+- [x] Record finalized contracts in the proposal before implementation depends on them; seek approval for any material behavior change.
 
 Exit gate: API and ownership rules are unambiguous, including passive/interactive behavior and failure paths.
+
+Completion evidence: see the proposal's "Phase 1 contracts" section for finalized signatures, ownership/failure rules, deferred invalidation, and native-source references. The user selected passive defaults with explicit input flags and required non-activating pointer-cancellation callbacks. Complete-row construction validates all inputs before ownership transfer. `TryAddTable` distinguishes conditional skips from registration and documents native partial-registration failures. No production code or automated tests were added in this phase.
 
 ## P2 - Implementing layout and ownership
 
@@ -73,7 +75,7 @@ Exit gate: API and ownership rules are unambiguous, including passive/interactiv
 - [ ] Ensure empty tables measure zero by zero and repeated layout is stable.
 - [ ] Expose table-local child lookup without exposing a mutable flat child collection.
 - [ ] Freeze structural mutation after composer registration for the first version.
-- [ ] Implement idempotent ownership cleanup, including unregistered tables and accepted children on construction failure.
+- [ ] Implement idempotent ownership cleanup for accepted rows and unregistered tables; ensure complete-row constructor validation failure transfers no children and leaks no resources.
 - [ ] Add dimension-only and instrumented-child tests for layout, validation, lookup, atomic row acceptance, and disposal.
 
 Required exact layout fixture:

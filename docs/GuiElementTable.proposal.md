@@ -42,7 +42,7 @@ The table has no decorative background by default, but owns a texture for its ch
 
 ## Row-oriented content API
 
-The following illustrates the intended API; exact signatures may be refined during implementation:
+The ordinary row API accepts elements directly:
 
 ```csharp
 table.AddRow(labelElement, valueElement);
@@ -78,6 +78,141 @@ Snapshot supplied row collections when accepted so deferred enumeration or exter
 
 Ownership transfers when a row is successfully accepted. Validate the complete row before accepting any of its children; if acceptance fails, those elements remain the caller's responsibility. Accepted elements must not be independently registered, disposed, or attached to another owner. Callers may retain non-owning references for normal value updates.
 
+## Phase 1 contracts
+
+Phase 1 finalizes the contracts below without implementing the component. Passive defaults, explicit input flags, and caller-supplied cancellation callbacks were selected during Phase 1. Later implementation must preserve these contracts or document and obtain approval for a material change.
+
+### Component surface
+
+Use the following operations; signatures describe the intended API, not implemented declarations:
+
+```csharp
+GuiElementTable(ICoreClientAPI api, ElementBounds bounds,
+    TableOptions? options = null);
+GuiElementTable(ICoreClientAPI api, ElementBounds bounds,
+    TableOptions options, IEnumerable<IEnumerable<GuiElement>> rows);
+
+void AddRow(params GuiElement[] elements);
+void AddRow(IEnumerable<GuiElement> elements);
+void AddRowCells(IEnumerable<TableCell> cells);
+
+TableSize Measure();
+void Arrange();
+GuiElement GetElement(string key);
+void SetPreferredSize(GuiElement element, TableSize size);
+void InvalidateArtwork();
+void CancelInput();
+
+ITableDividerRenderer DividerRenderer { get; set; }
+bool IsRegistered { get; }
+event Action? LayoutInvalidated;
+```
+
+- Keep element-array and enumerable forms under `AddRow`. Use the distinct name `AddRowCells` for descriptors, avoiding competing element/descriptor `params` overloads and ambiguous empty collection expressions.
+- The complete-row constructor takes options before rows and has four required arguments. It cannot compete with the optional three-argument constructor. Descriptor-based tables can be assembled through `AddRowCells`.
+- `TableCell` is immutable metadata containing an element, optional key, optional preferred size, input flags, and optional cancellation callback. Constructing a descriptor does not transfer ownership.
+- `TableOptions` is immutable configuration containing column definitions by zero-based index, column gap, row gap, and minimum row height. Snapshot supplied collections; do not retain mutable caller-owned dictionaries.
+- `TableColumn.Auto(minimumWidth = 0)` and `TableColumn.Fixed(width)` describe column policies. Unconfigured inferred columns use auto sizing with minimum zero.
+- `TableSize` is an immutable width/height pair in logical GUI units. It describes the cell's reserved outer footprint, including any native fixed padding. Arrange must translate that footprint to native content dimensions without counting padding twice.
+- `Measure()` validates the complete layout and returns its preferred dimensions without changing bounds or allocating drawing resources. It can cache its result.
+- `Arrange()` applies that measurement to the table and child bounds at the table's configured origin. It does not move or resize the surrounding panel. Mark affected bounds dirty before native world-bound calculation.
+- `GetElement()` uses case-sensitive ordinal keys and throws for an unknown key; it does not return a silent default. Caller-held typed child references are also supported.
+- `SetPreferredSize()` accepts only an element owned by this table. It updates the reserved footprint rather than inferring a new size from already-arranged bounds.
+- Reject null inputs, invalid flag values, and invalid dimensions with explicit argument exceptions. Reject structural changes after registration with `InvalidOperationException`; reject public mutating operations after disposal with `ObjectDisposedException`.
+- `Dispose()` remains idempotent. Native render/input callbacks after disposal do no work; they must not invoke children or recreate resources.
+
+### Explicit child-input configuration
+
+Define flags independently of rendering:
+
+```csharp
+[Flags]
+internal enum TableInput
+{
+    None = 0,
+    Pointer = 1,
+    Keyboard = 2
+}
+```
+
+`TableCell.Input` defaults to `None`. Ordinary `AddRow` elements are therefore passive, including dynamic text and elements whose native `Focusable` property is true. Descriptors opt children into pointer input, keyboard input, or both.
+
+`TableCell.CancelInput` is an optional `Action` which becomes required when `Pointer` is enabled. Validate that requirement before accepting the row. Its contract is idempotent, non-activating cleanup: clear any press, drag, or pointer-capture state without clicking, committing, or changing a value. Stateless controls may supply an explicitly documented no-op callback; the table never invents one.
+
+Native `GuiElement` has `OnFocusLost()` but no universal cancellation method. Its default focus-loss implementation only clears focus. Native button and slider mouse-up handlers can invoke callbacks, so synthetic mouse-up is not a safe generic cancellation strategy.
+
+Do not use reflection, concrete-control switches, fabricated events, or assume `CancelPress()` exists. A caller must provide a safe adapter/callback for pointer-enabled controls. If a native control cannot expose non-activating cancellation, it cannot be opted into pointer interaction under this contract until a suitable adapter exists; it can still be displayed passively.
+
+The table forwards pointer events only to opted-in children, never passive cells. Respect handled flags and reverse visual order for hit testing. Track every child/button interaction to which a down event was delivered, including native controls that may alter private drag state without marking the event handled.
+
+Normal matching mouse-up reaches those tracked children even outside their bounds. The table then clears tracking and invokes their cancellation callbacks to ensure cleanup. If another recipient has already handled the release, cancel the tracked interaction without forwarding an activating release. Do not forward the same release twice to one child.
+
+`CancelInput()` cancels tracked pointer interactions, clears cursor/capture state, and removes nested child focus. Invoke it on table focus loss and disposal. The host must also call it when hiding, disabling routing, or grabbing the gameplay mouse without disposing the table; non-focusable pointer controls cannot rely on keyboard focus-loss notifications.
+
+Rendering remains independent of input eligibility: every owned child receives composition and dynamic-render hooks.
+
+### Nested focus and traversal
+
+- Only children with `Keyboard` enabled and native `Focusable == true` participate in nested focus. Preserve row-major insertion order for tab traversal, independently of draw order.
+- Determine group focusability before composer registration, since the composer assigns tab indices at registration time. Input flags and row structure are immutable after registration.
+- Route keyboard events only to the focused eligible child while the table has focus. Do not broadcast activation keys to unrelated children.
+- On keyboard entry, focus the first eligible child for forward traversal or the last for reverse traversal. Observe unhandled Tab/Shift-Tab before composer focus assignment to retain entry direction.
+- Pointer activation may select an eligible child before the composer focuses the group; group focus gain preserves that selection.
+- Give the focused child first opportunity to handle Tab. Otherwise move within the group and mark handled only when an internal move occurs.
+- At either end, leave Tab unhandled for the outer composer. Do not wrap internally. With no other outer focus target, preserve existing focus rather than inventing a new destination.
+- On exit, call `OnFocusLost()` on the focused child and cancel pointer interaction. Group focus loss must not reactivate a child.
+
+### Ownership and registration failures
+
+| Situation | Ownership result |
+| --- | --- |
+| Descriptor created or a row collection enumerated | Caller still owns its elements. |
+| Entire `AddRow`/`AddRowCells` succeeds | Table owns that row's elements. |
+| Row enumeration or validation fails | No element in that addition transfers; previously accepted rows remain table-owned. A duplicate reference to an already-owned child remains owned by its original owner. |
+| Complete-row constructor fails during enumeration or validation | Validate the entire input before accepting any child; caller retains every supplied element. |
+| Table exists but is never registered | Caller owns and must dispose the table; disposal releases all accepted children. |
+| Table is successfully registered | Composer owns the table; table continues owning all children. |
+| Conditional composer addition is skipped | Caller still owns the unregistered table. |
+| Registration throws | Determine whether native registration already inserted the table, as described below; do not assume rollback. |
+
+Constructor validation and pre-registration layout failures must not leak native resources. Allocate no texture until composition. Complete predictable validation before committing ownership or changing bounds parentage.
+
+Use a composer extension with an explicit result:
+
+```csharp
+bool TryAddTable(this GuiComposer composer, GuiElementTable table, string key);
+```
+
+Return `true` only when the table is registered. Return `false` only when a native conditional-add block skips registration; ownership remains with the caller. Invalid keys, duplicate registration, a composed composer, conflicting parentage, and invalid layout throw rather than returning a success-shaped result.
+
+Require an explicit nonblank composer key and preflight key collisions, bounds cycles, table state, and layout before calling native `AddInteractiveElement()`. Afterward verify identity through `composer.GetElement(key)` before setting `IsRegistered` and freezing structure.
+
+Native registration inserts into element collections before completing all bounds work, so exceptional failure is not inherently atomic. If the composer already exposes this table after an exception, mark it registered/frozen and let that composer retain disposal responsibility; propagate the error and require the caller to abandon/dispose the failed composer rather than continue using a partial graph. If it was not inserted, the caller retains disposal responsibility. Do not clear or dispose unrelated composer content inside the registration helper, and do not claim to roll back private native collections.
+
+`TryAddTable` is the supported registration path. Direct native registration of the table bypasses this ownership/freeze contract and is not supported.
+
+### Deferred invalidation
+
+- Maintain separate layout-dirty and artwork-dirty state.
+- Row additions before registration and preferred-size changes invalidate layout and artwork. Coalesce `LayoutInvalidated` notifications until `Arrange()` consumes the pending layout.
+- The owner subscribes before registration and processes invalidation at its next safe GUI composition boundary: call `Measure()`, resize any affected surrounding layout, then `Arrange()` before composer bounds calculation/rendering.
+- Do not silently resize a registered table during rendering while its surrounding layout is stale. The owner must settle pending layout before invoking its composition/render lifecycle.
+- Renderer replacement and `InvalidateArtwork()` mark only static artwork dirty. At the next safe table render/composition entry, rebuild artwork once using settled bounds; do not call the outer composer's rebuild methods from a setter or input callback.
+- A renderer change uses the same non-null interface path and does not raise `LayoutInvalidated`.
+- Dynamic child value updates within reserved dimensions use the child's existing update method. Static child content changes require `InvalidateArtwork()`. Neither requires table reflow unless the caller changes preferred size.
+- The host cancels active input before rebuilding or disposing composition. GUI-scale and localization changes use the host's existing rebuild path, with new content measurements as required.
+
+### Native API evidence
+
+These contracts account for the local API implementation:
+
+- [GuiElement](../../vsapi/Client/UI/Elements/Impl/GuiElement.cs) provides focus loss but no generic pointer-cancellation hook, and its default mouse-down handler consumes an event over the element.
+- [GuiElementTextButton](../../vsapi/Client/UI/Elements/Impl/Interactive/Controls/GuiElementTextButton.cs) and [GuiElementSlider](../../vsapi/Client/UI/Elements/Impl/Interactive/Controls/GuiElementSlider.cs) can activate or commit during mouse-up, so release and cancellation are distinct operations.
+- [GuiComposer](../../vsapi/Client/UI/GuiComposer.cs) assigns group tab indices on addition, delegates unhandled Tab traversal, can skip conditional registration, and can throw after inserting an element.
+- The existing [collapse button](../VanillaBuildingExpanded/src/UI/GuiElementCollapseButton.cs) demonstrates explicit non-activating cancellation through `CancelPress()`, but that capability is not universal.
+
+Sibling-source links assume the existing local checkout layout.
+
 ## Column and row sizing
 
 Column configuration is optional. By default, all inferred columns size to their content.
@@ -108,7 +243,7 @@ An entirely empty table measures zero by zero. Reject empty individual rows rath
 The base `GuiElement` API has no universal intrinsic-size measurement method. The table must not assume it can determine arbitrary content dimensions automatically.
 
 - For ordinary fixed-size elements, use their declared unscaled bounds as the preferred size.
-- For content whose size requires calculation, allow per-cell preferred-size metadata through a row overload accepting cell descriptors.
+- For content whose size requires calculation, allow per-cell preferred-size metadata through `AddRowCells`.
 - A descriptor may also carry an optional table-local child key.
 - Keep the ordinary row API convenient; descriptors are only needed when bounds-based measurement is insufficient or keyed lookup is desired.
 - Preserve preferred measurements separately from arranged coordinates so repeated layout does not measure its own previous output.
@@ -168,7 +303,7 @@ Replacing the renderer invalidates the table's static artwork but does not requi
 
 ## Composer integration and lifecycle
 
-Provide a small composer extension, conceptually `AddTable(...)`, to register the table as one interactive element. This registration is required for runtime rendering even when all its content is informational.
+Provide `TryAddTable(...)` as specified in the Phase 1 contracts to register the table as one interactive element. This registration is required for runtime rendering even when all its content is informational.
 
 The sequence is:
 
@@ -203,11 +338,11 @@ Keep optional child keys local to the table, exposed through a lookup such as `t
 
 Forward relevant input to children and respect handled flags, clipping, and draw order. Do not invoke base mouse handling that consumes otherwise unhandled events over empty table space or passive content.
 
-The table must be non-focusable when it has no focusable children. When it does, expose a focusable group to the outer composer and manage child focus and tab traversal internally. At the group's traversal boundary, allow focus to move through the outer composer. Propagate focus loss and expose the hovered child's cursor.
+The table must be non-focusable when it has no keyboard-enabled focusable children. When it does, expose a focusable group to the outer composer and manage child focus and tab traversal internally. At the group's traversal boundary, allow focus to move through the outer composer. Propagate focus loss and expose the hovered input-eligible child's cursor.
 
 Mouse release and cancellation must reach an active child even when the pointer moves outside its bounds, so controls cannot remain pressed. Do not make informational content capture pointer input merely because its native base handler marks events handled; input eligibility must distinguish passive cells from interactive controls. This policy is separate from child rendering, and must not use `Focusable` alone as a clickability test.
 
-The containing HUD or dialog retains the final say over whether the table receives input at all.
+The containing HUD or dialog retains the final say over whether the table receives input at all. Apply the explicit passive-default flags and cancellation-callback contract above; do not infer input eligibility from child type.
 
 ### Disposal and validation
 
@@ -264,7 +399,7 @@ The trade-off is explicit: the table must implement and test child rendering, ro
 
 - A value-only change that fits the reserved preferred size updates the existing element without reflow.
 - A divider-renderer change invalidates static artwork only; it does not change table dimensions or child positions.
-- A preferred-size change invalidates table layout and artwork. The table handles its own recomposition; the surrounding owner coordinates remeasurement and recomposition when the table's outer dimensions affect the surrounding layout.
+- A preferred-size change invalidates table layout and artwork and raises the coalesced `LayoutInvalidated` notification. The surrounding owner settles measurement and arrangement at a safe composition boundary; the table rebuilds its artwork with those settled bounds.
 - Rows and column configuration may be built before registration; structural mutation after registration requires rebuilding the table through its owner in the initial version.
 - GUI-scale or localization changes are handled by the owner using the existing composition lifecycle.
 - Do not rebuild a HUD or dialog from inside a child input callback.
