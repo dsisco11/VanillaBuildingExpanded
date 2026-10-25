@@ -1,16 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 using Cairo;
 using Vintagestory.API.Client;
+using Vintagestory.API.Config;
 
 namespace VanillaBuildingExpanded.UI;
 
 /// <summary>Owns GUI elements supplied as rows and arranges them into shared, content-sized or fixed columns.</summary>
 /// <remarks>
 /// Sizes use unscaled logical GUI units. Accepted children must not be registered, reparented, or disposed independently.
-/// Layout, ownership, and divider strategies are implemented; texture composition and input routing are pending.
+/// Static artwork is cached in an owned texture; dynamic rendering stays with each child. Input routing is pending.
 /// </remarks>
 internal sealed class GuiElementTable : GuiElement
 {
@@ -34,14 +36,33 @@ internal sealed class GuiElementTable : GuiElement
     private readonly Dictionary<string, GuiElement> keyedElements = new(StringComparer.Ordinal);
     private Layout? arrangedLayout;
     private ITableDividerRenderer dividerRenderer = NoTableDividerRenderer.Instance;
+    private LoadedTexture? staticTexture;
+    private CellEntry[] drawOrder = [];
+    private bool childrenPrepared;
+    private long artworkRevision;
+    private double composedScale;
+    private bool composedPremultipliedAlpha;
     private bool invalidationNotified;
     private bool disposed;
 
     /// <summary>Whether the registration transition has frozen row structure; it does not itself register the table.</summary>
     public bool IsRegistered { get; private set; }
 
-    /// <summary>Whether static artwork needs composition; cleared by the future texture-composition lifecycle.</summary>
+    /// <summary>Whether settled-layout static artwork needs rebuilding at the next composition/render entry.</summary>
     internal bool IsArtworkDirty { get; private set; } = true;
+
+    /// <summary>Propagates the composer's enclosing clip to all currently owned children.</summary>
+    public override ElementBounds? InsideClipBounds
+    {
+        get => base.InsideClipBounds;
+        set
+        {
+            if (disposed) return;
+            base.InsideClipBounds = value;
+            foreach (var entry in rows.SelectMany(row => row))
+                entry.Cell.Element.InsideClipBounds = value;
+        }
+    }
 
     /// <summary>The injected divider strategy; replacing it dirties artwork without invalidating layout.</summary>
     public ITableDividerRenderer DividerRenderer
@@ -75,6 +96,7 @@ internal sealed class GuiElementTable : GuiElement
         ValidateTableBounds();
         if (bounds.ChildBounds.Count != 0)
             throw new ArgumentException("Table bounds must not already contain children.", nameof(bounds));
+        bounds.IsDrawingSurface = true;
     }
 
     /// <summary>Creates a table from passive rows, validating the entire input before transferring child ownership.</summary>
@@ -100,6 +122,7 @@ internal sealed class GuiElementTable : GuiElement
         }
         // Validate aggregate dimensions before committing any of the constructor's rows.
         CalculateLayout(pending);
+        PrepareChildConventions(pending.SelectMany(row => row));
         foreach (var row in pending) AcceptRow(row);
     }
 
@@ -127,6 +150,7 @@ internal sealed class GuiElementTable : GuiElement
         var pending = PrepareRow(cells,
             new HashSet<GuiElement>(elements.Keys, ReferenceEqualityComparer.Instance),
             new HashSet<string>(keyedElements.Keys, StringComparer.Ordinal), CollectOwnedBounds());
+        PrepareChildConventions(pending);
         AcceptRow(pending);
         NotifyLayoutInvalidated();
     }
@@ -149,6 +173,16 @@ internal sealed class GuiElementTable : GuiElement
     {
         ThrowIfDisposed();
         var layout = CalculateLayout();
+        ApplyLayout(layout);
+        arrangedLayout = layout;
+        childrenPrepared = false;
+        InvalidateArtwork();
+        invalidationNotified = false;
+    }
+
+    /// <summary>Reapplies reserved footprints after native preparation without remeasuring or changing surrounding layout.</summary>
+    private void ApplyLayout(Layout layout)
+    {
         tableBounds.fixedWidth = layout.Size.Width;
         tableBounds.fixedHeight = layout.Size.Height;
         for (int rowIndex = 0; rowIndex < rows.Count; rowIndex++)
@@ -170,9 +204,235 @@ internal sealed class GuiElementTable : GuiElement
             }
         }
         tableBounds.MarkDirtyRecursive();
-        arrangedLayout = layout;
+    }
+
+    /// <summary>Prepares children exactly once before the composer's world-bound calculation and surface allocation.</summary>
+    /// <remarks>Requires owner-settled layout; native preparation cannot replace the reserved cell footprints.</remarks>
+    public override void BeforeCalcBounds()
+    {
+        if (disposed) return;
+        childrenPrepared = false;
+        InvalidateArtwork();
+        PrepareComposition();
+    }
+
+    /// <summary>Composes into the table's own local surface, never into the enclosing composer's artwork.</summary>
+    /// <remarks>Zero drawable extent skips all texture allocation and releases any previous cached texture.</remarks>
+    public override void ComposeElements(Context ctx, ImageSurface surface)
+    {
+        if (disposed) return;
+        InvalidateArtwork();
+        EnsureArtwork();
+    }
+
+    /// <summary>Draws cached artwork and then children dynamically, clipped to the table and enclosing clip.</summary>
+    public override void RenderInteractiveElements(float deltaTime)
+    {
+        if (disposed) return;
+        EnsureArtwork();
+        RenderFrame(deltaTime, postRender: false);
+    }
+
+    /// <summary>Forwards the native post-render stage in the same stable order and clipping scope.</summary>
+    public override void PostRenderInteractiveElements(float deltaTime)
+    {
+        if (disposed) return;
+        RequireSettledLayout();
+        RenderFrame(deltaTime, postRender: true);
+    }
+
+    /// <summary>Leaves pointer input unhandled until explicit child routing is implemented.</summary>
+    public override void OnMouseDown(ICoreClientAPI api, MouseEvent args) { }
+
+    /// <summary>Checks predictable registration failures before native maps can acquire ownership.</summary>
+    internal void ValidateRegistration(GuiComposer composer)
+    {
+        ThrowIfDisposed();
+        if (IsRegistered) throw new InvalidOperationException("The table is already registered.");
+        if (!ReferenceEquals(api, composer.Api))
+            throw new ArgumentException("Table and composer must use the same client API.", nameof(composer));
+        var parent = composer.CurParentBounds;
+        if (tableBounds.ParentBounds is not null && !ReferenceEquals(tableBounds.ParentBounds, parent))
+            throw new InvalidOperationException("Table bounds already belong to a different parent.");
+        var ancestors = new HashSet<ElementBounds>(ReferenceEqualityComparer.Instance);
+        for (var ancestor = parent; ancestor is not null; ancestor = ancestor.ParentBounds)
+        {
+            if (ReferenceEquals(ancestor, tableBounds) || !ancestors.Add(ancestor))
+                throw new InvalidOperationException("Registering the table would introduce a bounds cycle.");
+        }
+        Arrange();
+    }
+
+    /// <summary>Rejects unsettled layout rather than silently resizing a registered table during rendering.</summary>
+    private Layout RequireSettledLayout()
+    {
+        ThrowIfDisposed();
+        if (arrangedLayout is not { } layout)
+            throw new InvalidOperationException("Arrange table layout before composition or rendering.");
+        if (!ReferenceEquals(Bounds, tableBounds) || !tableBounds.IsDrawingSurface ||
+            tableBounds.fixedWidth != layout.Size.Width || tableBounds.fixedHeight != layout.Size.Height)
+            throw new InvalidOperationException("Table bounds changed outside the settled layout; arrange again.");
+        ValidateTableBounds();
+        return layout;
+    }
+
+    private void PrepareChildConventions(IEnumerable<CellEntry> entries)
+    {
+        foreach (var entry in entries)
+        {
+            entry.Cell.Element.RenderAsPremultipliedAlpha = RenderAsPremultipliedAlpha;
+            entry.Cell.Element.InsideClipBounds = InsideClipBounds;
+        }
+    }
+
+    /// <summary>Prepares child internals while retaining row-major input order and independently sorting visual order.</summary>
+    private void PrepareComposition()
+    {
+        var layout = RequireSettledLayout();
+        CollectOwnedBounds();
+        PrepareChildConventions(rows.SelectMany(row => row));
+        foreach (var entry in rows.SelectMany(row => row))
+            entry.Cell.Element.BeforeCalcBounds();
+        if (!ReferenceEquals(layout, RequireSettledLayout()))
+            throw new InvalidOperationException("Layout changed during child preparation.");
+        // Validate native sizing/graph changes, then restore the agreed fixed cell footprints.
+        CalculateLayout();
+        ApplyLayout(layout);
+        drawOrder = rows.SelectMany(row => row).OrderBy(entry => entry.Cell.Element.DrawOrder).ToArray();
+        childrenPrepared = true;
+    }
+
+    /// <summary>Rebuilds dirty CPU artwork and uploads through the native texture-reuse API at a safe entry point.</summary>
+    private void EnsureArtwork()
+    {
+        var layout = RequireSettledLayout();
+        double scale = RuntimeEnv.GUIScale;
+        if (!double.IsFinite(scale) || scale <= 0)
+            throw new InvalidOperationException("GUI scale must be finite and positive.");
+        if (!IsArtworkDirty && composedScale == scale && composedPremultipliedAlpha == RenderAsPremultipliedAlpha)
+            return;
         IsArtworkDirty = true;
-        invalidationNotified = false;
+        try
+        {
+            if (!childrenPrepared) PrepareComposition();
+            if (tableBounds.ParentBounds is null)
+                throw new InvalidOperationException("Attach table bounds to a parent before composition.");
+            tableBounds.CalcWorldBounds();
+            long revision = artworkRevision;
+            double width = layout.Size.Width * scale;
+            double height = layout.Size.Height * scale;
+            if (width == 0 || height == 0)
+            {
+                ReleaseTexture();
+            }
+            else
+            {
+                // Round outwards: truncating a fractional extent would crop the final row/column.
+                int pixelWidth = checked((int)Math.Ceiling(width));
+                int pixelHeight = checked((int)Math.Ceiling(height));
+                using var surface = new ImageSurface(Format.Argb32, pixelWidth, pixelHeight);
+                using var context = genContext(surface);
+                context.Rectangle(0, 0, width, height);
+                context.Clip();
+                DrawDividers(context, scale);
+                foreach (var entry in drawOrder)
+                {
+                    context.Save();
+                    try
+                    {
+                        context.NewPath();
+                        entry.Cell.Element.ComposeElements(context, surface);
+                    }
+                    finally
+                    {
+                        context.Restore();
+                        context.NewPath();
+                    }
+                }
+                if (!ReferenceEquals(layout, RequireSettledLayout()))
+                    throw new InvalidOperationException("Layout changed during child composition.");
+                if (context.Status != Status.Success || surface.Status != Status.Success)
+                    throw new InvalidOperationException($"Table Cairo composition failed: {context.Status}, {surface.Status}.");
+                // Cairo pixels are premultiplied; straight-alpha rendering requires conversion before upload.
+                if (!RenderAsPremultipliedAlpha) ConvertToStraightAlpha(surface);
+                var texture = staticTexture ??= new LoadedTexture(api);
+                try { generateTexture(surface, ref texture); }
+                finally { staticTexture = texture; }
+                if (texture.TextureId == 0 || texture.Disposed ||
+                    texture.Width != pixelWidth || texture.Height != pixelHeight)
+                    throw new InvalidOperationException("The GUI API did not upload a valid table texture.");
+            }
+            composedScale = scale;
+            composedPremultipliedAlpha = RenderAsPremultipliedAlpha;
+            // An invalidation raised from child composition must survive this pass.
+            IsArtworkDirty = artworkRevision != revision;
+        }
+        finally
+        {
+            childrenPrepared = false;
+        }
+    }
+
+    private void RenderFrame(float deltaTime, bool postRender)
+    {
+        if (staticTexture is not { TextureId: not 0 } texture) return;
+        var enclosingClip = InsideClipBounds;
+        if (enclosingClip is not null) api.Render.PushScissor(enclosingClip, true);
+        try
+        {
+            api.Render.PushScissor(tableBounds, true);
+            try
+            {
+                if (!postRender)
+                {
+                    // Draw pixel-for-pixel; scissoring removes the outward-rounded fractional edge.
+                    Render2DTexture(texture.TextureId, tableBounds.renderX, tableBounds.renderY,
+                        (double)texture.Width, texture.Height);
+                }
+                foreach (var entry in drawOrder)
+                {
+                    if (postRender) entry.Cell.Element.PostRenderInteractiveElements(deltaTime);
+                    else entry.Cell.Element.RenderInteractiveElements(deltaTime);
+                }
+            }
+            finally { api.Render.PopScissor(); }
+        }
+        finally
+        {
+            if (enclosingClip is not null) api.Render.PopScissor();
+        }
+    }
+
+    private void ReleaseTexture()
+    {
+        var texture = staticTexture;
+        staticTexture = null;
+        texture?.Dispose();
+    }
+
+    /// <summary>Converts native-endian ARGB32 pixels without changing alpha or dividing transparent pixels by zero.</summary>
+    private static void ConvertToStraightAlpha(ImageSurface surface)
+    {
+        // The installed Cairo DemulAlpha helper misidentifies the alpha byte on little-endian Windows.
+        surface.Flush();
+        var pixels = surface.Data;
+        int alphaOffset = BitConverter.IsLittleEndian ? 3 : 0;
+        for (int y = 0; y < surface.Height; y++)
+        {
+            for (int x = 0; x < surface.Width; x++)
+            {
+                int pixel = y * surface.Stride + x * 4;
+                int alpha = pixels[pixel + alphaOffset];
+                for (int channel = 0; channel < 4; channel++)
+                {
+                    if (channel == alphaOffset) continue;
+                    pixels[pixel + channel] = alpha == 0 ? (byte)0 :
+                        (byte)Math.Min(255, (pixels[pixel + channel] * 255 + alpha / 2) / alpha);
+                }
+            }
+        }
+        Marshal.Copy(pixels, 0, surface.DataPtr, pixels.Length);
+        surface.MarkDirty();
     }
 
     /// <summary>Snapshots the last settled layout's divider boundaries in device units without touching child bounds.</summary>
@@ -213,7 +473,7 @@ internal sealed class GuiElementTable : GuiElement
     }
 
     /// <summary>Draws the injected strategy into a local surface without composing children or uploading a texture.</summary>
-    /// <remarks>The future composition lifecycle calls this before static children. Drawing state and paths are restored.</remarks>
+    /// <remarks>Composition calls this before static children. Drawing state and paths are restored.</remarks>
     internal void DrawDividers(Context context, double guiScale)
     {
         if (disposed) return;
@@ -241,6 +501,7 @@ internal sealed class GuiElementTable : GuiElement
     {
         ThrowIfDisposed();
         IsArtworkDirty = true;
+        artworkRevision++;
     }
 
     /// <summary>Finds an owned child by its case-sensitive, table-local key.</summary>
@@ -271,7 +532,7 @@ internal sealed class GuiElementTable : GuiElement
         NotifyLayoutInvalidated();
     }
 
-    /// <summary>Freezes row structure after the future composer helper establishes registration ownership.</summary>
+    /// <summary>Freezes row structure after the composer helper establishes registration ownership.</summary>
     /// <remarks>This internal state transition performs no native registration and allocates no resources.</remarks>
     internal void MarkRegistered()
     {
@@ -280,7 +541,7 @@ internal sealed class GuiElementTable : GuiElement
         IsRegistered = true;
     }
 
-    /// <summary>Cancels configured child interaction, releases every owned child, and detaches their root bounds once.</summary>
+    /// <summary>Cancels interaction, releases texture and children, and detaches their root bounds once.</summary>
     /// <remarks>Repeated calls do nothing, including after the initial cleanup reports failures.</remarks>
     /// <exception cref="AggregateException">One or more cleanup operations failed; all children were still processed.</exception>
     public override void Dispose()
@@ -296,13 +557,16 @@ internal sealed class GuiElementTable : GuiElement
             if (ReferenceEquals(entry.Bounds.ParentBounds, tableBounds)) entry.Bounds.ParentBounds = null;
             tableBounds.ChildBounds.Remove(entry.Bounds);
         }
+        Cleanup(ReleaseTexture);
         rows.Clear();
         elements.Clear();
         keyedElements.Clear();
         arrangedLayout = null;
+        drawOrder = [];
+        childrenPrepared = false;
         LayoutInvalidated = null;
         base.Dispose();
-        if (errors is not null) throw new AggregateException("Table child cleanup failed.", errors);
+        if (errors is not null) throw new AggregateException("Table cleanup failed.", errors);
 
         // Release every child even when one cleanup operation fails, then surface all failures.
         void Cleanup(Action action)
@@ -488,7 +752,8 @@ internal sealed class GuiElementTable : GuiElement
     private void NotifyLayoutInvalidated()
     {
         arrangedLayout = null;
-        IsArtworkDirty = true;
+        childrenPrepared = false;
+        InvalidateArtwork();
         if (invalidationNotified) return;
         invalidationNotified = true;
         LayoutInvalidated?.Invoke();

@@ -1,6 +1,6 @@
 # GUI table layout component proposal
 
-Status: Design direction approved: row-oriented content, child ownership, direct inheritance from `GuiElement`, and interface-based divider rendering. Phases 1 through 3 are complete: contracts, layout, validation, ownership, divider geometry, and rendering strategies are implemented. Native texture/composer integration, input routing, and HUD integration remain pending.
+Status: Design direction approved: row-oriented content, child ownership, direct inheritance from `GuiElement`, and interface-based divider rendering. Phases 1 through 4 are complete: contracts, layout, validation, ownership, divider strategies, composer registration, and cached child composition/rendering are implemented. Input routing and HUD integration remain pending; actual GPU display verification remains part of the in-game pass.
 
 Implementation progress is tracked in the [implementation TODO](GuiElementTable.implementation.todo).
 
@@ -365,13 +365,23 @@ Use the native owning-container pattern:
 - Prepare child measurements and bounds before final world-bound calculation.
 - Mark the table bounds as a drawing surface so child static drawing coordinates are local to it.
 - Delegate divider drawing through `ITableDividerRenderer` before composing children.
-- Compose every child into the table's own Cairo surface and upload the static artwork to a table-owned texture.
-- Render that texture, then invoke child dynamic rendering in stable draw order.
+- Compose every child into the table's own Cairo surface and upload the static artwork to a table-owned texture, except when the complete table has zero drawable width or height.
+- Render that texture, then invoke child dynamic rendering in stable draw order; forward the native post-render stage in the same order.
 - Preserve clipping, premultiplied-alpha conventions, and child draw order across composition and runtime rendering.
 - Propagate clip bounds to children both on addition and when the table's clip bounds change.
-- Avoid zero-sized texture allocation for an empty table; it has no artwork to render.
+- Avoid zero-sized texture allocation for an empty or zero-extent table; release a previous texture and skip child composition/rendering until it has drawable extent again.
 
-No per-child static/dynamic registration mode is necessary. Every child receives its composition and dynamic-render hooks; static-only elements have no dynamic artwork to render. Dynamic text continues rendering even though it is not registered with the outer composer.
+No per-child static/dynamic registration mode is necessary. For a drawable table, every child receives its composition and dynamic-render hooks; static-only elements have no dynamic artwork to render. Dynamic text continues rendering even though it is not registered with the outer composer.
+
+#### Phase 4 implementation evidence
+
+- [GuiElementTableComposerExtensions.cs](../VanillaBuildingExpanded/src/UI/GuiElementTableComposerExtensions.cs) implements `TryAddTable()`, including conditional skips, preflight validation, and ownership tracking after partial native insertion. It arranges the table before native world-bound calculation or surface allocation. It does not register children or alter unrelated composer content.
+- [GuiElementTable.cs](../VanillaBuildingExpanded/src/UI/GuiElementTable.cs) owns a lazily allocated, reusable `LoadedTexture`. Native child preparation runs before composer bounds calculation; preparation does not replace the reserved logical footprints. Static child composition and both dynamic render stages use stable ascending draw order, with row-major insertion order retained for ties.
+- Static drawing uses table-local coordinates. Cairo clips to the exact drawable extent; pixel allocation rounds fractional extents outwards. Runtime rendering draws the cached texture pixel-for-pixel and intersects table/enclosing scissors, restoring them even if a child throws.
+- Renderer replacement and static artwork invalidation rebuild lazily at the next composition/render entry without requesting an outer composer rebuild. Invalidations raised during child composition survive for the next pass. Pending layout must still be settled by the owner; rendering never silently calls `Arrange()`.
+- Child clip/alpha conventions are propagated. Cairo artwork stays premultiplied for native premultiplied rendering; straight-alpha mode uses an explicit native-endian ARGB32 conversion before upload. Pixel tests exposed an incorrect alpha-byte selection in the installed Cairo wrapper's `DemulAlpha()` helper on little-endian Windows, so the table does not use that helper. The local conversion preserves alpha, all three color channels, and fully transparent pixels without modifying the game's libraries.
+- [TableCompositionTests.cs](../VanillaBuildingExpanded.Tests/UI/TableCompositionTests.cs) adds 38 cases covering concrete native composer registration/composition, actual static/dynamic text, sizing before fit-to-children composer allocation, local coordinates, draw ordering, clipping, scale, alpha pixels, deferred invalidation, zero extent, failure cleanup, and repeated disposal. The focused UI suite passes 148 tests with zero failures or skips; existing unrelated compiler warnings remain.
+- Texture uploads and GPU rendering are mocked in these tests; CPU Cairo rasterization is real. Verify actual GPU upload/display in the later in-game pass. Input/focus routing and HUD migration have not been implemented in Phase 4.
 
 Keep optional child keys local to the table, exposed through a lookup such as `table.GetElement(key)`. The composer can retrieve the table by its own key, but cannot retrieve nested cells directly. Callers may alternatively retain typed, non-owning child references.
 

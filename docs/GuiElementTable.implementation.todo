@@ -1,6 +1,6 @@
 # GUI table implementation TODO
 
-Status: Phases 1 through 3 complete (contracts, layout, ownership, and divider strategies). Phases 4 onward are not started; native texture/composer integration and input routing remain pending.
+Status: Phases 1 through 4 complete (contracts, layout, ownership, divider strategies, composer registration, and cached composition/rendering). Phases 5 onward are not started; input/focus routing and HUD integration remain pending. Actual GPU display verification remains part of P7.
 
 Design source: [GUI table proposal](GuiElementTable.proposal.md).
 
@@ -146,19 +146,29 @@ Completion evidence:
 
 ## P4 - Implementing composition and rendering
 
-- [ ] Add composer integration that registers only the table as an interactive element, including when its content is passive.
-- [ ] Complete measurement and arrangement before composer world-bound calculation and surface allocation.
-- [ ] Mark table bounds as a drawing surface and compose children in the correct local coordinate system.
-- [ ] Allocate/update the table-owned static texture; skip allocation when either drawable dimension is zero.
-- [ ] Draw dividers through the interface before static child artwork, with clipping and Cairo save/restore around the call.
-- [ ] Compose every child and forward dynamic rendering in stable draw order without registering children with the composer.
-- [ ] Match native alpha conventions and propagate clip-bound changes to existing children.
-- [ ] Implement deferred artwork invalidation and texture reuse/release through the normal lifecycle.
-- [ ] Verify renderer replacement rebuilds artwork only, while child value updates fitting reserved bounds do not trigger table reflow.
-- [ ] Guard repeated disposal and post-disposal callbacks; release texture and children once even when the composer disposes the table through multiple collections.
-- [ ] Add lifecycle tests using counters/mocks and offscreen drawing where practical; reserve actual GPU upload/render verification for the in-game pass.
+- [x] Add composer integration that registers only the table as an interactive element, including when its content is passive.
+- [x] Complete measurement and arrangement before composer world-bound calculation and surface allocation.
+- [x] Mark table bounds as a drawing surface and compose children in the correct local coordinate system.
+- [x] Allocate/update the table-owned static texture; skip allocation when either drawable dimension is zero.
+- [x] Draw dividers through the interface before static child artwork, with clipping and Cairo save/restore around the call.
+- [x] Compose every child in drawable tables and forward dynamic rendering in stable draw order without registering children with the composer.
+- [x] Match native alpha conventions and propagate clip-bound changes to existing children.
+- [x] Implement deferred artwork invalidation and texture reuse/release through the normal lifecycle.
+- [x] Verify renderer replacement rebuilds artwork only, while child value updates fitting reserved bounds do not trigger table reflow.
+- [x] Guard repeated disposal and post-disposal callbacks; release texture and children once even when the composer disposes the table through multiple collections.
+- [x] Add lifecycle tests using counters/mocks and offscreen drawing where practical; reserve actual GPU upload/render verification for the in-game pass.
 
-Exit gate: static and dynamic children render through the table, no lifecycle calls are duplicated, and scale/clipping behavior is correct.
+Exit gate passed in automated coverage: real native static/dynamic text composes and renders through the table, preparation/composition hooks are not duplicated within a native pass, and scale/clipping are verified with Cairo pixels and render-API mocks. Actual GPU display remains an explicitly pending P7 check.
+
+P4 evidence and implementation notes:
+
+- [GuiElementTableComposerExtensions.cs](../VanillaBuildingExpanded/src/UI/GuiElementTableComposerExtensions.cs) implements explicit-result registration, preflight checks, conditional skips, and the partial-native-insertion ownership contract. Registration performs no texture allocation.
+- The table owns a lazy reusable texture, composes dividers before static child artwork, forwards dynamic and post-render stages in stable order, and restores intersecting table/enclosing scissors on failure.
+- Native preparation cannot change reserved logical footprints. A fit-to-children composer regression verifies correct dimensions before parent surface allocation. Zero drawable extent releases stale artwork and skips texture creation and child composition/rendering.
+- Static rebuild requests coalesce, including renderer replacement. A native dynamic-text update uploads only its own texture and does not reflow or recompose the table. Invalidations raised during child composition remain pending.
+- Premultiplied and straight-alpha pixels are tested. The installed Cairo wrapper's DemulAlpha helper uses the wrong alpha byte on little-endian Windows; a table-local native-endian conversion avoids that bug, preserves transparency and RGB channels, and leaves native libraries unchanged.
+- [TableCompositionTests.cs](../VanillaBuildingExpanded.Tests/UI/TableCompositionTests.cs) adds 38 lifecycle/registration cases. The combined UI command recorded in P2 passes 148 tests with zero failures or skips and builds production/test projects. Existing unrelated compiler warnings remain.
+- Input routing/focus and HUD migration remain out of scope for P4. The table suppresses the inherited consuming mouse-down fallback, but does not yet route child input.
 
 ## P5 - Implementing input and focus
 
