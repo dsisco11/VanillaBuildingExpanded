@@ -1,7 +1,6 @@
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
-using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 
 using VanillaBuildingExpanded.BuildBrush.Tessellation;
@@ -20,8 +19,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
     private readonly MiniDimensionTessellator tessellator;
     private readonly Vec4f RgbaGlowClear = new(1, 1, 1, 0);
 
-    private int lastSeenDirtyCounter = -1;
-    private int lastSeenBlockId = -1;
     private bool rebuildQueued;
     private bool disposed;
 
@@ -36,6 +33,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
     {
         brushEntity = (BuildBrushEntity)entity;
         tessellator = new MiniDimensionTessellator(api);
+        brushEntity.PreviewChanged += RebuildMesh;
     }
 
     public override void OnEntityLoaded()
@@ -43,28 +41,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
         base.OnEntityLoaded();
 
         RebuildMesh();
-    }
-
-    private void RebuildMeshIfChanged()
-    {
-        GetPreviewBounds(out BlockPos min, out _);
-        int dirtyCounter = brushEntity.WatchedAttributes.GetInt(BuildBrushEntity.BrushDirtyCounterKey);
-        int blockId = brushEntity.Dimension?.GetBlock(min)?.BlockId ?? 0;
-        if (dirtyCounter == lastSeenDirtyCounter && blockId == lastSeenBlockId)
-        {
-            return;
-        }
-
-        RebuildMesh();
-    }
-
-    private void GetPreviewBounds(out BlockPos min, out BlockPos max)
-    {
-        if (!brushEntity.TryGetPreviewBounds(out min, out max))
-        {
-            min = new BlockPos(0, 0, 0, Dimensions.MiniDimensions);
-            max = min;
-        }
     }
 
     /// <summary>
@@ -87,11 +63,9 @@ public class BuildBrushEntityRenderer : EntityRenderer
     private void RebuildMeshNow()
     {
         IMiniDimension? dimension = brushEntity.Dimension;
-        GetPreviewBounds(out BlockPos min, out BlockPos max);
-        lastSeenDirtyCounter = brushEntity.WatchedAttributes.GetInt(BuildBrushEntity.BrushDirtyCounterKey);
-        lastSeenBlockId = dimension?.GetBlock(min)?.BlockId ?? 0;
+        brushEntity.GetPreviewBounds(out BlockPos min, out BlockPos max);
 
-        if (dimension is null || lastSeenBlockId == 0)
+        if (dimension is null || (dimension.GetBlock(min)?.BlockId ?? 0) == 0)
         {
             DisposeMesh();
             return;
@@ -122,9 +96,6 @@ public class BuildBrushEntityRenderer : EntityRenderer
         if (isShadowPass || brushEntity.BrushInstance?.IsDisabled == true
             || !brushEntity.WatchedAttributes.GetBool(BuildBrushEntity.BrushVisibleKey))
             return;
-
-        // Chunks and watched attributes arrive independently; neither must be the only rebuild signal.
-        RebuildMeshIfChanged();
 
         if (meshRef is null)
             return;
@@ -183,6 +154,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
     public override void Dispose()
     {
         disposed = true;
+        brushEntity.PreviewChanged -= RebuildMesh;
         DisposeMesh();
     }
 }

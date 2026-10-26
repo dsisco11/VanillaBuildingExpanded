@@ -41,35 +41,44 @@ public sealed class BuildBrushEntityRendererTests
         var renderer = new BuildBrushEntityRenderer(entity, capi.Object);
 
         renderer.OnEntityLoaded();
+        entity.RefreshClientPreview();
         Assert.Single(rebuilds);
         rebuilds.Dequeue()();
         render.Verify(r => r.UploadMultiTextureMesh(It.Is<MeshData>(mesh => mesh.VerticesCount == 24)), Times.Once);
-        renderer.DoRender3DOpaque(0, false);
+        entity.RefreshClientPreview();
         Assert.Empty(rebuilds);
 
         if (counterArrivesFirst)
         {
             entity.IncrementBrushDirtyCounter();
-            renderer.DoRender3DOpaque(0, false);
+            entity.RefreshClientPreview();
             Assert.Single(rebuilds);
             rebuilds.Dequeue()();
         }
 
         block = TestHelpers.CreateTestBlock(101, "game:fence-n");
         renderer.DoRender3DOpaque(0, false);
+        Assert.Empty(rebuilds);
+        entity.RefreshClientPreview();
         Assert.Single(rebuilds);
         rebuilds.Dequeue()();
         Mock.Get(capi.Object.TesselatorManager).Verify(t => t.GetDefaultBlockMesh(block), Times.Once);
         render.Verify(r => r.UploadMultiTextureMesh(It.Is<MeshData>(mesh => mesh.VerticesCount == 24)),
             Times.Exactly(counterArrivesFirst ? 3 : 2));
-        renderer.DoRender3DOpaque(0, false);
+        entity.RefreshClientPreview();
         Assert.Empty(rebuilds);
 
         // Same-ID updates still use the counter for entity properties and mesh rotation.
         entity.IncrementBrushDirtyCounter();
-        renderer.DoRender3DOpaque(0, false);
+        entity.RefreshClientPreview();
         Assert.Single(rebuilds);
         renderer.Dispose();
+        rebuilds.Dequeue()();
+        entity.IncrementBrushDirtyCounter();
+        entity.RefreshClientPreview();
+        Assert.Empty(rebuilds);
+        render.Verify(r => r.UploadMultiTextureMesh(It.IsAny<MeshData>()),
+            Times.Exactly(counterArrivesFirst ? 3 : 2));
     }
 
     [Fact]
@@ -94,13 +103,14 @@ public sealed class BuildBrushEntityRendererTests
         var renderer = new BuildBrushEntityRenderer(entity, capi.Object);
 
         renderer.OnEntityLoaded();
+        entity.RefreshClientPreview();
         Assert.Single(rebuilds);
         rebuilds.Dequeue()();
-        renderer.DoRender3DOpaque(0, false);
+        entity.RefreshClientPreview();
         Assert.Empty(rebuilds);
 
         block = TestHelpers.CreateTestBlock(100);
-        renderer.DoRender3DOpaque(0, false);
+        entity.RefreshClientPreview();
         Assert.Single(rebuilds);
         renderer.Dispose();
     }
@@ -136,10 +146,11 @@ public sealed class BuildBrushEntityRendererTests
         var renderer = new BuildBrushEntityRenderer(entity, capi.Object);
 
         renderer.OnEntityLoaded();
+        entity.RefreshClientPreview();
         entity.SetPreviewBounds(latestPosition, latestPosition);
         entity.IncrementBrushDirtyCounter();
         renderer.RebuildMesh();
-        renderer.DoRender3DOpaque(0, false);
+        entity.RefreshClientPreview();
         Assert.Single(rebuilds);
 
         if (disposeBeforeRebuild)
@@ -151,7 +162,7 @@ public sealed class BuildBrushEntityRendererTests
             disposeBeforeRebuild ? Times.Never() : Times.Once());
         render.Verify(r => r.UploadMultiTextureMesh(It.IsAny<MeshData>()),
             disposeBeforeRebuild ? Times.Never() : Times.Once());
-        renderer.DoRender3DOpaque(0, false);
+        entity.RefreshClientPreview();
         Assert.Empty(rebuilds);
         renderer.Dispose();
     }

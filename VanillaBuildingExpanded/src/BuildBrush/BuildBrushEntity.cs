@@ -3,6 +3,7 @@ using System;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
+using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 using Vintagestory.API.Datastructures;
@@ -58,6 +59,11 @@ public class BuildBrushEntity : EntityChunky
     /// Weak reference to the owning brush instance.
     /// </summary>
     private WeakReference<BuildBrushInstance>? brushInstanceRef;
+    private int lastSeenDirtyCounter = -1;
+    private int lastSeenBlockId = -1;
+
+    /// <summary>Raised locally when received preview state changes on the client.</summary>
+    public event Action? PreviewChanged;
 
     /// <summary>
     /// Exposes the dimension for the renderer to access.
@@ -161,6 +167,36 @@ public class BuildBrushEntity : EntityChunky
         min = minPos;
         max = maxPos;
         return true;
+    }
+
+    internal void GetPreviewBounds(out BlockPos min, out BlockPos max)
+    {
+        if (!TryGetPreviewBounds(out min, out max))
+        {
+            min = new BlockPos(0, 0, 0, Dimensions.MiniDimensions);
+            max = min;
+        }
+    }
+
+    public override void OnGameTick(float dt)
+    {
+        base.OnGameTick(dt);
+        if (World.Side == EnumAppSide.Client && Alive)
+            RefreshClientPreview();
+    }
+
+    internal void RefreshClientPreview()
+    {
+        GetPreviewBounds(out BlockPos min, out _);
+        int dirtyCounter = GetBrushDirtyCounter();
+        int blockId = Dimension?.GetBlock(min)?.BlockId ?? 0;
+        if (dirtyCounter == lastSeenDirtyCounter && blockId == lastSeenBlockId)
+            return;
+
+        // Chunks and watched attributes arrive independently, so either can invalidate the preview.
+        lastSeenDirtyCounter = dirtyCounter;
+        lastSeenBlockId = blockId;
+        PreviewChanged?.Invoke();
     }
 
     public BuildBrushEntity() : base()
