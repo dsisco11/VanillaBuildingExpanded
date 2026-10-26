@@ -1,0 +1,229 @@
+# Build-mode ruler implementation plan
+
+Source proposal: [BuildModeRuler.proposal.md](./BuildModeRuler.proposal.md)
+
+Planning only. All tasks are unchecked; this file does not claim implementation or verification.
+
+## Goal and scope
+
+Deliver one client-only, inclusive block-cell ruler per saved world, independent of held-item eligibility, brush snapping, and placement preview state. Persist endpoints, safely select them through world clicks, and display a depth-tested wireframe while eligible.
+
+The expanded Ruler section, between Room and Controls, contains only:
+
+```text
+[ ] Show ruler
+[Set Start] [Set end]
+Size: <x>, <y>, <z>
+```
+
+Keep the existing section heading/collapse treatment, but add no endpoint/bounds/dimension/status rows or Clear action. Prompts and errors use localized in-game notifications.
+
+Non-goals: multiple rulers per world; distance/diagonal lines; ticks; in-world text; draggable handles; numeric editing; placement restrictions; remote sharing; extended-range/unloaded-terrain targeting; schematic/design-mode work. Do not change server controllers, placement packets, entities, world blocks, inventory items, claims, or synchronized brush state.
+
+## Assumptions and questions to resolve
+
+- The proposal labels details beyond its confirmed decisions as recommendations. This plan carries those recommendations forward, including unchecked visibility on world join, right-click cancellation, and starting a new partial ruler on cross-dimension selection. Names of new classes/files remain provisional.
+- Physical mouse event ordering, downstream action suppression, focus-loss cleanup, and available dimension-change hooks must be established against the supported engine before accepting the input implementation.
+- Confirm when `World.SavegameIdentifier` becomes available and that it distinguishes replacement multiplayer saves. An unavailable identity permits memory-only operation with feedback, never a global fallback.
+- Exact coordinate/dimension validation must follow the active world's API without requiring endpoint chunks or blocks to exist. Resolve how invalid entries are isolated without destroying unrelated entries.
+- Render order, color, line width, visual bias, and transparent-material occlusion need supported-build runtime qualification. They are not settled numeric values in the proposal.
+- Input and rendering completion require access to a running supported game. If unavailable, record the blocked checks and leave acceptance unchecked rather than substituting mocked evidence.
+
+## Phase 1: Establish contracts and implement ruler state
+
+Prerequisites: None.
+Outcome: Deterministic ruler commands and exact bounds are testable without GUI/GPU dependencies.
+
+    ☐ Confirm implementation surfaces and engine constraints before wiring consumers.
+        ☐ Inspect BuildBrushSystem_Client, BuildModeIndicatorBinding, BuildModeHud, CollapsibleSection, GuiElementTable input opt-in, and BuildBrushWheelInput.
+        ☐ Identify supported physical mouse/action ordering, cursor/dialog priority, focus-loss and dimension-change hooks, world identity readiness, and world coordinate validation.
+        ☐ Inspect IRenderer registration and wireframe mesh/shader helpers; note helper state-restoration limitations and RenderRange limitations.
+        ☐ Identify the existing focused xUnit test invocation and normal build target through build.ps1/CakeBuild; do not introduce new tooling.
+        ☐ Record resolved assumptions or remaining blockers in this plan before implementing dependent behavior.
+    ☐ Add a small client RulerController and explicit endpoint/state records, following existing naming and event patterns.
+        ☐ Represent nullable copied X/local-Y/Z/dimension endpoints; preserve start identity separately from normalized minimum/maximum bounds.
+        ☐ Represent Idle, PickingStart, PickingEnd, session visibility, and coherent presentation/change notifications.
+        ☐ Implement same-button cancellation, other-button switching, valid selection completion, and lifecycle cancellation.
+        ☐ Permit arming only with enabled local mode and a living player; do not require a placeable held item.
+        ☐ Keep invalid/absent targets from mutating state; retain armed mode and expose notification intent.
+        ☐ For a valid selection in another dimension, set the requested endpoint and clear the incompatible opposite endpoint as one state change; expose feedback to set the other endpoint.
+    ☐ Implement the inclusive bounds contract without engine side effects.
+        ☐ Calculate minCell/min(start,end), maxCell/max(start,end), size/max-min+1, renderMin/minCell, and renderMaxExclusive/maxCell+1 on each axis.
+        ☐ Promote operands before subtraction/addition; retain double-precision world render bounds and explicit dimension/local Y.
+        ☐ Report incomplete sizes without generating a speculative box; measure cells, not slab/stair/chiseled geometry.
+    ☐ Add focused state/bounds unit tests under VanillaBuildingExpanded.Tests\BuildBrush.
+        ☐ Assert (10,65,20) through (14,67,23) gives sizes (5,3,4), render min (10,65,20), and exclusive max (15,68,24).
+        ☐ Assert same-cell (1,1,1), reversed/negative coordinates, safe arithmetic at coordinate extremes, and no mutation through source BlockPos aliases.
+        ☐ Cover either endpoint first, preservation of the same-dimension opposite endpoint, switching/cancellation, invalid targets, and cross-dimension partial reset.
+
+Completion criteria:
+
+    ☐ Focused tests establish exact values and transitions, not only method calls.
+    ☐ State/bounds logic has no GUI/GPU/server dependency; engine integration uncertainties are explicitly resolved or blocked.
+
+## Phase 2: Persist endpoints without risking other saved rulers
+
+Prerequisites: Phase 1 state and world-identity/validation contracts.
+Outcome: Complete and partial endpoint records can be restored for the correct world without silently losing existing data.
+
+    ☐ Add client-only persistence through LoadModConfig/StoreModConfig in vanillabuildingexpanded-rulers.json.
+        ☐ Use a schema version and dictionary keyed by World.SavegameIdentifier; store nullable start/end X/local-Y/Z/dimension records.
+        ☐ Keep config coordination with the client ruler owner; do not extend VbeConfig's shared settings or brush packets with endpoint data.
+        ☐ Load only once the current identity is available; isolate single-player worlds, multiplayer worlds, and replacement saves at the same address.
+        ☐ Missing identity reports a persistence problem and leaves this session memory-only; do not use name, seed, address, or a global key as a substitute.
+        ☐ Save successful endpoint mutations, including cross-dimension clearing, in one update; preserve every unrelated world entry.
+        ☐ Do not save entering pick mode, per-frame refreshes, visibility, pending gestures, GUI state, or GPU state.
+    ☐ Validate and report failures explicitly.
+        ☐ Treat a missing file as normal first use; distinguish malformed data, unsupported schema, invalid coordinates/dimensions, and stored cross-dimension pairs.
+        ☐ Log errors and issue localized in-game feedback; never overwrite an unreadable/unsupported file with empty defaults.
+        ☐ Validate against world coordinate/dimension rules without block or chunk availability checks; retain valid coordinates if blocks later change.
+        ☐ On write failure retain the edit in memory, mark it dirty/unsaved, and notify that persistence failed.
+        ☐ Retry dirty data on the next explicit edit or orderly exit; clear dirty status only after success and never announce failed writes as successful.
+    ☐ Add persistence tests with isolated temporary test files or existing config mocks.
+        ☐ Round-trip empty, partial, complete, negative-coordinate, and dimension-bearing records exactly.
+        ☐ Prove isolation across two local worlds, two multiplayer worlds, and a replacement save at the same address.
+        ☐ Cover missing identity/file, corrupt/unsupported/invalid data, unwritable storage, retries, and preservation of other entries and original unreadable content.
+        ☐ Prove transient state is absent from serialized data and clean up only test-owned files.
+
+Completion criteria:
+
+    ☐ Focused persistence tests prove endpoint fidelity, world isolation, and non-destructive failure handling.
+    ☐ The controller publishes one saveable mutation for cross-dimension relocation and never persists a mismatched endpoint pair.
+
+## Phase 3: Capture endpoint gestures without gameplay fallthrough
+
+Prerequisites: Phase 1 engine/input contracts and Phase 2 mutation persistence.
+Outcome: A disposable input adapter safely converts armed world clicks into saved ruler changes.
+
+    ☐ Add a client input adapter, using handled physical mouse events and InWorldAction suppression where required by verified ordering.
+        ☐ Act only in grabbed-mouse gameplay with enabled mode, a living player, and an armed picker; respect already-handled input and GUI priority.
+        ☐ Copy the current original world BlockSelection on a fresh left press; never use the brush destination, face offset, or snapping result.
+        ☐ Use ordinary selection reach; entities, sky, and absent block targets do not become endpoints.
+        ☐ Consume invalid picking clicks, retain prior endpoints/pick mode, and notify Aim at a block.
+        ☐ On valid selection, commit the controller change, return to Idle, and trigger persistence/presentation updates.
+        ☐ Cancel on gameplay right-click before TryPlaceBlock/item use; do not change endpoints on cancellation.
+    ☐ Own the complete physical gesture independently of the pick state.
+        ☐ Suppress held/repeated actions and release after a successful press returns to Idle; apply equivalent ownership to cancellation gestures.
+        ☐ Ensure the GUI button's activation gesture cannot set an endpoint or trigger a world action.
+        ☐ Pause world picking for open dialogs/free cursor; keep dialog input and normal cursor management intact.
+        ☐ Cancel pending picking on mode-off, death, dimension change, departure, or disposal; safely release ownership on focus loss/teardown without leaking later held actions.
+        ☐ Preserve Idle left/right click behavior, ordinary brush controls, and empty/unsupported-hand operation; never send placement packets for ruler commands.
+        ☐ Detach every subscription on disposal and make repeated cleanup harmless.
+    ☐ Add adapter/integration tests covering event order and interactions with the existing placement path.
+        ☐ Exercise valid/invalid targets, button-to-world transition, held/repeated/released clicks after success, and right-click cancellation with an eligible brush.
+        ☐ Assert mining/attack/item-use/placement callbacks and placement packets are absent for owned gestures, not just that handled flags are set.
+        ☐ Cover handled events, dialog/free-cursor pause, focus loss, mode/death/dimension changes, repeated disposal, and ordinary Idle input.
+
+Completion criteria:
+
+    ☐ Focused automated tests establish full-gesture suppression and normal-input compatibility.
+    ☐ Native gameplay suppression remains explicitly subject to the live gate in Phase 6; mocks alone are not completion evidence.
+
+## Phase 4: Add exactly the requested three-row section
+
+Prerequisites: Phases 1-3 controller commands, notifications, persistence, and input adapter.
+Outcome: The existing build-mode panel operates the ruler without gaining focus or intercepting passive panel space.
+
+    ☐ Extend the existing client composition/BuildModeIndicatorBinding path to share one world-session ruler controller with the HUD.
+        ☐ Keep state ownership outside BuildModeHud; retain lazy HUD creation and independence from preview/held-item eligibility.
+    ☐ Compose BuildModeHud.Ruler.cs using existing CollapsibleSection, table, and native checkbox/button patterns.
+        ☐ Insert expanded-by-default Ruler between Room and Controls, with checkbox first, Set Start/Set end buttons second, size third.
+        ☐ Format complete sizes as Size: 5, 3, 4 in X/Y/Z block counts; show Size: -, -, - until complete.
+        ☐ Add no coordinates, bounds/dimension/status rows, extra actions, or Clear control.
+        ☐ Allow checking visibility while incomplete; notify that both endpoints are needed without drawing a box.
+        ☐ Highlight the armed button without extra rows; same button cancels and other button switches.
+        ☐ Route pick prompts, dimension feedback, persistence/render errors, and invalid-target explanations through in-game notifications outside the panel.
+        ☐ Keep collapse purely visual: no endpoint clearing, pick cancellation, or visibility changes.
+    ☐ Extend HUD input routing surgically.
+        ☐ Use existing table pointer opt-in for interactive cells and actual control hits/outstanding captures in ShouldReceiveMouseEvents.
+        ☐ Forward mouse down/up/move as needed, including captured releases outside bounds; preserve existing collapse-button routing.
+        ☐ Cancel captures before collapse, hide, recompose, or disposal; do not leave pressed controls or dispatch duplicate commands.
+        ☐ Keep HUD non-focusing, do not force cursor grabbing, and leave the size readout/headings/unused panel space passive.
+        ☐ Avoid default dialog routing that consumes events across the whole panel.
+    ☐ Add localization in assets\vanillabuildingexpanded\lang\en.json and follow existing scaling/layout conventions.
+        ☐ Localize labels, size format/placeholders, prompts, and all error notifications.
+        ☐ Handle large size values and long translated strings without clipping or overlap; preserve room/control layout behavior.
+    ☐ Extend BuildModeHudControlsTests and relevant table/indicator tests.
+        ☐ Assert exact row order/content, incomplete/complete formatting, armed state, and independent notification feedback while collapsed.
+        ☐ Test control clicks, drag/release outside, passive hit areas, collapse/reopen, hidden HUD, GUI-scale/locale rebuilds, and repeated cleanup.
+
+Completion criteria:
+
+    ☐ GUI/integration tests prove the exact three-row contract and usable controls, not merely element existence.
+    ☐ Existing Room/Controls and non-focusing/passive-input behavior remain covered and working.
+
+## Phase 5: Render the wireframe and finish lifecycle ownership
+
+Prerequisites: Phase 1 bounds/render contracts; Phases 2-4 session/input/HUD integration.
+Outcome: Visibility controls exactly one depth-tested renderer, with no resources or callbacks surviving the world session.
+
+    ☐ Implement client-owned RulerRenderer : IRenderer with a reusable unit-cube line mesh and engine wireframe shader.
+        ☐ Render 12 edges scaled by inclusive sizes and positioned at renderMin; use double-precision camera-relative subtraction before float matrices.
+        ☐ Reuse qualified WireframeCube/LineMeshUtil facilities; do not introduce a custom shader or tessellate block meshes.
+        ☐ Do not allocate meshes, sample blocks, or rebuild geometry per frame.
+        ☐ Draw after opaque terrain with depth test enabled/depth writes disabled; qualify order against brush preview/selection/transparency in Phase 6.
+        ☐ Apply only a small validated visual expansion/depth bias without changing measured bounds.
+        ☐ Restore shader/line/depth/blend state to the render-stage contract, including failures; do not trust helper cleanup to restore arbitrary prior state.
+        ☐ Do not depend on RenderRange or endpoint-distance culling; omit explicit culling unless based on the whole box.
+        ☐ Log/notify GPU/setup failure explicitly while keeping the size readout usable.
+    ☐ Coordinate registration and session lifecycle from the existing client owner/binding.
+        ☐ Register exactly one renderer only for enabled build mode, checked visibility, two valid same-dimension endpoints, matching player dimension, and an available session.
+        ☐ Unregister on loss of any condition at the original stage; endpoint edits update bounds without duplicate registration.
+        ☐ Reuse at most one mesh per session; dispose it on departure/system disposal with idempotent hide/show and teardown.
+        ☐ Start joins with mode disabled and visibility unchecked; load endpoints without enabling either.
+        ☐ Mode-off/death cancels picking and hides while retaining endpoints and the session checkbox preference; mode-on restores eligible visibility.
+        ☐ Dimension change cancels picking and hides without deleting saved endpoints; retain size text and notify mismatch outside the section.
+        ☐ Returning dimensions restores eligible rendering unless a new endpoint replaced the old-dimension ruler.
+        ☐ Retry dirty config while world identity remains available on orderly exit, then detach input/binding/state callbacks and clear session ownership.
+    ☐ Add renderer-registration and lifecycle integration tests.
+        ☐ Assert exact renderMin/exclusive max and scale, not just that a draw callback ran.
+        ☐ Exercise each eligibility condition, zero/one registrations, same-stage balanced unregistration, and bound updates without re-registration.
+        ☐ Verify mode/death/dimension transitions, preference restoration, world leave/rejoin, GUI rebuilds, resource failures, and repeated disposal.
+        ☐ Assert no stale callbacks/registrations/mesh references or prior-world state leakage; verify size readout still works when drawing fails.
+
+Completion criteria:
+
+    ☐ Focused rendering/lifecycle tests establish exact drawing inputs and balanced resource ownership.
+    ☐ The complete feature is wired locally with no server/network/placement-state changes.
+
+## Phase 6: Verify the supported runtime and document delivery
+
+Prerequisites: Phases 1-5 complete and access to a supported game/runtime.
+Outcome: Automated, build, and live evidence independently establish the proposed behavior.
+
+    ☐ Run the smallest combined existing test selections covering changed ruler, input, HUD/table, indicator, persistence, and renderer surfaces.
+        ☐ Use the repository's existing xUnit test project/runner; expand regression scope only when failures or shared changes warrant it.
+        ☐ Run the normal repository build; record commands, supported game version, and outcomes separately from unit/integration results.
+        ☐ Do not install dependencies speculatively or introduce new build/test tooling.
+    ☐ Verify live input and persistence in the supported game.
+        ☐ Confirm button gestures cannot pick or act on blocks; valid/invalid left clicks and post-success holds cannot mine, attack, or use items.
+        ☐ Confirm right-click cancels without placement/item use, normal Idle controls remain intact, and picking works with empty/unsupported hands.
+        ☐ Confirm native reach, sky/entity rejection, dialog/free-cursor pause, focus transitions, collapse, scale/locale changes, and notifications.
+        ☐ Confirm same-cell/reversed/negative-coordinate sizes and cross-dimension new-partial-ruler behavior.
+        ☐ Restart the game and verify exact saved endpoints, visibility reset, separate worlds/server worlds, and replacement-save isolation.
+        ☐ Confirm mode-off/death/dimension changes hide/cancel and restore according to the agreed lifetime rules.
+    ☐ Verify live rendering instead of substituting mocked evidence.
+        ☐ Check terrain occlusion, edge stability/bias, large/negative coordinates, camera-inside-box views, and a large box whose endpoints are distant.
+        ☐ Check brush preview/native selection overlap and transparent terrain; record observed depth-pipeline limitations and any unresolved blocking discrepancy.
+        ☐ Confirm repeated visibility toggles and world changes leave no duplicate/stale wireframes or render-state damage.
+    ☐ Update directly related documentation and record evidence.
+        ☐ Describe the three-row UI, inclusive sizes, normal targeting reach, pick/cancel controls, config scope/failure behavior, and lifetime rules in the existing appropriate user documentation.
+        ☐ Update relevant BuildBrushArchitecture sections for client-only ruler/HUD ownership without rewriting unrelated architecture.
+        ☐ Record automated/build/live results and any blocked checks or qualified transparency limitations in this plan or existing project evidence location.
+        ☐ Verify the normal build output includes the modified assembly and localization assets; no new packaging or release workflow is required by this proposal.
+        ☐ Remove only task-owned test artifacts or temporary instrumentation; retain no temporary capture paths, debug controls, or compatibility scaffolding.
+        ☐ Reconcile implementation against every proposal section and all acceptance cases without marking deferred runtime checks complete.
+
+Completion criteria:
+
+    ☐ Targeted automated tests and the normal build pass with recorded evidence.
+    ☐ Supported-game input, restart persistence, and rendering checks are recorded; any missing access/check remains blocked and unchecked.
+    ☐ Documentation matches actual behavior, the three-row UI is unchanged, and no unsupported scope was introduced.
+
+## Final acceptance
+
+    ☐ Every proposal requirement is implemented or explicitly deferred with rationale; a deferral is not a completion claim.
+    ☐ Exact UI shape, inclusive arithmetic, safe full-gesture capture, per-world config fidelity, and renderer eligibility/lifecycle are verified.
+    ☐ Source-level review, unit/integration tests, normal build/output checks, and live-game evidence are distinguished and complete.
+    ☐ Existing placement/networking, brush controls, passive HUD input, and Room/Controls behavior remain intact.
+    ☐ Required documentation and cleanup are complete; no unresolved blocker is represented as success.
