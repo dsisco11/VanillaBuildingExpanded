@@ -104,7 +104,7 @@ internal sealed class CollapsibleSection
             ctx.Rectangle(bounds.drawX, bounds.drawY, bounds.InnerWidth, bounds.InnerHeight);
             ctx.Clip();
             using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize)
-                .WithColor([.. UiPalette.ValueColor]);
+                .WithColor([.. UiPalette.SectionTitleColor]);
             font.SetupContext(ctx);
             var extents = ctx.TextExtents(title);
             double gap = GuiElement.scaled(TitleRuleGap);

@@ -9,6 +9,7 @@ internal static class UiPalette
     public static readonly ImmutableArray<double> LabelColor = [.. ColorUtil.Hex2Doubles("#B8ADA0")];
     public static readonly ImmutableArray<double> KeybindDividerColor = [.. ColorUtil.Hex2Doubles("#B8ADA0", 0.55)];
     public static readonly ImmutableArray<double> SectionDividerColor = [.. ColorUtil.Hex2Doubles("#D4C8B6", 0.35)];
+    public static readonly ImmutableArray<double> SectionTitleColor = [.. ColorUtil.Hex2Doubles("#D8BE8A")];
     public static readonly ImmutableArray<double> SectionHoverColor = [.. ColorUtil.Hex2Doubles("#A0A0A0", 0.22)];
     public static readonly ImmutableArray<double> SectionToggleIconColor = [.. ColorUtil.Hex2Doubles("#A65F26")];
     public static readonly ImmutableArray<double> ValueColor = [.. ColorUtil.Hex2Doubles("#F3EBDD")];

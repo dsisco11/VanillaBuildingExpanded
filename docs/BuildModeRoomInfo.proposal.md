@@ -110,7 +110,7 @@ Acceptance contract (automated evidence below does not replace live-game checks)
 - Sampling runs on the existing GUI render callback, once per half-second while open and expanded, with immediate fresh sampling on reopening or expansion. There are no new tick listeners or network messages. Existing session teardown disposes the HUD and clears its snapshot.
 - Numeric changes update native dynamic text and availability colors without recomposing. Qualification/status changes rebuild the row structure and artwork; locale and GUI-scale changes rebuild measured text and tags. Controls retain their independent collapse state and input routing.
 - [Snapshot tests](../VanillaBuildingExpanded.Tests/BuildBrush/BuildModeRoomInfoTests.cs) cover additive qualifications, strict sunlight comparisons, native cellar verdicts at representative bounds, inclusive dimensions, incomplete/missing data, detached snapshot data, zero totals, rounding, and overflow-safe aggregate totals. They do not re-test the registry's flood-fill or its 150-cell boundary algorithm.
-- [Native HUD tests](../VanillaBuildingExpanded.Tests/UI/BuildModeHudControlsTests.cs) cover tag footprints and raster output at scales 1, 1.25, 1.33, 1.5, and 2, long localized labels, passive input, structural transitions, numeric texture reuse, sampling suspension/resumption, localization changes, repeated lifecycle cleanup, scale rebuilds, and upload-failure cleanup/retry.
+- [Native HUD tests](../VanillaBuildingExpanded.Tests/UI/BuildModeHudControlsTests.cs) focus on long localized content staying within its layout, passive input, structural transitions, numeric texture reuse, sampling suspension/resumption, localization changes, repeated lifecycle cleanup, scale rebuilds, and upload-failure cleanup/retry. Exact HUD colors, glyph pixels, historical rendering parity, and duplicated sizing formulas are intentionally not asserted; visual styling is checked in game. Precise layout and rendering contracts remain covered by the reusable table and divider tests.
 
 Validation command:
 
@@ -118,6 +118,6 @@ Validation command:
 dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj --no-restore --filter "FullyQualifiedName~VanillaBuildingExpanded.Tests.UI|FullyQualifiedName~BuildModeRoomInfoTests|FullyQualifiedName~BuildModeKeybindsTests|FullyQualifiedName~BuildModeIndicatorTests" --verbosity minimal
 ```
 
-Result: **281 passed, zero failures or skips**, including 38 new room cases. This builds production and tests against the installed game without a manual native-library `PATH` adjustment. Existing unrelated compiler warnings remain.
+Initial implementation result (before test consolidation): **281 passed, zero failures or skips**, including 38 new room cases. The command builds production and tests against the installed game without a manual native-library `PATH` adjustment. Existing unrelated compiler warnings remain.
 
 Pending live-game acceptance: inspect actual GPU presentation and gameplay input, move between enclosed/open/oversized regions, verify partial-chunk handling, place/remove blocks and change retention-relevant states, and check native cellar membership boundaries (including 150 versus 151 cells). These checks have not been claimed as completed.
