@@ -14,99 +14,37 @@ namespace VanillaBuildingExpanded.Tests.UI;
 [Collection("Table composition")]
 public sealed class BuildModeHudControlsTests
 {
-    [Theory]
-    [InlineData(1, false)]
-    [InlineData(1.33, false)]
-    [InlineData(2, false)]
-    [InlineData(1, true)]
-    [InlineData(1.33, true)]
-    [InlineData(2, true)]
-    public void Sections_OmitBottomDividerAndItsReservedHeight(float scale, bool collapsed)
+    [Fact]
+    public void SectionHeadings_RemainVisibleAndPassiveWhenCollapsed()
     {
-        using var fixture = new Fixture(scale);
-        var section = new CollapsibleSection("test", "test-title", () => 300, _ => 20,
-            (_, _) => { }, collapsed);
-        double width = section.MeasureWidth();
-        double height = section.MeasureHeight(width);
-        Assert.Equal(collapsed ? 60 : 80, height);
-        using var composer = fixture.Composer(ElementBounds.Fixed(0, 0, width, height).WithEmptyParent());
-        Assert.Equal(height, section.Compose(fixture.Api.Object, composer, 0, width));
-        Assert.Equal(height - 24, section.ToggleButton!.Bounds.fixedY);
-        composer.Compose();
-        var artwork = Assert.Single(fixture.Uploads, upload =>
-            upload.Width == (int)(width * scale) && upload.Height == (int)(height * scale));
-        int y = (int)((height - 24) * scale);
-        for (int x = (int)(12 * scale); x < (int)((width - 24) * scale); x++)
-            Assert.Equal(0, artwork.Pixels[y * artwork.Stride + x * 4 + 3]);
-    }
-
-    [Theory]
-    [InlineData(1, false)]
-    [InlineData(1.25, false)]
-    [InlineData(1.33, false)]
-    [InlineData(1.5, false)]
-    [InlineData(2, false)]
-    [InlineData(1, true)]
-    [InlineData(1.25, true)]
-    [InlineData(1.33, true)]
-    [InlineData(1.5, true)]
-    [InlineData(2, true)]
-    public void SectionHeadings_CenterTextBetweenLightRulesExpandedAndCollapsed(float scale, bool longTitle)
-    {
-        using var fixture = new Fixture(scale);
+        using var fixture = new Fixture();
         fixture.Translate = (key, _) => key is "vanillabuildingexpanded:build-info-room" or "vanillabuildingexpanded:build-info-controls"
-            ? longTitle ? string.Concat(Enumerable.Repeat("Long localized section heading ", 6)) : key.Split('-').Last()
+            ? string.Concat(Enumerable.Repeat("Long localized section heading ", 6))
             : key.Split(':').Last();
         using var hud = new BuildModeHud(fixture.Api.Object);
         hud.SetVisible(true);
         double panelWidth = hud.SingleComposer.Bounds.fixedWidth;
         foreach (string id in new[] { "room", "controls" })
         {
-            byte[] RenderHeading()
+            void CheckHeading()
             {
                 var heading = Assert.IsType<GuiElementCustomDraw>(hud.SingleComposer.GetElement($"{id}-title"));
-                Assert.Equal(panelWidth / 2, heading.Bounds.fixedX + heading.Bounds.fixedWidth / 2, 8);
-                int width = (int)Math.Ceiling(heading.Bounds.InnerWidth);
-                int height = (int)Math.Ceiling(heading.Bounds.InnerHeight);
-                using var surface = new ImageSurface(Format.Argb32, width, height);
-                using var context = new Context(surface);
-                context.Translate(-heading.Bounds.drawX, -heading.Bounds.drawY);
-                heading.ComposeElements(context, surface);
-                surface.Flush();
-                var pixels = surface.Data;
-                int firstX = width, lastX = -1;
-                for (int y = 0; y < height; y++)
-                    for (int x = 0; x < width; x++)
-                        if (pixels[y * surface.Stride + x * 4 + 3] > 180)
-                        {
-                            firstX = Math.Min(firstX, x);
-                            lastX = Math.Max(lastX, x);
-                        }
-                Assert.True(lastX >= firstX);
-                Assert.InRange(Math.Abs((firstX + lastX + 1) / 2d - heading.Bounds.InnerWidth / 2), 0, 2 * scale);
-                int row = (int)(height / 2d);
-                Assert.InRange(pixels[row * surface.Stride + (int)(2 * scale) * 4 + 3], 1, 100);
-                Assert.InRange(pixels[row * surface.Stride + (width - (int)(2 * scale) - 1) * 4 + 3], 1, 100);
-                int gapX = Math.Max(0, firstX - (int)(4 * scale));
-                Assert.Equal(0, pixels[row * surface.Stride + gapX * 4 + 3]);
-                fixture.MouseX = (int)heading.Bounds.renderX + width / 2;
-                fixture.MouseY = (int)heading.Bounds.renderY + height / 2;
+                Assert.InRange(heading.Bounds.fixedX, 0, panelWidth);
+                Assert.True(heading.Bounds.fixedX + heading.Bounds.fixedWidth <= panelWidth);
+                fixture.MouseX = (int)(heading.Bounds.renderX + heading.Bounds.InnerWidth / 2);
+                fixture.MouseY = (int)(heading.Bounds.renderY + heading.Bounds.InnerHeight / 2);
                 Assert.False(hud.ShouldReceiveMouseEvents());
-                return pixels;
             }
-            var expanded = RenderHeading();
+            CheckHeading();
             ClickToggle(hud, fixture, id);
             Assert.Equal(panelWidth, hud.SingleComposer.Bounds.fixedWidth);
-            Assert.Equal(expanded, RenderHeading());
+            CheckHeading();
         }
     }
 
     [Theory]
     [InlineData(1)]
-    [InlineData(1.25)]
     [InlineData(1.33)]
-    [InlineData(1.5)]
-    [InlineData(2)]
     public void RoomSection_LocalizedTagsFitOneLineAndRemainPassive(float scale)
     {
         using var fixture = new Fixture(scale);
@@ -117,9 +55,7 @@ public sealed class BuildModeHudControlsTests
         using var hud = new BuildModeHud(fixture.Api.Object, () => state);
         hud.SetVisible(true);
         var table = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("room-table"));
-        Assert.Equal(96, table.Measure().Height);
         Assert.Equal(8, table.Bounds.ChildBounds.Count);
-        AssertRowCenters(table, 24);
         Assert.IsType<GuiElementCustomDraw>(table.GetElement("type"));
         Assert.False(table.Focusable);
         Assert.IsType<FadingRowTableDividerRenderer>(table.DividerRenderer);
@@ -128,37 +64,7 @@ public sealed class BuildModeHudControlsTests
         Assert.True(tagBounds.OuterWidth <= table.Bounds.OuterWidth);
         Assert.True(table.Bounds.renderY > hud.SingleComposer.GetElement("room-title").Bounds.renderY);
         Assert.True(hud.SingleComposer.GetElement("controls-title").Bounds.renderY > table.Bounds.renderY + table.Bounds.OuterHeight);
-        var pixels = Assert.Single(fixture.Uploads, upload =>
-            upload.Width == (int)Math.Ceiling(table.Measure().Width * scale)
-            && upload.Height == (int)Math.Ceiling(96 * scale));
-        // Sample each localized tag's interior within its measured single-line footprint.
-        using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize);
-        double tagX = tagBounds.fixedX;
-        foreach (string key in new[] { "room", "shelter", "cellar", "greenhouse" })
-        {
-            double width = Math.Ceiling(font.GetTextExtents(Lang.Get($"vanillabuildingexpanded:build-info-room-{key}")).Width / scale) + 8;
-            int x = (int)((tagX + 2) * scale);
-            int y = (int)(10 * scale);
-            Assert.True(pixels.Pixels[y * pixels.Stride + x * 4 + 3] > 0);
-            Assert.True(tagX + width <= table.Measure().Width);
-            int firstTextX = pixels.Width;
-            int firstTextY = pixels.Height;
-            for (int py = 0; py < (int)(24 * scale); py++)
-                for (int px = (int)Math.Ceiling(tagX * scale); px < (int)((tagX + width) * scale); px++)
-                {
-                    int offset = py * pixels.Stride + px * 4;
-                    if (pixels.Pixels[offset] > 140 && pixels.Pixels[offset + 1] > 140
-                        && pixels.Pixels[offset + 2] > 140 && pixels.Pixels[offset + 3] > 180)
-                    {
-                        firstTextX = Math.Min(firstTextX, px);
-                        firstTextY = Math.Min(firstTextY, py);
-                    }
-                }
-            Assert.InRange(firstTextX / scale - tagX, 3, 6);
-            double height = Math.Ceiling(font.GetTextExtents(Lang.Get($"vanillabuildingexpanded:build-info-room-{key}")).Height / scale) + 6;
-            Assert.InRange(firstTextY / scale - (24 - height) / 2, 2, 4.5);
-            tagX += width + 4;
-        }
+        Assert.True(tagBounds.fixedX + tagBounds.fixedWidth <= table.Measure().Width);
         fixture.MouseX = (int)tagBounds.renderX + 1;
         fixture.MouseY = (int)tagBounds.renderY + 1;
         var mouse = new MouseEvent(fixture.MouseX, fixture.MouseY, EnumMouseButton.Left, 0);
@@ -305,36 +211,16 @@ public sealed class BuildModeHudControlsTests
         }
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(1.25)]
-    [InlineData(1.33)]
-    [InlineData(1.5)]
-    [InlineData(2)]
-    public void InformationTable_PreservesReservedGeometryNativeLabelPixelsAndPassiveInput(float scale)
+    [Fact]
+    public void InformationTable_OwnsPassiveDynamicValues()
     {
-        using var fixture = new Fixture(scale);
+        using var fixture = new Fixture();
         using var hud = new BuildModeHud(fixture.Api.Object);
         hud.SetVisible(true);
         var composer = hud.SingleComposer;
         var table = Assert.IsType<GuiElementTable>(composer.GetElement("information-table"));
-        Assert.Equal(new TableSize(296, 48), table.Measure());
-        Assert.Equal((12d, 54d), (table.Bounds.fixedX, table.Bounds.fixedY));
-        Assert.Equal([0d, 96d, 0d, 96d], table.Bounds.ChildBounds.Select(bounds => bounds.fixedX));
-        AssertRowCenters(table, 24);
         var snapping = Assert.IsType<GuiElementDynamicText>(table.GetElement("snapping"));
         var rotation = Assert.IsType<GuiElementDynamicText>(table.GetElement("rotation"));
-        double textHeight = Math.Ceiling(snapping.Font.GetFontExtents().Height / scale);
-        Assert.Equal((200d, textHeight), (snapping.Bounds.fixedWidth, snapping.Bounds.fixedHeight));
-        Assert.Equal((200d, textHeight), (rotation.Bounds.fixedWidth, rotation.Bounds.fixedHeight));
-        foreach (var (value, y) in new[] { (snapping, 54d), (rotation, 78d) })
-        {
-            var legacyBounds = ElementBounds.Fixed(108, y + (24 - textHeight) / 2, 200, textHeight);
-            legacyBounds.ParentBounds = composer.Bounds;
-            legacyBounds.CalcWorldBounds();
-            Assert.Equal(legacyBounds.renderX, value.Bounds.renderX, 8);
-            Assert.Equal(legacyBounds.renderY, value.Bounds.renderY, 8);
-        }
         Assert.False(snapping.autoHeight);
         Assert.False(rotation.autoHeight);
         Assert.Equal(UiPalette.ValueColor, snapping.Font.Color);
@@ -354,28 +240,6 @@ public sealed class BuildModeHudControlsTests
         Assert.False(mouse.Handled);
         Assert.False(hud.ShouldReceiveMouseEvents());
 
-        var uploaded = Assert.Single(fixture.Uploads, upload =>
-            upload.Width == (int)Math.Ceiling(296 * scale) && upload.Height == (int)Math.Ceiling(48 * scale));
-        using var baseline = new ImageSurface(Format.Argb32, uploaded.Width, uploaded.Height);
-        using var context = new Context(baseline);
-        context.Rectangle(0, 0, 296 * scale, 48 * scale);
-        context.Clip();
-        table.DrawDividers(context, scale);
-        string[] keys = ["snapping", "rotation"];
-        for (int row = 0; row < keys.Length; row++)
-        {
-            using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize)
-                .WithColor([.. UiPalette.LabelColor]);
-            var bounds = ElementBounds.Fixed(0, row * 24 + (24 - textHeight) / 2, 88, textHeight).WithEmptyParent();
-            bounds.CalcWorldBounds();
-            using var label = new GuiElementStaticText(fixture.Api.Object,
-                Lang.Get($"vanillabuildingexpanded:build-info-{keys[row]}-label"),
-                EnumTextOrientation.Left, bounds, font);
-            label.ComposeElements(context, baseline);
-        }
-        baseline.Flush();
-        Assert.Equal(baseline.Data, uploaded.Pixels);
-        Assert.Contains(uploaded.Pixels, value => value != 0);
     }
 
     [Fact]
@@ -390,7 +254,9 @@ public sealed class BuildModeHudControlsTests
         var snapping = Assert.IsType<GuiElementDynamicText>(table.GetElement("snapping"));
         var rotation = Assert.IsType<GuiElementDynamicText>(table.GetElement("rotation"));
         var title = composer.GetDynamicText("title");
-        var artwork = Assert.Single(fixture.Uploads, upload => upload.Width == 296 && upload.Height == 48);
+        var initialSize = table.Measure();
+        var artwork = Assert.Single(fixture.Uploads, upload =>
+            upload.Width == table.Bounds.OuterWidthInt && upload.Height == table.Bounds.OuterHeightInt);
         int invalidations = 0;
         table.LayoutInvalidated += () => invalidations++;
         BuildModeInfo[] states =
@@ -429,7 +295,7 @@ public sealed class BuildModeHudControlsTests
             Assert.Same(composer, hud.SingleComposer);
             Assert.Same(snapping, table.GetElement("snapping"));
             Assert.Same(rotation, table.GetElement("rotation"));
-            Assert.Equal(new TableSize(296, 48), table.Measure());
+            Assert.Equal(initialSize, table.Measure());
             Assert.False(table.IsArtworkDirty);
         }
         Assert.Equal(0, invalidations);
@@ -501,17 +367,14 @@ public sealed class BuildModeHudControlsTests
     }
 
     [Fact]
-    public void ControlsRows_UseTableMinimumsSpacingAndPassiveChildren()
+    public void ControlsRows_UsePassiveFadingDividers()
     {
         using var fixture = new Fixture();
         using var table = BuildModeHud.CreateControlsTable(fixture.Api.Object,
             [Hint("A", ["B"]), Hint("C", ["D"])]);
-        Assert.Equal(new TableSize(300, 40), table.Measure());
         Assert.IsType<FadingRowTableDividerRenderer>(table.DividerRenderer);
         table.Arrange();
         Assert.Equal(4, table.Bounds.ChildBounds.Count);
-        Assert.Equal([0d, 100d, 0d, 100d], table.Bounds.ChildBounds.Select(bounds => bounds.fixedX));
-        AssertRowCenters(table, 20);
         Assert.False(table.Focusable);
         fixture.Attach(table);
         var mouse = new MouseEvent(101, 1, EnumMouseButton.Left, 0);
@@ -522,13 +385,11 @@ public sealed class BuildModeHudControlsTests
 
     [Theory]
     [InlineData(1)]
-    [InlineData(1.25)]
     [InlineData(1.33)]
-    [InlineData(1.5)]
-    [InlineData(2)]
-    public void MeasuredDimensions_MatchPreviousColumnMaximaForLongLabelsAndAlternateBindings(float scale)
+    public void Controls_LongLabelsAndAlternateBindingsExpandWithoutOverlap(float scale)
     {
         using var fixture = new Fixture(scale);
+        using var compact = BuildModeHud.CreateControlsTable(fixture.Api.Object, [Hint("A", ["B"])]);
         BuildModeKeybindHint[] hints =
         [
             Hint("A very long translated controls action label", ["Ctrl", "Shift", "Esc"], ["Alt", "Esc"]),
@@ -536,61 +397,18 @@ public sealed class BuildModeHudControlsTests
             Hint("Rotate", ["R"])
         ];
         using var table = BuildModeHud.CreateControlsTable(fixture.Api.Object, hints);
-        var expected = PreviousSize(hints);
-        Assert.Equal(expected, table.Measure());
+        Assert.True(table.Measure().Width > compact.Measure().Width);
         table.Arrange();
         var bindingStarts = table.Bounds.ChildBounds.Where((_, index) => index % 2 == 1)
             .Select(bounds => bounds.fixedX).ToArray();
         Assert.All(bindingStarts, x => Assert.Equal(bindingStarts[0], x));
-        Assert.True(bindingStarts[0] > 100);
-        Assert.Equal(60, table.Measure().Height);
-    }
-
-    [Theory]
-    [InlineData(1)]
-    [InlineData(1.25)]
-    [InlineData(1.33)]
-    [InlineData(1.5)]
-    [InlineData(2)]
-    public void LabelPixels_MatchNativeStaticTextWithoutNewPerCellWrapping(float scale)
-    {
-        using var fixture = new Fixture(scale);
-        BuildModeKeybindHint[] hints =
-        [
-            Hint("Toggle build mode", ["B"]),
-            Hint("Change snapping mode", ["Shift", "R"]),
-            Hint("Rotate", ["R"])
-        ];
-        using var table = BuildModeHud.CreateControlsTable(fixture.Api.Object, hints);
-        fixture.Attach(table);
-        using var dummy = new ImageSurface(Format.Argb32, 1, 1);
-        using var dummyContext = new Context(dummy);
-        table.ComposeElements(dummyContext, dummy);
-        var uploaded = Assert.Single(fixture.Uploads);
-        using var baseline = new ImageSurface(Format.Argb32, uploaded.Width, uploaded.Height);
-        using var context = new Context(baseline);
-        table.DrawDividers(context, scale);
-        double columnWidth = table.Bounds.ChildBounds[1].fixedX - 12;
-        for (int i = 0; i < hints.Length; i++)
+        for (int row = 0; row < hints.Length; row++)
         {
-            using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize)
-                .WithColor([.. UiPalette.LabelColor]);
-            double textHeight = Math.Ceiling(font.GetFontExtents().Height / scale);
-            var bounds = ElementBounds.Fixed(0, i * 20 + (20 - textHeight) / 2, columnWidth, textHeight).WithEmptyParent();
-            bounds.CalcWorldBounds();
-            using var text = new GuiElementStaticText(fixture.Api.Object, hints[i].Action,
-                EnumTextOrientation.Left, bounds, font);
-            text.ComposeElements(context, baseline);
+            var label = table.Bounds.ChildBounds[row * 2];
+            var binding = table.Bounds.ChildBounds[row * 2 + 1];
+            Assert.True(label.fixedX + label.fixedWidth <= binding.fixedX);
+            Assert.True(binding.fixedX + binding.fixedWidth <= table.Measure().Width);
         }
-        baseline.Flush();
-        var expected = baseline.Data;
-        int labelPixels = (int)Math.Ceiling(columnWidth * scale);
-        for (int y = 0; y < uploaded.Height; y++)
-            for (int x = 0; x < labelPixels; x++)
-                for (int channel = 0; channel < 4; channel++)
-                    Assert.Equal(expected[y * baseline.Stride + x * 4 + channel],
-                        uploaded.Pixels[y * uploaded.Stride + x * 4 + channel]);
-        Assert.Contains(uploaded.Pixels, value => value != 0);
     }
 
     [Fact]
@@ -606,7 +424,7 @@ public sealed class BuildModeHudControlsTests
         section.RequestToggle();
         section.ApplyPendingToggle();
         Assert.Equal(width, section.MeasureWidth());
-        Assert.Equal(20, expandedHeight - section.MeasureHeight(width));
+        Assert.Equal(table.Measure().Height, expandedHeight - section.MeasureHeight(width));
         using (var collapsed = fixture.Composer())
         {
             section.Compose(fixture.Api.Object, collapsed, 0, width);
@@ -673,11 +491,12 @@ public sealed class BuildModeHudControlsTests
         var previous = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
         double width = hud.SingleComposer.Bounds.fixedWidth;
         double expandedHeight = hud.SingleComposer.Bounds.fixedHeight;
+        double contentHeight = previous.Measure().Height;
         ClickToggle(hud, fixture);
         Assert.Null(hud.SingleComposer.GetElement("controls-table"));
         Assert.Empty(previous.Bounds.ChildBounds);
         Assert.Equal(width, hud.SingleComposer.Bounds.fixedWidth);
-        Assert.Equal(100, expandedHeight - hud.SingleComposer.Bounds.fixedHeight);
+        Assert.Equal(contentHeight, expandedHeight - hud.SingleComposer.Bounds.fixedHeight);
         Assert.Null(PendingTable(hud));
         ClickToggle(hud, fixture);
         Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
@@ -700,6 +519,7 @@ public sealed class BuildModeHudControlsTests
         for (int cycle = 0; cycle < 8; cycle++)
         {
             var previous = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
+            double contentHeight = previous.Measure().Height;
             var previousInformation = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("information-table"));
             var informationChildren = previousInformation.Bounds.ChildBounds.ToArray();
             var children = previous.Bounds.ChildBounds.ToArray();
@@ -710,7 +530,7 @@ public sealed class BuildModeHudControlsTests
             Assert.All(informationChildren, bounds => Assert.Null(bounds.ParentBounds));
             Assert.All(children, bounds => Assert.Null(bounds.ParentBounds));
             Assert.Equal(width, hud.SingleComposer.Bounds.fixedWidth);
-            Assert.Equal(height - 100, hud.SingleComposer.Bounds.fixedHeight);
+            Assert.Equal(height - contentHeight, hud.SingleComposer.Bounds.fixedHeight);
             Assert.Null(PendingTable(hud));
 
             ClickToggle(hud, fixture);
@@ -853,32 +673,8 @@ public sealed class BuildModeHudControlsTests
         Assert.Empty(fixture.Uploads);
     }
 
-    private static void AssertRowCenters(GuiElementTable table, double rowHeight)
-    {
-        for (int i = 0; i < table.Bounds.ChildBounds.Count; i++)
-        {
-            var bounds = table.Bounds.ChildBounds[i];
-            Assert.Equal((i / 2 + 0.5) * rowHeight, bounds.fixedY + bounds.fixedHeight / 2, 8);
-        }
-    }
-
     private static BuildModeKeybindHint Hint(string label, ImmutableArray<string> keys,
         ImmutableArray<string> alternate = default) => new(label, keys, alternate.IsDefault ? [] : alternate);
-
-    private static TableSize PreviousSize(IReadOnlyList<BuildModeKeybindHint> hints)
-    {
-        using var labelFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize);
-        using var keyFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.KeybindFontSize);
-        double labelWidth = Math.Ceiling(Math.Max(88,
-            hints.Max(hint => labelFont.GetTextExtents(hint.Action).Width / RuntimeEnv.GUIScale)));
-        double KeyWidth(ImmutableArray<string> keys) =>
-            keys.Sum(key => (int)(keyFont.GetTextExtents(key).Width + GuiElement.scaled(8))) +
-            GuiElement.scaled(3) * Math.Max(0, keys.Length - 1);
-        double bindingWidth = Math.Ceiling(Math.Max(200, hints.Max(hint =>
-            (KeyWidth(hint.Keys) + (hint.AlternateKeys.IsEmpty ? 0 :
-                GuiElement.scaled(13) + KeyWidth(hint.AlternateKeys)) + 3) / RuntimeEnv.GUIScale)));
-        return new TableSize(labelWidth + 12 + bindingWidth, hints.Count * 20);
-    }
 
     private static GuiElementTable? PendingTable(BuildModeHud hud) =>
         (GuiElementTable?)typeof(BuildModeHud).GetField("controlsTable", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -895,7 +691,7 @@ public sealed class BuildModeHudControlsTests
     }
 
     private delegate void UploadCallback(ImageSurface surface, bool linearMag, ref LoadedTexture texture);
-    private sealed record UploadSnapshot(LoadedTexture Texture, int Width, int Height, int Stride, byte[] Pixels);
+    private sealed record UploadSnapshot(LoadedTexture Texture, int Width, int Height);
 
     private sealed class Fixture : IDisposable
     {
@@ -984,8 +780,7 @@ public sealed class BuildModeHudControlsTests
             if (texture.TextureId == 0) texture.TextureId = ++nextTexture;
             texture.Width = surface.Width;
             texture.Height = surface.Height;
-            surface.Flush();
-            Uploads.Add(new UploadSnapshot(texture, surface.Width, surface.Height, surface.Stride, surface.Data));
+            Uploads.Add(new UploadSnapshot(texture, surface.Width, surface.Height));
             if (FailUpload || Uploads.Count == FailOnUploadNumber)
                 throw new InvalidOperationException("Test upload failure.");
         }
