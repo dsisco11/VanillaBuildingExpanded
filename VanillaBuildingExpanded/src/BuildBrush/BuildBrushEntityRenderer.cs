@@ -21,6 +21,9 @@ public class BuildBrushEntityRenderer : EntityRenderer
     private readonly Vec4f RgbaGlowClear = new(1, 1, 1, 0);
 
     private int lastSeenDirtyCounter = -1;
+    private int lastSeenBlockId = -1;
+    private bool rebuildQueued;
+    private bool disposed;
 
     #region Constants
     // Render colors
@@ -39,84 +42,69 @@ public class BuildBrushEntityRenderer : EntityRenderer
     {
         base.OnEntityLoaded();
 
-        lastSeenDirtyCounter = brushEntity.WatchedAttributes.GetInt(BuildBrushEntity.BrushDirtyCounterKey);
         RebuildMesh();
     }
 
-    private void RebuildMeshIfDirtyCounterChanged()
+    private void RebuildMeshIfChanged()
     {
+        GetPreviewBounds(out BlockPos min, out _);
         int dirtyCounter = brushEntity.WatchedAttributes.GetInt(BuildBrushEntity.BrushDirtyCounterKey);
-        if (dirtyCounter == lastSeenDirtyCounter)
+        int blockId = brushEntity.Dimension?.GetBlock(min)?.BlockId ?? 0;
+        if (dirtyCounter == lastSeenDirtyCounter && blockId == lastSeenBlockId)
         {
             return;
         }
 
-        lastSeenDirtyCounter = dirtyCounter;
         RebuildMesh();
+    }
+
+    private void GetPreviewBounds(out BlockPos min, out BlockPos max)
+    {
+        if (!brushEntity.TryGetPreviewBounds(out min, out max))
+        {
+            min = new BlockPos(0, 0, 0, Dimensions.MiniDimensions);
+            max = min;
+        }
     }
 
     /// <summary>
-    /// Rebuilds the mesh from the blocks in the dimension using async tessellation.
+    /// Queues a main-thread mesh rebuild, coalescing requests until it runs.
     /// </summary>
     public void RebuildMesh()
     {
-        if (capi.World.Side != EnumAppSide.Client)
+        if (disposed || rebuildQueued || capi.World.Side != EnumAppSide.Client)
             return;
 
-        IMiniDimension? dimension = brushEntity.Dimension;
-
-        if (dimension is null)
-        {
-            DisposeMesh();
-            return;
-        }
-
-        // Get the block to check if it changed
-        BlockPos originPos = new(0, 0, 0, Dimensions.MiniDimensions);
-        Block? block = dimension.GetBlock(originPos);
-        if (block is null || block.BlockId == 0)
-        {
-            block = brushEntity?.BrushInstance?.CurrentPlacementBlock;
-        }
-
-        if (block is null || block.BlockId == 0)
-        {
-            DisposeMesh();
-            return;
-        }
-
-        // Get active bounds from watched attrs, falling back to origin for single-block previews.
-        if (!brushEntity.TryGetPreviewBounds(out BlockPos min, out BlockPos max))
-        {
-            BlockPos originFallback = new(0, 0, 0, Dimensions.MiniDimensions);
-            Block? originBlock = dimension.GetBlock(originFallback);
-            if (originBlock is null || originBlock.BlockId == 0)
-            {
-                DisposeMesh();
-                return;
-            }
-
-            min = originFallback;
-            max = originFallback;
-        }
-
+        rebuildQueued = true;
         capi.Event.EnqueueMainThreadTask(() =>
         {
-            MeshData ? meshData = tessellator.Tessellate(dimension, min, max);
-            _upload_mesh(meshData);
+            rebuildQueued = false;
+            if (!disposed)
+                RebuildMeshNow();
         }, $"{nameof(BuildBrushEntityRenderer)}.{nameof(RebuildMesh)}");
+    }
 
-        void _upload_mesh(MeshData? meshData)
+    private void RebuildMeshNow()
+    {
+        IMiniDimension? dimension = brushEntity.Dimension;
+        GetPreviewBounds(out BlockPos min, out BlockPos max);
+        lastSeenDirtyCounter = brushEntity.WatchedAttributes.GetInt(BuildBrushEntity.BrushDirtyCounterKey);
+        lastSeenBlockId = dimension?.GetBlock(min)?.BlockId ?? 0;
+
+        if (dimension is null || lastSeenBlockId == 0)
         {
-            if (meshData is null || meshData.VerticesCount == 0)
-            {
-                return;
-            }
-
-            // Dispose old mesh and upload new one
             DisposeMesh();
-            meshRef = capi.Render.UploadMultiTextureMesh(meshData);
+            return;
         }
+
+        MeshData? meshData = tessellator.Tessellate(dimension, min, max);
+        if (meshData is null || meshData.VerticesCount == 0)
+        {
+            return;
+        }
+
+        DisposeMesh();
+        meshRef = capi.Render.UploadMultiTextureMesh(meshData);
     }
 
     /// <summary>
@@ -135,8 +123,8 @@ public class BuildBrushEntityRenderer : EntityRenderer
             || !brushEntity.WatchedAttributes.GetBool(BuildBrushEntity.BrushVisibleKey))
             return;
 
-        // The server signals content changes, including refreshed neighbors, via the watched dirty counter.
-        RebuildMeshIfDirtyCounterChanged();
+        // Chunks and watched attributes arrive independently; neither must be the only rebuild signal.
+        RebuildMeshIfChanged();
 
         if (meshRef is null)
             return;
@@ -194,6 +182,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
 
     public override void Dispose()
     {
+        disposed = true;
         DisposeMesh();
     }
 }
