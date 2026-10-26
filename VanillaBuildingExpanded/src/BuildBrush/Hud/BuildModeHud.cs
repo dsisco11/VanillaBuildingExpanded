@@ -231,7 +231,10 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
             {
                 [0] = TableColumn.Fixed(88),
                 [1] = TableColumn.Fixed(200)
-            }, columnGap: 8, minimumRowHeight: 24));
+            }, columnGap: 8, minimumRowHeight: 24))
+        {
+            DividerRenderer = new FadingRowTableDividerRenderer()
+        };
         bool complete = false;
         try
         {
@@ -309,7 +312,10 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
             {
                 [0] = TableColumn.Auto(88),
                 [1] = TableColumn.Auto(200)
-            }, columnGap: 12, minimumRowHeight: 20));
+            }, columnGap: 12, minimumRowHeight: 20))
+        {
+            DividerRenderer = new FadingRowTableDividerRenderer()
+        };
         bool complete = false;
         try
         {

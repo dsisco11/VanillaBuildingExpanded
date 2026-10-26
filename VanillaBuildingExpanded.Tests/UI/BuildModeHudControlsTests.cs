@@ -34,7 +34,7 @@ public sealed class BuildModeHudControlsTests
         Assert.Equal(8, table.Bounds.ChildBounds.Count);
         Assert.IsType<GuiElementCustomDraw>(table.GetElement("type"));
         Assert.False(table.Focusable);
-        Assert.Same(NoTableDividerRenderer.Instance, table.DividerRenderer);
+        Assert.IsType<FadingRowTableDividerRenderer>(table.DividerRenderer);
         Assert.Equal(table.Bounds.ChildBounds[1].fixedX, table.Bounds.ChildBounds[7].fixedX);
         var tagBounds = table.GetElement("type").Bounds;
         Assert.True(tagBounds.OuterWidth <= table.Bounds.OuterWidth);
@@ -253,7 +253,7 @@ public sealed class BuildModeHudControlsTests
         Assert.Null(composer.GetElement("rotation"));
         Assert.IsType<GuiElementDynamicText>(composer.GetElement("title"));
         Assert.False(table.Focusable);
-        Assert.Same(NoTableDividerRenderer.Instance, table.DividerRenderer);
+        Assert.IsType<FadingRowTableDividerRenderer>(table.DividerRenderer);
         fixture.MouseX = (int)snapping.Bounds.renderX + 1;
         fixture.MouseY = (int)snapping.Bounds.renderY + 1;
         var mouse = new MouseEvent(fixture.MouseX, fixture.MouseY, EnumMouseButton.Left, 0);
@@ -270,6 +270,7 @@ public sealed class BuildModeHudControlsTests
         using var context = new Context(baseline);
         context.Rectangle(0, 0, 296 * scale, 48 * scale);
         context.Clip();
+        table.DrawDividers(context, scale);
         string[] keys = ["snapping", "rotation"];
         for (int row = 0; row < keys.Length; row++)
         {
@@ -416,7 +417,7 @@ public sealed class BuildModeHudControlsTests
         using var table = BuildModeHud.CreateControlsTable(fixture.Api.Object,
             [Hint("A", ["B"]), Hint("C", ["D"])]);
         Assert.Equal(new TableSize(300, 40), table.Measure());
-        Assert.Same(NoTableDividerRenderer.Instance, table.DividerRenderer);
+        Assert.IsType<FadingRowTableDividerRenderer>(table.DividerRenderer);
         table.Arrange();
         Assert.Equal(4, table.Bounds.ChildBounds.Count);
         Assert.Equal([(0d, 0d), (100d, 0d), (0d, 20d), (100d, 20d)],
@@ -478,6 +479,7 @@ public sealed class BuildModeHudControlsTests
         var uploaded = Assert.Single(fixture.Uploads);
         using var baseline = new ImageSurface(Format.Argb32, uploaded.Width, uploaded.Height);
         using var context = new Context(baseline);
+        table.DrawDividers(context, scale);
         double columnWidth = table.Bounds.ChildBounds[1].fixedX - 12;
         for (int i = 0; i < hints.Length; i++)
         {

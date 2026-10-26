@@ -79,7 +79,10 @@ internal sealed partial class BuildModeHud
             {
                 [0] = TableColumn.Auto(88),
                 [1] = TableColumn.Auto(200)
-            }, columnGap: 12, minimumRowHeight: 24));
+            }, columnGap: 12, minimumRowHeight: 24))
+        {
+            DividerRenderer = new FadingRowTableDividerRenderer()
+        };
         bool complete = false;
         try
         {

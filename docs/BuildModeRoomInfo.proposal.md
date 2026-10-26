@@ -50,6 +50,8 @@ Draw each tag as a compact filled rounded box with a visible border and centered
 
 Size boxes to the measured text ink, with 3 logical units of horizontal padding, 2 of vertical padding, and a 1-unit border. Keep the table's row footprint independent of this compact box height.
 
+The Room table, like the snapping/rotation and Controls tables, uses faint row separators that fade to transparent at both ends. These are table-content dividers, independent of the collapsible section's divider and toggle. Existing row spacing and passive input behavior are unchanged.
+
 Keep the tags on one line by measuring localized labels and allowing the panel to accommodate them. Verify the layout at supported GUI scales.
 
 When no qualifications apply, show plain text `Type: None` and a short explanation, `Not enclosed or too large`. Do not invent a precise leak count or claim the space is definitely outdoors. Omit dimensions, sunlight, and cooling-wall summaries in this state because the detected region may be truncated and its aggregates may not describe the intended room.
