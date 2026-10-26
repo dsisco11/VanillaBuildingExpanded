@@ -107,18 +107,24 @@ internal sealed class TableOptions
     public double RowGap { get; }
     /// <summary>The minimum logical height of each populated row.</summary>
     public double MinimumRowHeight { get; }
+    /// <summary>Positions each preferred cell footprint within its row without stretching it.</summary>
+    public EnumVerticalAlign VerticalAlignment { get; }
 
     /// <summary>Validates spacing and snapshots column policies without retaining a mutable caller dictionary.</summary>
     /// <param name="columns">Optional column policies; the completed table must contain every configured index.</param>
     /// <param name="columnGap">Finite, nonnegative logical spacing between columns.</param>
     /// <param name="rowGap">Finite, nonnegative logical spacing between rows.</param>
     /// <param name="minimumRowHeight">Finite, nonnegative minimum row height.</param>
+    /// <param name="verticalAlignment">Top, middle, or bottom alignment within each row.</param>
     public TableOptions(IReadOnlyDictionary<int, TableColumn>? columns = null,
-        double columnGap = 0, double rowGap = 0, double minimumRowHeight = 0)
+        double columnGap = 0, double rowGap = 0, double minimumRowHeight = 0,
+        EnumVerticalAlign verticalAlignment = EnumVerticalAlign.Top)
     {
         TableSize.ValidateDimension(columnGap, nameof(columnGap));
         TableSize.ValidateDimension(rowGap, nameof(rowGap));
         TableSize.ValidateDimension(minimumRowHeight, nameof(minimumRowHeight));
+        if (verticalAlignment is not (EnumVerticalAlign.Top or EnumVerticalAlign.Middle or EnumVerticalAlign.Bottom))
+            throw new ArgumentOutOfRangeException(nameof(verticalAlignment));
         var snapshot = new Dictionary<int, TableColumn>();
         if (columns is not null)
         {
@@ -133,5 +139,6 @@ internal sealed class TableOptions
         ColumnGap = columnGap;
         RowGap = rowGap;
         MinimumRowHeight = minimumRowHeight;
+        VerticalAlignment = verticalAlignment;
     }
 }

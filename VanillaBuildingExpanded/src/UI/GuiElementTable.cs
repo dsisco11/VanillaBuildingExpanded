@@ -167,7 +167,7 @@ internal sealed partial class GuiElementTable : GuiElement
         return CalculateLayout().Size;
     }
 
-    /// <summary>Applies measured dimensions and top-left cell positions while preserving the table's own origin.</summary>
+    /// <summary>Applies measured dimensions and aligned cell positions while preserving the table's own origin.</summary>
     /// <remarks>
     /// Clears child offsets, margins, and sibling-relative positioning. Preserves each preferred footprint,
     /// marks native bounds dirty, and resets coalesced layout notifications without calculating world bounds.
@@ -196,7 +196,13 @@ internal sealed partial class GuiElementTable : GuiElement
                 var entry = rows[rowIndex][columnIndex];
                 var bounds = entry.Bounds;
                 bounds.fixedX = layout.ColumnStarts[columnIndex];
-                bounds.fixedY = layout.RowStarts[rowIndex];
+                double spareHeight = layout.RowHeights[rowIndex] - entry.Size.Height;
+                bounds.fixedY = layout.RowStarts[rowIndex] + (options.VerticalAlignment switch
+                {
+                    EnumVerticalAlign.Middle => spareHeight / 2,
+                    EnumVerticalAlign.Bottom => spareHeight,
+                    _ => 0
+                });
                 // Native fixed dimensions exclude padding; preferred footprints already include it.
                 bounds.fixedWidth = entry.Size.Width - 2 * entry.PaddingX;
                 bounds.fixedHeight = entry.Size.Height - 2 * entry.PaddingY;

@@ -9,6 +9,37 @@ public sealed class GuiElementTableTests
 {
     private readonly ICoreClientAPI api = Mock.Of<ICoreClientAPI>();
 
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 0.5)]
+    [InlineData(2, 1)]
+    public void VerticalAlignment_PositionsPreferredFootprintsWithoutChangingRowsOrDividers(int alignment, double factor)
+    {
+        using var table = CreateTable(new TableOptions(rowGap: 4, minimumRowHeight: 20,
+            verticalAlignment: (EnumVerticalAlign)alignment));
+        var shortCell = CreateCell(10, 8);
+        var paddedCell = CreateCell(10, 8);
+        paddedCell.Bounds.fixedPaddingY = 2;
+        var tallCell = CreateCell(10, 30);
+        table.AddRow(shortCell, paddedCell);
+        table.AddRow(tallCell, CreateCell(10, 10));
+        table.Arrange();
+        Assert.Equal(12 * factor, shortCell.Bounds.fixedY);
+        Assert.Equal(8 * factor, paddedCell.Bounds.fixedY);
+        Assert.Equal(24, tallCell.Bounds.fixedY);
+        Assert.Equal(24 + 20 * factor, table.Bounds.ChildBounds[3].fixedY);
+        Assert.Equal(new TableSize(20, 54), table.Measure());
+        Assert.Equal(8, shortCell.Bounds.fixedHeight);
+        Assert.Equal(8, paddedCell.Bounds.fixedHeight);
+        Assert.Equal(new TableDividerSegment(TableDividerKind.Row, 0, 22, 20, 22),
+            Assert.Single(table.GetDividerGeometry(1).Segments.Where(segment => segment.Kind == TableDividerKind.Row)));
+        table.SetPreferredSize(shortCell, new TableSize(10, 16));
+        table.Arrange();
+        Assert.Equal(4 * factor, shortCell.Bounds.fixedY);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new TableOptions(verticalAlignment: EnumVerticalAlign.FixedOffset));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new TableOptions(verticalAlignment: (EnumVerticalAlign)99));
+    }
+
     [Fact]
     public void PlannedFixture_MeasuresAndArrangesExactDimensions()
     {

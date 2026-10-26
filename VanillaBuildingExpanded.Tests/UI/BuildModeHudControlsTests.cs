@@ -32,6 +32,7 @@ public sealed class BuildModeHudControlsTests
         var table = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("room-table"));
         Assert.Equal(96, table.Measure().Height);
         Assert.Equal(8, table.Bounds.ChildBounds.Count);
+        AssertRowCenters(table, 24);
         Assert.IsType<GuiElementCustomDraw>(table.GetElement("type"));
         Assert.False(table.Focusable);
         Assert.IsType<FadingRowTableDividerRenderer>(table.DividerRenderer);
@@ -67,7 +68,8 @@ public sealed class BuildModeHudControlsTests
                     }
                 }
             Assert.InRange(firstTextX / scale - tagX, 3, 6);
-            Assert.InRange(firstTextY / scale, 2, 4.5);
+            double height = Math.Ceiling(font.GetTextExtents(Lang.Get($"vanillabuildingexpanded:build-info-room-{key}")).Height / scale) + 6;
+            Assert.InRange(firstTextY / scale - (24 - height) / 2, 2, 4.5);
             tagX += width + 4;
         }
         fixture.MouseX = (int)tagBounds.renderX + 1;
@@ -231,15 +233,16 @@ public sealed class BuildModeHudControlsTests
         var table = Assert.IsType<GuiElementTable>(composer.GetElement("information-table"));
         Assert.Equal(new TableSize(296, 48), table.Measure());
         Assert.Equal((12d, 54d), (table.Bounds.fixedX, table.Bounds.fixedY));
-        Assert.Equal([(0d, 0d), (96d, 0d), (0d, 24d), (96d, 24d)],
-            table.Bounds.ChildBounds.Select(bounds => (bounds.fixedX, bounds.fixedY)));
+        Assert.Equal([0d, 96d, 0d, 96d], table.Bounds.ChildBounds.Select(bounds => bounds.fixedX));
+        AssertRowCenters(table, 24);
         var snapping = Assert.IsType<GuiElementDynamicText>(table.GetElement("snapping"));
         var rotation = Assert.IsType<GuiElementDynamicText>(table.GetElement("rotation"));
-        Assert.Equal((200d, 24d), (snapping.Bounds.fixedWidth, snapping.Bounds.fixedHeight));
-        Assert.Equal((200d, 24d), (rotation.Bounds.fixedWidth, rotation.Bounds.fixedHeight));
+        double textHeight = Math.Ceiling(snapping.Font.GetFontExtents().Height / scale);
+        Assert.Equal((200d, textHeight), (snapping.Bounds.fixedWidth, snapping.Bounds.fixedHeight));
+        Assert.Equal((200d, textHeight), (rotation.Bounds.fixedWidth, rotation.Bounds.fixedHeight));
         foreach (var (value, y) in new[] { (snapping, 54d), (rotation, 78d) })
         {
-            var legacyBounds = ElementBounds.Fixed(108, y, 200, 24);
+            var legacyBounds = ElementBounds.Fixed(108, y + (24 - textHeight) / 2, 200, textHeight);
             legacyBounds.ParentBounds = composer.Bounds;
             legacyBounds.CalcWorldBounds();
             Assert.Equal(legacyBounds.renderX, value.Bounds.renderX, 8);
@@ -276,7 +279,7 @@ public sealed class BuildModeHudControlsTests
         {
             using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize)
                 .WithColor([.. UiPalette.LabelColor]);
-            var bounds = ElementBounds.Fixed(0, row * 24, 88, 24).WithEmptyParent();
+            var bounds = ElementBounds.Fixed(0, row * 24 + (24 - textHeight) / 2, 88, textHeight).WithEmptyParent();
             bounds.CalcWorldBounds();
             using var label = new GuiElementStaticText(fixture.Api.Object,
                 Lang.Get($"vanillabuildingexpanded:build-info-{keys[row]}-label"),
@@ -420,8 +423,8 @@ public sealed class BuildModeHudControlsTests
         Assert.IsType<FadingRowTableDividerRenderer>(table.DividerRenderer);
         table.Arrange();
         Assert.Equal(4, table.Bounds.ChildBounds.Count);
-        Assert.Equal([(0d, 0d), (100d, 0d), (0d, 20d), (100d, 20d)],
-            table.Bounds.ChildBounds.Select(bounds => (bounds.fixedX, bounds.fixedY)));
+        Assert.Equal([0d, 100d, 0d, 100d], table.Bounds.ChildBounds.Select(bounds => bounds.fixedX));
+        AssertRowCenters(table, 20);
         Assert.False(table.Focusable);
         fixture.Attach(table);
         var mouse = new MouseEvent(101, 1, EnumMouseButton.Left, 0);
@@ -485,7 +488,8 @@ public sealed class BuildModeHudControlsTests
         {
             using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize)
                 .WithColor([.. UiPalette.LabelColor]);
-            var bounds = ElementBounds.Fixed(0, i * 20, columnWidth, 20).WithEmptyParent();
+            double textHeight = Math.Ceiling(font.GetFontExtents().Height / scale);
+            var bounds = ElementBounds.Fixed(0, i * 20 + (20 - textHeight) / 2, columnWidth, textHeight).WithEmptyParent();
             bounds.CalcWorldBounds();
             using var text = new GuiElementStaticText(fixture.Api.Object, hints[i].Action,
                 EnumTextOrientation.Left, bounds, font);
@@ -760,6 +764,15 @@ public sealed class BuildModeHudControlsTests
         Assert.Throws<InvalidOperationException>(() =>
             BuildModeHud.CreateControlsTable(fixture.Api.Object, [Hint("A", ["B"])]));
         Assert.Empty(fixture.Uploads);
+    }
+
+    private static void AssertRowCenters(GuiElementTable table, double rowHeight)
+    {
+        for (int i = 0; i < table.Bounds.ChildBounds.Count; i++)
+        {
+            var bounds = table.Bounds.ChildBounds[i];
+            Assert.Equal((i / 2 + 0.5) * rowHeight, bounds.fixedY + bounds.fixedHeight / 2, 8);
+        }
     }
 
     private static BuildModeKeybindHint Hint(string label, ImmutableArray<string> keys,

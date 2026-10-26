@@ -231,7 +231,7 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
             {
                 [0] = TableColumn.Fixed(88),
                 [1] = TableColumn.Fixed(200)
-            }, columnGap: 8, minimumRowHeight: 24))
+            }, columnGap: 8, minimumRowHeight: 24, verticalAlignment: EnumVerticalAlign.Middle))
         {
             DividerRenderer = new FadingRowTableDividerRenderer()
         };
@@ -252,13 +252,14 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     /// <summary>Adds a passive label and native dynamic value with a lookup key local to the owning table.</summary>
     private void AddInformationRow(GuiElementTable table, string key, string value, bool unavailable)
     {
+        var labelFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor]);
+        double textHeight = MeasureTextHeight(labelFont);
         var label = new GuiElementStaticText(capi, Lang.Get($"vanillabuildingexpanded:build-info-{key}-label"),
-            EnumTextOrientation.Left, ElementBounds.Fixed(0, 0, 88, 24),
-            CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor]));
+            EnumTextOrientation.Left, ElementBounds.Fixed(0, 0, 88, textHeight), labelFont);
         var text = new GuiElementDynamicText(capi, value,
             CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize)
                 .WithColor([.. (unavailable ? UiPalette.UnavailableColor : UiPalette.ValueColor)]),
-            ElementBounds.Fixed(0, 0, 200, 24));
+            ElementBounds.Fixed(0, 0, 200, textHeight));
         try
         {
             table.AddRowCells([new TableCell(label), new TableCell(text, key: key)]);
@@ -312,7 +313,7 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
             {
                 [0] = TableColumn.Auto(88),
                 [1] = TableColumn.Auto(200)
-            }, columnGap: 12, minimumRowHeight: 20))
+            }, columnGap: 12, minimumRowHeight: 20, verticalAlignment: EnumVerticalAlign.Middle))
         {
             DividerRenderer = new FadingRowTableDividerRenderer()
         };
@@ -321,14 +322,17 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
         {
             using var measureFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize);
             using var measureKeyFont = CairoFont.WhiteSmallText().WithFontSize(UiPalette.KeybindFontSize);
+            double labelHeight = MeasureTextHeight(measureFont);
+            // Native keycaps start one device pixel down and extend another 0.75 pixels for their border.
+            double bindingHeight = Math.Ceiling(((int)measureKeyFont.GetFontExtents().Height + 1.75) / RuntimeEnv.GUIScale);
             foreach (var hint in hints)
             {
                 double labelWidth = Math.Ceiling(measureFont.GetTextExtents(hint.Action).Width / RuntimeEnv.GUIScale);
                 double bindingWidth = Math.Ceiling(MeasureKeybindWidth(measureKeyFont, hint));
-                var binding = new GuiElementCustomDraw(api, ElementBounds.Fixed(0, 0, bindingWidth, 20),
+                var binding = new GuiElementCustomDraw(api, ElementBounds.Fixed(0, 0, bindingWidth, bindingHeight),
                     (ctx, _, bounds) => DrawKeybind(api, ctx, bounds, hint));
                 table.AddRow(
-                    new GuiElementCustomDraw(api, ElementBounds.Fixed(0, 0, labelWidth, 20),
+                    new GuiElementCustomDraw(api, ElementBounds.Fixed(0, 0, labelWidth, labelHeight),
                         (ctx, _, bounds) => DrawControlLabel(ctx, bounds, hint.Action,
                             GuiElement.scaled(binding.Bounds.fixedX - 12))),
                     binding);
@@ -341,6 +345,10 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
             if (!complete) table.Dispose();
         }
     }
+
+    /// <summary>Reserves a full native font line so row alignment centers static and changing text consistently.</summary>
+    private static double MeasureTextHeight(CairoFont font) =>
+        Math.Ceiling(font.GetFontExtents().Height / RuntimeEnv.GUIScale);
 
     /// <summary>Preserves native label drawing against the allocated column without retaining font resources.</summary>
     private static void DrawControlLabel(Context ctx, ElementBounds bounds, string action, double columnWidth)

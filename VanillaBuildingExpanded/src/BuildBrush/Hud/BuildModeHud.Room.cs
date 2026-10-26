@@ -79,7 +79,7 @@ internal sealed partial class BuildModeHud
             {
                 [0] = TableColumn.Auto(88),
                 [1] = TableColumn.Auto(200)
-            }, columnGap: 12, minimumRowHeight: 24))
+            }, columnGap: 12, minimumRowHeight: 24, verticalAlignment: EnumVerticalAlign.Middle))
         {
             DividerRenderer = new FadingRowTableDividerRenderer()
         };
@@ -88,11 +88,15 @@ internal sealed partial class BuildModeHud
         {
             using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize);
             double Width(string text) => Math.Ceiling(font.GetTextExtents(text).Width / RuntimeEnv.GUIScale) + 2;
+            double textHeight = MeasureTextHeight(font);
             // Reserve every localized tag, including while unavailable, to avoid panel-width jitter on movement.
             var tags = TagOrder.Select(tag => (Tag: tag, Text: RoomText(tag.ToString().ToLowerInvariant())))
                 .Select(tag => (tag.Tag, tag.Text,
                     Width: Math.Ceiling(font.GetTextExtents(tag.Text).Width / RuntimeEnv.GUIScale)
-                        + 2 * (TagHorizontalPadding + TagBorderWidth))).ToArray();
+                        + 2 * (TagHorizontalPadding + TagBorderWidth),
+                    Height: Math.Ceiling(font.GetTextExtents(tag.Text).Height / RuntimeEnv.GUIScale)
+                        + 2 * (TagVerticalPadding + TagBorderWidth))).ToArray();
+            double tagHeight = tags.Max(tag => tag.Height);
             double valueWidth = Math.Max(tags.Sum(tag => tag.Width) + 4 * (tags.Length - 1),
                 new[] { RoomText("incomplete"), RoomText("missing"), RoomText("not-enclosed"),
                     RoomText("dimensions", 14, 14, 14), PercentageText(null), PercentageText(100) }.Max(Width));
@@ -104,7 +108,7 @@ internal sealed partial class BuildModeHud
                 {
                     string text = key == "reason" ? "" : RoomText($"{key}-label");
                     label = new GuiElementStaticText(capi, text, EnumTextOrientation.Left,
-                        ElementBounds.Fixed(0, 0, Width(text), 24),
+                        ElementBounds.Fixed(0, 0, Width(text), textHeight),
                         CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor]));
                     table.AddRowCells([new TableCell(label), new TableCell(value, key: key)]);
                 }
@@ -119,19 +123,20 @@ internal sealed partial class BuildModeHud
             void AddText(string key) => AddRow(key, new GuiElementDynamicText(capi, RoomValue(key),
                 CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize)
                     .WithColor(RoomValueColor(key)),
-                ElementBounds.Fixed(0, 0, valueWidth, 24)));
+                ElementBounds.Fixed(0, 0, valueWidth, textHeight)));
 
             if (roomInfo.Qualifications != RoomQualifications.None)
             {
                 var qualifications = roomInfo.Qualifications;
-                AddRow("type", new GuiElementCustomDraw(capi, ElementBounds.Fixed(0, 0, valueWidth, 24),
+                AddRow("type", new GuiElementCustomDraw(capi, ElementBounds.Fixed(0, 0, valueWidth, tagHeight),
                     (ctx, _, bounds) =>
                     {
                         double x = bounds.drawX;
                         foreach (var tag in tags)
                         {
                             if (!qualifications.HasFlag(tag.Tag)) continue;
-                            DrawRoomTag(ctx, x, bounds.drawY, tag.Width, tag.Text, tag.Tag);
+                            DrawRoomTag(ctx, x, bounds.drawY + GuiElement.scaled((tagHeight - tag.Height) / 2),
+                                tag.Width, tag.Text, tag.Tag);
                             x += GuiElement.scaled(tag.Width + 4);
                         }
                     }));
