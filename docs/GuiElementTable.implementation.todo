@@ -1,6 +1,6 @@
 # GUI table implementation TODO
 
-Status: Phases 1 through 6 complete (owning table, divider strategies, composer/render lifecycle, opt-in input/nested focus, and controls-only HUD adoption). P7 acceptance remains pending, including actual GPU display and in-game visual/input checks.
+Status: Phases 1 through 7 complete. Automated acceptance passes, the user approved the in-game appearance, and Phase 7 was closed at the user's direction on 2026-10-25. Remaining detailed manual checks are recorded below as unverified follow-up notes, not claimed passes or blockers.
 
 Design source: [GUI table proposal](GuiElementTable.proposal.md).
 
@@ -221,20 +221,37 @@ P6 evidence and implementation notes:
 
 ## P7 - Verifying and closing the first delivery
 
-- [ ] Build the affected production project using the repository's existing .NET 10 setup and game references.
-- [ ] Run new table layout, ownership, divider, rendering-lifecycle, and input tests together with existing UI section/button tests and keybinding tests.
-- [ ] Use existing xUnit/VSTest tooling; confirm `VINTAGE_STORY` resolves the required installed game assemblies. Do not introduce a new test runner or renderer dependency.
-- [ ] Expand test scope only if focused failures or shared lifecycle changes justify it.
-- [ ] In game, compare controls appearance and panel dimensions before/after at identical settings.
-- [ ] Exercise fractional GUI scales, long labels, alternate key combinations, changed bindings, and repeated collapse/expand and close/reopen cycles.
-- [ ] Verify dynamic child values, clipping, no-op dividers, solid/dashed styles, and runtime style replacement in a suitable test host without changing the production HUD's no-op default.
-- [ ] Verify empty and partially populated tables, varying row heights, nested focus, and release outside the table.
-- [ ] Confirm panel non-button areas still pass input to gameplay and collapse buttons retain their existing behavior.
-- [ ] Check for duplicate disposal, stale child references, retained textures, and runtime exceptions during rebuilding and shutdown.
-- [ ] Update the proposal with finalized API details and verified implementation status; mark TODO items complete only with supporting evidence.
-- [ ] Record automated results separately from in-game checks. Leave unavailable manual checks explicitly pending rather than declaring them passed.
+- [x] Build the affected production project using the repository's existing .NET 10 setup and game references.
+- [x] Run new table layout, ownership, divider, rendering-lifecycle, and input tests together with existing UI section/button tests and keybinding tests.
+- [x] Use existing xUnit/VSTest tooling; confirm `VINTAGE_STORY` resolves the required installed game assemblies. Do not introduce a new test runner or renderer dependency.
+- [x] Expand test scope only if focused failures or shared lifecycle changes justify it.
+- [x] Obtain user approval of the in-game controls appearance.
+- [x] Verify dynamic child values, clipping, no-op dividers, solid/dashed styles, and runtime style replacement in a suitable test host without changing the production HUD's no-op default.
+- [x] Verify empty and partially populated tables, varying row heights, nested focus, and release outside the table.
+- [x] Check instrumented test hosts for duplicate disposal, stale child references, retained textures, and exceptions during rebuilding and shutdown.
+- [x] Update the proposal with finalized API details and verified implementation status; mark TODO items complete only with supporting evidence.
+- [x] Record automated results separately from in-game checks. Retain unavailable manual checks as unverified follow-up notes rather than declaring them passed.
+- [x] Close Phase 7 at the user's direction after automated acceptance and visual approval.
 
-First-delivery completion gate: the owning table and divider extension point are implemented and tested, controls are migrated, and required in-game behavior is verified.
+P7 automated evidence (2026-10-25):
+
+- Explicit production build succeeded with zero errors and nine existing warnings using .NET SDK 10.0.401 and the installed game at G:\Vintagestory.
+- The combined UI/keybinding suite passes 222 tests with zero failures or skips. Six new cases cover real no-op/solid/dashed/no-op runtime replacement and eight repeated collapse/expand, close/reopen, and rebinding cycles at scales 1, 1.33, and 2.
+- Style replacement asserts actual Cairo pixel coverage, unchanged short-row geometry and varying row heights, dynamic value forwarding, texture reuse, and single disposal. Repeated native HUD composition asserts detached old bounds, stable dimensions, no pending measurement tables, and one deletion per owned texture.
+- The user's normal test invocation exposed a native-library setup defect hidden by the earlier process-local PATH adjustment: libcairo-2 could not be loaded. The Windows test project now copies the installed game's libcairo-2.dll and libSkiaSharp.dll into test output; no package, runner, production dependency, or machine-wide PATH change was introduced.
+- After that fix, the complete existing suite passes 663 tests with zero failures or skips using dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj --no-restore --verbosity minimal, with no PATH adjustment. Broadening scope was justified by the reported failures and shared test-host native dependency setup.
+- Existing layout, divider, composition, input, section/button, and keybinding cases cover empty/short rows, clipping, native dynamic text, nested focus, and outside release. Cairo and native composition execute for real; GPU services and icon bitmap remain mocked.
+
+P7 live-game evidence (2026-10-25): after the native test-library fix, the user reported "okay it looks fine" and subsequently directed Phase 7 to be closed. This approves the displayed controls appearance and accepts the first delivery; it does not establish that every detailed manual check was performed.
+
+Unverified manual follow-up notes (not blockers to the user-directed closeout):
+
+- Exact before/after panel dimensions at identical settings.
+- In-game fractional GUI scales, long localized labels, alternate/changed bindings, and repeated collapse/expand and close/reopen cycles.
+- Gameplay pass-through over non-button panel areas and collapse-button interaction.
+- Actual game rebuilding/shutdown logs and retained GPU resources.
+
+First-delivery completion gate: closed at the user's direction on 2026-10-25, supported by passing automated acceptance and user visual approval. The owning table and divider extension point are delivered and controls are migrated. Unverified manual checks are retained transparently above. F1 is eligible as a separate follow-up but has not started.
 
 ## F1 - Follow-up: migrating snapping and rotation
 

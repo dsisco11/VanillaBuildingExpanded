@@ -30,6 +30,13 @@
     <ProjectReference Include="..\VanillaBuildingExpanded\VanillaBuildingExpanded.csproj" />
   </ItemGroup>
 
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <!-- Native GUI tests must also work outside the game's native-library search path. -->
+    <None Include="$(VINTAGE_STORY)\Lib\libcairo-2.dll;$(VINTAGE_STORY)\Lib\libSkiaSharp.dll"
+          Link="%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <Reference Include="cairo-sharp">
       <HintPath>$(VINTAGE_STORY)\Lib\cairo-sharp.dll</HintPath>

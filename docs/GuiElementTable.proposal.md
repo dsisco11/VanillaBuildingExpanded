@@ -1,6 +1,6 @@
 # GUI table layout component proposal
 
-Status: Design direction approved: row-oriented content, child ownership, direct inheritance from `GuiElement`, and interface-based divider rendering. Phases 1 through 6 are complete: the owning table, divider strategies, composer/render lifecycle, opt-in input/nested focus, and controls-only HUD adoption are implemented and covered by focused automated tests. Phase 7 acceptance, including actual GPU display and in-game appearance/input checks, remains pending.
+Status: Phases 1 through 7 complete. The owning row-oriented table, interface-based divider rendering, and controls-only HUD adoption are delivered. Automated acceptance passes and the user approved the in-game appearance, then directed Phase 7 closeout on 2026-10-25. Detailed manual checks not explicitly verified are retained as follow-up notes, not claimed passes or blockers.
 
 Implementation progress is tracked in the [implementation TODO](GuiElementTable.implementation.todo).
 
@@ -517,6 +517,16 @@ Initial scope excludes column or row spanning, interior empty-cell placeholders,
 These features can be proposed separately when a concrete consumer requires them.
 
 ## Verification and acceptance criteria
+
+### Phase 7 verification evidence (2026-10-25)
+
+- The explicit production build succeeds under .NET SDK 10.0.401 with the installed game references, zero errors, and nine existing warnings.
+- The focused UI/keybinding suite passes 222 tests with no failures or skips. New acceptance cases in [TableCompositionTests.cs](../VanillaBuildingExpanded.Tests/UI/TableCompositionTests.cs) execute no-op/solid/dashed/no-op transitions with actual Cairo pixels, dynamic values, short rows, different row heights, stable geometry, texture reuse, and single cleanup at GUI scales 1, 1.33, and 2.
+- New cases in [BuildModeHudControlsTests.cs](../VanillaBuildingExpanded.Tests/UI/BuildModeHudControlsTests.cs) run eight cycles per scale through collapse/expand, close/reopen, and rebinding. They verify old child detachment, stable dimensions, pending-table cleanup, and exactly one deletion per owned texture.
+- A normal test run reproduced the user's missing native Cairo failure, which earlier PATH-adjusted validation had hidden. The Windows [test project](../VanillaBuildingExpanded.Tests/VanillaBuildingExpanded.Tests.csproj) now copies the installed game's native Cairo and Skia DLLs into test output. This supports ordinary CLI/VS Code runs without manual PATH setup or new dependencies.
+- The complete suite then passes 663 tests with zero failures or skips using `dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj --no-restore --verbosity minimal`, without changing PATH. The reported failures and shared test-host dependency fix justified expanding beyond the focused suite.
+- Automated coverage uses real native GUI composition and Cairo rasterization but mocked GPU services and icon bitmap. It does not establish actual GPU upload/display, full icon/background fidelity, gameplay pass-through, or real shutdown resource behavior.
+- After the native test-library fix, the user reported "okay it looks fine", approving the displayed controls appearance, then explicitly directed Phase 7 closeout on 2026-10-25. The first-delivery gate is closed on that basis. Exact before/after dimensions, the full in-game GUI-scale/localization matrix, gameplay pass-through, and shutdown resource behavior remain unverified follow-up notes in the [implementation TODO](GuiElementTable.implementation.todo), not claimed passes. Snapping/rotation migration is a separate eligible follow-up and has not started.
 
 Add focused layout tests using supplied dimensions rather than requiring live GPU rendering:
 

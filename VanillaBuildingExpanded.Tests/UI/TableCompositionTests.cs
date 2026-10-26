@@ -248,6 +248,65 @@ public sealed class TableCompositionTests
         Assert.False(table.IsArtworkDirty);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1.33)]
+    [InlineData(2)]
+    public void BuiltInStyleReplacement_PreservesShortRowLayoutDynamicValuesAndTextureOwnership(float scale)
+    {
+        using var fixture = new Fixture(scale);
+        using var table = fixture.Table(new TableOptions(columnGap: 4, rowGap: 4));
+        var children = new[]
+        {
+            fixture.Cell("first", 16, 12),
+            fixture.Cell("second", 24, 10),
+            fixture.Cell("third", 16, 18)
+        };
+        table.AddRow(children[0], children[1]);
+        table.AddRow(children[2]);
+        fixture.Attach(table);
+        var origins = children.Select(child => (child.Bounds.fixedX, child.Bounds.fixedY)).ToArray();
+        int layoutInvalidations = 0;
+        table.LayoutInvalidated += () => layoutInvalidations++;
+        var options = new TableDividerOptions(new Color(1, 1, 1, 1));
+        ITableDividerRenderer[] renderers =
+        [
+            NoTableDividerRenderer.Instance,
+            new SolidTableDividerRenderer(options),
+            new DashedTableDividerRenderer(options, [3, 3]),
+            NoTableDividerRenderer.Instance
+        ];
+        int[] coverage = new int[renderers.Length];
+
+        for (int index = 0; index < renderers.Length; index++)
+        {
+            children[0].Value = index;
+            table.DividerRenderer = renderers[index];
+            table.RenderInteractiveElements(0.1f);
+            table.RenderInteractiveElements(0.1f);
+
+            Assert.Equal(index + 1, fixture.Uploads.Count);
+            var upload = fixture.Uploads[^1];
+            Assert.Same(fixture.Uploads[0].Texture, upload.Texture);
+            coverage[index] = upload.Pixels.Count(value => value != 0);
+            Assert.Equal(index, children[0].RenderedValue);
+            Assert.Equal(new TableSize(44, 34), table.Measure());
+            Assert.Equal(origins, children.Select(child => (child.Bounds.fixedX, child.Bounds.fixedY)));
+            Assert.All(children, child => Assert.Same(table.Bounds, child.Bounds.ParentBounds));
+            Assert.False(table.IsArtworkDirty);
+        }
+
+        Assert.Equal(0, coverage[0]);
+        Assert.True(coverage[1] > coverage[2]);
+        Assert.True(coverage[2] > 0);
+        Assert.Equal(0, coverage[3]);
+        Assert.Equal(0, layoutInvalidations);
+        Assert.All(children, child => Assert.Equal(4, child.ComposeCalls));
+        table.Dispose();
+        Assert.All(children, child => Assert.Equal(1, child.DisposeCalls));
+        Assert.Single(fixture.Deleted);
+    }
+
     [Fact]
     public void DynamicUpdates_FittingReservedBoundsDoNotRecomposeOrReflow()
     {

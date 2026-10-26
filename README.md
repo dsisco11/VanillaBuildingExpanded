@@ -60,6 +60,16 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 Build-overlay sections use the shared `CollapsibleSection` and `GuiElementCollapseButton` UI components. Each section supplies a stable ID, a localized title key, content-width and content-height measurement callbacks, and a content-composition callback using the native `GuiComposer`. Content is composed relative to the supplied content bounds. The section owns its collapse state independently of composer lifetime; the HUD stacks sections by measured height and applies queued toggles before recomposition. Controls-specific keycap formatting remains in the build-mode HUD.
 
+### Running tests
+
+Install the .NET 10 SDK and set `VINTAGE_STORY` to your Vintage Story installation directory, then run:
+
+```powershell
+dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj
+```
+
+On Windows, the test project copies the installed game's native Cairo and Skia libraries into the test output directory. GUI tests therefore run from the command line and VS Code without adding the game's `Lib` directory to `PATH`. These tests use real Cairo rasterization with mocked GPU services; they do not replace in-game visual and input acceptance checks.
+
 ## License
 
 See [LICENSE.txt](LICENSE.txt) for details.

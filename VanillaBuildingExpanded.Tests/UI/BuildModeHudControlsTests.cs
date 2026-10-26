@@ -197,6 +197,64 @@ public sealed class BuildModeHudControlsTests
         Assert.Equal(expandedHeight, hud.SingleComposer.Bounds.fixedHeight);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1.33)]
+    [InlineData(2)]
+    public void Hud_RepeatedCollapseReopenAndRebindingReleaseEveryOwnedTextureOnce(float scale)
+    {
+        using var fixture = new Fixture(scale);
+        using var hud = new BuildModeHud(fixture.Api.Object);
+        hud.SetVisible(true);
+        double width = hud.SingleComposer.Bounds.fixedWidth;
+        double height = hud.SingleComposer.Bounds.fixedHeight;
+
+        for (int cycle = 0; cycle < 8; cycle++)
+        {
+            var previous = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
+            var children = previous.Bounds.ChildBounds.ToArray();
+            ClickToggle(hud, fixture);
+            Assert.Null(hud.SingleComposer.GetElement("controls-table"));
+            Assert.Empty(previous.Bounds.ChildBounds);
+            Assert.All(children, bounds => Assert.Null(bounds.ParentBounds));
+            Assert.Equal(width, hud.SingleComposer.Bounds.fixedWidth);
+            Assert.Equal(height - 100, hud.SingleComposer.Bounds.fixedHeight);
+            Assert.Null(PendingTable(hud));
+
+            ClickToggle(hud, fixture);
+            var composer = hud.SingleComposer;
+            var expanded = Assert.IsType<GuiElementTable>(composer.GetElement("controls-table"));
+            Assert.NotSame(previous, expanded);
+            Assert.Equal(width, composer.Bounds.fixedWidth);
+            Assert.Equal(height, composer.Bounds.fixedHeight);
+            int builds = fixture.CreatedComposers.Count;
+            hud.SetVisible(false);
+            hud.SetVisible(true);
+            Assert.Same(composer, hud.SingleComposer);
+            Assert.Equal(builds, fixture.CreatedComposers.Count);
+
+            fixture.Hotkeys["vbe.ToggleBuildMode"].CurrentMapping.KeyCode =
+                (int)(cycle % 2 == 0 ? GlKeys.Escape : GlKeys.LShift);
+            hud.SetVisible(true);
+            Assert.NotSame(composer, hud.SingleComposer);
+            Assert.Empty(expanded.Bounds.ChildBounds);
+            Assert.Null(PendingTable(hud));
+        }
+
+        hud.Dispose();
+        hud.Dispose();
+        var textures = fixture.Uploads.Select(upload => upload.Texture).Distinct().ToArray();
+        Assert.All(textures, texture => Assert.True(texture.Disposed));
+        Assert.All(textures, texture => Assert.Equal(0, texture.TextureId));
+        Assert.Equal(textures.Length, fixture.Deleted.Count);
+        Assert.Equal(fixture.Deleted.Count, fixture.Deleted.Distinct().Count());
+        Assert.All(fixture.CreatedComposers, composer =>
+        {
+            if (composer.GetElement("controls-table") is GuiElementTable table)
+                Assert.Empty(table.Bounds.ChildBounds);
+        });
+    }
+
     [Fact]
     public void Hud_ScaleChangesRebuildVisibleContentAndDeferHiddenRebuilds()
     {
