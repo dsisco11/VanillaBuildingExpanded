@@ -2,7 +2,7 @@
 
 Source proposal: [BuildModeRuler.proposal.md](./BuildModeRuler.proposal.md)
 
-Planning only. All tasks are unchecked; this file does not claim implementation or verification.
+Implementation is tracked by phase. Checked entries claim verified completion only for their selected phase; later phases remain pending.
 
 ## Goal and scope
 
@@ -34,32 +34,45 @@ Non-goals: multiple rulers per world; distance/diagonal lines; ticks; in-world t
 Prerequisites: None.
 Outcome: Deterministic ruler commands and exact bounds are testable without GUI/GPU dependencies.
 
-    ☐ Confirm implementation surfaces and engine constraints before wiring consumers.
-        ☐ Inspect BuildBrushSystem_Client, BuildModeIndicatorBinding, BuildModeHud, CollapsibleSection, GuiElementTable input opt-in, and BuildBrushWheelInput.
-        ☐ Identify supported physical mouse/action ordering, cursor/dialog priority, focus-loss and dimension-change hooks, world identity readiness, and world coordinate validation.
-        ☐ Inspect IRenderer registration and wireframe mesh/shader helpers; note helper state-restoration limitations and RenderRange limitations.
-        ☐ Identify the existing focused xUnit test invocation and normal build target through build.ps1/CakeBuild; do not introduce new tooling.
-        ☐ Record resolved assumptions or remaining blockers in this plan before implementing dependent behavior.
-    ☐ Add a small client RulerController and explicit endpoint/state records, following existing naming and event patterns.
-        ☐ Represent nullable copied X/local-Y/Z/dimension endpoints; preserve start identity separately from normalized minimum/maximum bounds.
-        ☐ Represent Idle, PickingStart, PickingEnd, session visibility, and coherent presentation/change notifications.
-        ☐ Implement same-button cancellation, other-button switching, valid selection completion, and lifecycle cancellation.
-        ☐ Permit arming only with enabled local mode and a living player; do not require a placeable held item.
-        ☐ Keep invalid/absent targets from mutating state; retain armed mode and expose notification intent.
-        ☐ For a valid selection in another dimension, set the requested endpoint and clear the incompatible opposite endpoint as one state change; expose feedback to set the other endpoint.
-    ☐ Implement the inclusive bounds contract without engine side effects.
-        ☐ Calculate minCell/min(start,end), maxCell/max(start,end), size/max-min+1, renderMin/minCell, and renderMaxExclusive/maxCell+1 on each axis.
-        ☐ Promote operands before subtraction/addition; retain double-precision world render bounds and explicit dimension/local Y.
-        ☐ Report incomplete sizes without generating a speculative box; measure cells, not slab/stair/chiseled geometry.
-    ☐ Add focused state/bounds unit tests under VanillaBuildingExpanded.Tests\BuildBrush.
-        ☐ Assert (10,65,20) through (14,67,23) gives sizes (5,3,4), render min (10,65,20), and exclusive max (15,68,24).
-        ☐ Assert same-cell (1,1,1), reversed/negative coordinates, safe arithmetic at coordinate extremes, and no mutation through source BlockPos aliases.
-        ☐ Cover either endpoint first, preservation of the same-dimension opposite endpoint, switching/cancellation, invalid targets, and cross-dimension partial reset.
+Phase 1 contract findings and downstream gates:
+
+- The named client system, indicator binding, HUD, collapsible section, table input, and wheel adapter were consulted. Keep composition in the client owner, state outside the HUD, and pointer input opt-in with non-activating cancellation; this phase does not wire consumers.
+- API sources under the adjacent vsapi checkout establish MouseDown/MouseUp handled suppression and LevelFinalize/LeaveWorld (Client\API\IClientEventAPI.cs), MouseGrabbed/InWorldAction (Client\API\IInputAPI.cs), and the shared PlayerDimensionChanged event (Common\API\IEventAPI.cs). Exact native event ordering and focus-loss gesture cleanup remain unverified: block Phase 3 input acceptance until verified against the supported engine. Pure state transitions do not depend on that ordering.
+- Common\API\IWorldAccessor.cs documents SavegameIdentifier as globally unique. Its readiness and replacement-server-save behavior still need runtime qualification before Phase 2 identity acceptance; no global fallback is permitted.
+- Common\API\IBlockAccessor.cs provides dimension-aware IsValidPos(BlockPos) boundary validation without a loaded-chunk requirement in its contract. Math\BlockPos.cs distinguishes local Y/dimension from InternalY. Phase 1 takes an explicit caller validation result; Phase 2 must qualify dimension validity and isolate invalid saved entries without deleting other entries.
+- Client\API\IRenderer.cs documents RenderRange as unused and opaque terrain ordering at 0.37. Client\Render\WireframeCube.cs supplies a unit cube and camera-relative transforms but changes line/depth/blend state; Client\Model\Mesh\LineMeshUtil.cs uses line loops with duplicate shared face edges. Phase 5 must restore stage state and qualify the 12-edge drawing path, order, and bias; Phase 6 must verify transparency/visual behavior live.
+- README.md, the test project, build.ps1, and CakeBuild\Program.cs establish .NET 10/xUnit/VSTest, VINTAGE_STORY, and the normal non-packaging Build target. Focused command: dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj --filter FullyQualifiedName~RulerControllerTests. Normal build: .\build.ps1 --target=Build (not Default/Package, which cleans Releases).
+- Traceability: state commands/feedback -> proposal Bounds contract and Endpoint-picking interaction -> RulerController/RulerState and transition/publication tests; arithmetic/copies -> proposal Bounds contract -> exact extents, same-cell, reverse/negative, extreme-coordinate, and mutable-position tests. Persistence/input/GUI/GPU effects remain later-phase work.
+- Verification (2026-10-26): separate verification agent detected SDK 10.0.401, xUnit v2/VSTest, and no global/Directory runner overrides; dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj --filter "FullyQualifiedName~RulerControllerTests" --no-restore --verbosity normal passed 29/29 tests (shell 332). .\build.ps1 --target=Build passed JSON validation and clean/publish (shell 334). Existing nullable warnings and NuGet advisories for System.Security.Cryptography.Pkcs 10.0.12 remain outside this phase.
+- Second implementation review (2026-10-26): reviewed both new source files, all new test cases, and the changed planning section against inherited proposal constraints. Exact extents, pre-promotion arithmetic, immutable copied positions, gating/cancellation, atomic cross-dimension publication, explicit notification intents, and unchanged live brush surfaces were checked. No remaining Phase 1 code issue was identified.
+- Independent completion audit (2026-10-26): a fresh read-only reviewer applied audit-stage-completion, independently consulted the proposal, selected plan contract, implementation, named repository/API sources, and verification outputs. Verdict: Phase 1 fully satisfied; no confirmed issues, partial requirements, or blocking evidence gaps. Native input, identity/dimension validation, and rendering qualifications remain the explicit later-consumer gates above. Phase 1 entries were checked only after this verdict.
+
+    ✔ Confirm implementation surfaces and engine constraints before wiring consumers.
+        ✔ Inspect BuildBrushSystem_Client, BuildModeIndicatorBinding, BuildModeHud, CollapsibleSection, GuiElementTable input opt-in, and BuildBrushWheelInput.
+        ✔ Identify supported physical mouse/action ordering, cursor/dialog priority, focus-loss and dimension-change hooks, world identity readiness, and world coordinate validation.
+        ✔ Inspect IRenderer registration and wireframe mesh/shader helpers; note helper state-restoration limitations and RenderRange limitations.
+        ✔ Identify the existing focused xUnit test invocation and normal build target through build.ps1/CakeBuild; do not introduce new tooling.
+        ✔ Record resolved assumptions or remaining blockers in this plan before implementing dependent behavior.
+    ✔ Add a small client RulerController and explicit endpoint/state records, following existing naming and event patterns.
+        ✔ Represent nullable copied X/local-Y/Z/dimension endpoints; preserve start identity separately from normalized minimum/maximum bounds.
+        ✔ Represent Idle, PickingStart, PickingEnd, session visibility, and coherent presentation/change notifications.
+        ✔ Implement same-button cancellation, other-button switching, valid selection completion, and lifecycle cancellation.
+        ✔ Permit arming only with enabled local mode and a living player; do not require a placeable held item.
+        ✔ Keep invalid/absent targets from mutating state; retain armed mode and expose notification intent.
+        ✔ For a valid selection in another dimension, set the requested endpoint and clear the incompatible opposite endpoint as one state change; expose feedback to set the other endpoint.
+    ✔ Implement the inclusive bounds contract without engine side effects.
+        ✔ Calculate minCell/min(start,end), maxCell/max(start,end), size/max-min+1, renderMin/minCell, and renderMaxExclusive/maxCell+1 on each axis.
+        ✔ Promote operands before subtraction/addition; retain double-precision world render bounds and explicit dimension/local Y.
+        ✔ Report incomplete sizes without generating a speculative box; measure cells, not slab/stair/chiseled geometry.
+    ✔ Add focused state/bounds unit tests under VanillaBuildingExpanded.Tests\BuildBrush.
+        ✔ Assert (10,65,20) through (14,67,23) gives sizes (5,3,4), render min (10,65,20), and exclusive max (15,68,24).
+        ✔ Assert same-cell (1,1,1), reversed/negative coordinates, safe arithmetic at coordinate extremes, and no mutation through source BlockPos aliases.
+        ✔ Cover either endpoint first, preservation of the same-dimension opposite endpoint, switching/cancellation, invalid targets, and cross-dimension partial reset.
 
 Completion criteria:
 
-    ☐ Focused tests establish exact values and transitions, not only method calls.
-    ☐ State/bounds logic has no GUI/GPU/server dependency; engine integration uncertainties are explicitly resolved or blocked.
+    ✔ Focused tests establish exact values and transitions, not only method calls.
+    ✔ State/bounds logic has no GUI/GPU/server dependency; engine integration uncertainties are explicitly resolved or blocked.
 
 ## Phase 2: Persist endpoints without risking other saved rulers
 
