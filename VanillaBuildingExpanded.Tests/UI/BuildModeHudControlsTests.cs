@@ -15,6 +15,67 @@ namespace VanillaBuildingExpanded.Tests.UI;
 public sealed class BuildModeHudControlsTests
 {
     [Theory]
+    [InlineData(1, false)]
+    [InlineData(1.25, false)]
+    [InlineData(1.33, false)]
+    [InlineData(1.5, false)]
+    [InlineData(2, false)]
+    [InlineData(1, true)]
+    [InlineData(1.25, true)]
+    [InlineData(1.33, true)]
+    [InlineData(1.5, true)]
+    [InlineData(2, true)]
+    public void SectionHeadings_CenterTextBetweenLightRulesExpandedAndCollapsed(float scale, bool longTitle)
+    {
+        using var fixture = new Fixture(scale);
+        fixture.Translate = (key, _) => key is "vanillabuildingexpanded:build-info-room" or "vanillabuildingexpanded:build-info-controls"
+            ? longTitle ? string.Concat(Enumerable.Repeat("Long localized section heading ", 6)) : key.Split('-').Last()
+            : key.Split(':').Last();
+        using var hud = new BuildModeHud(fixture.Api.Object);
+        hud.SetVisible(true);
+        double panelWidth = hud.SingleComposer.Bounds.fixedWidth;
+        foreach (string id in new[] { "room", "controls" })
+        {
+            byte[] RenderHeading()
+            {
+                var heading = Assert.IsType<GuiElementCustomDraw>(hud.SingleComposer.GetElement($"{id}-title"));
+                Assert.Equal(panelWidth / 2, heading.Bounds.fixedX + heading.Bounds.fixedWidth / 2, 8);
+                int width = (int)Math.Ceiling(heading.Bounds.InnerWidth);
+                int height = (int)Math.Ceiling(heading.Bounds.InnerHeight);
+                using var surface = new ImageSurface(Format.Argb32, width, height);
+                using var context = new Context(surface);
+                context.Translate(-heading.Bounds.drawX, -heading.Bounds.drawY);
+                heading.ComposeElements(context, surface);
+                surface.Flush();
+                var pixels = surface.Data;
+                int firstX = width, lastX = -1;
+                for (int y = 0; y < height; y++)
+                    for (int x = 0; x < width; x++)
+                        if (pixels[y * surface.Stride + x * 4 + 3] > 180)
+                        {
+                            firstX = Math.Min(firstX, x);
+                            lastX = Math.Max(lastX, x);
+                        }
+                Assert.True(lastX >= firstX);
+                Assert.InRange(Math.Abs((firstX + lastX + 1) / 2d - heading.Bounds.InnerWidth / 2), 0, 2 * scale);
+                int row = (int)(height / 2d);
+                Assert.InRange(pixels[row * surface.Stride + (int)(2 * scale) * 4 + 3], 1, 100);
+                Assert.InRange(pixels[row * surface.Stride + (width - (int)(2 * scale) - 1) * 4 + 3], 1, 100);
+                int gapX = Math.Max(0, firstX - (int)(4 * scale));
+                Assert.Equal(0, pixels[row * surface.Stride + gapX * 4 + 3]);
+                fixture.MouseX = (int)heading.Bounds.renderX + width / 2;
+                fixture.MouseY = (int)heading.Bounds.renderY + height / 2;
+                Assert.False(hud.ShouldReceiveMouseEvents());
+                return pixels;
+            }
+            var expanded = RenderHeading();
+            ClickToggle(hud, fixture, id);
+            Assert.Equal(panelWidth, hud.SingleComposer.Bounds.fixedWidth);
+            Assert.Equal(expanded, RenderHeading());
+        }
+    }
+
+    [Theory]
     [InlineData(1)]
     [InlineData(1.25)]
     [InlineData(1.33)]

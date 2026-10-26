@@ -1,5 +1,6 @@
 using System;
 
+using Cairo;
 using Vintagestory.API.Client;
 using Vintagestory.API.Config;
 
@@ -11,6 +12,8 @@ internal sealed class CollapsibleSection
     private const double RightPadding = 24;
     private const double TitleHeight = 24;
     private const double TitleContentGap = 4;
+    private const double TitleRuleGap = 8;
+    private const double TitleRuleMinimumWidth = 16;
     private const double ContentBottomPadding = 8;
     private const double DividerHeight = 1;
     private const double ButtonHeight = 24;
@@ -72,10 +75,11 @@ internal sealed class CollapsibleSection
         double height = MeasureHeight(width);
         double contentWidth = width - LeftPadding - RightPadding;
         double dividerY = height - ButtonHeight - DividerHeight;
-        composer.BeginChildElements(ElementBounds.Fixed(0, top, width, height))
-            .AddStaticText(Lang.Get(titleKey),
-                CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.ValueColor]),
-                ElementBounds.Fixed(LeftPadding, 0, contentWidth, TitleHeight), $"{Id}-title");
+        composer.BeginChildElements(ElementBounds.Fixed(0, top, width, height));
+        string title = Lang.Get(titleKey);
+        composer.AddStaticElement(new GuiElementCustomDraw(api,
+            ElementBounds.Fixed(LeftPadding, 0, width - 2 * LeftPadding, TitleHeight),
+            (ctx, _, bounds) => DrawTitle(ctx, bounds, title)), $"{Id}-title");
         if (!IsCollapsed)
         {
             var contentBounds = ElementBounds.Fixed(LeftPadding, TitleHeight + TitleContentGap,
@@ -104,5 +108,48 @@ internal sealed class CollapsibleSection
         composer.AddInteractiveElement(ToggleButton, $"{Id}-toggle");
         composer.EndChildElements();
         return height;
+    }
+
+    /// <summary>Centers a localized heading between light rules, independently of content columns and collapse state.</summary>
+    private static void DrawTitle(Context ctx, ElementBounds bounds, string title)
+    {
+        ctx.Save();
+        try
+        {
+            ctx.Rectangle(bounds.drawX, bounds.drawY, bounds.InnerWidth, bounds.InnerHeight);
+            ctx.Clip();
+            using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize)
+                .WithColor([.. UiPalette.ValueColor]);
+            font.SetupContext(ctx);
+            var extents = ctx.TextExtents(title);
+            double gap = GuiElement.scaled(TitleRuleGap);
+            double available = Math.Max(1, bounds.InnerWidth - 2 * (gap + GuiElement.scaled(TitleRuleMinimumWidth)));
+            while (extents.Width > available)
+            {
+                // Hinting can change glyph widths nonlinearly; remeasure and guarantee progress on each reduction.
+                font.WithFontSize((float)(font.UnscaledFontsize * Math.Min(0.9, available / extents.Width)));
+                font.SetupContext(ctx);
+                extents = ctx.TextExtents(title);
+            }
+            double textLeft = bounds.drawX + (bounds.InnerWidth - extents.Width) / 2;
+            double middleY = bounds.drawY + bounds.InnerHeight / 2;
+            ctx.SetSourceRGBA([.. UiPalette.SectionDividerColor]);
+            ctx.LineWidth = GuiElement.scaled(DividerHeight);
+            ctx.LineCap = LineCap.Butt;
+            ctx.SetDash([], 0);
+            if (textLeft - gap > bounds.drawX)
+            {
+                ctx.MoveTo(bounds.drawX, middleY);
+                ctx.LineTo(textLeft - gap, middleY);
+                ctx.MoveTo(textLeft + extents.Width + gap, middleY);
+                ctx.LineTo(bounds.drawX + bounds.InnerWidth, middleY);
+                ctx.Stroke();
+            }
+            ctx.SetSourceRGBA(font.Color);
+            ctx.MoveTo(textLeft - extents.XBearing,
+                middleY - extents.Height / 2 - extents.YBearing);
+            ctx.ShowText(title);
+        }
+        finally { ctx.Restore(); }
     }
 }
