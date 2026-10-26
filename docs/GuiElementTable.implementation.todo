@@ -1,6 +1,6 @@
 # GUI table implementation TODO
 
-Status: Phases 1 through 7 complete. Automated acceptance passes, the user approved the in-game appearance, and Phase 7 was closed at the user's direction on 2026-10-25. Remaining detailed manual checks are recorded below as unverified follow-up notes, not claimed passes or blockers.
+Status: Phases 1 through 7 complete. Phase 7 was closed at the user's direction on 2026-10-25. F1 snapping/rotation adoption is implemented and passes automated acceptance; visual approval of this separate migration remains pending. Earlier detailed manual checks are retained as unverified follow-up notes.
 
 Design source: [GUI table proposal](GuiElementTable.proposal.md).
 
@@ -251,14 +251,24 @@ Unverified manual follow-up notes (not blockers to the user-directed closeout):
 - Gameplay pass-through over non-button panel areas and collapse-button interaction.
 - Actual game rebuilding/shutdown logs and retained GPU resources.
 
-First-delivery completion gate: closed at the user's direction on 2026-10-25, supported by passing automated acceptance and user visual approval. The owning table and divider extension point are delivered and controls are migrated. Unverified manual checks are retained transparently above. F1 is eligible as a separate follow-up but has not started.
+First-delivery completion gate: closed at the user's direction on 2026-10-25, supported by passing automated acceptance and user visual approval. The owning table and divider extension point are delivered and controls are migrated. Unverified manual checks are retained transparently above. F1 implementation is recorded separately below.
 
 ## F1 - Follow-up: migrating snapping and rotation
 
-- [ ] After P7, replace the remaining label/value coordinates with another table.
-- [ ] Move snapping/rotation lookups to table-local keys or typed non-owning references.
-- [ ] Preserve title handling, unavailable-state colors, dynamic updates, and reserved cell dimensions.
-- [ ] Keep the title, icon, panel background, and section chrome outside the table.
-- [ ] Repeat targeted regression and visual/input checks for this separate migration.
+- [x] After P7, replace the remaining label/value coordinates with another table.
+- [x] Move snapping/rotation lookups to table-local keys or typed non-owning references.
+- [x] Preserve title handling, unavailable-state colors, dynamic updates, and reserved cell dimensions.
+- [x] Keep the title, icon, panel background, and section chrome outside the table.
+- [x] Repeat targeted regression and offscreen visual/input checks for this separate migration.
+- [ ] Obtain in-game visual/input approval for the snapping/rotation migration; prior controls-only approval does not cover F1.
+
+F1 evidence (2026-10-25):
+
+- BuildModeHud composes a passive information-table at (12,54), with fixed 88/200 columns, an 8-unit gap, and two 24-unit rows. Its 296x48 footprint preserves the previous label/value origins and reserved dimensions. The no-op divider remains the default.
+- Native static labels and dynamic values are table-owned. Only information-table is composer-registered; snapping and rotation are table-local keys. Title updates remain composer-local. Value and color changes update native dynamic textures without table artwork invalidation, layout changes, or full HUD recomposition.
+- Suspension, unsupported rotation, indexed orientations, angle values, hidden updates, collapsed controls, rebuilds, and retry after failed uploads retain their prior behavior. Unregistered information tables are disposed locally; registered ones are cleaned up by the successful or failed composer.
+- BuildModeHudControlsTests adds 13 cases and extends repeated lifecycle checks to both tables. Tests assert exact native value world coordinates and label pixels at scales 1, 1.25, 1.33, 1.5, and 2; fixed dimensions, passive input, initial/update colors and text, stable table textures, old-child detachment, and cleanup/retry after information-row or table upload failures.
+- The focused command dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj --no-restore --filter "FullyQualifiedName~VanillaBuildingExpanded.Tests.UI|FullyQualifiedName~BuildModeKeybindsTests|FullyQualifiedName~BuildModeIndicatorTests" --verbosity minimal passes 243 tests with zero failures or skips and builds both projects. No manual PATH adjustment is needed. Existing unrelated compiler warnings remain.
+- Cairo and native GUI composition execute for real; GPU services and icon bitmap are mocked. Actual in-game F1 appearance/input approval is not claimed.
 
 Do not add room information, wrapping, spanning, outer borders, scrolling, selection, or other deferred features as part of either migration.

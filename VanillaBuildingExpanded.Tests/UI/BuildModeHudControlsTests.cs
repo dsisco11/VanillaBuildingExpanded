@@ -14,6 +14,199 @@ namespace VanillaBuildingExpanded.Tests.UI;
 [Collection("Table composition")]
 public sealed class BuildModeHudControlsTests
 {
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1.25)]
+    [InlineData(1.33)]
+    [InlineData(1.5)]
+    [InlineData(2)]
+    public void InformationTable_PreservesReservedGeometryNativeLabelPixelsAndPassiveInput(float scale)
+    {
+        using var fixture = new Fixture(scale);
+        using var hud = new BuildModeHud(fixture.Api.Object);
+        hud.SetVisible(true);
+        var composer = hud.SingleComposer;
+        var table = Assert.IsType<GuiElementTable>(composer.GetElement("information-table"));
+        Assert.Equal(new TableSize(296, 48), table.Measure());
+        Assert.Equal((12d, 54d), (table.Bounds.fixedX, table.Bounds.fixedY));
+        Assert.Equal([(0d, 0d), (96d, 0d), (0d, 24d), (96d, 24d)],
+            table.Bounds.ChildBounds.Select(bounds => (bounds.fixedX, bounds.fixedY)));
+        var snapping = Assert.IsType<GuiElementDynamicText>(table.GetElement("snapping"));
+        var rotation = Assert.IsType<GuiElementDynamicText>(table.GetElement("rotation"));
+        Assert.Equal((200d, 24d), (snapping.Bounds.fixedWidth, snapping.Bounds.fixedHeight));
+        Assert.Equal((200d, 24d), (rotation.Bounds.fixedWidth, rotation.Bounds.fixedHeight));
+        foreach (var (value, y) in new[] { (snapping, 54d), (rotation, 78d) })
+        {
+            var legacyBounds = ElementBounds.Fixed(108, y, 200, 24);
+            legacyBounds.ParentBounds = composer.Bounds;
+            legacyBounds.CalcWorldBounds();
+            Assert.Equal(legacyBounds.renderX, value.Bounds.renderX, 8);
+            Assert.Equal(legacyBounds.renderY, value.Bounds.renderY, 8);
+        }
+        Assert.False(snapping.autoHeight);
+        Assert.False(rotation.autoHeight);
+        Assert.Equal(UiPalette.ValueColor, snapping.Font.Color);
+        Assert.Equal(UiPalette.UnavailableColor, rotation.Font.Color);
+        Assert.Null(composer.GetElement("snapping"));
+        Assert.Null(composer.GetElement("rotation"));
+        Assert.IsType<GuiElementDynamicText>(composer.GetElement("title"));
+        Assert.False(table.Focusable);
+        Assert.Same(NoTableDividerRenderer.Instance, table.DividerRenderer);
+        fixture.MouseX = (int)snapping.Bounds.renderX + 1;
+        fixture.MouseY = (int)snapping.Bounds.renderY + 1;
+        var mouse = new MouseEvent(fixture.MouseX, fixture.MouseY, EnumMouseButton.Left, 0);
+        table.OnMouseDown(fixture.Api.Object, mouse);
+        table.OnMouseUp(fixture.Api.Object, mouse);
+        hud.OnMouseDown(mouse);
+        hud.OnMouseUp(mouse);
+        Assert.False(mouse.Handled);
+        Assert.False(hud.ShouldReceiveMouseEvents());
+
+        var uploaded = Assert.Single(fixture.Uploads, upload =>
+            upload.Width == (int)Math.Ceiling(296 * scale) && upload.Height == (int)Math.Ceiling(48 * scale));
+        using var baseline = new ImageSurface(Format.Argb32, uploaded.Width, uploaded.Height);
+        using var context = new Context(baseline);
+        context.Rectangle(0, 0, 296 * scale, 48 * scale);
+        context.Clip();
+        string[] keys = ["snapping", "rotation"];
+        for (int row = 0; row < keys.Length; row++)
+        {
+            using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize)
+                .WithColor([.. UiPalette.LabelColor]);
+            var bounds = ElementBounds.Fixed(0, row * 24, 88, 24).WithEmptyParent();
+            bounds.CalcWorldBounds();
+            using var label = new GuiElementStaticText(fixture.Api.Object,
+                Lang.Get($"vanillabuildingexpanded:build-info-{keys[row]}-label"),
+                EnumTextOrientation.Left, bounds, font);
+            label.ComposeElements(context, baseline);
+        }
+        baseline.Flush();
+        Assert.Equal(baseline.Data, uploaded.Pixels);
+        Assert.Contains(uploaded.Pixels, value => value != 0);
+    }
+
+    [Fact]
+    public void InformationUpdates_PreserveNativeValuesColorsAndTexturesWithoutReflow()
+    {
+        using var fixture = new Fixture();
+        fixture.Translate = (key, args) => key.Split(':').Last() + string.Concat(args.Select(arg => $" {arg}"));
+        using var hud = new BuildModeHud(fixture.Api.Object);
+        hud.SetVisible(true);
+        var composer = hud.SingleComposer;
+        var table = Assert.IsType<GuiElementTable>(composer.GetElement("information-table"));
+        var snapping = Assert.IsType<GuiElementDynamicText>(table.GetElement("snapping"));
+        var rotation = Assert.IsType<GuiElementDynamicText>(table.GetElement("rotation"));
+        var title = composer.GetDynamicText("title");
+        var artwork = Assert.Single(fixture.Uploads, upload => upload.Width == 296 && upload.Height == 48);
+        int invalidations = 0;
+        table.LayoutInvalidated += () => invalidations++;
+        BuildModeInfo[] states =
+        [
+            new(false, EBuildBrushSnapping.Horizontal, 0, 4, null),
+            new(false, EBuildBrushSnapping.Vertical, 1, 4, null),
+            new(false, EBuildBrushSnapping.None, 0, 4, 90),
+            new(true, EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical, 0, 4, 90),
+            new(false, EBuildBrushSnapping.Horizontal, 0, 1, null),
+            new(false, EBuildBrushSnapping.Vertical, 2, 4, null)
+        ];
+        foreach (var state in states)
+        {
+            int uploadsBefore = fixture.Uploads.Count;
+            hud.Update(state);
+            Assert.True(fixture.Uploads.Count > uploadsBefore);
+            Assert.Equal(Lang.Get($"vanillabuildingexpanded:build-info-snapping-{state.Snapping.GetCode()}"), snapping.Text);
+            string expectedRotation = state.IsSuspended
+                ? Lang.Get("vanillabuildingexpanded:build-info-unavailable")
+                : state.OrientationCount <= 1
+                    ? Lang.Get("vanillabuildingexpanded:build-info-no-rotation")
+                    : state.RotationAngleDegrees is float angle
+                        ? Lang.Get("vanillabuildingexpanded:build-info-angle", angle)
+                        : Lang.Get("vanillabuildingexpanded:build-info-orientation", state.OrientationIndex + 1, state.OrientationCount);
+            Assert.Equal(expectedRotation, rotation.Text);
+            Assert.Equal(state.IsSuspended || state.OrientationCount <= 1
+                ? UiPalette.UnavailableColor : UiPalette.ValueColor, rotation.Font.Color);
+            Assert.Equal(Lang.Get(state.IsSuspended
+                ? "vanillabuildingexpanded:build-info-suspended"
+                : "vanillabuildingexpanded:build-info-title"), title.Text);
+            int uploadsAfter = fixture.Uploads.Count;
+            hud.Update(state);
+            Assert.Equal(uploadsAfter, fixture.Uploads.Count);
+            table.RenderInteractiveElements(0);
+            Assert.Single(fixture.Uploads, upload => ReferenceEquals(upload.Texture, artwork.Texture));
+            Assert.Same(composer, hud.SingleComposer);
+            Assert.Same(snapping, table.GetElement("snapping"));
+            Assert.Same(rotation, table.GetElement("rotation"));
+            Assert.Equal(new TableSize(296, 48), table.Measure());
+            Assert.False(table.IsArtworkDirty);
+        }
+        Assert.Equal(0, invalidations);
+        Assert.Single(fixture.CreatedComposers);
+        hud.SetVisible(false);
+        hud.Update(new(false, EBuildBrushSnapping.None, 0, 4, 180));
+        hud.SetVisible(true);
+        Assert.Same(composer, hud.SingleComposer);
+        Assert.Equal(Lang.Get("vanillabuildingexpanded:build-info-angle", 180f), rotation.Text);
+    }
+
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(false, 1)]
+    [InlineData(false, 4)]
+    [InlineData(true, 4)]
+    public void InformationTable_InitialStateAndCollapsedRebuildKeepCurrentValues(bool suspended, int orientations)
+    {
+        using var fixture = new Fixture();
+        using var hud = new BuildModeHud(fixture.Api.Object);
+        var state = new BuildModeInfo(suspended, EBuildBrushSnapping.Vertical, 0, orientations, null);
+        hud.Update(state);
+        hud.SetVisible(true);
+        var previous = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("information-table"));
+        var previousRotation = Assert.IsType<GuiElementDynamicText>(previous.GetElement("rotation"));
+        string expectedText = previousRotation.Text;
+        Assert.Equal(suspended || orientations <= 1
+            ? UiPalette.UnavailableColor : UiPalette.ValueColor, previousRotation.Font.Color);
+        ClickToggle(hud, fixture);
+        var collapsed = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("information-table"));
+        Assert.NotSame(previous, collapsed);
+        Assert.Empty(previous.Bounds.ChildBounds);
+        Assert.Null(previousRotation.Bounds.ParentBounds);
+        Assert.Null(hud.SingleComposer.GetElement("controls-table"));
+        Assert.Equal(expectedText, Assert.IsType<GuiElementDynamicText>(collapsed.GetElement("rotation")).Text);
+        hud.Update(new(false, EBuildBrushSnapping.None, 0, 4, 90));
+        var current = Assert.IsType<GuiElementDynamicText>(collapsed.GetElement("rotation"));
+        Assert.Equal(UiPalette.ValueColor, current.Font.Color);
+        Assert.Same(collapsed, hud.SingleComposer.GetElement("information-table"));
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void InformationCompositionFailure_ReleasesBothTablesAndNativeValueTexturesBeforeRetry(int failedUpload)
+    {
+        using var fixture = new Fixture();
+        using var hud = new BuildModeHud(fixture.Api.Object);
+        fixture.FailOnUploadNumber = failedUpload;
+        Assert.Throws<InvalidOperationException>(() => hud.SetVisible(true));
+        var failed = Assert.Single(fixture.CreatedComposers);
+        Assert.Null(hud.SingleComposer);
+        Assert.Null(PendingTable(hud));
+        Assert.False(hud.IsOpened());
+        Assert.Empty(Assert.IsType<GuiElementTable>(failed.GetElement("information-table")).Bounds.ChildBounds);
+        Assert.Empty(Assert.IsType<GuiElementTable>(failed.GetElement("controls-table")).Bounds.ChildBounds);
+        Assert.All(fixture.Uploads, upload => Assert.True(upload.Texture.Disposed));
+        Assert.Equal(failedUpload, fixture.Deleted.Count);
+        fixture.FailOnUploadNumber = null;
+        hud.SetVisible(true);
+        hud.Update(new(false, EBuildBrushSnapping.Horizontal, 1, 4, null));
+        Assert.True(hud.IsOpened());
+        Assert.Equal(2, fixture.CreatedComposers.Count);
+        hud.Dispose();
+        Assert.All(fixture.Uploads, upload => Assert.Equal(0, upload.Texture.TextureId));
+        Assert.Equal(fixture.Uploads.Select(upload => upload.Texture).Distinct().Count(), fixture.Deleted.Count);
+        Assert.Equal(fixture.Deleted.Count, fixture.Deleted.Distinct().Count());
+    }
+
     [Fact]
     public void ControlsRows_UseTableMinimumsSpacingAndPassiveChildren()
     {
@@ -212,10 +405,14 @@ public sealed class BuildModeHudControlsTests
         for (int cycle = 0; cycle < 8; cycle++)
         {
             var previous = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
+            var previousInformation = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("information-table"));
+            var informationChildren = previousInformation.Bounds.ChildBounds.ToArray();
             var children = previous.Bounds.ChildBounds.ToArray();
             ClickToggle(hud, fixture);
             Assert.Null(hud.SingleComposer.GetElement("controls-table"));
             Assert.Empty(previous.Bounds.ChildBounds);
+            Assert.Empty(previousInformation.Bounds.ChildBounds);
+            Assert.All(informationChildren, bounds => Assert.Null(bounds.ParentBounds));
             Assert.All(children, bounds => Assert.Null(bounds.ParentBounds));
             Assert.Equal(width, hud.SingleComposer.Bounds.fixedWidth);
             Assert.Equal(height - 100, hud.SingleComposer.Bounds.fixedHeight);
@@ -252,6 +449,7 @@ public sealed class BuildModeHudControlsTests
         {
             if (composer.GetElement("controls-table") is GuiElementTable table)
                 Assert.Empty(table.Bounds.ChildBounds);
+            Assert.Empty(Assert.IsType<GuiElementTable>(composer.GetElement("information-table")).Bounds.ChildBounds);
         });
     }
 
@@ -408,9 +606,11 @@ public sealed class BuildModeHudControlsTests
         public OnSettingsChanged<float>? ScaleWatcher { get; private set; }
         public Action? OnCreate { get; set; }
         public bool FailUpload { get; set; }
+        public int? FailOnUploadNumber { get; set; }
         public int MouseX { get; set; }
         public int MouseY { get; set; }
         public bool MouseGrabbed { get; set; }
+        public System.Func<string, object[], string> Translate { get; set; } = (key, _) => key.Split(':').Last();
 
         public Fixture(float scale = 1)
         {
@@ -419,7 +619,7 @@ public sealed class BuildModeHudControlsTests
             translations.Setup(service => service.HasTranslation(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()))
                 .Returns(true);
             translations.Setup(service => service.Get(It.IsAny<string>(), It.IsAny<object[]>()))
-                .Returns((string key, object[] _) => key.Split(':').Last());
+                .Returns((string key, object[] args) => Translate(key, args));
             translations.SetupGet(service => service.LineBreakBehavior).Returns(EnumLinebreakBehavior.AfterWord);
             Lang.AvailableLanguages.Add(Locale, translations.Object);
             Lang.ChangeLanguage(Locale);
@@ -478,7 +678,8 @@ public sealed class BuildModeHudControlsTests
             texture.Height = surface.Height;
             surface.Flush();
             Uploads.Add(new UploadSnapshot(texture, surface.Width, surface.Height, surface.Stride, surface.Data));
-            if (FailUpload) throw new InvalidOperationException("Test upload failure.");
+            if (FailUpload || Uploads.Count == FailOnUploadNumber)
+                throw new InvalidOperationException("Test upload failure.");
         }
 
         public void Dispose()

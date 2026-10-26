@@ -101,8 +101,9 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
         if (SingleComposer is not null)
         {
             SingleComposer.GetDynamicText("title").SetNewText(GetTitle());
-            SingleComposer.GetDynamicText("snapping").SetNewText(GetSnapping());
-            var rotation = SingleComposer.GetDynamicText("rotation");
+            var information = (GuiElementTable)SingleComposer.GetElement("information-table");
+            ((GuiElementDynamicText)information.GetElement("snapping")).SetNewText(GetSnapping());
+            var rotation = (GuiElementDynamicText)information.GetElement("rotation");
             if (wasRotationUnavailable != RotationUnavailable)
                 rotation.Font.WithColor([.. (RotationUnavailable ? UiPalette.UnavailableColor : UiPalette.ValueColor)]);
             rotation.SetNewText(GetRotation(), forceRedraw: wasRotationUnavailable != RotationUnavailable);
@@ -133,10 +134,11 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
         if (!IsOpened()) TryOpen(false);
     }
 
-    /// <summary>Measures one controls table per build and transfers it only when expanded content is registered.</summary>
+    /// <summary>Builds the information and controls tables, transferring registered tables to the composer.</summary>
     private void ComposeHud()
     {
         GuiComposer? composer = null;
+        GuiElementTable? informationTable = null;
         try
         {
             controlsTable = CreateControlsTable(capi, keybindHints);
@@ -151,18 +153,10 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
                     (ctx, surface, backgroundBounds) => DrawBackground(ctx, surface, backgroundBounds, width, height))
                 .AddStaticCustomDraw(ElementBounds.Fixed(12, 10, 36, 36), DrawIcon)
                 .AddDynamicText(GetTitle(), CairoFont.WhiteSmallText().WithFontSize(UiPalette.TitleFontSize).WithColor([.. UiPalette.ValueColor]),
-                    ElementBounds.Fixed(58, 14, 250, 30), "title")
-                .AddStaticText(Lang.Get("vanillabuildingexpanded:build-info-snapping-label"),
-                    CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor]),
-                    ElementBounds.Fixed(12, 54, 88, 24))
-                .AddDynamicText(GetSnapping(), CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.ValueColor]),
-                    ElementBounds.Fixed(108, 54, 200, 24), "snapping")
-                .AddStaticText(Lang.Get("vanillabuildingexpanded:build-info-rotation-label"),
-                    CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor]),
-                    ElementBounds.Fixed(12, 78, 88, 24))
-                .AddDynamicText(GetRotation(),
-                    CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. (RotationUnavailable ? UiPalette.UnavailableColor : UiPalette.ValueColor)]),
-                    ElementBounds.Fixed(108, 78, 200, 24), "rotation");
+                    ElementBounds.Fixed(58, 14, 250, 30), "title");
+            informationTable = CreateInformationTable();
+            if (!composer.TryAddTable(informationTable, "information-table"))
+                throw new InvalidOperationException("The information table was unexpectedly skipped during HUD composition.");
             double sectionY = SectionsTop;
             foreach (var section in sections)
             {
@@ -179,8 +173,60 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
             finally
             {
                 // Collapsed measurement never registers the table; registered tables remain composer-owned.
-                if (table is { IsRegistered: false }) table.Dispose();
+                try
+                {
+                    if (table is { IsRegistered: false }) table.Dispose();
+                }
+                finally
+                {
+                    if (informationTable is { IsRegistered: false }) informationTable.Dispose();
+                }
             }
+        }
+    }
+
+    /// <summary>Reserves the existing label/value footprints while letting table tracks position both information rows.</summary>
+    private GuiElementTable CreateInformationTable()
+    {
+        var table = new GuiElementTable(capi, ElementBounds.Fixed(12, 54, 0, 0),
+            new TableOptions(new Dictionary<int, TableColumn>
+            {
+                [0] = TableColumn.Fixed(88),
+                [1] = TableColumn.Fixed(200)
+            }, columnGap: 8, minimumRowHeight: 24));
+        bool complete = false;
+        try
+        {
+            AddInformationRow(table, "snapping", GetSnapping(), false);
+            AddInformationRow(table, "rotation", GetRotation(), RotationUnavailable);
+            complete = true;
+            return table;
+        }
+        finally
+        {
+            if (!complete) table.Dispose();
+        }
+    }
+
+    /// <summary>Adds a passive label and native dynamic value with a lookup key local to the owning table.</summary>
+    private void AddInformationRow(GuiElementTable table, string key, string value, bool unavailable)
+    {
+        var label = new GuiElementStaticText(capi, Lang.Get($"vanillabuildingexpanded:build-info-{key}-label"),
+            EnumTextOrientation.Left, ElementBounds.Fixed(0, 0, 88, 24),
+            CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor]));
+        var text = new GuiElementDynamicText(capi, value,
+            CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize)
+                .WithColor([.. (unavailable ? UiPalette.UnavailableColor : UiPalette.ValueColor)]),
+            ElementBounds.Fixed(0, 0, 200, 24));
+        try
+        {
+            table.AddRowCells([new TableCell(label), new TableCell(text, key: key)]);
+        }
+        catch
+        {
+            try { label.Dispose(); }
+            finally { text.Dispose(); }
+            throw;
         }
     }
 

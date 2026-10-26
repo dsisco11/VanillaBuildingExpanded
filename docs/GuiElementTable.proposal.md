@@ -1,6 +1,6 @@
 # GUI table layout component proposal
 
-Status: Phases 1 through 7 complete. The owning row-oriented table, interface-based divider rendering, and controls-only HUD adoption are delivered. Automated acceptance passes and the user approved the in-game appearance, then directed Phase 7 closeout on 2026-10-25. Detailed manual checks not explicitly verified are retained as follow-up notes, not claimed passes or blockers.
+Status: Phases 1 through 7 complete; the user directed Phase 7 closeout on 2026-10-25 after automated acceptance and controls visual approval. F1 snapping/rotation table adoption is also implemented and passes automated acceptance, with separate in-game approval pending. Earlier detailed manual checks are retained as follow-up notes, not claimed passes.
 
 Implementation progress is tracked in the [implementation TODO](GuiElementTable.implementation.todo).
 
@@ -14,16 +14,16 @@ Rows are the content-facing abstraction. Callers supply a collection of elements
 
 The component is independent of the build-mode HUD and collapsible sections. A table may be content within a section, dialog, or another layout, but it never references those owners or manages their behavior.
 
-## Current layout
+## Original layout before table adoption
 
 The [build-mode HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs) contains two table-like arrangements:
 
-- Snapping and rotation use manually positioned label/value pairs.
-- Controls use measured action-label and keybinding columns, with manually positioned rows.
+- Snapping and rotation used manually positioned label/value pairs.
+- Controls used measured action-label and keybinding columns, with manually positioned rows.
 
 Before Phase 6 adoption, the controls implementation calculated column widths in `MeasureControlsColumns()`, total content height separately, and row coordinates in `ComposeControlsContent()`. The replacement table preserves the minimum widths of 88 and 200 logical units, column gap of 12, and 20-unit rows without duplicating that layout arithmetic in the HUD.
 
-This distributes related layout rules across measurement and composition. The proposed table centralizes those rules while leaving label creation, keybinding measurement, and keycap drawing with the caller.
+This distributed related layout rules across measurement and composition. The implemented tables centralize those rules while leaving label creation, keybinding measurement, and keycap drawing with the caller.
 
 The [collapsible-section helper](../VanillaBuildingExpanded/src/UI/CollapsibleSection.cs) already separates section chrome from content. It does not need table-specific behavior.
 
@@ -506,6 +506,15 @@ The HUD currently routes pointer input only to collapse buttons. Preserve that r
 - [BuildModeHudControlsTests.cs](../VanillaBuildingExpanded.Tests/UI/BuildModeHudControlsTests.cs) adds 20 cases covering row layout, legacy dimension formulas, native label pixel equivalence at scales 1, 1.25, 1.33, 1.5, and 2, section wiring, collapsed measurement ownership, native HUD composition/cleanup, rebinding, scale changes, collapse/expand, hide/reopen, and passive input. Upload/render APIs and the icon bitmap are mocked; native GUI lifecycle and Cairo drawing are exercised.
 - The combined UI and keybinding command passes 216 tests with zero failures or skips and builds both projects. Existing unrelated compiler warnings remain. Actual GPU display and in-game appearance/input acceptance are still Phase 7, not claimed by these automated results. Snapping/rotation content and update lookups remain unchanged.
 
+### F1 implementation evidence: snapping and rotation
+
+- [BuildModeHud.cs](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs) creates a separate passive information table at logical (12,54). Fixed 88/200 columns, gap 8, and 24-unit rows preserve the previous label/value origins and 296x48 reserved footprint. The table owns native static labels and dynamic values and retains the no-op divider default.
+- Only `information-table` is registered with the composer. `snapping` and `rotation` are table-local keys used by `Update()`. Title, icon, panel background, and section chrome remain outside both tables, and HUD input routing is unchanged.
+- Value updates preserve snapping localization, indexed/angle rotation strings, suspension and unsupported-state colors, and native force-redraw on availability changes. Dynamic textures update within their fixed bounds without table reflow, static-artwork invalidation, or HUD rebuilds. Updates while hidden or while controls are collapsed remain supported.
+- Information-table ownership follows registration even on failure: local cleanup handles an unregistered table, while the successful or failed composer owns any registered table. Existing rebuild paths release both tables.
+- [BuildModeHudControlsTests.cs](../VanillaBuildingExpanded.Tests/UI/BuildModeHudControlsTests.cs) adds 13 cases and extends repeated lifecycle checks to both tables. Exact native value world coordinates and static-label pixels match at scales 1, 1.25, 1.33, 1.5, and 2. Tests also cover passive input, initial and updated state text/colors, texture stability, collapsed/hidden updates, child detachment, and retry after dynamic/table upload failures.
+- The combined UI, keybinding, and mode-indicator filter passes 243 tests with zero failures or skips, builds both projects, and requires no manual PATH adjustment. Existing unrelated compiler warnings remain. This is real Cairo/native composition with mocked GPU services and icon bitmap, not in-game F1 approval.
+
 Future room-information content can use the same row-oriented API without adding room-specific behavior to the table.
 
 ## Scope
@@ -526,7 +535,7 @@ These features can be proposed separately when a concrete consumer requires them
 - A normal test run reproduced the user's missing native Cairo failure, which earlier PATH-adjusted validation had hidden. The Windows [test project](../VanillaBuildingExpanded.Tests/VanillaBuildingExpanded.Tests.csproj) now copies the installed game's native Cairo and Skia DLLs into test output. This supports ordinary CLI/VS Code runs without manual PATH setup or new dependencies.
 - The complete suite then passes 663 tests with zero failures or skips using `dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj --no-restore --verbosity minimal`, without changing PATH. The reported failures and shared test-host dependency fix justified expanding beyond the focused suite.
 - Automated coverage uses real native GUI composition and Cairo rasterization but mocked GPU services and icon bitmap. It does not establish actual GPU upload/display, full icon/background fidelity, gameplay pass-through, or real shutdown resource behavior.
-- After the native test-library fix, the user reported "okay it looks fine", approving the displayed controls appearance, then explicitly directed Phase 7 closeout on 2026-10-25. The first-delivery gate is closed on that basis. Exact before/after dimensions, the full in-game GUI-scale/localization matrix, gameplay pass-through, and shutdown resource behavior remain unverified follow-up notes in the [implementation TODO](GuiElementTable.implementation.todo), not claimed passes. Snapping/rotation migration is a separate eligible follow-up and has not started.
+- After the native test-library fix, the user reported "okay it looks fine", approving the displayed controls appearance, then explicitly directed Phase 7 closeout on 2026-10-25. The first-delivery gate is closed on that basis. Exact before/after dimensions, the full in-game GUI-scale/localization matrix, gameplay pass-through, and shutdown resource behavior remain unverified follow-up notes in the [implementation TODO](GuiElementTable.implementation.todo), not claimed passes. The subsequent F1 migration has its own implementation evidence above and separate pending in-game approval.
 
 Add focused layout tests using supplied dimensions rather than requiring live GPU rendering:
 
