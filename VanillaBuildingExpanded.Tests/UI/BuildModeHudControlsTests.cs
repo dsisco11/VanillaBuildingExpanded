@@ -20,6 +20,208 @@ public sealed class BuildModeHudControlsTests
     [InlineData(1.33)]
     [InlineData(1.5)]
     [InlineData(2)]
+    public void RoomSection_LocalizedTagsFitOneLineAndRemainPassive(float scale)
+    {
+        using var fixture = new Fixture(scale);
+        fixture.Translate = (key, args) => key.Split(':').Last() + " translated" + string.Join(" ", args);
+        var state = new BuildModeRoomInfo(RoomInfoStatus.Complete,
+            RoomQualifications.Room | RoomQualifications.Shelter | RoomQualifications.Cellar | RoomQualifications.Greenhouse,
+            7, 4, 6, 65, 80);
+        using var hud = new BuildModeHud(fixture.Api.Object, () => state);
+        hud.SetVisible(true);
+        var table = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("room-table"));
+        Assert.Equal(96, table.Measure().Height);
+        Assert.Equal(8, table.Bounds.ChildBounds.Count);
+        Assert.IsType<GuiElementCustomDraw>(table.GetElement("type"));
+        Assert.False(table.Focusable);
+        Assert.Same(NoTableDividerRenderer.Instance, table.DividerRenderer);
+        Assert.Equal(table.Bounds.ChildBounds[1].fixedX, table.Bounds.ChildBounds[7].fixedX);
+        var tagBounds = table.GetElement("type").Bounds;
+        Assert.True(tagBounds.OuterWidth <= table.Bounds.OuterWidth);
+        Assert.True(table.Bounds.renderY > hud.SingleComposer.GetElement("room-title").Bounds.renderY);
+        Assert.True(hud.SingleComposer.GetElement("controls-title").Bounds.renderY > table.Bounds.renderY + table.Bounds.OuterHeight);
+        var pixels = Assert.Single(fixture.Uploads, upload =>
+            upload.Width == (int)Math.Ceiling(table.Measure().Width * scale)
+            && upload.Height == (int)Math.Ceiling(96 * scale));
+        // Sample each localized tag's interior within its measured single-line footprint.
+        using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize);
+        double tagX = tagBounds.fixedX;
+        foreach (string key in new[] { "room", "shelter", "cellar", "greenhouse" })
+        {
+            double width = Math.Ceiling(font.GetTextExtents(Lang.Get($"vanillabuildingexpanded:build-info-room-{key}")).Width / scale) + 8;
+            int x = (int)((tagX + 2) * scale);
+            int y = (int)(10 * scale);
+            Assert.True(pixels.Pixels[y * pixels.Stride + x * 4 + 3] > 0);
+            Assert.True(tagX + width <= table.Measure().Width);
+            int firstTextX = pixels.Width;
+            int firstTextY = pixels.Height;
+            for (int py = 0; py < (int)(24 * scale); py++)
+                for (int px = (int)Math.Ceiling(tagX * scale); px < (int)((tagX + width) * scale); px++)
+                {
+                    int offset = py * pixels.Stride + px * 4;
+                    if (pixels.Pixels[offset] > 140 && pixels.Pixels[offset + 1] > 140
+                        && pixels.Pixels[offset + 2] > 140 && pixels.Pixels[offset + 3] > 180)
+                    {
+                        firstTextX = Math.Min(firstTextX, px);
+                        firstTextY = Math.Min(firstTextY, py);
+                    }
+                }
+            Assert.InRange(firstTextX / scale - tagX, 3, 6);
+            Assert.InRange(firstTextY / scale, 2, 4.5);
+            tagX += width + 4;
+        }
+        fixture.MouseX = (int)tagBounds.renderX + 1;
+        fixture.MouseY = (int)tagBounds.renderY + 1;
+        var mouse = new MouseEvent(fixture.MouseX, fixture.MouseY, EnumMouseButton.Left, 0);
+        table.OnMouseDown(fixture.Api.Object, mouse);
+        table.OnMouseUp(fixture.Api.Object, mouse);
+        hud.OnMouseDown(mouse);
+        hud.OnMouseUp(mouse);
+        Assert.False(mouse.Handled);
+        Assert.False(hud.ShouldReceiveMouseEvents());
+        Assert.False(hud.ShouldReceiveKeyboardEvents());
+    }
+
+    [Fact]
+    public void RoomSampling_ThrottlesUpdatesAndSuspendsWhileCollapsedHiddenOrDisposed()
+    {
+        using var fixture = new Fixture();
+        fixture.Translate = (key, args) => key.Split(':').Last() + string.Join(" ", args);
+        var state = new BuildModeRoomInfo(RoomInfoStatus.Complete,
+            RoomQualifications.Room | RoomQualifications.Shelter, 7, 4, 6, 65, 80);
+        int samples = 0;
+        var hud = new BuildModeHud(fixture.Api.Object, () => { samples++; return state; });
+        using (hud)
+        {
+            hud.SetVisible(true);
+            Assert.Equal(1, samples);
+            var composer = hud.SingleComposer;
+            var table = Assert.IsType<GuiElementTable>(composer.GetElement("room-table"));
+            int uploads = fixture.Uploads.Count;
+            hud.OnRenderGUI(0.25f);
+            Assert.Equal(1, samples);
+            hud.OnRenderGUI(0.25f);
+            Assert.Equal(2, samples);
+            Assert.Equal(uploads, fixture.Uploads.Count);
+            state = state with { Width = 8, SunlightPercent = null, CoolingPercent = 25 };
+            hud.OnRenderGUI(0.5f);
+            Assert.Same(composer, hud.SingleComposer);
+            Assert.Same(table, composer.GetElement("room-table"));
+            Assert.Equal(uploads + 3, fixture.Uploads.Count);
+            Assert.Equal(UiPalette.UnavailableColor, Assert.IsType<GuiElementDynamicText>(table.GetElement("sunlight")).Font.Color);
+            Assert.Contains("8", Assert.IsType<GuiElementDynamicText>(table.GetElement("dimensions")).Text);
+            Assert.False(table.IsArtworkDirty);
+
+            ClickToggle(hud, fixture, "room");
+            Assert.Null(hud.SingleComposer.GetElement("room-table"));
+            int before = samples;
+            hud.OnRenderGUI(2);
+            Assert.Equal(before, samples);
+            state = default;
+            ClickToggle(hud, fixture, "room");
+            Assert.Equal(before + 1, samples);
+            table = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("room-table"));
+            Assert.Throws<KeyNotFoundException>(() => table.GetElement("dimensions"));
+            Assert.Contains("missing", Assert.IsType<GuiElementDynamicText>(table.GetElement("reason")).Text);
+
+            hud.SetVisible(false);
+            before = samples;
+            hud.OnRenderGUI(2);
+            Assert.Equal(before, samples);
+            state = new(RoomInfoStatus.Incomplete, RoomQualifications.None, 0, 0, 0, null, null);
+            hud.SetVisible(true);
+            Assert.Equal(before + 1, samples);
+            table = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("room-table"));
+            Assert.Contains("incomplete", Assert.IsType<GuiElementDynamicText>(table.GetElement("reason")).Text);
+        }
+        int final = samples;
+        hud.OnRenderGUI(1);
+        hud.SetVisible(true);
+        Assert.Equal(final, samples);
+        Assert.All(fixture.Uploads, upload => Assert.True(upload.Texture.Disposed));
+    }
+
+    [Theory]
+    [InlineData(0, 0, 2)]
+    [InlineData(1, 0, 2)]
+    [InlineData(2, 0, 2)]
+    [InlineData(2, 2, 1)]
+    [InlineData(2, 3, 4)]
+    public void RoomStructureChanges_RemoveStaleTagsAndDetails(int statusValue, int tagValue, int rows)
+    {
+        var status = (RoomInfoStatus)statusValue;
+        var tags = (RoomQualifications)tagValue;
+        using var fixture = new Fixture();
+        var state = new BuildModeRoomInfo(RoomInfoStatus.Complete,
+            RoomQualifications.Room | RoomQualifications.Shelter | RoomQualifications.Greenhouse, 7, 4, 6, 65, 80);
+        using var hud = new BuildModeHud(fixture.Api.Object, () => state);
+        hud.SetVisible(true);
+        var oldTable = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("room-table"));
+        state = new(status, tags, 5, 3, 4, null, null);
+        hud.OnRenderGUI(0.5f);
+        Assert.Empty(oldTable.Bounds.ChildBounds);
+        var table = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("room-table"));
+        Assert.Equal(rows * 2, table.Bounds.ChildBounds.Count);
+        if (tags.HasFlag(RoomQualifications.Room))
+            Assert.IsType<GuiElementDynamicText>(table.GetElement("dimensions"));
+        else
+            Assert.Throws<KeyNotFoundException>(() => table.GetElement("dimensions"));
+        Assert.Equal(tags != RoomQualifications.None, table.GetElement("type") is GuiElementCustomDraw);
+        int uploads = fixture.Uploads.Count;
+        hud.OnRenderGUI(0.5f);
+        Assert.Same(table, hud.SingleComposer.GetElement("room-table"));
+        Assert.Equal(uploads, fixture.Uploads.Count);
+    }
+
+    [Fact]
+    public void RoomCompositionFailure_ReleasesRegisteredChildrenAndAllowsRetry()
+    {
+        using var fixture = new Fixture();
+        using var hud = new BuildModeHud(fixture.Api.Object, () => new(RoomInfoStatus.Complete,
+            RoomQualifications.Room | RoomQualifications.Shelter, 7, 4, 6, 50, 80));
+        fixture.FailOnUploadNumber = 5;
+        Assert.Throws<InvalidOperationException>(() => hud.SetVisible(true));
+        Assert.Null(hud.SingleComposer);
+        Assert.Empty(Assert.IsType<GuiElementTable>(fixture.CreatedComposers.Single().GetElement("room-table")).Bounds.ChildBounds);
+        Assert.All(fixture.Uploads, upload => Assert.True(upload.Texture.Disposed));
+        fixture.FailOnUploadNumber = null;
+        hud.SetVisible(true);
+        Assert.True(hud.IsOpened());
+    }
+
+    [Fact]
+    public void RoomLocalization_RebuildsEvenWhenKeybindHintsAndSampleAreUnchanged()
+    {
+        using var fixture = new Fixture();
+        using var hud = new BuildModeHud(fixture.Api.Object, () => new(RoomInfoStatus.Complete,
+            RoomQualifications.Room | RoomQualifications.Shelter, 7, 4, 6, 50, 80));
+        hud.SetVisible(true);
+        var composer = hud.SingleComposer;
+        var table = Assert.IsType<GuiElementTable>(composer.GetElement("room-table"));
+        string previous = Lang.CurrentLocale;
+        const string locale = "vbe-room-localization-tests";
+        Lang.AvailableLanguages.Add(locale, Lang.AvailableLanguages[previous]);
+        try
+        {
+            Lang.ChangeLanguage(locale);
+            hud.OnRenderGUI(0.5f);
+            Assert.NotSame(composer, hud.SingleComposer);
+            Assert.Empty(table.Bounds.ChildBounds);
+            Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("room-table"));
+        }
+        finally
+        {
+            Lang.ChangeLanguage(previous);
+            Lang.AvailableLanguages.Remove(locale);
+        }
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1.25)]
+    [InlineData(1.33)]
+    [InlineData(1.5)]
+    [InlineData(2)]
     public void InformationTable_PreservesReservedGeometryNativeLabelPixelsAndPassiveInput(float scale)
     {
         using var fixture = new Fixture(scale);
@@ -450,6 +652,7 @@ public sealed class BuildModeHudControlsTests
             if (composer.GetElement("controls-table") is GuiElementTable table)
                 Assert.Empty(table.Bounds.ChildBounds);
             Assert.Empty(Assert.IsType<GuiElementTable>(composer.GetElement("information-table")).Bounds.ChildBounds);
+            Assert.Empty(Assert.IsType<GuiElementTable>(composer.GetElement("room-table")).Bounds.ChildBounds);
         });
     }
 
@@ -460,9 +663,11 @@ public sealed class BuildModeHudControlsTests
         using var hud = new BuildModeHud(fixture.Api.Object);
         hud.SetVisible(true);
         var previous = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
+        var previousRoom = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("room-table"));
         RuntimeEnv.GUIScale = 1.25f;
         fixture.ScaleWatcher!(1.25f);
         Assert.Empty(previous.Bounds.ChildBounds);
+        Assert.Empty(previousRoom.Bounds.ChildBounds);
         Assert.Equal(2, fixture.CreatedComposers.Count);
         Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
         hud.SetVisible(false);
@@ -577,9 +782,9 @@ public sealed class BuildModeHudControlsTests
         (GuiElementTable?)typeof(BuildModeHud).GetField("controlsTable", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(hud);
 
-    private static void ClickToggle(BuildModeHud hud, Fixture fixture)
+    private static void ClickToggle(BuildModeHud hud, Fixture fixture, string section = "controls")
     {
-        var toggle = hud.SingleComposer.GetElement("controls-toggle");
+        var toggle = hud.SingleComposer.GetElement($"{section}-toggle");
         int x = (int)toggle.Bounds.renderX + 1;
         int y = (int)toggle.Bounds.renderY + 1;
         hud.OnMouseDown(new MouseEvent(x, y, EnumMouseButton.Left, 0));
@@ -624,6 +829,7 @@ public sealed class BuildModeHudControlsTests
             Lang.AvailableLanguages.Add(Locale, translations.Object);
             Lang.ChangeLanguage(Locale);
             Api.SetupGet(api => api.Gui).Returns(Gui.Object);
+            Api.SetupGet(api => api.World.Player).Returns((IClientPlayer)null!);
             Api.SetupGet(api => api.Render).Returns(Render.Object);
             Gui.SetupGet(gui => gui.Text).Returns(new TextDrawUtil());
             Gui.SetupGet(gui => gui.LoadedGuis).Returns([]);

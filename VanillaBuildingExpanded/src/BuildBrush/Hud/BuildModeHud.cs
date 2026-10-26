@@ -11,7 +11,7 @@ using Vintagestory.API.Config;
 namespace VanillaBuildingExpanded.BuildBrush;
 
 /// <summary>Draws a non-focusing, GUI-scaled build information panel.</summary>
-internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
+internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
 {
     private const double KeycapSpacing = 3;
     private const double KeybindDividerPadding = 6;
@@ -25,16 +25,24 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
     private BuildModeKeybindHint[] keybindHints = [];
     private GuiElementTable? controlsTable;
     private float keybindRefreshElapsed;
+    private string displayLocale = Lang.CurrentLocale;
     private bool RotationUnavailable => info.IsSuspended || info.OrientationCount <= 1;
     private GuiElementTable ControlsTable => controlsTable
         ?? throw new InvalidOperationException("Controls content is only available during HUD composition.");
 
     #region Public API
     /// <summary>Retains client GUI services; composition is deferred until first activation.</summary>
-    public BuildModeHud(ICoreClientAPI api) : base(api)
+    public BuildModeHud(ICoreClientAPI api) : this(api, () => BuildModeRoomInfo.Read(api)) { }
+
+    /// <summary>Allows deterministic room samples without replacing the native GUI composition path.</summary>
+    internal BuildModeHud(ICoreClientAPI api, System.Func<BuildModeRoomInfo> sampleRoom) : base(api)
     {
+        this.sampleRoom = sampleRoom ?? throw new ArgumentNullException(nameof(sampleRoom));
+        roomSection = new CollapsibleSection("room", "vanillabuildingexpanded:build-info-room",
+            () => RoomTable.Measure().Width, _ => RoomTable.Measure().Height, ComposeRoomContent);
         sections =
         [
+            roomSection,
             new CollapsibleSection("controls", "vanillabuildingexpanded:build-info-controls",
                 () => ControlsTable.Measure().Width, _ => ControlsTable.Measure().Height, ComposeControlsContent)
         ];
@@ -75,13 +83,26 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
         if (disposed) return;
         if (IsOpened())
         {
+            bool roomWasCollapsed = roomSection.IsCollapsed;
             bool sectionsChanged = false;
             foreach (var section in sections)
                 sectionsChanged |= section.ApplyPendingToggle();
             if (sectionsChanged)
             {
+                roomRefreshElapsed = 0;
+                if (roomWasCollapsed && !roomSection.IsCollapsed) RefreshRoom();
                 ClearComposers();
                 SetVisible(true);
+            }
+            if (!roomSection.IsCollapsed)
+            {
+                roomRefreshElapsed += deltaTime;
+                if (roomRefreshElapsed >= 0.5f)
+                {
+                    roomRefreshElapsed = 0;
+                    RefreshRoom();
+                    if (SingleComposer is null) ComposeHud();
+                }
             }
             keybindRefreshElapsed += deltaTime;
             if (keybindRefreshElapsed >= 0.5f)
@@ -116,10 +137,17 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
         if (disposed) return;
         if (!visible)
         {
+            roomRefreshElapsed = 0;
             foreach (var section in sections)
                 section.CancelInput();
             TryClose();
             return;
+        }
+        if (!IsOpened() && !roomSection.IsCollapsed) RefreshRoom();
+        if (displayLocale != Lang.CurrentLocale)
+        {
+            displayLocale = Lang.CurrentLocale;
+            ClearComposers();
         }
         var currentHints = BuildModeKeybinds.Read(capi.Input);
         if (keybindHints.Length != currentHints.Length
@@ -142,6 +170,7 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
         try
         {
             controlsTable = CreateControlsTable(capi, keybindHints);
+            roomTable = CreateRoomTable();
             double width = Math.Max(320, sections.Max(section => section.MeasureWidth()));
             double height = SectionsTop + sections.Sum(section => section.MeasureHeight(width))
                 + (sections.Length - 1) * SectionSpacing + BottomPadding;
@@ -168,7 +197,9 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
         finally
         {
             var table = controlsTable;
+            var pendingRoom = roomTable;
             controlsTable = null;
+            roomTable = null;
             try { composer?.Dispose(); }
             finally
             {
@@ -179,7 +210,14 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
                 }
                 finally
                 {
-                    if (informationTable is { IsRegistered: false }) informationTable.Dispose();
+                    try
+                    {
+                        if (informationTable is { IsRegistered: false }) informationTable.Dispose();
+                    }
+                    finally
+                    {
+                        if (pendingRoom is { IsRegistered: false }) pendingRoom.Dispose();
+                    }
                 }
             }
         }
@@ -235,6 +273,7 @@ internal sealed class BuildModeHud : HudElement, IBuildModeIndicator
     {
         if (disposed) return;
         disposed = true;
+        roomInfo = default;
         capi.Settings.Float.RemoveWatcher("guiScale", OnGuiScaleChanged);
         TryClose();
         base.Dispose();

@@ -13,6 +13,10 @@ internal static class UiPalette
     public static readonly ImmutableArray<double> SectionToggleIconColor = [.. ColorUtil.Hex2Doubles("#A65F26")];
     public static readonly ImmutableArray<double> ValueColor = [.. ColorUtil.Hex2Doubles("#F3EBDD")];
     public static readonly ImmutableArray<double> UnavailableColor = [.. ColorUtil.Hex2Doubles("#918A80")];
+    public static readonly ImmutableArray<double> RoomTagColor = [.. ColorUtil.Hex2Doubles("#639ED9")];
+    public static readonly ImmutableArray<double> ShelterTagColor = [.. ColorUtil.Hex2Doubles("#D1A85E")];
+    public static readonly ImmutableArray<double> CellarTagColor = [.. ColorUtil.Hex2Doubles("#B082CF")];
+    public static readonly ImmutableArray<double> GreenhouseTagColor = [.. ColorUtil.Hex2Doubles("#66BA73")];
     public static readonly ImmutableArray<double> PanelBackgroundColor = [.. ColorUtil.Hex2Doubles("#000000", 0.55)];
     public static readonly ImmutableArray<double> TitleOverlayColor = [.. ColorUtil.Hex2Doubles("#000000", 0.25)];
     public static readonly ImmutableArray<double> OpaqueFadeMaskColor = [.. ColorUtil.Hex2Doubles("#000000FF")];
