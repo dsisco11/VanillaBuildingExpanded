@@ -15,6 +15,29 @@ namespace VanillaBuildingExpanded.Tests.UI;
 public sealed class BuildModeHudControlsTests
 {
     [Fact]
+    public void Hud_ControlsStartCollapsedAndStayCollapsedAcrossReopeningAndScaling()
+    {
+        using var fixture = new Fixture();
+        using var hud = new BuildModeHud(fixture.Api.Object);
+        hud.SetVisible(true);
+        var composer = hud.SingleComposer;
+        Assert.Null(composer.GetElement("controls-table"));
+        Assert.NotNull(composer.GetElement("controls-title"));
+        Assert.NotNull(composer.GetElement("controls-toggle"));
+        Assert.IsType<GuiElementTable>(composer.GetElement("room-table"));
+        hud.SetVisible(false);
+        hud.SetVisible(true);
+        Assert.Same(composer, hud.SingleComposer);
+        Assert.Null(hud.SingleComposer.GetElement("controls-table"));
+        RuntimeEnv.GUIScale = 1.25f;
+        fixture.ScaleWatcher!(1.25f);
+        Assert.Null(hud.SingleComposer.GetElement("controls-table"));
+        Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("room-table"));
+        ClickToggle(hud, fixture);
+        Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
+    }
+
+    [Fact]
     public void SectionHeadings_RemainVisibleAndPassiveWhenCollapsed()
     {
         using var fixture = new Fixture();
@@ -319,6 +342,7 @@ public sealed class BuildModeHudControlsTests
         var state = new BuildModeInfo(suspended, EBuildBrushSnapping.Vertical, 0, orientations, null);
         hud.Update(state);
         hud.SetVisible(true);
+        ClickToggle(hud, fixture);
         var previous = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("information-table"));
         var previousRotation = Assert.IsType<GuiElementDynamicText>(previous.GetElement("rotation"));
         string expectedText = previousRotation.Text;
@@ -341,7 +365,7 @@ public sealed class BuildModeHudControlsTests
     [InlineData(2)]
     [InlineData(3)]
     [InlineData(4)]
-    public void InformationCompositionFailure_ReleasesBothTablesAndNativeValueTexturesBeforeRetry(int failedUpload)
+    public void InformationCompositionFailure_ReleasesComposerAndNativeValueTexturesBeforeRetry(int failedUpload)
     {
         using var fixture = new Fixture();
         using var hud = new BuildModeHud(fixture.Api.Object);
@@ -352,7 +376,7 @@ public sealed class BuildModeHudControlsTests
         Assert.Null(PendingTable(hud));
         Assert.False(hud.IsOpened());
         Assert.Empty(Assert.IsType<GuiElementTable>(failed.GetElement("information-table")).Bounds.ChildBounds);
-        Assert.Empty(Assert.IsType<GuiElementTable>(failed.GetElement("controls-table")).Bounds.ChildBounds);
+        Assert.Null(failed.GetElement("controls-table"));
         Assert.All(fixture.Uploads, upload => Assert.True(upload.Texture.Disposed));
         Assert.Equal(failedUpload, fixture.Deleted.Count);
         fixture.FailOnUploadNumber = null;
@@ -447,7 +471,9 @@ public sealed class BuildModeHudControlsTests
         using var fixture = new Fixture();
         using var hud = new BuildModeHud(fixture.Api.Object);
         hud.SetVisible(true);
+        ClickToggle(hud, fixture);
         var composer = hud.SingleComposer;
+        int builds = fixture.CreatedComposers.Count;
         var table = Assert.IsType<GuiElementTable>(composer.GetElement("controls-table"));
         var texture = Assert.Single(fixture.Uploads, upload => upload.Width == table.Bounds.OuterWidthInt &&
             upload.Height == table.Bounds.OuterHeightInt).Texture;
@@ -457,7 +483,7 @@ public sealed class BuildModeHudControlsTests
         hud.SetVisible(true);
         Assert.Same(composer, hud.SingleComposer);
         Assert.Same(table, hud.SingleComposer.GetElement("controls-table"));
-        Assert.Single(fixture.CreatedComposers);
+        Assert.Equal(builds, fixture.CreatedComposers.Count);
         hud.Dispose();
         Assert.True(texture.Disposed);
         Assert.False(table.Focusable);
@@ -472,11 +498,13 @@ public sealed class BuildModeHudControlsTests
         using var fixture = new Fixture();
         using var hud = new BuildModeHud(fixture.Api.Object);
         hud.SetVisible(true);
+        ClickToggle(hud, fixture);
         var previous = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
+        int builds = fixture.CreatedComposers.Count;
         var childBounds = previous.Bounds.ChildBounds.ToArray();
         fixture.Hotkeys["vbe.ToggleBuildMode"].CurrentMapping.KeyCode = (int)GlKeys.Escape;
         hud.SetVisible(true);
-        Assert.Equal(2, fixture.CreatedComposers.Count);
+        Assert.Equal(builds + 1, fixture.CreatedComposers.Count);
         Assert.NotSame(previous, hud.SingleComposer.GetElement("controls-table"));
         Assert.Empty(previous.Bounds.ChildBounds);
         Assert.All(childBounds, bounds => Assert.Null(bounds.ParentBounds));
@@ -488,6 +516,7 @@ public sealed class BuildModeHudControlsTests
         using var fixture = new Fixture();
         using var hud = new BuildModeHud(fixture.Api.Object);
         hud.SetVisible(true);
+        ClickToggle(hud, fixture);
         var previous = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
         double width = hud.SingleComposer.Bounds.fixedWidth;
         double expandedHeight = hud.SingleComposer.Bounds.fixedHeight;
@@ -513,6 +542,7 @@ public sealed class BuildModeHudControlsTests
         using var fixture = new Fixture(scale);
         using var hud = new BuildModeHud(fixture.Api.Object);
         hud.SetVisible(true);
+        ClickToggle(hud, fixture);
         double width = hud.SingleComposer.Bounds.fixedWidth;
         double height = hud.SingleComposer.Bounds.fixedHeight;
 
@@ -575,21 +605,23 @@ public sealed class BuildModeHudControlsTests
         using var fixture = new Fixture();
         using var hud = new BuildModeHud(fixture.Api.Object);
         hud.SetVisible(true);
+        ClickToggle(hud, fixture);
+        int builds = fixture.CreatedComposers.Count;
         var previous = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
         var previousRoom = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("room-table"));
         RuntimeEnv.GUIScale = 1.25f;
         fixture.ScaleWatcher!(1.25f);
         Assert.Empty(previous.Bounds.ChildBounds);
         Assert.Empty(previousRoom.Bounds.ChildBounds);
-        Assert.Equal(2, fixture.CreatedComposers.Count);
+        Assert.Equal(builds + 1, fixture.CreatedComposers.Count);
         Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
         hud.SetVisible(false);
         RuntimeEnv.GUIScale = 1.5f;
         fixture.ScaleWatcher(1.5f);
         Assert.Null(hud.SingleComposer);
-        Assert.Equal(2, fixture.CreatedComposers.Count);
+        Assert.Equal(builds + 1, fixture.CreatedComposers.Count);
         hud.SetVisible(true);
-        Assert.Equal(3, fixture.CreatedComposers.Count);
+        Assert.Equal(builds + 2, fixture.CreatedComposers.Count);
         Assert.Null(PendingTable(hud));
     }
 
@@ -601,7 +633,7 @@ public sealed class BuildModeHudControlsTests
         fixture.FailUpload = true;
         Assert.Throws<InvalidOperationException>(() => hud.SetVisible(true));
         var failed = Assert.Single(fixture.CreatedComposers);
-        var table = Assert.IsType<GuiElementTable>(failed.GetElement("controls-table"));
+        var table = Assert.IsType<GuiElementTable>(failed.GetElement("information-table"));
         Assert.Empty(table.Bounds.ChildBounds);
         Assert.Null(hud.SingleComposer);
         Assert.Null(PendingTable(hud));
@@ -618,7 +650,6 @@ public sealed class BuildModeHudControlsTests
         using var fixture = new Fixture();
         using var hud = new BuildModeHud(fixture.Api.Object);
         hud.SetVisible(true);
-        ClickToggle(hud, fixture);
         hud.ClearComposers();
         GuiElementTable? pending = null;
         fixture.OnCreate = () => pending = PendingTable(hud);
@@ -636,6 +667,7 @@ public sealed class BuildModeHudControlsTests
         using var fixture = new Fixture();
         using var hud = new BuildModeHud(fixture.Api.Object);
         hud.SetVisible(true);
+        ClickToggle(hud, fixture);
         var table = Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
         fixture.MouseX = (int)table.Bounds.renderX + 1;
         fixture.MouseY = (int)table.Bounds.renderY + 1;

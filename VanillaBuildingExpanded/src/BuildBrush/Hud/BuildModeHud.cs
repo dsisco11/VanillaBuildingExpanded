@@ -44,7 +44,7 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
         [
             roomSection,
             new CollapsibleSection("controls", "vanillabuildingexpanded:build-info-controls",
-                () => ControlsTable.Measure().Width, _ => ControlsTable.Measure().Height, ComposeControlsContent)
+                () => ControlsTable.Measure().Width, _ => ControlsTable.Measure().Height, ComposeControlsContent, collapsed: true)
         ];
         api.Settings.Float.AddWatcher("guiScale", OnGuiScaleChanged);
     }
