@@ -28,8 +28,6 @@ public static class TestHelpers
         var mockLogger = new Mock<ILogger>();
         mockWorld.Setup(w => w.Logger).Returns(mockLogger.Object);
         mockWorld.Setup(w => w.Side).Returns(side);
-        mockWorld.Setup(w => w.GetBlock(new AssetLocation("game:packeddirt")))
-            .Returns(CreateTestBlock(1000000, "game:packeddirt"));
 
         // Setup callback registration tracking
         var callbackIds = new Dictionary<long, Action<float>>();
@@ -125,8 +123,6 @@ public static class TestHelpers
 
         mockWorld.Setup(w => w.Logger).Returns(mockLogger.Object);
         mockWorld.Setup(w => w.Side).Returns(EnumAppSide.Server);
-        mockWorld.Setup(w => w.GetBlock(new AssetLocation("game:packeddirt")))
-            .Returns(CreateTestBlock(1000000, "game:packeddirt"));
         mockWorld.Setup(w => w.Api).Returns(mockSapi.Object);
         mockWorld.Setup(w => w.BlockAccessor).Returns(mockBlockAccessor.Object);
 

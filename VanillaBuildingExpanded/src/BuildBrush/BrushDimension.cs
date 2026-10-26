@@ -6,6 +6,7 @@ using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
+using Vintagestory.Common;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
@@ -306,22 +307,26 @@ public class BrushDimension
         RecreatePreviewBlock(block, rotationMode ?? EBuildBrushRotationMode.None);
     }
 
-    private void RecreatePreviewBlock(Block block, EBuildBrushRotationMode rotationMode)
+    private void RecreatePreviewBlock(Block block, EBuildBrushRotationMode rotationMode, bool notifyNeighbors = true)
     {
+        Block baseBlock = notifyNeighbors ? block : originalBlock ?? block;
+        Block displayBlock = !notifyNeighbors && internalBlockPos is not null
+            ? dimension?.GetBlock(internalBlockPos) ?? block
+            : block;
         Clear();
 
-        originalBlock = block;
-        currentBlock = block;
+        originalBlock = baseBlock;
+        currentBlock = displayBlock;
         RotationMode = rotationMode;
 
         // Place the block in the dimension
-        PlaceBlockInDimension();
+        PlaceBlockInDimension(notifyNeighbors);
     }
 
     /// <summary>
     /// Places the current block in the mini-dimension at the origin.
     /// </summary>
-    private void PlaceBlockInDimension()
+    private void PlaceBlockInDimension(bool notifyNeighbors = true)
     {
         if (dimension is null || currentBlock is null)
             return;
@@ -331,12 +336,7 @@ public class BrushDimension
         internalBlockPos = new BlockPos(0, 0, 0, Dimensions.MiniDimensions);
         dimension.AdjustPosForSubDimension(internalBlockPos);
 
-        Block? support = world.GetBlock(new AssetLocation("game:packeddirt"));
-        if (support is null || support.BlockId == 0 || support.IsMissing)
-            throw new InvalidOperationException("Cannot create build-brush preview: game:packeddirt support block is unavailable.");
-
-        // Native placement checks need support immediately; keep it outside the rendered bounds.
-        dimension.SetBlock(support.BlockId, internalBlockPos.DownCopy());
+        RefreshAdjacentBlocks();
 
         ItemStack? source = _subscribedInstance?.ItemStack;
         dimension.SetBlock(currentBlock.BlockId, internalBlockPos, source?.Clone());
@@ -363,14 +363,50 @@ public class BrushDimension
         }
         placementInitializedStack = source?.Clone();
         placementInitializedSlotNumber = _subscribedInstance?.SourceHotbarSlotNumber;
+        if (notifyNeighbors)
+            NotifyPreviewNeighbors();
         MarkDirty(nameof(PlaceBlockInDimension));
+    }
+
+    private void RefreshAdjacentBlocks()
+    {
+        if (dimension is null || internalBlockPos is null || _subscribedInstance?.Position is not { } worldPosition)
+            return;
+
+        foreach (BlockFacing facing in BlockFacing.ALLFACES)
+        {
+            BlockPos sourcePos = worldPosition.AddCopy(facing);
+            BlockPos targetPos = internalBlockPos.AddCopy(facing);
+            Block solid = world.BlockAccessor.GetBlock(sourcePos, BlockLayersAccess.Solid);
+            dimension.SetBlock(solid.BlockId, targetPos);
+        }
+
+        dimension.Dirty = true;
+    }
+
+    private void NotifyPreviewNeighbors()
+    {
+        if (world.Side != EnumAppSide.Server || dimension is null || internalBlockPos is null ||
+            _subscribedInstance?.Position is null)
+            return;
+
+        Block? block = dimension.GetBlock(internalBlockPos);
+        if (block is null || block.BlockId == 0)
+            return;
+
+        // This refreshes preview geometry, not individual gameplay neighbor events.
+        block.OnNeighbourBlockChange(world, internalBlockPos, internalBlockPos);
+
+        if (dimension is BlockAccessorMovable movable)
+            movable.MarkChunkDirty(internalBlockPos.X, internalBlockPos.Y, internalBlockPos.Z);
+        dimension.Dirty = true;
     }
 
     private void RefreshBlockEntityPlacement()
     {
         if (dimension is null || internalBlockPos is null ||
             _subscribedInstance?.ItemStack is not { } source ||
-            currentBlock is null || source.Block?.Id != currentBlock.Id)
+            currentBlock is null || source.Block?.Id != originalBlock?.Id)
             return;
 
         // Brush rotation changes the prepared stack, not its held source, and does not require a new entity.
@@ -387,7 +423,7 @@ public class BrushDimension
         try
         {
             var sourceRotation = _subscribedInstance.Rotation;
-            RecreatePreviewBlock(currentBlock, RotationMode);
+            RecreatePreviewBlock(currentBlock, RotationMode, notifyNeighbors: false);
             if (sourceRotation is not null)
             {
                 var definition = sourceRotation.Current;
@@ -606,6 +642,7 @@ public class BrushDimension
         instance.OnOrientationChanged += Instance_OnOrientationChanged;
         instance.OnRotationInfoChanged += Instance_OnRotationInfoChanged;
         instance.OnPlacementItemStackChanged += Instance_OnPlacementItemStackChanged;
+        instance.OnPositionChanged += Instance_OnPositionChanged;
     }
 
     /// <summary>
@@ -620,6 +657,7 @@ public class BrushDimension
         _subscribedInstance.OnOrientationChanged -= Instance_OnOrientationChanged;
         _subscribedInstance.OnRotationInfoChanged -= Instance_OnRotationInfoChanged;
         _subscribedInstance.OnPlacementItemStackChanged -= Instance_OnPlacementItemStackChanged;
+        _subscribedInstance.OnPositionChanged -= Instance_OnPositionChanged;
 
         _subscribedInstance = null;
     }
@@ -631,6 +669,16 @@ public class BrushDimension
     #endregion
 
     #region Event Handlers
+    private void Instance_OnPositionChanged(object? sender, PositionChangedEventArgs e)
+    {
+        if (dimension is null || internalBlockPos is null || e.CurrentPosition is null)
+            return;
+
+        RefreshAdjacentBlocks();
+        NotifyPreviewNeighbors();
+        MarkDirty(nameof(RefreshAdjacentBlocks));
+    }
+
     private void Instance_OnPlacementItemStackChanged(object? sender, EventArgs e)
     {
         RefreshBlockEntityPlacement();

@@ -135,8 +135,7 @@ public class BuildBrushEntityRenderer : EntityRenderer
             || !brushEntity.WatchedAttributes.GetBool(BuildBrushEntity.BrushVisibleKey))
             return;
 
-        // Server-side preview updates are signaled via the watched dirty counter.
-        // This avoids mesh rebuild on cursor movement (translation-only updates).
+        // The server signals content changes, including refreshed neighbors, via the watched dirty counter.
         RebuildMeshIfDirtyCounterChanged();
 
         if (meshRef is null)

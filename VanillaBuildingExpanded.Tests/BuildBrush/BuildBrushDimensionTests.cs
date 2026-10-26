@@ -10,6 +10,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
+using Vintagestory.API.Server;
 using Vintagestory.GameContent;
 
 using Xunit;
@@ -23,13 +24,289 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 public class BuildBrushDimensionTests
 {
     [Theory]
-    [InlineData(EnumAppSide.Client)]
     [InlineData(EnumAppSide.Server)]
-    public void Preview_PlacesPackedDirtBeforeQuernWithoutIncludingSupportInBounds(EnumAppSide side)
+    [InlineData(EnumAppSide.Client)]
+    public void NeighborNotifications_UpdateNativeFencesOnlyOnBlockOrPositionChanges(EnumAppSide side)
     {
         var world = TestHelpers.CreateMockWorld(side);
-        Block support = world.Object.GetBlock(new AssetLocation("game:packeddirt"));
+        var accessor = new Mock<IBlockAccessor>();
+        world.SetupGet(w => w.BlockAccessor).Returns(accessor.Object);
+        Block air = TestHelpers.CreateTestBlock(0, "game:air");
+        foreach (BlockFacing facing in BlockFacing.ALLFACES)
+            air.SideSolid[facing.Index] = false;
+        CountingFence[] variants =
+        [
+            new() { BlockId = 100, Code = new AssetLocation("game:previewfence-ew") },
+            new() { BlockId = 101, Code = new AssetLocation("game:previewfence-n") },
+            new() { BlockId = 102, Code = new AssetLocation("game:previewfence-empty") }
+        ];
+        string[] types = ["ew", "n", "empty"];
+        for (int i = 0; i < variants.Length; i++)
+        {
+            variants[i].VariantStrict["type"] = types[i];
+            world.Setup(w => w.GetBlock(variants[i].BlockId)).Returns(variants[i]);
+        }
+        Dictionary<int, Block> registry = variants.ToDictionary(b => b.BlockId, b => (Block)b);
+        registry[0] = air;
+        Dictionary<BlockPos, Block> blocks = [];
+        BlockPos origin = new(100, 100, 100, Dimensions.MiniDimensions);
+        BlockPos firstPosition = new(10, 20, 30);
+        BlockPos secondPosition = firstPosition.EastCopy();
+        accessor.Setup(a => a.GetBlock(It.IsAny<BlockPos>(), BlockLayersAccess.Solid))
+            .Returns((BlockPos pos, int _) => pos == firstPosition.NorthCopy() ? variants[2] : air);
+        accessor.Setup(a => a.GetBlock(It.IsAny<BlockPos>()))
+            .Returns((BlockPos pos) => blocks.GetValueOrDefault(pos, air));
+        accessor.Setup(a => a.GetBlock(It.IsAny<AssetLocation>()))
+            .Returns((AssetLocation code) => variants.FirstOrDefault(b => b.Code.Equals(code))!);
+        accessor.Setup(a => a.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>()))
+            .Callback<int, BlockPos>((id, pos) => blocks[pos.Copy()] = registry[id]);
+        var preview = TestHelpers.CreateMockDimension();
+        preview.SetupGet(d => d.subDimensionId).Returns(1);
+        preview.Setup(d => d.AdjustPosForSubDimension(It.IsAny<BlockPos>()))
+            .Callback<BlockPos>(pos => pos.Set(origin));
+        preview.Setup(d => d.ClearChunks()).Callback(blocks.Clear);
+        preview.Setup(d => d.GetBlock(It.IsAny<BlockPos>()))
+            .Returns((BlockPos pos) => blocks.GetValueOrDefault(pos, air));
+        preview.Setup(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>()))
+            .Callback<int, BlockPos>((id, pos) => blocks[pos.Copy()] = registry[id]);
+        preview.Setup(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>(), It.IsAny<ItemStack>()))
+            .Callback<int, BlockPos, ItemStack>((id, pos, _) => blocks[pos.Copy()] = registry[id]);
+        var inputs = TestHelpers.CreateBrushInputs();
+        var slot = new DummySlot { Itemstack = new ItemStack(variants[0]) };
+        int selectedSlot = 0;
+        inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(slot);
+        inputs.Inventory.SetupGet(i => i.ActiveHotbarSlotNumber).Returns(() => selectedSlot);
+        var brush = inputs.CreateBrush(world.Object);
+        brush.TryUpdateBlockId();
+        brush.Position = firstPosition;
+        var dimension = new BrushDimension(world.Object);
+        dimension.InitializeClientSide(preview.Object);
+        dimension.SubscribeTo(brush);
+
+        dimension.SetBlock(variants[0]);
+
+        int expectedNotifications = side == EnumAppSide.Server ? 1 : 0;
+        Assert.Equal(expectedNotifications, variants.Sum(b => b.NotificationCount));
+        Assert.Same(side == EnumAppSide.Server ? variants[1] : variants[0], blocks[origin]);
+        if (side == EnumAppSide.Server)
+        {
+            Assert.Equal(1, variants[0].NotificationCount);
+            Assert.Equal(0, variants[1].NotificationCount);
+        }
+        dimension.SetBlock(variants[0]);
+        brush.Position = firstPosition.Copy();
+        Assert.Equal(expectedNotifications, variants.Sum(b => b.NotificationCount));
+
+        // Property-only recreation must retain the resolved connection variant without notifying again.
+        slot.Itemstack.Attributes.SetString("testProperty", "first");
+        brush.TryUpdateBlockId();
+        slot.Itemstack.Attributes.SetString("testProperty", "second");
+        brush.TryUpdateBlockId();
+        selectedSlot = 1;
+        brush.TryUpdateBlockId();
+        dimension.SetBlock(variants[0]);
+        Assert.Equal(expectedNotifications, variants.Sum(b => b.NotificationCount));
+        Assert.Same(side == EnumAppSide.Server ? variants[1] : variants[0], blocks[origin]);
+
+        var previous = new BlockOrientation(100, 0);
+        var rotated = new BlockOrientation(100, 90);
+        SetRotationMode(dimension, EBuildBrushRotationMode.Rotatable);
+        var orientation = new BrushOrientation(world.Object, variants[0],
+            EBuildBrushRotationMode.Rotatable, [previous, rotated]);
+        dimension.ApplyRotation(new OrientationIndexChangedEventArgs(0, 1, previous, rotated), orientation);
+        Assert.Equal(expectedNotifications, variants.Sum(b => b.NotificationCount));
+
+        brush.Position = secondPosition;
+        Assert.Equal(expectedNotifications * 2, variants.Sum(b => b.NotificationCount));
+        Assert.Same(side == EnumAppSide.Server ? variants[2] : variants[0], blocks[origin]);
+
+        dimension.SetBlock(variants[1]);
+        Assert.Equal(expectedNotifications * 3, variants.Sum(b => b.NotificationCount));
+        brush.Position = null;
+        dimension.Unsubscribe();
+        brush.Position = firstPosition;
+        Assert.Equal(expectedNotifications * 3, variants.Sum(b => b.NotificationCount));
+        Assert.True(dimension.GetActiveBounds(out BlockPos min, out BlockPos max));
+        Assert.Equal(origin, min);
+        Assert.Equal(origin, max);
+        Assert.All(variants.SelectMany(b => b.NotificationPositions), pos => Assert.Equal(origin, pos));
+        accessor.Verify(a => a.SetBlock(It.IsAny<int>(), It.Is<BlockPos>(pos => pos.dimension != Dimensions.MiniDimensions)),
+            Times.Never);
+    }
+
+    private sealed class CountingFence : BlockFence
+    {
+        public int NotificationCount { get; private set; }
+        public List<BlockPos> NotificationPositions { get; } = [];
+
+        public override void OnNeighbourBlockChange(IWorldAccessor world, BlockPos pos, BlockPos neibpos)
+        {
+            NotificationCount++;
+            NotificationPositions.Add(pos.Copy());
+            Assert.Equal(pos, neibpos);
+            base.OnNeighbourBlockChange(world, pos, neibpos);
+        }
+    }
+
+    [Theory]
+    [InlineData(31)]
+    [InlineData(32)]
+    public void AdjacentCopies_CopyOnlySolidsAndAirAcrossChunkBoundaries(int coordinate)
+    {
+        var world = TestHelpers.CreateMockWorld(EnumAppSide.Server);
+        var accessor = new Mock<IBlockAccessor>();
+        world.SetupGet(w => w.BlockAccessor).Returns(accessor.Object);
+        int solidId = 100;
+        accessor.Setup(a => a.GetBlock(It.IsAny<BlockPos>(), It.IsAny<int>()))
+            .Returns((BlockPos _, int layer) => TestHelpers.CreateTestBlock(
+                layer == BlockLayersAccess.Solid ? solidId : 200));
+        var brush = TestHelpers.CreateBrushInputs().CreateBrush(world.Object);
+        var preview = TestHelpers.CreateMockDimension();
+        preview.SetupGet(d => d.subDimensionId).Returns(1);
+        BlockPos origin = new(coordinate, coordinate, coordinate, Dimensions.MiniDimensions);
+        preview.Setup(d => d.AdjustPosForSubDimension(It.IsAny<BlockPos>()))
+            .Callback<BlockPos>(pos => pos.Set(origin));
+        Dictionary<BlockPos, int> copied = [];
+        preview.Setup(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>()))
+            .Callback<int, BlockPos>((id, pos) => copied[pos.Copy()] = id);
+        var dimension = new BrushDimension(world.Object);
+        dimension.InitializeClientSide(preview.Object);
+        dimension.SubscribeTo(brush);
+        dimension.SetBlock(TestHelpers.CreateTestBlock(500));
+
+        int step = 0;
+        foreach (int solid in new[] { 100, 0, 100, 0 })
+        {
+            solidId = solid;
+            brush.Position = new BlockPos(500 + step++, 200, 600);
+
+            foreach (BlockFacing facing in BlockFacing.ALLFACES)
+            {
+                Assert.Equal(solid, copied[origin.AddCopy(facing)]);
+            }
+        }
+
+        preview.Verify(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>(), It.IsAny<int>()), Times.Never);
+        accessor.Verify(a => a.GetBlock(It.IsAny<BlockPos>(), BlockLayersAccess.Fluid), Times.Never);
+        preview.Verify(d => d.GetChunkAtBlockPos(It.IsAny<BlockPos>()), Times.Never);
+        Assert.True(dimension.GetActiveBounds(out BlockPos min, out BlockPos max));
+        Assert.Equal(origin, min);
+        Assert.Equal(origin, max);
+    }
+
+    [Theory]
+    [InlineData(EnumAppSide.Client, false)]
+    [InlineData(EnumAppSide.Client, true)]
+    [InlineData(EnumAppSide.Server, false)]
+    [InlineData(EnumAppSide.Server, true)]
+    public void PositionChanges_CopySixAdjacentPositionsWithoutRenderingOrRecreatingThem(
+        EnumAppSide side, bool positionBeforeBlock)
+    {
+        var world = TestHelpers.CreateMockWorld(side);
+        var accessor = new Mock<IBlockAccessor>();
+        world.Setup(w => w.BlockAccessor).Returns(accessor.Object);
+        var brush = TestHelpers.CreateBrushInputs().CreateBrush(world.Object);
+        var miniDimension = TestHelpers.CreateMockDimension();
+        miniDimension.SetupGet(d => d.subDimensionId).Returns(1);
+        miniDimension.SetupProperty(d => d.Dirty);
+        miniDimension.Setup(d => d.AdjustPosForSubDimension(It.IsAny<BlockPos>()))
+            .Callback<BlockPos>(pos => pos.Set(100, 100, 100));
+        BlockPos origin = new(100, 100, 100, Dimensions.MiniDimensions);
+        BlockPos firstPosition = new(10, 20, 30, 3);
+        BlockPos secondPosition = new(40, 50, 60, 3);
+        Block air = TestHelpers.CreateTestBlock(0, "game:air");
+        Dictionary<(BlockPos, int), Block> source = [];
+        Dictionary<(BlockPos, int), int> copied = [];
+        foreach (BlockFacing facing in BlockFacing.ALLFACES)
+        {
+            source[(firstPosition.AddCopy(facing), BlockLayersAccess.Solid)] =
+                TestHelpers.CreateTestBlock(100 + facing.Index);
+            source[(firstPosition.AddCopy(facing), BlockLayersAccess.Fluid)] =
+                TestHelpers.CreateTestBlock(200 + facing.Index);
+        }
+        source[(secondPosition.EastCopy(), BlockLayersAccess.Solid)] = TestHelpers.CreateTestBlock(300);
+        accessor.Setup(a => a.GetBlock(It.IsAny<BlockPos>(), It.IsAny<int>()))
+            .Returns((BlockPos pos, int layer) => source.GetValueOrDefault((pos, layer), air));
+        miniDimension.Setup(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>()))
+            .Callback<int, BlockPos>((id, pos) => copied[(pos.Copy(), BlockLayersAccess.Solid)] = id);
+        var dimension = new BrushDimension(world.Object);
+        dimension.InitializeClientSide(miniDimension.Object);
+        dimension.SubscribeTo(brush);
+        int dirtyCount = 0;
+        dimension.OnDirty += (_, _) => dirtyCount++;
+        Block preview = TestHelpers.CreateTestBlock(500);
+
+        if (positionBeforeBlock)
+            brush.Position = firstPosition;
+        dimension.SetBlock(preview);
+        if (!positionBeforeBlock)
+            brush.Position = firstPosition;
+
+        Assert.Equal(6, copied.Count);
+        foreach (BlockFacing facing in BlockFacing.ALLFACES)
+        {
+            Assert.Equal(100 + facing.Index, copied[(origin.AddCopy(facing), BlockLayersAccess.Solid)]);
+        }
+        Assert.True(dimension.GetActiveBounds(out BlockPos min, out BlockPos max));
+        Assert.Equal(origin, min);
+        Assert.Equal(origin, max);
+        int previousDirtyCount = dirtyCount;
+        brush.Position = firstPosition.Copy();
+        Assert.Equal(previousDirtyCount, dirtyCount);
+
+        brush.Position = secondPosition;
+
+        Assert.Equal(previousDirtyCount + 1, dirtyCount);
+        Assert.True(miniDimension.Object.Dirty);
+        foreach (BlockFacing facing in BlockFacing.ALLFACES)
+        {
+            Assert.Equal(facing == BlockFacing.EAST ? 300 : 0,
+                copied[(origin.AddCopy(facing), BlockLayersAccess.Solid)]);
+        }
+        miniDimension.Verify(d => d.SetBlock(500, origin, It.IsAny<ItemStack>()), Times.Once);
+        miniDimension.Verify(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>(), It.IsAny<int>()), Times.Never);
+        accessor.Verify(a => a.GetBlock(It.IsAny<BlockPos>(), BlockLayersAccess.Fluid), Times.Never);
+        miniDimension.Verify(d => d.ClearChunks(), Times.Once);
+        accessor.Verify(a => a.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>(), It.IsAny<int>()), Times.Never);
+
+        copied.Clear();
+        dimension.SetBlock(TestHelpers.CreateTestBlock(501));
+        Assert.Equal(6, copied.Count);
+        Assert.Equal(300, copied[(origin.EastCopy(), BlockLayersAccess.Solid)]);
+
+        copied.Clear();
+        previousDirtyCount = dirtyCount;
+        brush.Position = null;
+        Assert.Empty(copied);
+        Assert.Equal(previousDirtyCount, dirtyCount);
+        dimension.Unsubscribe();
+        brush.Position = firstPosition;
+        Assert.Empty(copied);
+        Assert.Equal(previousDirtyCount, dirtyCount);
+    }
+
+    [Theory]
+    [InlineData(EnumAppSide.Client, true)]
+    [InlineData(EnumAppSide.Client, false)]
+    [InlineData(EnumAppSide.Server, true)]
+    [InlineData(EnumAppSide.Server, false)]
+    public void Preview_CopiesLiteralBlockBelowBeforeQuernPlacementWithoutIncludingItInBounds(
+        EnumAppSide side, bool hasSupport)
+    {
+        var world = TestHelpers.CreateMockWorld(side);
+        if (side == EnumAppSide.Server)
+        {
+            var sapi = TestHelpers.CreateMockSapi();
+            sapi.Setup(s => s.World.Config).Returns(new TreeAttribute());
+            world.As<IServerWorldAccessor>().SetupGet(w => w.Api).Returns(sapi.Object);
+        }
+        Block support = TestHelpers.CreateTestBlock(200, "game:rock-granite");
         support.SideSolid[BlockFacing.UP.Index] = true;
+        Block air = TestHelpers.CreateTestBlock(0, "game:air");
+        air.SideSolid[BlockFacing.UP.Index] = false;
+        Block below = hasSupport ? support : air;
+        var brush = TestHelpers.CreateBrushInputs().CreateBrush(world.Object);
+        brush.Position = new BlockPos(10, 20, 30);
         var quern = new BlockQuern { BlockId = 100, Code = new AssetLocation("game:quern-basalt"), EntityClass = "Quern" };
         var fallingBehavior = new BlockBehaviorUnstableFalling(quern);
         fallingBehavior.Initialize(JsonObject.FromJson("{}"));
@@ -41,34 +318,56 @@ public class BuildBrushDimensionTests
         Dictionary<BlockPos, Block> blocks = [];
         var accessor = new Mock<IBlockAccessor>();
         world.Setup(w => w.BlockAccessor).Returns(accessor.Object);
+        accessor.Setup(a => a.GetBlock(It.IsAny<BlockPos>(), It.IsAny<int>()))
+            .Returns((BlockPos pos, int layer) =>
+                pos == brush.Position.DownCopy() && layer == BlockLayersAccess.Solid ? below : air);
         accessor.Setup(a => a.GetBlock(It.IsAny<BlockPos>()))
-            .Returns((BlockPos pos) => blocks.TryGetValue(pos, out Block? block) ? block : null!);
+            .Returns((BlockPos pos) => blocks.GetValueOrDefault(pos, air));
         miniDimension.Setup(d => d.GetBlock(It.IsAny<BlockPos>()))
-            .Returns((BlockPos pos) => blocks.TryGetValue(pos, out Block? block) ? block : null!);
-        miniDimension.Setup(d => d.SetBlock(support.BlockId, It.IsAny<BlockPos>()))
-            .Callback<int, BlockPos>((_, pos) => blocks[pos.Copy()] = support);
+            .Returns((BlockPos pos) => blocks.GetValueOrDefault(pos, air));
+        miniDimension.Setup(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>()))
+            .Callback<int, BlockPos>((id, pos) => blocks[pos.Copy()] = id == support.BlockId ? support : air);
         miniDimension.Setup(d => d.SetBlock(quern.BlockId, It.IsAny<BlockPos>(), It.IsAny<ItemStack>()))
             .Callback<int, BlockPos, ItemStack>((_, pos, _) =>
             {
-                Assert.Same(support, blocks[pos.DownCopy()]);
-                Assert.True(fallingBehavior.IsAttached(accessor.Object, pos));
+                Assert.Same(below, blocks[pos.DownCopy()]);
+                Assert.Equal(hasSupport, fallingBehavior.IsAttached(accessor.Object, pos));
                 blocks[pos.Copy()] = quern;
-                EnumHandling handling = EnumHandling.PassThrough;
-                fallingBehavior.OnBlockPlaced(world.Object, pos, ref handling);
-                Assert.Equal(EnumHandling.PassThrough, handling);
             });
         var dimension = new BrushDimension(world.Object);
         dimension.InitializeClientSide(miniDimension.Object);
+        dimension.SubscribeTo(brush);
 
         dimension.SetBlock(quern);
 
         Assert.True(dimension.GetActiveBounds(out BlockPos min, out BlockPos max));
         Assert.Equal(new BlockPos(100, 100, 100, Dimensions.MiniDimensions), min);
         Assert.Equal(min, max);
-        Assert.Equal(2, blocks.Count);
-        miniDimension.Verify(d => d.SetBlock(support.BlockId, min.DownCopy()), Times.Once);
+        Assert.Equal(7, blocks.Count);
+        miniDimension.Verify(d => d.SetBlock(below.BlockId, min.DownCopy()), Times.Once);
+        world.Verify(w => w.GetBlock(new AssetLocation("game:packeddirt")), Times.Never);
         dimension.Clear();
         miniDimension.Verify(d => d.ClearChunks(), Times.Exactly(2));
+    }
+
+    [Theory]
+    [InlineData(EnumAppSide.Client)]
+    [InlineData(EnumAppSide.Server)]
+    public void Preview_WithoutPosition_DoesNotCreateSyntheticSupport(EnumAppSide side)
+    {
+        var world = TestHelpers.CreateMockWorld(side);
+        var miniDimension = TestHelpers.CreateMockDimension();
+        miniDimension.SetupGet(d => d.subDimensionId).Returns(1);
+        var dimension = new BrushDimension(world.Object);
+        dimension.InitializeClientSide(miniDimension.Object);
+        dimension.SubscribeTo(TestHelpers.CreateBrushInputs().CreateBrush(world.Object));
+
+        dimension.SetBlock(TestHelpers.CreateTestBlock(100));
+
+        miniDimension.Verify(d => d.SetBlock(100, It.IsAny<BlockPos>(), It.IsAny<ItemStack>()), Times.Once);
+        miniDimension.Verify(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>()), Times.Never);
+        miniDimension.Verify(d => d.SetBlock(It.IsAny<int>(), It.IsAny<BlockPos>(), It.IsAny<int>()), Times.Never);
+        world.Verify(w => w.GetBlock(new AssetLocation("game:packeddirt")), Times.Never);
     }
 
     [Fact]
