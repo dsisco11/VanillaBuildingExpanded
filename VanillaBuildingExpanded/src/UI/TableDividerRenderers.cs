@@ -109,11 +109,51 @@ internal sealed class DashedTableDividerRenderer : ITableDividerRenderer
         TableDividerDrawing.Stroke(context, geometry, options, dashPattern, dashOffset);
 }
 
+/// <summary>Draws faint row separators with symmetric alpha fades at the table's left and right edges.</summary>
+internal sealed class FadingRowTableDividerRenderer : ITableDividerRenderer
+{
+    private readonly TableDividerOptions options;
+    private readonly double fadeLength;
+
+    /// <summary>Uses a one-unit white line at 15 percent opacity, fading over 24 logical units at each end.</summary>
+    public FadingRowTableDividerRenderer()
+        : this(new TableDividerOptions(new Color(1, 1, 1, 0.15), boundaries: TableDividerKind.Row)) { }
+
+    /// <summary>Configures peak color, logical stroke width, and logical end-fade length; cell boundaries are never drawn.</summary>
+    /// <remarks>Fades meet at the center for tables narrower than twice the requested fade length.</remarks>
+    public FadingRowTableDividerRenderer(TableDividerOptions options, double fadeLength = 24)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        TableDividerOptions.RequirePositive(fadeLength, nameof(fadeLength));
+        this.options = new TableDividerOptions(options.Color, options.StrokeWidth, options.Boundaries & TableDividerKind.Row);
+        this.fadeLength = fadeLength;
+    }
+
+    /// <summary>Scales styling once and paints all row boundaries with a shared, temporary Cairo gradient.</summary>
+    public void Draw(Context context, TableDividerGeometry geometry)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(geometry);
+        double scaledFade = fadeLength * geometry.GuiScale;
+        TableDividerOptions.RequirePositive(scaledFade, nameof(fadeLength));
+        if (geometry.Width == 0) return;
+        double fadeFraction = Math.Min(scaledFade / geometry.Width, 0.5);
+        var color = options.Color;
+        var transparent = new Color(color.R, color.G, color.B, 0);
+        using var gradient = new LinearGradient(0, 0, geometry.Width, 0) { Extend = Extend.Pad };
+        gradient.AddColorStop(0, transparent);
+        gradient.AddColorStop(fadeFraction, color);
+        gradient.AddColorStop(1 - fadeFraction, color);
+        gradient.AddColorStop(1, transparent);
+        TableDividerDrawing.Stroke(context, geometry, options, [], 0, gradient);
+    }
+}
+
 /// <summary>Shares line mechanics between strategies without introducing style decisions into the table.</summary>
 internal static class TableDividerDrawing
 {
     internal static void Stroke(Context context, TableDividerGeometry geometry, TableDividerOptions options,
-        ReadOnlySpan<double> dashPattern, double dashOffset)
+        ReadOnlySpan<double> dashPattern, double dashOffset, Pattern? source = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(geometry);
@@ -139,7 +179,8 @@ internal static class TableDividerDrawing
             context.Rectangle(0, 0, geometry.Width, geometry.Height);
             context.Clip();
             context.Operator = Operator.Over;
-            context.SetSourceColor(options.Color);
+            if (source is null) context.SetSourceColor(options.Color);
+            else context.SetSource(source);
             context.LineWidth = width;
             context.LineCap = LineCap.Butt;
             context.SetDash(scaledDashes, scaledOffset);

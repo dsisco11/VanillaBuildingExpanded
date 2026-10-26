@@ -269,6 +269,59 @@ public sealed class TableDividerTests
     }
 
     [Theory]
+    [InlineData(1)]
+    [InlineData(1.25)]
+    [InlineData(1.5)]
+    [InlineData(2)]
+    public void FadingRows_HaveSymmetricTransparentEndsAndAFaintPlateau(double scale)
+    {
+        var renderer = new FadingRowTableDividerRenderer(
+            new TableDividerOptions(new Color(1, 1, 1, 0.25)), fadeLength: 8);
+        var pixels = Render(renderer, HorizontalGeometry(scale));
+        int width = (int)(32 * scale);
+        int y = (int)Math.Floor(10 * scale - scale / 2 + 0.5);
+        Assert.InRange(Alpha(pixels, 0, y), 0, 4);
+        Assert.True(Alpha(pixels, (int)(4 * scale), y) > Alpha(pixels, 0, y));
+        Assert.True(Alpha(pixels, (int)(8 * scale), y) > Alpha(pixels, (int)(4 * scale), y));
+        Assert.InRange(Alpha(pixels, width / 2, y), 63, 64);
+        for (int x = 0; x < width; x++)
+            Assert.InRange(Math.Abs(Alpha(pixels, x, y) - Alpha(pixels, width - x - 1, y)), 0, 1);
+        Assert.Equal(0, Alpha(pixels, width / 2, y - 1));
+        if (width < 64) Assert.Equal(0, Alpha(pixels, width, y));
+    }
+
+    [Fact]
+    public void FadingRows_DrawEveryRowButNoCellOrOuterBorder()
+    {
+        var geometry = new TableDividerGeometry(32, 32, 1, [
+            new(TableDividerKind.Row, 0, 10, 32, 10),
+            new(TableDividerKind.Row, 0, 20, 32, 20),
+            new(TableDividerKind.Cell, 16, 0, 16, 32)
+        ]);
+        var pixels = Render(new FadingRowTableDividerRenderer(), geometry);
+        Assert.InRange(Alpha(pixels, 15, 10), 35, 39);
+        Assert.Equal(Alpha(pixels, 15, 10), Alpha(pixels, 15, 20));
+        Assert.Equal(0, Alpha(pixels, 16, 5));
+        Assert.Equal(0, Alpha(pixels, 15, 0));
+        Assert.Equal(0, Alpha(pixels, 15, 31));
+    }
+
+    [Fact]
+    public void FadingRows_NarrowTablesMeetAtCenterAndEmptyOrUnselectedTablesDrawNothing()
+    {
+        var geometry = new TableDividerGeometry(8, 16, 1, [new(TableDividerKind.Row, 0, 10, 8, 10)]);
+        var pixels = Render(new FadingRowTableDividerRenderer(), geometry);
+        Assert.InRange(Alpha(pixels, 3, 10), 32, 35);
+        Assert.Equal(Alpha(pixels, 3, 10), Alpha(pixels, 4, 10));
+        Assert.True(Alpha(pixels, 0, 10) < Alpha(pixels, 3, 10));
+        Assert.All(Render(new FadingRowTableDividerRenderer(), new TableDividerGeometry(0, 0, 1, [])),
+            value => Assert.Equal(0, value));
+        Assert.All(Render(new FadingRowTableDividerRenderer(
+            new TableDividerOptions(new Color(1, 1, 1, 1), boundaries: TableDividerKind.Cell)), geometry),
+            value => Assert.Equal(0, value));
+    }
+
+    [Theory]
     [InlineData(4)]
     [InlineData(-4)]
     public void DashOffset_UsesTheConfiguredPhase(double offset)
@@ -317,8 +370,10 @@ public sealed class TableDividerTests
         Assert.Equal(0, Alpha(surface.Data, 4, 24));
     }
 
-    [Fact]
-    public void Strategies_PreserveSourceOperatorLineWidthTransformClipAndPath()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Strategies_PreserveSourceOperatorLineWidthTransformClipAndPath(bool fading)
     {
         using var surface = new ImageSurface(Format.Argb32, 64, 64);
         using var context = new Context(surface);
@@ -329,7 +384,9 @@ public sealed class TableDividerTests
         context.Rectangle(1, 1, 30, 30);
         context.Clip();
         context.Rectangle(20, 20, 4, 4);
-        var renderer = new DashedTableDividerRenderer(new TableDividerOptions(new Color(1, 0, 0, 0.5)), [4, 4]);
+        ITableDividerRenderer renderer = fading
+            ? new FadingRowTableDividerRenderer(new TableDividerOptions(new Color(1, 0, 0, 0.5)))
+            : new DashedTableDividerRenderer(new TableDividerOptions(new Color(1, 0, 0, 0.5)), [4, 4]);
         renderer.Draw(context, HorizontalGeometry(1));
 
         Assert.Equal(7, context.LineWidth);
@@ -408,6 +465,7 @@ public sealed class TableDividerTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new TableDividerOptions(new Color(1, 1, 1, 1), value));
         var options = new TableDividerOptions(new Color(1, 1, 1, 1));
         Assert.Throws<ArgumentOutOfRangeException>(() => new DashedTableDividerRenderer(options, [value, 1]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new FadingRowTableDividerRenderer(options, value));
     }
 
     [Fact]
@@ -420,6 +478,7 @@ public sealed class TableDividerTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new TableDividerOptions(new Color(1, 1, 1, 1), boundaries: (TableDividerKind)4));
         var options = new TableDividerOptions(new Color(1, 1, 1, 1));
         Assert.Throws<ArgumentNullException>(() => new SolidTableDividerRenderer(null!));
+        Assert.Throws<ArgumentNullException>(() => new FadingRowTableDividerRenderer(null!));
         Assert.Throws<ArgumentNullException>(() => new DashedTableDividerRenderer(options, null!));
         Assert.Throws<ArgumentException>(() => new DashedTableDividerRenderer(options, []));
         Assert.Throws<ArgumentOutOfRangeException>(() => new DashedTableDividerRenderer(options, [double.MaxValue, double.MaxValue]));
@@ -440,6 +499,8 @@ public sealed class TableDividerTests
         var hugeDash = new DashedTableDividerRenderer(new TableDividerOptions(new Color(1, 1, 1, 1)),
             [double.MaxValue / 2, double.MaxValue / 2]);
         Assert.Throws<ArgumentOutOfRangeException>(() => hugeDash.Draw(context, geometry));
+        var hugeFade = new FadingRowTableDividerRenderer(new TableDividerOptions(new Color(1, 1, 1, 1)), double.MaxValue);
+        Assert.Throws<ArgumentOutOfRangeException>(() => hugeFade.Draw(context, geometry));
         Assert.Equal(3, context.LineWidth);
         Assert.Equal(Status.Success, context.Status);
     }
