@@ -47,6 +47,8 @@ public sealed class CollapsibleSectionTests
         first.RequestToggle();
         first.ApplyPendingToggle();
         double collapsedFirstHeight = first.MeasureHeight(width);
+        Assert.Equal(60, collapsedFirstHeight);
+        Assert.Equal(160, expandedFirstHeight);
         Assert.Equal(100, expandedFirstHeight - collapsedFirstHeight);
         Assert.Equal(width, first.MeasureWidth());
         Assert.Equal(secondHeight, second.MeasureHeight(width));

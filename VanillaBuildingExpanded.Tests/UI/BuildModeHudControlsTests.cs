@@ -16,6 +16,32 @@ public sealed class BuildModeHudControlsTests
 {
     [Theory]
     [InlineData(1, false)]
+    [InlineData(1.33, false)]
+    [InlineData(2, false)]
+    [InlineData(1, true)]
+    [InlineData(1.33, true)]
+    [InlineData(2, true)]
+    public void Sections_OmitBottomDividerAndItsReservedHeight(float scale, bool collapsed)
+    {
+        using var fixture = new Fixture(scale);
+        var section = new CollapsibleSection("test", "test-title", () => 300, _ => 20,
+            (_, _) => { }, collapsed);
+        double width = section.MeasureWidth();
+        double height = section.MeasureHeight(width);
+        Assert.Equal(collapsed ? 60 : 80, height);
+        using var composer = fixture.Composer(ElementBounds.Fixed(0, 0, width, height).WithEmptyParent());
+        Assert.Equal(height, section.Compose(fixture.Api.Object, composer, 0, width));
+        Assert.Equal(height - 24, section.ToggleButton!.Bounds.fixedY);
+        composer.Compose();
+        var artwork = Assert.Single(fixture.Uploads, upload =>
+            upload.Width == (int)(width * scale) && upload.Height == (int)(height * scale));
+        int y = (int)((height - 24) * scale);
+        for (int x = (int)(12 * scale); x < (int)((width - 24) * scale); x++)
+            Assert.Equal(0, artwork.Pixels[y * artwork.Stride + x * 4 + 3]);
+    }
+
+    [Theory]
+    [InlineData(1, false)]
     [InlineData(1.25, false)]
     [InlineData(1.33, false)]
     [InlineData(1.5, false)]

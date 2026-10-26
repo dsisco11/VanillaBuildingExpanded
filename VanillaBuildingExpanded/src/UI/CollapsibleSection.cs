@@ -14,8 +14,8 @@ internal sealed class CollapsibleSection
     private const double TitleContentGap = 4;
     private const double TitleRuleGap = 8;
     private const double TitleRuleMinimumWidth = 16;
+    private const double TitleRuleHeight = 1;
     private const double ContentBottomPadding = 8;
-    private const double DividerHeight = 1;
     private const double ButtonHeight = 24;
 
     private readonly string titleKey;
@@ -51,7 +51,7 @@ internal sealed class CollapsibleSection
     public double MeasureHeight(double width)
     {
         double contentHeight = IsCollapsed ? 0 : measureContentHeight(width - LeftPadding - RightPadding);
-        return TitleHeight + TitleContentGap + contentHeight + ContentBottomPadding + DividerHeight + ButtonHeight;
+        return TitleHeight + TitleContentGap + contentHeight + ContentBottomPadding + ButtonHeight;
     }
 
     public void RequestToggle() => togglePending = !togglePending;
@@ -74,7 +74,7 @@ internal sealed class CollapsibleSection
     {
         double height = MeasureHeight(width);
         double contentWidth = width - LeftPadding - RightPadding;
-        double dividerY = height - ButtonHeight - DividerHeight;
+        double buttonY = height - ButtonHeight;
         composer.BeginChildElements(ElementBounds.Fixed(0, top, width, height));
         string title = Lang.Get(titleKey);
         composer.AddStaticElement(new GuiElementCustomDraw(api,
@@ -83,28 +83,13 @@ internal sealed class CollapsibleSection
         if (!IsCollapsed)
         {
             var contentBounds = ElementBounds.Fixed(LeftPadding, TitleHeight + TitleContentGap,
-                contentWidth, dividerY - TitleHeight - TitleContentGap - ContentBottomPadding);
+                contentWidth, buttonY - TitleHeight - TitleContentGap - ContentBottomPadding);
             composer.BeginChildElements(contentBounds);
             composeContent(composer, contentBounds);
             composer.EndChildElements();
         }
-        composer.AddStaticCustomDraw(ElementBounds.Fixed(LeftPadding, dividerY, contentWidth, DividerHeight),
-            (ctx, surface, bounds) =>
-            {
-                ctx.Save();
-                try
-                {
-                    ctx.SetSourceRGBA([.. UiPalette.SectionDividerColor]);
-                    ctx.Rectangle(bounds.drawX, bounds.drawY, bounds.InnerWidth, bounds.InnerHeight);
-                    ctx.Fill();
-                }
-                finally
-                {
-                    ctx.Restore();
-                }
-            });
         ToggleButton = new GuiElementCollapseButton(api,
-            ElementBounds.Fixed(0, dividerY + DividerHeight, width, ButtonHeight), IsCollapsed, RequestToggle);
+            ElementBounds.Fixed(0, buttonY, width, ButtonHeight), IsCollapsed, RequestToggle);
         composer.AddInteractiveElement(ToggleButton, $"{Id}-toggle");
         composer.EndChildElements();
         return height;
@@ -134,7 +119,7 @@ internal sealed class CollapsibleSection
             double textLeft = bounds.drawX + (bounds.InnerWidth - extents.Width) / 2;
             double middleY = bounds.drawY + bounds.InnerHeight / 2;
             ctx.SetSourceRGBA([.. UiPalette.SectionDividerColor]);
-            ctx.LineWidth = GuiElement.scaled(DividerHeight);
+            ctx.LineWidth = GuiElement.scaled(TitleRuleHeight);
             ctx.LineCap = LineCap.Butt;
             ctx.SetDash([], 0);
             if (textLeft - gap > bounds.drawX)

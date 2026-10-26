@@ -50,7 +50,7 @@ Draw each tag as a compact filled rounded box with a visible border and centered
 
 Size boxes to the measured text ink, with 3 logical units of horizontal padding, 2 of vertical padding, and a 1-unit border. Keep the table's row footprint independent of this compact box height.
 
-The Room table, like the snapping/rotation and Controls tables, uses faint row separators that fade to transparent at both ends. These are table-content dividers, independent of the collapsible section's divider and toggle. Existing row spacing and passive input behavior are unchanged.
+The Room table, like the snapping/rotation and Controls tables, uses faint row separators that fade to transparent at both ends. These are table-content dividers, independent of the section heading's flanking rules and collapse toggle. Sections have no bottom divider line. Table row spacing and passive input behavior are unchanged.
 
 All HUD tables vertically center preferred cell footprints within their rows. Native labels and dynamic values reserve their measured font-line height; room tags reserve their measured padded box height, with each box centered in the tag track. The Room table retains 24-unit rows, and its dividers remain on row boundaries.
 
