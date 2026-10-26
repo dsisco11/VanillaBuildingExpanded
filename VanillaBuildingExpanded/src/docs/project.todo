@@ -1,4 +1,6 @@
 # Short-Term:
+    ☐ BUG: Placement indicator does not always indicate the true mesh shape (e.g. glass panes facing wrong way or fences not linked to nearby fences).
+    ☐ BUG: Sometimes horizontal/vertical snapping restriction placement does not work as expected (for slabs?).
     ☐ Snapping indicators to visualize which edges the "build brush" is snapping to.
     ☐ Placement restriction modes (e.g. only placing blocks along a specific plane, such as when you are building a long straight wall or flooring).
     ☐ ISSUE: cant place doors with the build-brush.
