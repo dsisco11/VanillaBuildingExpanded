@@ -18,11 +18,11 @@ BuildBrush resolves placement intent locally and applies native block rules on b
 | [Preview dimension](../VanillaBuildingExpanded/src/BuildBrush/BrushDimension.cs) | Owns preview contents and native chunk synchronization. |
 | [Preview entity](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushEntity.cs) and [renderer](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushEntityRenderer.cs) | Publish/render watched validity, ownership, bounds and dirty state with mini-dimension contents. Local entity association checks the owner UID; rendering uses the local camera's real player context. |
 | [HUD binding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) and [HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs) | Observe enabled mode independently of brush eligibility and lazily own the non-focusing information panel. The [Work area partial](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.WorkArea.cs) observes shared work area state and issues commands without owning coordinates, config or GPU resources. |
-| [Work area state](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaState.cs) and [controller](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaController.cs) | Own immutable copied endpoints with local Y/dimension, inclusive wide-integer bounds, visibility preference and direct endpoint transactions. Coordinate validation is shared with the world-facing adapters. |
-| [Work area persistence](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaPersistence.cs) | Uses native mod-config APIs for versioned per-savegame endpoints, validates without requiring loaded blocks, preserves unrelated entries and retries dirty edits. |
+| [Work area state](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaState.cs) and [controller](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaController.cs) | Own the named-area collection, stable IDs, selected-area projection, per-area session visibility, copied local-Y/dimension endpoints, inclusive bounds and direct endpoint transactions. Coordinate validation is shared with the world-facing adapters. |
+| [Work area persistence](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaPersistence.cs) | Uses native mod-config APIs for schema-2 per-savegame named-area collections, validates without requiring loaded blocks, preserves unrelated entries and retries dirty edits. |
 | [Work area gizmo session](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaGizmoSession.cs) | Owns one manager/render/input composition, per-endpoint positioning controls and a whole-selection midpoint control, controller transaction binding and explicit missing-endpoint creation. Creation-only [terrain targeting](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaTerrainTarget.cs) raycasts the finite visual near/far segment without changing native selection or loading terrain; handle movement never invokes it. |
 | [Work area render binding](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaRenderBinding.cs) | Observes state and local dimension/session eligibility, balances opaque-stage registration, reports mismatch/render failure, and owns one renderer per session. |
-| [Work area renderer](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaRenderer.cs) and [render state](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaRenderState.cs) | Reuse one 12-edge mesh with the native wireframe shader, compute double-precision camera-relative drawing and restore the active shader and captured depth/line state without mutating blend state. |
+| [Work area renderer](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaRenderer.cs) and [render state](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaRenderState.cs) | Draw all eligible visible boxes using one shared 12-edge mesh and the native wireframe shader, compute double-precision camera-relative drawing and restore the active shader and captured depth/line state without mutating blend state. |
 
 Brush/controller decisions require no player proxy. Real `IPlayer`, `IClientPlayer` and `IServerPlayer` objects remain at game callbacks, native validation/placement, network replies, entity/camera access and dimension synchronization. `BuildBrushInstance.SyncDimensionToPlayers` and `BrushDimension.SyncToPlayers` retain their native recipient contracts.
 
@@ -55,6 +55,39 @@ registration identifiers. Persistence starts fresh in
 `vanillabuildingexpanded-workareas.json`; the former
 `vanillabuildingexpanded-rulers.json` is intentionally left untouched, with no
 fallback reads or migration.
+
+Each world owns a collection of named areas. Names are trimmed, control-free,
+at most 64 UTF-16 code units, and unique using ordinal case-insensitive comparison.
+GUIDs, rather than names or list indices, identify areas across renames and saves.
+A fresh controller offers one empty, hidden area with a localized default name.
+Deleting the last area leaves no active selection and disables world creation
+until an area is created through New. Selection and independent visibility remain
+session-only; restoration selects the first saved area and hides every area.
+
+The HUD exposes a native named-area dropdown, New/Rename/Delete controls, the
+selected area's visibility checkbox and its size. Popup input is routed beyond
+the table footprint, with outside presses dismissing it and complete per-button
+gestures retained through recomposition. Names are escaped before native rich-text
+display. [Naming dialogs](../VanillaBuildingExpanded/src/BuildBrush/Hud/WorkAreaNameDialog.cs)
+take native focus and capture keyboard input; validation errors keep the dialog
+open. Escape/Cancel do not mutate the collection. Deletion requires confirmation.
+Hiding/disposal, death, locale changes and scale changes close management dialogs.
+
+Only the selected area's existing endpoints and complete-bounds midpoint own
+gizmos. Switching selection cancels its transaction before projecting the next
+area and clears pending creation/cancellation state. Other visible complete areas
+keep their boxes, filtered individually by dimension and coordinate validity,
+even when the selected area's visibility is unchecked.
+
+Schema 2 stores each world as an `areas` array of `id`, `name`, nullable `start`
+and nullable `end`. Validation rejects duplicate IDs/names and invalid records
+atomically for that world; unrelated worlds and world-level metadata remain
+untouched by repairs. The prior schema-1 single-area config is intentionally not
+migrated: it is ignored and replaced only by a subsequent explicit save.
+Unsupported other versions and unreadable files remain protected from overwrite.
+Metadata commits use `CommittedAreas`, substituting the original pair for the
+active preview, so a rename cannot accidentally save a drag preview. Dirty
+collection saves retain the existing staged-file promotion and retry behavior.
 
 The [analytic movement replacement](InWorldGizmos.todo#phase-7-replace-terrain-following-movement-with-analytic-translation) uses a camera-facing plane captured at drag start, retaining analytic arrows and whole-block work area snapping. Terrain targeting serves only explicit first-use/missing-endpoint creation. Automated/build evidence and outstanding live qualification are recorded separately in the plan.
 
@@ -131,8 +164,8 @@ only the selected component and preserve the other two. Neither snapped previews
 normalized role anchors replace the unsnapped interaction baseline. World-grid rounding
 can put the published center slightly off the continuous plane. Decode/validation applies to
 the cell with its explicit dimension, including End anchors at local Y32768.
-State remains the live presentation; CommittedEndpoints supplies the baseline during
-an active edit. Persistence reads only committed endpoints, even on an explicit dirty
+State remains the selected area's live presentation; CommittedEndpoints supplies the baseline during
+an active edit. Persistence reads the collection's committed endpoints, even on an explicit dirty
 retry during a preview. Completion requests the durable save; a clean unchanged
 completion causes no write. Cancellation precedes both client departure teardown and
 standalone persistence disposal/dirty retries, so canceled previews cannot be saved.
@@ -150,7 +183,7 @@ and cancellation restores both corners. Endpoint edits resynchronize the midpoin
 Partial work areas do not have this control; visibility, dimension and lifecycle gates
 are shared with the endpoint controls.
 
-On local join, the client system creates a fresh work area controller, restores endpoints through persistence, then creates the box render binding. Visibility remains unchecked and mode disabled. The gizmo session is created lazily once enabled and alive, independent of brush placement eligibility. The 50-ms client tick refreshes context before brush early-outs; mode transitions refresh it immediately.
+On local join, the client system creates a fresh work area controller, restores the named-area collection through persistence, then creates the shared box render binding. Visibility remains unchecked and mode disabled. The gizmo session is created lazily once enabled and alive, independent of brush placement eligibility. The 50-ms client tick refreshes context before brush early-outs; mode transitions refresh it immediately.
 
 Both free cursor and mouse-look reticle support center and axis drags; reticle motion remains available for native aiming. Existing handles move over sky, foreground entities and absent terrain subject to coordinate/dimension validity. Only an explicit fresh empty/partial creation click calls the terrain resolver, using the captured visual near/far ray through the camera far plane without a player-reach cap. Creation retains native meta-block/interactable-entity filters and liquid policy, rejects foreground entities, sky, unloaded chunks and outside-clip hits, and copies the selected cell without brush offsets. It never refreshes native selection or loads terrain. Per-button ownership suppresses hold/repeat/release actions in both native action families, including after completion; Right/Escape cancel before placement. The installed 1.22.7 public event API lacks a focus callback, so the adapter uses the native client world's focus-listener list and explicitly detaches it.
 

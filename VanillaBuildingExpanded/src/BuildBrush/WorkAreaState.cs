@@ -12,6 +12,15 @@ internal enum WorkAreaNotice
     InvalidEndpoint
 }
 
+internal enum WorkAreaNameError { None, Invalid, Duplicate }
+
+internal sealed record NamedWorkArea(Guid Id, string Name, WorkAreaEndpoint? Start, WorkAreaEndpoint? End,
+    bool IsVisible = false)
+{
+    public WorkAreaBounds? Bounds => Start is { } start && End is { } end
+        && start.Dimension == end.Dimension ? new WorkAreaBounds(start, end) : null;
+}
+
 internal readonly record struct WorkAreaEndpoint(int X, int Y, int Z, int Dimension)
 {
     public bool IsValid(IBlockAccessor accessor) => Dimension >= 0
@@ -63,9 +72,10 @@ internal readonly record struct WorkAreaState(
     WorkAreaEndpoint? End,
     bool ShowWorkArea,
     bool IsBuildModeEnabled,
-    bool IsPlayerAlive)
+    bool IsPlayerAlive,
+    bool HasActiveArea = true)
 {
-    public bool CanPick => IsBuildModeEnabled && IsPlayerAlive;
+    public bool CanPick => HasActiveArea && IsBuildModeEnabled && IsPlayerAlive;
 
     public WorkAreaBounds? Bounds => Start is { } start && End is { } end
         && start.Dimension == end.Dimension ? new WorkAreaBounds(start, end) : null;

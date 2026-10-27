@@ -9,6 +9,135 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 public sealed class WorkAreaControllerTests
 {
     [Fact]
+    public void NamedAreas_SelectRenameAndToggleIndependentlyWithoutMutatingOtherBounds()
+    {
+        var controller = new WorkAreaController();
+        controller.SetContext(true, true);
+        var first = controller.SelectedId!.Value;
+        controller.RenameArea(first, " Workshop ");
+        controller.TrySetEndpoints(new(1, 2, 3, 0), new(4, 5, 6, 0), Accessor());
+        controller.SetVisibility(true);
+        var original = Assert.Single(controller.Areas);
+        var second = controller.CreateArea("Garden");
+        Assert.NotEqual(first, second);
+        Assert.Equal(second, controller.SelectedId);
+        Assert.Null(controller.State.Bounds);
+        Assert.True(controller.State.ShowWorkArea);
+        controller.TrySetEndpoints(new(20, 30, 40, 2), null, Accessor());
+        controller.SetVisibility(false);
+        controller.SelectArea(first);
+        Assert.Equal(original.Start, controller.State.Start);
+        Assert.Equal(original.End, controller.State.End);
+        Assert.True(controller.State.ShowWorkArea);
+        Assert.Equal("Workshop", controller.Areas[0].Name);
+        controller.SetVisibility(second, true);
+        Assert.Equal(first, controller.SelectedId);
+        Assert.True(controller.Areas[1].IsVisible);
+        controller.SetVisibility(first, false);
+        Assert.False(controller.State.ShowWorkArea);
+        Assert.True(controller.Areas[1].IsVisible);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData("A\nB")]
+    [InlineData("A\tB")]
+    [InlineData("A\0B")]
+    public void Names_RejectEmptyAndControlCharactersWithoutChangingTheCollection(string name)
+    {
+        var controller = new WorkAreaController();
+        Assert.Equal(WorkAreaNameError.Invalid, controller.ValidateName(name));
+        Assert.Throws<ArgumentException>(() => controller.CreateArea(name));
+        Assert.Single(controller.Areas);
+    }
+
+    [Fact]
+    public void Names_TrimPreserveUnicodeAndRequireCaseInsensitiveUniquenessAndBoundedLength()
+    {
+        var controller = new WorkAreaController();
+        var first = controller.SelectedId!.Value;
+        string unicode = "Garden " + char.ConvertFromUtf32(0x1F33B);
+        controller.RenameArea(first, unicode);
+        Assert.Equal(unicode, controller.Areas[0].Name);
+        Assert.Equal(WorkAreaNameError.Duplicate, controller.ValidateName(" " + unicode.ToUpperInvariant() + " "));
+        Assert.Equal(WorkAreaNameError.None, controller.ValidateName(unicode, first));
+        Assert.Throws<ArgumentException>(() => controller.CreateArea(new string('x', 65)));
+        var second = controller.CreateArea(new string('x', 64));
+        Assert.Throws<ArgumentException>(() => controller.RenameArea(second, unicode));
+        Assert.Throws<KeyNotFoundException>(() => controller.SelectArea(Guid.NewGuid()));
+        Assert.Throws<KeyNotFoundException>(() => controller.DeleteArea(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void SelectingOrDeletingDuringPreviewRollsBackOriginalAreaAndNeverCommitsItsPreview()
+    {
+        var controller = new WorkAreaController();
+        controller.SetContext(true, true);
+        var first = controller.SelectedId!.Value;
+        controller.TrySetEndpoints(new(1, 2, 3, 0), new(4, 5, 6, 0), Accessor());
+        var second = controller.CreateArea("Second");
+        controller.SelectArea(first);
+        Assert.True(controller.BeginTranslation());
+        Assert.True(controller.PreviewTranslation(10, 10, 10, Accessor()));
+        Assert.Equal(1, controller.CommittedAreas.First().Start!.Value.X);
+        controller.RenameArea(second, "Other");
+        Assert.True(controller.IsEditing);
+        Assert.Equal(1, controller.CommittedAreas.First().Start!.Value.X);
+        int commits = 0;
+        controller.EndpointsCommitted += () => commits++;
+        controller.SelectArea(second);
+        Assert.False(controller.IsEditing);
+        Assert.Equal(1, controller.Areas[0].Start!.Value.X);
+        Assert.Null(controller.State.Start);
+        Assert.Equal(0, commits);
+        controller.SelectArea(first);
+        controller.BeginEndpointEdit(WorkAreaEndpointRole.Start);
+        controller.PreviewEndpoint(new(-20, 2, 3, 0), Accessor());
+        controller.DeleteArea(first);
+        Assert.Equal(second, controller.SelectedId);
+        Assert.Null(controller.State.Start);
+        Assert.False(controller.IsEditing);
+        Assert.Equal(0, commits);
+    }
+
+    [Fact]
+    public void DeletingLastAreaLeavesAnEmptyNonEditableCollectionAndCreatingAnAreaRestoresEditing()
+    {
+        var controller = new WorkAreaController();
+        controller.SetContext(true, true);
+        controller.DeleteArea(controller.SelectedId!.Value);
+        Assert.Empty(controller.Areas);
+        Assert.Null(controller.SelectedId);
+        Assert.False(controller.State.CanPick);
+        Assert.False(controller.TrySetEndpoints(new(1, 2, 3, 0), null, Accessor()));
+        controller.SetVisibility(true);
+        Assert.False(controller.State.ShowWorkArea);
+        var id = controller.CreateArea("New");
+        Assert.Equal(id, controller.SelectedId);
+        Assert.True(controller.State.CanPick);
+        Assert.True(controller.State.ShowWorkArea);
+    }
+
+    [Fact]
+    public void RestoredAreasNormalizeAllCornersAndStartHiddenWithoutEditingOrSaving()
+    {
+        var controller = new WorkAreaController();
+        int commits = 0;
+        controller.AreasCommitted += () => commits++;
+        var id = Guid.NewGuid();
+        controller.RestoreAreas([new(id, "Home", new(10, 1, 30, 0), new(5, 2, 20, 0), true),
+            new(Guid.NewGuid(), "Field", null, new(1, 2, 3, 2), true)]);
+        Assert.Equal(id, controller.SelectedId);
+        Assert.Equal(new WorkAreaEndpoint(5, 1, 20, 0), controller.State.Start);
+        Assert.All(controller.Areas, area => Assert.False(area.IsVisible));
+        Assert.False(controller.IsEditing);
+        Assert.Equal(0, commits);
+        Assert.Throws<ArgumentException>(() => controller.RestoreAreas([controller.Areas[0], controller.Areas[0]]));
+        Assert.Equal(2, controller.Areas.Count);
+    }
+
+    [Fact]
     public void NewController_IsInactiveIncompleteAndHidden()
     {
         var controller = new WorkAreaController();

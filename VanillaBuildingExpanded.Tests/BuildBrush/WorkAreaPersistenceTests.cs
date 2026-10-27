@@ -22,6 +22,137 @@ public sealed class WorkAreaConfigFileCollection;
 [Collection("Work area config files")]
 public sealed class WorkAreaPersistenceTests
 {
+    [Fact]
+    public void NamedAreas_RoundTripNamesIdsAndBoundsButNotSelectionOrVisibility()
+    {
+        using var fixture = new Fixture();
+        using var persistence = fixture.Open();
+        var first = fixture.Controller.SelectedId!.Value;
+        fixture.Controller.RenameArea(first, "Workshop");
+        Commit(fixture.Controller, true, new BlockPos(-10, 65, 20, 0));
+        Commit(fixture.Controller, false, new BlockPos(10, 75, 30, 0));
+        var second = fixture.Controller.CreateArea("Garden");
+        Commit(fixture.Controller, true, new BlockPos(30, 65, 40, 2));
+        var expected = fixture.Controller.CommittedAreas.Select(area => area with { IsVisible = false }).ToArray();
+        int writes = fixture.Writes.Count;
+        fixture.Controller.SelectArea(first);
+        fixture.Controller.SetVisibility(first, true);
+        fixture.Controller.SetVisibility(second, false);
+        Assert.Equal(writes, fixture.Writes.Count);
+        var restored = new WorkAreaController();
+        using var reopened = fixture.Open(restored);
+        Assert.Equal(expected, restored.Areas);
+        Assert.Equal(first, restored.SelectedId);
+        restored.SelectArea(second);
+        Assert.Equal(new WorkAreaEndpoint(30, 65, 40, 2), restored.State.Start);
+        Assert.Null(restored.State.End);
+        Assert.False(restored.State.ShowWorkArea);
+        var record = fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!;
+        Assert.Equal(new[] { "id", "name", "start", "end" }, ((JObject)record).Properties().Select(p => p.Name));
+    }
+
+    [Fact]
+    public void MetadataSavesDuringPreviewUseCommittedBoundsAndDeletionOfLastAreaRoundTripsEmpty()
+    {
+        using var fixture = new Fixture();
+        using var persistence = fixture.Open();
+        Commit(fixture.Controller, true, new BlockPos(10, 65, 20, 0));
+        Commit(fixture.Controller, false, new BlockPos(20, 70, 30, 0));
+        Assert.True(fixture.Controller.BeginTranslation());
+        Assert.True(fixture.Controller.PreviewTranslation(100, 0, 0, fixture.Accessor.Object));
+        fixture.Controller.RenameArea(fixture.Controller.SelectedId!.Value, "Renamed during drag");
+        Assert.True(fixture.Controller.IsEditing);
+        Assert.Equal(10, fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!["start"]!["x"]!.Value<int>());
+        fixture.Controller.DeleteArea(fixture.Controller.SelectedId!.Value);
+        Assert.Empty((JArray)fixture.Read()["worlds"]!["world-a"]!["areas"]!);
+        var restored = new WorkAreaController();
+        using var reopened = fixture.Open(restored);
+        Assert.Empty(restored.Areas);
+        Assert.Null(restored.SelectedId);
+        Assert.False(restored.State.HasActiveArea);
+        restored.CreateArea("First again");
+        Assert.Single((JArray)fixture.Read()["worlds"]!["world-a"]!["areas"]!);
+    }
+
+    [Fact]
+    public void SingleAreaSchemaIsNotMigratedAndIsReplacedOnlyOnAnExplicitNamedAreaCommit()
+    {
+        using var fixture = new Fixture();
+        var old = new JObject { ["schemaVersion"] = 1, ["worlds"] = new JObject
+        {
+            ["world-a"] = new JObject { ["start"] = Endpoint(100, 65, 200), ["end"] = Endpoint(110, 75, 210) }
+        } };
+        string original = fixture.Write(old);
+        using var persistence = fixture.Open();
+        Assert.Null(fixture.Controller.State.Start);
+        Assert.Null(fixture.Controller.State.End);
+        Assert.Single(fixture.Controller.Areas);
+        Assert.Equal(original, File.ReadAllText(fixture.ConfigPath));
+        Assert.Empty(fixture.Errors);
+        Assert.Empty(fixture.Writes);
+        fixture.Controller.RenameArea(fixture.Controller.SelectedId!.Value, "Fresh");
+        Assert.Equal(2, fixture.Read()["schemaVersion"]!.Value<int>());
+        Assert.Equal("Fresh", fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!["name"]!.Value<string>());
+        Assert.Equal(JTokenType.Null, fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!["start"]!.Type);
+    }
+
+    [Theory]
+    [InlineData("id", "not-an-id")]
+    [InlineData("id", "00000000000000000000000000000000")]
+    [InlineData("name", " ")]
+    [InlineData("name", " bad padding ")]
+    [InlineData("name", "bad\nname")]
+    public void InvalidNamedAreaMetadataIsReportedWithoutPartiallyLoadingTheWorld(string property, string value)
+    {
+        using var fixture = new Fixture();
+        var entry = Pair(Endpoint(10, 65, 20), null);
+        entry["areas"]![0]![property] = value;
+        string original = fixture.Write(Config(("world-a", entry)));
+        using var persistence = fixture.Open();
+        Assert.Null(fixture.Controller.State.Start);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-invalid-entry", fixture.Errors);
+        Assert.Equal(original, File.ReadAllText(fixture.ConfigPath));
+        Assert.Empty(fixture.Writes);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DuplicateIdsOrCaseInsensitiveNamesRejectTheWholeSavedCollection(bool duplicateId)
+    {
+        using var fixture = new Fixture();
+        var entry = Pair(Endpoint(10, 65, 20), null);
+        var duplicate = (JObject)entry["areas"]![0]!.DeepClone();
+        duplicate[duplicateId ? "name" : "id"] = duplicateId ? "Other" : Guid.NewGuid().ToString("N");
+        if (!duplicateId) duplicate["name"] = "FIRST";
+        ((JArray)entry["areas"]!).Add(duplicate);
+        fixture.Write(Config(("world-a", entry)));
+        using var persistence = fixture.Open();
+        Assert.Null(fixture.Controller.State.Start);
+        Assert.Single(fixture.Controller.Areas);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-invalid-entry", fixture.Errors);
+    }
+
+    [Fact]
+    public void FailedNameSaveRetainsTheCollectionAndRetriesWithSubsequentMetadataChanges()
+    {
+        using var fixture = new Fixture();
+        using var persistence = fixture.Open();
+        fixture.FailWrites = true;
+        fixture.Controller.RenameArea(fixture.Controller.SelectedId!.Value, "Workshop");
+        Assert.True(persistence.IsDirty);
+        Assert.Equal("Workshop", fixture.Controller.Areas[0].Name);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-save-failed", fixture.Errors);
+        fixture.FailWrites = false;
+        var second = fixture.Controller.CreateArea("Garden");
+        Assert.False(persistence.IsDirty);
+        var restored = new WorkAreaController();
+        using var reopened = fixture.Open(restored);
+        Assert.Equal(new[] { "Workshop", "Garden" }, restored.Areas.Select(area => area.Name));
+        restored.DeleteArea(second);
+        Assert.Single((JArray)fixture.Read()["worlds"]!["world-a"]!["areas"]!);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -136,9 +267,9 @@ public sealed class WorkAreaPersistenceTests
         controller.CompleteEndpointEdit();
         var saved = fixture.Read();
         Assert.Single(fixture.Writes);
-        Assert.Equal(1, saved["schemaVersion"]!.Value<int>());
-        Assert.Equal(30, saved["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
-        Assert.Equal(50, saved["worlds"]!["world-a"]!["end"]!["x"]!.Value<int>());
+        Assert.Equal(2, saved["schemaVersion"]!.Value<int>());
+        Assert.Equal(30, saved["worlds"]!["world-a"]!["areas"]![0]!["start"]!["x"]!.Value<int>());
+        Assert.Equal(50, saved["worlds"]!["world-a"]!["areas"]![0]!["end"]!["x"]!.Value<int>());
         var restored = new WorkAreaController();
         using var reopened = fixture.Open(restored);
         Assert.Equal(controller.State.Start, restored.State.Start);
@@ -173,7 +304,7 @@ public sealed class WorkAreaPersistenceTests
             }
             Assert.True(h.Up().Handled);
             Assert.Equal(i + 1, fixture.Writes.Count);
-            var record = fixture.Read()["worlds"]!["world-a"]![start ? "start" : "end"]!;
+            var record = fixture.Read()["worlds"]!["world-a"]!["areas"]![0]![start ? "start" : "end"]!;
             var committedCell = (start ? h.WorkArea.State.Start : h.WorkArea.State.End)!.Value;
             Assert.Equal(committedCell.X, record["x"]!.Value<int>());
             Assert.Equal(committedCell.Y, record["y"]!.Value<int>());
@@ -211,14 +342,14 @@ public sealed class WorkAreaPersistenceTests
         persistence.Dispose();
         Assert.False(persistence.IsDirty);
         Assert.Equal(10, fixture.Writes.Count);
-        Assert.Equal(committed!.Value.X, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
+        Assert.Equal(committed!.Value.X, fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!["start"]!["x"]!.Value<int>());
         var restored = new WorkAreaController();
         using var reopened = fixture.Open(restored);
         Assert.Equal(committed, restored.State.Start);
         Assert.Equal(committedEnd, restored.State.End);
         foreach (var (name, cell) in new[] { ("start", committed!.Value), ("end", committedEnd!.Value) })
         {
-            var saved = fixture.Read()["worlds"]!["world-a"]![name]!;
+            var saved = fixture.Read()["worlds"]!["world-a"]!["areas"]![0]![name]!;
             Assert.Equal(cell.X, saved["x"]!.Value<int>());
             Assert.Equal(cell.Y, saved["y"]!.Value<int>());
             Assert.Equal(cell.Z, saved["z"]!.Value<int>());
@@ -316,7 +447,7 @@ public sealed class WorkAreaPersistenceTests
         Assert.Equal(expected.MinCell, controller.State.Start);
         Assert.Equal(expected.MaxCell, controller.State.End);
         Assert.Equal(start ? expected.MinCell.X : expected.MaxCell.X,
-            fixture.Read()["worlds"]!["world-a"]![start ? "start" : "end"]!["x"]!.Value<int>());
+            fixture.Read()["worlds"]!["world-a"]!["areas"]![0]![start ? "start" : "end"]!["x"]!.Value<int>());
         var committed = controller.State;
         var committedPointer = new GizmoPointer(context, new(origin + Gizmos.PositionGizmoTests.V(100, 0, 0),
             Gizmos.PositionGizmoTests.V(0, 0, -1)));
@@ -346,7 +477,7 @@ public sealed class WorkAreaPersistenceTests
         Assert.True(persistence.TrySave());
         Assert.True(controller.IsEditing);
         Assert.Equal(99, controller.State.End!.Value.X);
-        Assert.Equal(14, fixture.Read()["worlds"]!["world-a"]!["end"]!["x"]!.Value<int>());
+        Assert.Equal(14, fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!["end"]!["x"]!.Value<int>());
         Assert.False(persistence.IsDirty);
         controller.CancelEndpointEdit();
         Assert.Equal(14, controller.State.End!.Value.X);
@@ -398,7 +529,7 @@ public sealed class WorkAreaPersistenceTests
         controller.TrySetEndpoint(WorkAreaEndpointRole.Start, saved, fixture.Accessor.Object);
         Assert.False(persistence.IsDirty);
         Assert.Equal(2, fixture.Writes.Count);
-        Assert.Equal(saved.X, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
+        Assert.Equal(saved.X, fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!["start"]!["x"]!.Value<int>());
     }
 
     [Fact]
@@ -420,7 +551,7 @@ public sealed class WorkAreaPersistenceTests
         controller.BeginEndpointEdit(WorkAreaEndpointRole.Start);
         controller.CompleteEndpointEdit();
         Assert.False(persistence.IsDirty);
-        Assert.Equal(30, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
+        Assert.Equal(30, fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!["start"]!["x"]!.Value<int>());
         int writes = fixture.Writes.Count;
         controller.BeginEndpointEdit(WorkAreaEndpointRole.Start);
         controller.CompleteEndpointEdit();
@@ -465,8 +596,8 @@ public sealed class WorkAreaPersistenceTests
         using var fresh = fixture.Open(restored);
         Assert.Equal(end, restored.State.End);
         Assert.Null(restored.State.Start);
-        Assert.Equal(1, fixture.Read()["schemaVersion"]!.Value<int>());
-        Assert.Equal(new[] { "start", "end" }, ((JObject)fixture.Read()["worlds"]!["world-a"]!).Properties().Select(p => p.Name));
+        Assert.Equal(2, fixture.Read()["schemaVersion"]!.Value<int>());
+        Assert.Equal(new[] { "areas" }, ((JObject)fixture.Read()["worlds"]!["world-a"]!).Properties().Select(p => p.Name));
     }
 
     [Fact]
@@ -484,8 +615,8 @@ public sealed class WorkAreaPersistenceTests
 
         Assert.False(persistence.IsDirty);
         Assert.Single(fixture.Writes);
-        Assert.Equal(1, fixture.Read()["schemaVersion"]!.Value<int>());
-        Assert.Equal(-10, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
+        Assert.Equal(2, fixture.Read()["schemaVersion"]!.Value<int>());
+        Assert.Equal(-10, fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!["start"]!["x"]!.Value<int>());
         Assert.Empty(Directory.GetFiles(GamePaths.ModConfig, "*.tmp"));
     }
 
@@ -518,8 +649,8 @@ public sealed class WorkAreaPersistenceTests
         Assert.False(fresh.IsEditing);
         Assert.False(reopened.IsDirty);
         Assert.Empty(fixture.Errors);
-        var record = Assert.IsType<JObject>(fixture.Read()["worlds"]!["world-a"]);
-        Assert.Equal(new[] { "start", "end" }, record.Properties().Select(p => p.Name));
+        var record = Assert.IsType<JObject>(fixture.Read()["worlds"]!["world-a"]!["areas"]![0]);
+        Assert.Equal(new[] { "id", "name", "start", "end" }, record.Properties().Select(p => p.Name));
         foreach (var endpoint in record.Properties().Select(p => p.Value).OfType<JObject>())
             Assert.Equal(new[] { "x", "y", "z", "dimension" }, endpoint.Properties().Select(p => p.Name));
     }
@@ -601,7 +732,7 @@ public sealed class WorkAreaPersistenceTests
 
         Commit(fixture.Controller, setStart, new BlockPos(30, 80, 40, 2));
         Assert.Equal(before + 1, fixture.Writes.Count);
-        var entry = fixture.Read()["worlds"]!["world-a"]!;
+        var entry = fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!;
         Assert.Equal(JTokenType.Null, entry[setStart ? "end" : "start"]!.Type);
         Assert.Equal(2, entry[setStart ? "start" : "end"]!["dimension"]!.Value<int>());
         Assert.Null(fixture.Controller.State.Bounds);
@@ -634,10 +765,10 @@ public sealed class WorkAreaPersistenceTests
     [InlineData("[]")]
     [InlineData("{}")]
     [InlineData("{\"schemaVersion\":\"1\",\"worlds\":{}}")]
-    [InlineData("{\"schemaVersion\":1.0,\"worlds\":{}}")]
+    [InlineData("{\"schemaVersion\":2.0,\"worlds\":{}}")]
     [InlineData("{\"schemaVersion\":2147483648,\"worlds\":{}}")]
-    [InlineData("{\"schemaVersion\":1,\"worlds\":null}")]
-    [InlineData("{\"schemaVersion\":1,\"worlds\":[]}")]
+    [InlineData("{\"schemaVersion\":2,\"worlds\":null}")]
+    [InlineData("{\"schemaVersion\":2,\"worlds\":[]}")]
     public void UnreadableOrMalformedFiles_AreReportedAndNeverReplacedWithDefaults(string json)
     {
         using var fixture = new Fixture();
@@ -653,7 +784,7 @@ public sealed class WorkAreaPersistenceTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(2)]
+    [InlineData(3)]
     [InlineData(-1)]
     public void UnsupportedSchema_IsDistinctAndProtectedUntilFileIsRepaired(int version)
     {
@@ -668,7 +799,7 @@ public sealed class WorkAreaPersistenceTests
         Assert.Equal(original, File.ReadAllText(fixture.ConfigPath));
         Assert.True(persistence.IsDirty);
         Assert.Empty(fixture.Writes);
-        root["schemaVersion"] = 1;
+        root["schemaVersion"] = 2;
         fixture.Write(root);
         Assert.True(persistence.TrySave());
         Assert.False(persistence.IsDirty);
@@ -693,7 +824,14 @@ public sealed class WorkAreaPersistenceTests
     public void InvalidActiveEntries_AreReportedAndRetainedUntilAnExplicitValidCommit(string entry)
     {
         using var fixture = new Fixture();
-        var root = Config(("world-a", JToken.Parse(entry)), ("other-world", new JValue("preserve")));
+        var invalid = JToken.Parse(entry);
+        if (invalid is JObject area && area.ContainsKey("start"))
+        {
+            area["id"] = "11111111111111111111111111111111";
+            area["name"] = "First";
+            invalid = new JObject { ["areas"] = new JArray(area) };
+        }
+        var root = Config(("world-a", invalid), ("other-world", new JValue("preserve")));
         string original = fixture.Write(root);
         using var persistence = fixture.Open();
 
@@ -707,7 +845,7 @@ public sealed class WorkAreaPersistenceTests
         Assert.False(persistence.IsDirty);
         Assert.Single(fixture.Writes);
         Assert.Equal("preserve", fixture.Read()["worlds"]!["other-world"]!.Value<string>());
-        Assert.Equal(JTokenType.Null, fixture.Read()["worlds"]!["world-a"]!["start"]!.Type);
+        Assert.Equal(JTokenType.Null, fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!["start"]!.Type);
     }
 
     [Fact]
@@ -765,7 +903,7 @@ public sealed class WorkAreaPersistenceTests
         Commit(fixture.Controller, true, new BlockPos(10, 65, 20, 0));
         Assert.False(persistence.IsDirty);
         Assert.Equal(2, fixture.Writes.Count);
-        Assert.Equal(4, fixture.Read()["worlds"]!["other-world"]!["start"]!["x"]!.Value<int>());
+        Assert.Equal(4, fixture.Read()["worlds"]!["other-world"]!["areas"]![0]!["start"]!["x"]!.Value<int>());
     }
 
     [Fact]
@@ -818,7 +956,7 @@ public sealed class WorkAreaPersistenceTests
         Assert.False(persistence.IsDirty);
         Assert.Equal(2, count);
         Assert.Equal(count, fixture.Writes.Count);
-        Assert.Equal(JTokenType.Null, fixture.Read()["worlds"]!["world-a"]!["end"]!.Type);
+        Assert.Equal(JTokenType.Null, fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!["end"]!.Type);
         Assert.Throws<ObjectDisposedException>(() => persistence.TrySave());
     }
 
@@ -880,7 +1018,7 @@ public sealed class WorkAreaPersistenceTests
             Assert.Null(GetField(system, "workArea"));
             Assert.Null(GetField(system, "workAreaPersistence"));
             Assert.Null(GetField(system, "workAreaRendering"));
-            Assert.Equal(10, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
+            Assert.Equal(10, fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!["start"]!["x"]!.Value<int>());
             int writes = fixture.Writes.Count;
             Commit(workArea, false, new BlockPos(14, 67, 23, 0));
             Assert.Equal(writes, fixture.Writes.Count);
@@ -911,13 +1049,14 @@ public sealed class WorkAreaPersistenceTests
         new() { ["x"] = x, ["y"] = y, ["z"] = z, ["dimension"] = dimension };
 
     private static JObject Pair(JToken? start, JToken? end) =>
-        new() { ["start"] = start ?? JValue.CreateNull(), ["end"] = end ?? JValue.CreateNull() };
+        new() { ["areas"] = new JArray(new JObject { ["id"] = "11111111111111111111111111111111",
+            ["name"] = "First", ["start"] = start ?? JValue.CreateNull(), ["end"] = end ?? JValue.CreateNull() }) };
 
     private static JObject Config(params (string Id, JToken Value)[] entries)
     {
         var worlds = new JObject();
         foreach (var (id, value) in entries) worlds[id] = value;
-        return new JObject { ["schemaVersion"] = 1, ["worlds"] = worlds };
+        return new JObject { ["schemaVersion"] = 2, ["worlds"] = worlds };
     }
 
     private static object? GetField(object target, string name) =>
@@ -958,7 +1097,8 @@ public sealed class WorkAreaPersistenceTests
             translations.Setup(t => t.HasTranslation(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()))
                 .Returns(true);
             translations.Setup(t => t.Get(It.IsAny<string>(), It.IsAny<object[]>()))
-                .Returns((string key, object[] _) => $"translated {key}");
+                .Returns((string key, object[] args) => key.EndsWith("workarea-default-name", StringComparison.Ordinal)
+                    ? $"Work area {args[0]}" : $"translated {key}");
             Lang.AvailableLanguages.Add(Locale, translations.Object);
             Lang.ChangeLanguage(Locale);
             Api.Setup(a => a.World).Returns(World.Object);

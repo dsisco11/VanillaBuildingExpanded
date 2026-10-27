@@ -64,14 +64,16 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     public override bool UnregisterOnClose => true;
     /// <summary>Routes only actual controls, captures, and hover exit with a free cursor.</summary>
     public override bool ShouldReceiveMouseEvents() => !disposed && IsOpened() && !capi.Input.MouseGrabbed
-        && (ActiveWorkAreaTable?.WantsPointerEvents(capi.Input.MouseX, capi.Input.MouseY) == true
+        && (workAreaSelector?.listMenu.IsOpened == true || workAreaMenuGestures.Count != 0
+            || ActiveWorkAreaTable?.WantsPointerEvents(capi.Input.MouseX, capi.Input.MouseY) == true
             || sections.Any(section => section.ToggleButton is { } button && (button.IsPressed
                 || button.IsPositionInside(capi.Input.MouseX, capi.Input.MouseY))));
     /// <summary>Leaves keyboard input entirely to gameplay and existing dialogs.</summary>
     public override bool ShouldReceiveKeyboardEvents() => false;
 
     internal bool ReservesPointer(int x, int y) => !disposed && IsOpened() && !capi.Input.MouseGrabbed
-        && (ActiveWorkAreaTable?.ReservesPointer(x, y) == true
+        && (workAreaSelector?.listMenu.IsOpened == true || workAreaMenuGestures.Count != 0
+            || ActiveWorkAreaTable?.ReservesPointer(x, y) == true
             || sections.Any(section => section.ToggleButton is { } button
                 && (button.IsPressed || button.IsPositionInside(x, y))));
 
@@ -79,6 +81,15 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     {
         if (!disposed && IsOpened() && !capi.Input.MouseGrabbed)
         {
+            if (workAreaSelector?.listMenu.IsOpened == true && !args.Handled)
+            {
+                workAreaMenuGestures.Add(args.Button);
+                if (args.Button == EnumMouseButton.Left && workAreaSelector.IsPositionInside(args.X, args.Y))
+                    workAreaSelector.OnMouseDown(capi, args);
+                else workAreaSelector.OnFocusLost();
+                args.Handled = true;
+                return;
+            }
             ActiveWorkAreaTable?.OnMouseDown(capi, args);
             foreach (var section in sections)
                 section.ToggleButton?.OnMouseDown(capi, args);
@@ -87,6 +98,12 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
 
     public override void OnMouseUp(MouseEvent args)
     {
+        if (workAreaMenuGestures.Remove(args.Button))
+        {
+            workAreaSelector?.listMenu.OnMouseUp(capi, args);
+            args.Handled = true;
+            return;
+        }
         if (!disposed && IsOpened())
         {
             if (capi.Input.MouseGrabbed) CancelWorkAreaInput();
@@ -100,15 +117,28 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     public override void OnMouseMove(MouseEvent args)
     {
         if (!disposed && IsOpened() && !capi.Input.MouseGrabbed)
-            ActiveWorkAreaTable?.OnMouseMove(capi, args);
+        {
+            if (workAreaSelector?.listMenu.IsOpened == true)
+                workAreaSelector.OnMouseMove(capi, args);
+            else ActiveWorkAreaTable?.OnMouseMove(capi, args);
+        }
     }
-    public override void OnMouseWheel(MouseWheelEventArgs args) { }
+    public override void OnMouseWheel(MouseWheelEventArgs args)
+    {
+        if (!disposed && IsOpened() && !capi.Input.MouseGrabbed && workAreaSelector?.listMenu.IsOpened == true)
+        {
+            workAreaSelector.listMenu.OnMouseWheel(capi, args);
+            args.SetHandled(true);
+        }
+    }
 
     public override void OnRenderGUI(float deltaTime)
     {
         if (disposed) return;
         if (IsOpened())
         {
+            if (workArea is not null && (!workArea.State.IsBuildModeEnabled || !workArea.State.IsPlayerAlive))
+                CloseWorkAreaDialog();
             if (capi.Input.MouseGrabbed) CancelWorkAreaInput();
             bool roomWasCollapsed = roomSection.IsCollapsed;
             bool sectionsChanged = false;
@@ -169,6 +199,7 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
         if (disposed) return;
         if (!visible)
         {
+            CloseWorkAreaDialog();
             roomRefreshElapsed = 0;
             foreach (var section in sections)
                 section.CancelInput();
@@ -179,6 +210,7 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
         if (!IsOpened() && !roomSection.IsCollapsed) RefreshRoom();
         if (displayLocale != Lang.CurrentLocale)
         {
+            CloseWorkAreaDialog();
             displayLocale = Lang.CurrentLocale;
             ResetHudComposition();
         }
@@ -323,6 +355,7 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
         if (disposed) return;
         disposed = true;
         if (workArea is not null) workArea.Changed -= OnWorkAreaChanged;
+        CloseWorkAreaDialog();
         CancelWorkAreaInput();
         roomInfo = default;
         capi.Settings.Float.RemoveWatcher("guiScale", OnGuiScaleChanged);
@@ -544,6 +577,7 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     private void OnGuiScaleChanged(float scale)
     {
         if (disposed) return;
+        CloseWorkAreaDialog();
         bool visible = IsOpened();
         ResetHudComposition();
         if (visible) SetVisible(true);

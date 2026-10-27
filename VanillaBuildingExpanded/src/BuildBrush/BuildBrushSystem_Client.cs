@@ -172,7 +172,7 @@ public class BuildBrushSystem_Client : ModSystem
 
         if (workArea is null)
         {
-            workArea = new WorkAreaController();
+            workArea = new WorkAreaController(Lang.Get("vanillabuildingexpanded:build-info-workarea-default-name", 1));
             workAreaPersistence = new WorkAreaPersistence(api!, workArea);
             workArea.NoticeRequested += OnWorkAreaNotice;
             workAreaRendering = new WorkAreaRenderBinding(api!, workArea,

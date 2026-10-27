@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 
@@ -15,13 +16,12 @@ namespace VanillaBuildingExpanded.BuildBrush;
 internal sealed class WorkAreaPersistence : IDisposable
 {
     public const string ConfigFileName = "vanillabuildingexpanded-workareas.json";
-    private const int SchemaVersion = 1;
+    private const int SchemaVersion = 2;
     private readonly ICoreClientAPI api;
     private readonly IClientWorldAccessor world;
     private readonly WorkAreaController controller;
     private readonly string? worldId;
-    private WorkAreaEndpoint? savedStart;
-    private WorkAreaEndpoint? savedEnd;
+    private JArray savedAreas = [];
     private bool disposed;
 
     public bool IsDirty { get; private set; }
@@ -32,7 +32,7 @@ internal sealed class WorkAreaPersistence : IDisposable
         this.controller = controller;
         world = api.World;
         worldId = world.SavegameIdentifier;
-        controller.RestoreEndpoints(null, null);
+        controller.ResetAreas();
         if (string.IsNullOrWhiteSpace(worldId))
         {
             Report("workarea-persistence-no-world", "SavegameIdentifier is unavailable; this work area is memory-only.");
@@ -41,9 +41,9 @@ internal sealed class WorkAreaPersistence : IDisposable
         {
             Load();
         }
-        savedStart = controller.State.Start;
-        savedEnd = controller.State.End;
-        controller.EndpointsCommitted += OnEndpointsCommitted;
+        savedAreas = WriteAreas();
+        controller.EndpointsCommitted += OnAreasCommitted;
+        controller.AreasCommitted += OnAreasCommitted;
     }
 
     public bool TrySave()
@@ -54,16 +54,14 @@ internal sealed class WorkAreaPersistence : IDisposable
         try
         {
             var document = ReadDocument();
-            var state = controller.CommittedEndpoints;
-            ValidatePair(state.Start, state.End);
+            foreach (var area in controller.CommittedAreas) ValidatePair(area.Start, area.End);
+            var current = WriteAreas();
             var worlds = (JObject)document["worlds"]!;
             var entry = worlds[worldId] is JObject existing ? (JObject)existing.DeepClone() : new JObject();
-            entry["start"] = WriteEndpoint(state.Start);
-            entry["end"] = WriteEndpoint(state.End);
+            entry["areas"] = current;
             worlds[worldId] = entry;
             WriteDocument(document);
-            savedStart = state.Start;
-            savedEnd = state.End;
+            savedAreas = current;
             IsDirty = false;
             return true;
         }
@@ -81,7 +79,8 @@ internal sealed class WorkAreaPersistence : IDisposable
     public void Dispose()
     {
         if (disposed) return;
-        controller.EndpointsCommitted -= OnEndpointsCommitted;
+        controller.EndpointsCommitted -= OnAreasCommitted;
+        controller.AreasCommitted -= OnAreasCommitted;
         try
         {
             controller.CancelEndpointEdit();
@@ -90,10 +89,9 @@ internal sealed class WorkAreaPersistence : IDisposable
         finally { disposed = true; }
     }
 
-    private void OnEndpointsCommitted()
+    private void OnAreasCommitted()
     {
-        var state = controller.CommittedEndpoints;
-        IsDirty = state.Start != savedStart || state.End != savedEnd;
+        IsDirty = !JToken.DeepEquals(WriteAreas(), savedAreas);
         if (IsDirty) TrySave();
     }
 
@@ -106,12 +104,26 @@ internal sealed class WorkAreaPersistence : IDisposable
             if (!worlds.TryGetValue(worldId!, StringComparison.Ordinal, out var entry)) return;
             try
             {
-                if (entry is not JObject record || !record.ContainsKey("start") || !record.ContainsKey("end"))
-                    throw new InvalidDataException("The saved work area must contain nullable start and end records.");
-                var start = ReadEndpoint(record["start"]!);
-                var end = ReadEndpoint(record["end"]!);
-                ValidatePair(start, end);
-                controller.RestoreEndpoints(start, end);
+                if (entry is not JObject record || record["areas"] is not JArray list)
+                    throw new InvalidDataException("The saved world must contain a named work areas array.");
+                var areas = new List<NamedWorkArea>();
+                var ids = new HashSet<Guid>();
+                var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var item in list)
+                {
+                    if (item is not JObject area || area["id"]?.Type != JTokenType.String
+                        || !Guid.TryParseExact(area["id"]!.Value<string>(), "N", out var id) || id == Guid.Empty
+                        || area["name"]?.Type != JTokenType.String
+                        || !WorkAreaController.IsValidName(area["name"]!.Value<string>())
+                        || !ids.Add(id) || !names.Add(area["name"]!.Value<string>()!)
+                        || !area.ContainsKey("start") || !area.ContainsKey("end"))
+                        throw new InvalidDataException("Saved work areas require unique IDs, valid unique names and nullable endpoints.");
+                    var start = ReadEndpoint(area["start"]!);
+                    var end = ReadEndpoint(area["end"]!);
+                    ValidatePair(start, end);
+                    areas.Add(new(id, area["name"]!.Value<string>()!, start, end));
+                }
+                controller.RestoreAreas(areas);
             }
             catch (InvalidDataException error)
             {
@@ -136,11 +148,25 @@ internal sealed class WorkAreaPersistence : IDisposable
         if (loaded.Token is not JObject document)
             throw new InvalidDataException("The work area configuration must be a JSON object.");
         int version = ReadInteger(document, "schemaVersion");
-        if (version != SchemaVersion)
+        if (version is not (1 or SchemaVersion))
             throw new NotSupportedException($"Unsupported work area schema version {version}.");
         if (document["worlds"] is not JObject)
             throw new InvalidDataException("The work area configuration must contain a worlds dictionary.");
+        // The single-area format is intentionally retired without migrating its bounds.
+        if (version == 1)
+            return new JObject { ["schemaVersion"] = SchemaVersion, ["worlds"] = new JObject() };
         return (JObject)document.DeepClone();
+    }
+
+    private JArray WriteAreas()
+    {
+        var result = new JArray();
+        foreach (var area in controller.CommittedAreas)
+        {
+            result.Add(new JObject { ["id"] = area.Id.ToString("N"), ["name"] = area.Name,
+                ["start"] = WriteEndpoint(area.Start), ["end"] = WriteEndpoint(area.End) });
+        }
+        return result;
     }
 
     private static WorkAreaEndpoint? ReadEndpoint(JToken token)

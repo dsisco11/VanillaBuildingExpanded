@@ -12,6 +12,221 @@ namespace VanillaBuildingExpanded.Tests.UI;
 public sealed partial class BuildModeHudControlsTests
 {
     [Fact]
+    public void DeleteConfirmationCapturesInputUnregistersOnCloseAndEscapeDoesNotDelete()
+    {
+        using var f = WorkAreaFixture();
+        var dialogs = PrepareWorkAreaDialogs(f);
+        var workArea = ActiveWorkArea();
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
+        hud.SetVisible(true);
+        ClickWorkAreaCommand(hud, f, "delete");
+        var dialog = Assert.Single(dialogs.OfType<GuiDialogConfirm>());
+        Assert.True(dialog.UnregisterOnClose);
+        Assert.True(dialog.CaptureAllInputs());
+        var escape = new KeyEvent { KeyCode = (int)GlKeys.Escape };
+        dialog.OnKeyDown(escape);
+        Assert.True(escape.Handled);
+        Assert.False(dialog.IsOpened());
+        Assert.Single(workArea.Areas);
+    }
+
+    [Fact]
+    public void NamedSelectorEscapesUserTextAndCanceledPressDoesNotOpenItsPopup()
+    {
+        using var f = WorkAreaFixture();
+        var workArea = ActiveWorkArea();
+        workArea.RenameArea(workArea.SelectedId!.Value, "<Garden> & Home");
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
+        hud.SetVisible(true);
+        var selector = Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select"));
+        Assert.Equal("&lt;Garden&gt; &amp; Home", selector.listMenu.Names[0]);
+        var press = WorkAreaMouse(f, selector);
+        hud.OnMouseDown(press);
+        Assert.True(press.Handled);
+        var release = new MouseEvent(-100, -100, EnumMouseButton.Left, 0);
+        hud.OnMouseUp(release);
+        Assert.True(release.Handled);
+        Assert.False(selector.listMenu.IsOpened);
+    }
+
+    [Fact]
+    public void NamedAreaSelectorRoutesPopupOutsideTheTableAndConsumesItsCompleteGesture()
+    {
+        using var f = WorkAreaFixture();
+        var workArea = ActiveWorkArea();
+        for (int i = 1; i <= 6; i++) workArea.CreateArea("Area " + i);
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
+        hud.SetVisible(true);
+        var selector = Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select"));
+        var press = WorkAreaMouse(f, selector);
+        hud.OnMouseDown(press);
+        Assert.True(press.Handled);
+        Assert.False(selector.listMenu.IsOpened);
+        hud.OnMouseUp(new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0));
+        Assert.True(selector.listMenu.IsOpened);
+        f.MouseX = (int)selector.Bounds.renderX + 10;
+        f.MouseY = (int)(selector.listMenu.Bounds.renderY + selector.listMenu.Bounds.InnerHeight + 5.5 * 30);
+        Assert.False(WorkAreaTable(hud).IsPositionInside(f.MouseX, f.MouseY));
+        Assert.True(hud.ReservesPointer(f.MouseX, f.MouseY));
+        var choose = new MouseEvent(f.MouseX, f.MouseY, EnumMouseButton.Left, 0);
+        hud.OnMouseDown(choose);
+        Assert.True(choose.Handled);
+        Assert.Equal(workArea.Areas[5].Id, workArea.SelectedId);
+        hud.OnRenderGUI(0);
+        var release = new MouseEvent(-100, -100, EnumMouseButton.Left, 0);
+        hud.OnMouseUp(release);
+        Assert.True(release.Handled);
+        Assert.False(hud.ReservesPointer(-100, -100));
+        selector = Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select"));
+        var reopen = WorkAreaMouse(f, selector);
+        hud.OnMouseDown(reopen);
+        hud.OnMouseUp(new MouseEvent(reopen.X, reopen.Y, EnumMouseButton.Left, 0));
+        Assert.True(selector.listMenu.IsOpened);
+        hud.OnMouseDown(new MouseEvent(-100, -100, EnumMouseButton.Left, 0));
+        Assert.False(selector.listMenu.IsOpened);
+        var outside = new MouseEvent(-100, -100, EnumMouseButton.Left, 0);
+        hud.OnMouseUp(outside);
+        Assert.True(outside.Handled);
+    }
+
+    [Fact]
+    public void NewAndRenameDialogsValidateNamesCaptureKeyboardAndCommitOnlyOnSave()
+    {
+        using var f = WorkAreaFixture();
+        var dialogs = PrepareWorkAreaDialogs(f);
+        var workArea = ActiveWorkArea();
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
+        hud.SetVisible(true);
+        ClickWorkAreaCommand(hud, f, "new");
+        var dialog = Assert.Single(dialogs.OfType<WorkAreaNameDialog>());
+        Assert.True(dialog.IsOpened());
+        Assert.True(dialog.Focusable);
+        Assert.True(dialog.CaptureAllInputs());
+        Assert.True(dialog.DisableMouseGrab);
+        Assert.True(dialog.SingleComposer.GetTextInput("name").HasFocus);
+        Assert.Equal("Work area 2", dialog.SingleComposer.GetTextInput("name").GetText());
+        var typed = new KeyEvent { KeyChar = 'q' };
+        dialog.OnKeyPress(typed);
+        Assert.True(typed.Handled);
+        Assert.Contains("q", dialog.SingleComposer.GetTextInput("name").GetText());
+        Assert.Single(workArea.Areas);
+        dialog.SingleComposer.GetTextInput("name").SetValue(" ");
+        var enter = new KeyEvent { KeyCode = (int)GlKeys.Enter };
+        dialog.OnKeyDown(enter);
+        Assert.True(enter.Handled);
+        Assert.True(dialog.IsOpened());
+        Assert.NotEmpty(dialog.SingleComposer.GetDynamicText("error").GetText());
+        dialog.SingleComposer.GetTextInput("name").SetValue("WORK AREA 1");
+        dialog.OnKeyDown(new KeyEvent { KeyCode = (int)GlKeys.Enter });
+        Assert.True(dialog.IsOpened());
+        Assert.Single(workArea.Areas);
+        dialog.SingleComposer.GetTextInput("name").SetValue(" Garden ");
+        dialog.OnKeyDown(new KeyEvent { KeyCode = (int)GlKeys.Enter });
+        Assert.False(dialog.IsOpened());
+        Assert.Equal("Garden", workArea.Areas[1].Name);
+        Assert.Equal(workArea.Areas[1].Id, workArea.SelectedId);
+        Assert.Null(workArea.State.Bounds);
+        Assert.True(workArea.State.ShowWorkArea);
+        hud.OnRenderGUI(0);
+        ClickWorkAreaCommand(hud, f, "rename");
+        dialog = dialogs.OfType<WorkAreaNameDialog>().Last();
+        dialog.SingleComposer.GetTextInput("name").SetValue("Courtyard");
+        dialog.OnKeyDown(new KeyEvent { KeyCode = (int)GlKeys.Enter });
+        Assert.Equal("Courtyard", workArea.Areas[1].Name);
+        hud.OnRenderGUI(0);
+        ClickWorkAreaCommand(hud, f, "new");
+        dialog = dialogs.OfType<WorkAreaNameDialog>().Last();
+        var escape = new KeyEvent { KeyCode = (int)GlKeys.Escape };
+        dialog.OnKeyDown(escape);
+        Assert.True(escape.Handled);
+        Assert.False(dialog.IsOpened());
+        Assert.Equal(2, workArea.Areas.Count);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DeleteRequiresConfirmationAndEmptyCollectionsStillAllowCreatingAnArea(bool confirm)
+    {
+        using var f = WorkAreaFixture();
+        var dialogs = PrepareWorkAreaDialogs(f);
+        var workArea = ActiveWorkArea();
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
+        hud.SetVisible(true);
+        ClickWorkAreaCommand(hud, f, "delete");
+        Assert.Single(workArea.Areas);
+        var dialog = Assert.Single(dialogs.OfType<GuiDialogConfirm>());
+        var elements = Assert.IsType<Dictionary<string, GuiElement>>(typeof(GuiComposer)
+            .GetField("interactiveElements", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(dialog.SingleComposer));
+        var button = elements.Values.OfType<GuiElementTextButton>()
+            .Single(button => button.Text == (confirm ? "Confirm" : "Cancel"));
+        var mouse = WorkAreaMouse(f, button);
+        dialog.OnMouseDown(mouse);
+        dialog.OnMouseUp(new MouseEvent(mouse.X, mouse.Y, EnumMouseButton.Left, 0));
+        Assert.False(dialog.IsOpened());
+        Assert.Equal(confirm ? 0 : 1, workArea.Areas.Count);
+        hud.OnRenderGUI(0);
+        if (confirm)
+        {
+            Assert.False(workArea.State.CanPick);
+            Assert.False(Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select")).Enabled);
+            ClickWorkAreaCommand(hud, f, "new");
+            Assert.True(dialogs.OfType<WorkAreaNameDialog>().Last().IsOpened());
+        }
+    }
+
+    [Theory]
+    [InlineData("hide")]
+    [InlineData("scale")]
+    [InlineData("locale")]
+    [InlineData("death")]
+    [InlineData("dispose")]
+    public void NamingDialogsCloseOnHudLifecycleChangesWithoutCreatingAnArea(string change)
+    {
+        using var f = WorkAreaFixture();
+        var dialogs = PrepareWorkAreaDialogs(f);
+        var workArea = ActiveWorkArea();
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
+        hud.SetVisible(true);
+        ClickWorkAreaCommand(hud, f, "new");
+        var dialog = Assert.Single(dialogs.OfType<WorkAreaNameDialog>());
+        Assert.True(dialog.IsOpened());
+        switch (change)
+        {
+            case "hide": hud.SetVisible(false); break;
+            case "scale": f.ScaleWatcher!(1.25f); break;
+            case "locale": f.ChangeLocale(); hud.SetVisible(true); break;
+            case "death": workArea.SetContext(true, false); hud.OnRenderGUI(0); break;
+            case "dispose": hud.Dispose(); break;
+        }
+        Assert.False(dialog.IsOpened());
+        Assert.Single(workArea.Areas);
+    }
+
+    private static List<GuiDialog> PrepareWorkAreaDialogs(Fixture f)
+    {
+        var dialogs = new List<GuiDialog>();
+        f.Gui.SetupGet(gui => gui.LoadedGuis).Returns(dialogs);
+        f.Gui.SetupGet(gui => gui.OpenedGuis).Returns(() => dialogs.Where(dialog => dialog.IsOpened()).ToList());
+        f.Gui.Setup(gui => gui.Icons).Returns(new IconUtil(f.Api.Object));
+        f.Gui.Setup(gui => gui.RegisterDialog(It.IsAny<GuiDialog[]>())).Callback<GuiDialog[]>(dialogs.AddRange);
+        f.Gui.Setup(gui => gui.RequestFocus(It.IsAny<GuiDialog>())).Callback<GuiDialog>(dialog =>
+            typeof(GuiDialog).GetField("focused", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .SetValue(dialog, true));
+        return dialogs;
+    }
+
+    private static void ClickWorkAreaCommand(BuildModeHud hud, Fixture f, string key)
+    {
+        var commands = Assert.IsType<GuiElementTable>(WorkAreaTable(hud).GetElement("commands"));
+        var mouse = WorkAreaMouse(f, commands.GetElement(key));
+        hud.OnMouseDown(mouse);
+        Assert.True(mouse.Handled);
+        hud.OnMouseUp(new MouseEvent(mouse.X, mouse.Y, EnumMouseButton.Left, 0));
+    }
+
+    [Fact]
     public void WorkAreaSession_HudPriorityAndRecompositionLeaveWorldCaptureAndSessionIntact()
     {
         using var f = WorkAreaFixture();
@@ -166,7 +381,7 @@ public sealed partial class BuildModeHudControlsTests
         Assert.Equal(1, unregistrations);
         hud.OnRenderGUI(0);
         Assert.Equal("Size: 5, 3, 4", WorkAreaSize(hud));
-        Assert.Equal(2, WorkAreaTable(hud).Bounds.ChildBounds.Count);
+        Assert.Equal(4, WorkAreaTable(hud).Bounds.ChildBounds.Count);
         workArea.RestoreEndpoints(new(10, 65, 20, 0), new(20, 68, 24, 0));
         hud.OnRenderGUI(0);
         Assert.Equal("Size: 11, 4, 5", WorkAreaSize(hud));
@@ -222,14 +437,21 @@ public sealed partial class BuildModeHudControlsTests
     [InlineData(1)]
     [InlineData(1.33)]
     [InlineData(2)]
-    public void WorkAreaSection_HasExactlyTwoOrderedRowsAndSharedInclusiveSizes(float scale)
+    public void WorkAreaSection_HasSelectorCommandsVisibilityAndSharedInclusiveSizes(float scale)
     {
         using var f = WorkAreaFixture(scale);
         var workArea = ActiveWorkArea();
         using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
         var table = WorkAreaTable(hud);
-        Assert.Equal(2, table.Bounds.ChildBounds.Count);
+        Assert.Equal(4, table.Bounds.ChildBounds.Count);
+        var selector = Assert.IsAssignableFrom<GuiElementDropDown>(table.GetElement("select"));
+        Assert.Equal(workArea.SelectedId!.Value.ToString("N"), selector.SelectedValue);
+        Assert.Equal(new[] { "Work area 1" }, selector.listMenu.Names);
+        var commands = Assert.IsType<GuiElementTable>(table.GetElement("commands"));
+        Assert.Equal(3, commands.Bounds.ChildBounds.Count);
+        Assert.True(selector.Bounds.renderY + selector.Bounds.OuterHeight <= commands.Bounds.renderY);
+        Assert.True(commands.Bounds.renderY + commands.Bounds.OuterHeight <= table.GetElement("visibility").Bounds.renderY);
         var visibility = Assert.IsType<GuiElementTable>(table.GetElement("visibility"));
         var size = Assert.IsType<GuiElementStaticText>(table.GetElement("size"));
         Assert.Equal(2, visibility.Bounds.ChildBounds.Count);
@@ -401,6 +623,7 @@ public sealed partial class BuildModeHudControlsTests
         fixture.Translate = (key, args) => key switch
         {
             "vanillabuildingexpanded:build-info-workarea" => "Work area",
+            "vanillabuildingexpanded:build-info-workarea-default-name" => string.Format("Work area {0}", args),
             "vanillabuildingexpanded:build-info-workarea-show" => "Show work area",
             "vanillabuildingexpanded:build-info-workarea-unset" => "-",
             "vanillabuildingexpanded:build-info-workarea-size" => string.Format("Size: {0}, {1}, {2}", args),

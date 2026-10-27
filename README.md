@@ -56,12 +56,27 @@ Room information refreshes every half-second while the section is expanded and t
 
 #### Work area
 
-The expanded-by-default **Work area** section sits between Room and Controls and contains only:
+The expanded-by-default **Work area** section sits between Room and Controls:
 
 ```text
+[Work area 1              v]
+[New] [Rename] [Delete]
 [ ] Show work area
 Size: <x>, <y>, <z>
 ```
+
+Use the selector to switch between named areas in this world. **New** creates an empty,
+selected, visible area after you save its name; **Rename** changes only its name.
+Names are trimmed, unique within the world without regard to case, and limited to
+64 characters without control characters. Naming uses a focused dialog so typing
+does not trigger gameplay actions; Cancel or Escape makes no change. **Delete**
+requires confirmation. Deleting the last area leaves an empty list; **New** remains
+available. A fresh world initially offers one empty **Work area 1**.
+
+Each area's **Show work area** checkbox is independent. All checked, complete areas
+in the current dimension show their boxes, but only the selected area has editing
+gizmos. Selecting another area cancels any current drag or pending creation without
+saving its preview, and shows the selected area's size and visibility preference.
 
 With build mode enabled and your player alive, check **Show work area**. If no endpoints exist, one world block click creates both on that cell. A restored partial work area offers the same click for its missing endpoint. Creation targets loaded terrain through the camera far plane without a player-reach cap, using the actual free cursor or mouse-look reticle, never brush placement offsets. Sky/entity/unloaded targets leave creation pending with feedback.
 
@@ -69,15 +84,20 @@ Drag either corner's center handle or RGB axis arrows with the free cursor or re
 
 A third gizmo at the midpoint of a complete selection moves the entire box. Drag its center across the captured camera plane or use its axis arrows to translate both corners together in whole-block steps without changing the size. Release saves both corners once; cancel restores both. A move that would put either corner outside valid coordinates is rejected without moving the other corner. Partial work areas have only their existing endpoint handle.
 
-**Show work area** controls both overlay handles and the depth-tested measurement box. The box needs both endpoints in the current dimension; each existing endpoint has its own handle. Collapsing the section only hides its controls. Release commits a drag; right-click or Escape restores its baseline, or cancels pending creation until visibility/mode is re-enabled. Captured gestures suppress mining, attack, placement and use through release. Reticle motion remains available for aiming. Invalid viewing angles retain the last valid value with feedback. Prompts and errors appear outside the panel; renderer/input failures leave size and persisted endpoints usable.
+**Show work area** controls the selected area's box and handles; other checked areas retain their depth-tested boxes without handles. Each box needs both endpoints in the current dimension; each existing endpoint in the selected area has its own handle. Collapsing the section only hides its controls. Release commits a drag; right-click or Escape restores its baseline, or cancels pending creation until visibility/mode is re-enabled. Captured gestures suppress mining, attack, placement and use through release. Reticle motion remains available for aiming. Invalid viewing angles retain the last valid value with feedback. Prompts and errors appear outside the panel; renderer/input failures leave size and persisted endpoints usable.
 
 All center handles and axis arrows use bright, unlit colors at 80% opacity. Hovering or dragging a handle raises it to full opacity and thickens its lines; scene lighting does not dim the controls.
 
 Turning build mode off or dying hides the work area and cancels interaction, but retains endpoints and the session's checkbox preference. Focus loss, dialogs, pointer-mode changes and dimension/world changes also cancel active edits safely. Re-enabling mode restores eligible visibility. Another dimension hides retained endpoints without clearing their size or automatically replacing them; returning restores visibility.
 
-Only committed endpoints persist, using the base game's mod-config APIs in `ModConfig/vanillabuildingexpanded-workareas.json`; drag previews do not write config. Entries are keyed by the world's `SavegameIdentifier`, keeping single-player saves, server worlds, and replacement saves at the same server address separate. They are local to this client, not shared with other players. Each join starts with build mode off and **Show work area** unchecked. Missing world identity makes the session memory-only with a notice. Invalid entries are reported; unreadable or unsupported config files are not overwritten with defaults. A failed save retains the in-memory edit, warns that it may be lost after restart, and retries on the next explicit endpoint edit or orderly exit.
+Names, stable area IDs, and committed endpoints persist using the base game's mod-config APIs in `ModConfig/vanillabuildingexpanded-workareas.json` (schema 2); drag previews do not write config. Creating, renaming or deleting an area saves the collection, using the original committed endpoints if a drag is in progress. Entries are keyed by the world's `SavegameIdentifier`, keeping single-player saves, server worlds, and replacement saves at the same server address separate. They are local to this client, not shared with other players. Each join selects the first saved area, starts with build mode off, and resets all visibility checkboxes to unchecked. Selection and visibility are session-only. Missing world identity makes the session memory-only with a notice. Invalid entries are reported; unreadable or unsupported config files are not overwritten with defaults. A failed save retains the in-memory edit, warns that it may be lost after restart, and retries on the next explicit endpoint/collection edit or orderly exit.
 
 The rename starts fresh: saved bounds in the former `ModConfig/vanillabuildingexpanded-rulers.json` are not loaded or migrated. That old file is left untouched; new edits are saved only in the work-area config.
+
+The previous single-area work-area format (schema 1) is also intentionally not
+migrated. Its bounds are ignored, and its file is replaced with schema 2 only
+when an explicit area or endpoint edit is saved. No existing single-area bounds
+are imported.
 
 Work area qualification uses the installed Vintage Story **1.22.7** API/runtime files. Automated evidence and outstanding live checks are recorded in the [gizmo implementation plan](docs/InWorldGizmos.todo). The earlier workarea-only live-check waiver does not waive gizmo qualification. Live input, comparable before/after frame timings, restart persistence and rendering checks remain separate evidence requirements; mocked tests do not establish them. Removing movement selection calls does not remove the independently identified full-panel HUD recomposition cost.
 

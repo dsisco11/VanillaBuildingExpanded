@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 using Vintagestory.API.Client;
@@ -10,7 +11,7 @@ internal sealed class WorkAreaRenderer : IRenderer
 {
     internal const double VisualExpansion = 0.002;
     private readonly ICoreClientAPI api;
-    private readonly System.Func<WorkAreaBounds?> getBounds;
+    private readonly System.Func<IReadOnlyList<WorkAreaBounds>> getBounds;
     private readonly Action<Exception> onFailure;
     private readonly IWorkAreaRenderState renderState;
     private readonly Matrixf model = new();
@@ -22,7 +23,7 @@ internal sealed class WorkAreaRenderer : IRenderer
     public double RenderOrder => 0.51;
     public int RenderRange => int.MaxValue;
 
-    public WorkAreaRenderer(ICoreClientAPI api, System.Func<WorkAreaBounds?> getBounds,
+    public WorkAreaRenderer(ICoreClientAPI api, System.Func<IReadOnlyList<WorkAreaBounds>> getBounds,
         Action<Exception> onFailure, IWorkAreaRenderState? renderState = null)
     {
         this.api = api;
@@ -33,7 +34,9 @@ internal sealed class WorkAreaRenderer : IRenderer
 
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
     {
-        if (disposed || failed || stage != EnumRenderStage.Opaque || getBounds() is not { } bounds) return;
+        if (disposed || failed || stage != EnumRenderStage.Opaque) return;
+        var bounds = getBounds();
+        if (bounds.Count == 0) return;
         IsInCallback = true;
         try
         {
@@ -45,8 +48,11 @@ internal sealed class WorkAreaRenderer : IRenderer
             if (!mesh.Initialized || mesh.Disposed)
                 throw new InvalidOperationException("The work area mesh is unavailable.");
             var camera = api.World.Player.Entity.CameraPos;
-            SetModelMatrix(model, api.Render.CameraMatrixOriginf, bounds, camera);
-            Draw(shader);
+            foreach (var box in bounds)
+            {
+                SetModelMatrix(model, api.Render.CameraMatrixOriginf, box, camera);
+                Draw(shader);
+            }
         }
         catch (Exception error) when (IsRenderFailure(error))
         {

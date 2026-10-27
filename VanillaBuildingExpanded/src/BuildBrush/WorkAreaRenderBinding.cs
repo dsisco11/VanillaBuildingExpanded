@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -14,7 +16,8 @@ internal sealed class WorkAreaRenderBinding : IDisposable
     private readonly WorkAreaController workArea;
     private readonly WorkAreaRenderer renderer;
     private readonly System.Func<bool>? deferMembership;
-    private WorkAreaBounds? bounds;
+    private readonly List<NamedWorkArea> areas = [];
+    private readonly List<WorkAreaBounds> eligibleBounds = [];
     private bool registered;
     private bool mismatched;
     private bool failed;
@@ -37,18 +40,24 @@ internal sealed class WorkAreaRenderBinding : IDisposable
     private void OnChanged(WorkAreaState state)
     {
         if (disposed) return;
-        bounds = state.Start is { } start && state.End is { } end
-            && start.IsValid(world.BlockAccessor) && end.IsValid(world.BlockAccessor) ? state.Bounds : null;
+        areas.Clear();
+        foreach (var area in workArea.Areas)
+            if (area.Start is { } start && area.End is { } end
+                && start.IsValid(world.BlockAccessor) && end.IsValid(world.BlockAccessor) && area.Bounds is not null)
+                areas.Add(area);
         Refresh();
     }
 
-    private WorkAreaBounds? GetEligibleBounds()
+    private IReadOnlyList<WorkAreaBounds> GetEligibleBounds()
     {
         var state = workArea.State;
         var player = world.Player?.Entity;
-        return !disposed && !failed && ReferenceEquals(api.World, world)
-            && state.CanPick && state.ShowWorkArea && player?.Alive == true
-            && bounds is { } box && player.Pos.Dimension == box.MinCell.Dimension ? box : null;
+        eligibleBounds.Clear();
+        if (!disposed && !failed && ReferenceEquals(api.World, world) && state.CanPick && player?.Alive == true)
+            foreach (var area in areas)
+                if (area.IsVisible && area.Bounds is { } box && player.Pos.Dimension == box.MinCell.Dimension)
+                    eligibleBounds.Add(box);
+        return eligibleBounds;
     }
 
     public void Refresh()
@@ -56,10 +65,11 @@ internal sealed class WorkAreaRenderBinding : IDisposable
         if (disposed) return;
         var player = world.Player?.Entity;
         bool mismatch = ReferenceEquals(api.World, world) && player is not null
-            && bounds is { } box && player.Pos.Dimension != box.MinCell.Dimension;
+            && areas.Any(area => area.Id == workArea.SelectedId && area.Bounds is { } box
+                && player.Pos.Dimension != box.MinCell.Dimension);
         if (mismatch && !mismatched) Notify("workarea-dimension-mismatch");
         mismatched = mismatch;
-        bool eligible = GetEligibleBounds() is not null;
+        bool eligible = GetEligibleBounds().Count != 0;
         if (eligible == registered) return;
         if (InRenderCallback) { QueueMembership(); return; }
         try
@@ -130,7 +140,8 @@ internal sealed class WorkAreaRenderBinding : IDisposable
         disposed = true;
         workArea.Changed -= OnChanged;
         api.Event.PlayerDimensionChanged -= OnDimensionChanged;
-        bounds = null;
+        areas.Clear();
+        eligibleBounds.Clear();
         if (InRenderCallback) QueueMembership();
         else Release();
     }

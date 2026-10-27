@@ -15,6 +15,52 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 [Collection("Table composition")]
 public sealed class WorkAreaRenderingTests
 {
+    [Fact]
+    public void MultipleVisibleAreasShareOneRendererAndMeshEvenWhenTheSelectedAreaIsHidden()
+    {
+        using var f = new Fixture();
+        f.Complete();
+        f.Enable();
+        var first = f.WorkArea.SelectedId!.Value;
+        var second = f.WorkArea.CreateArea("Second");
+        f.WorkArea.RestoreEndpoints(new(30, 65, 20, 0), new(34, 67, 23, 0));
+        f.Draw();
+        Assert.Equal(2, f.Draws);
+        Assert.Equal(1, f.Uploads);
+        Assert.Equal(1, f.Registers);
+        f.WorkArea.SetVisibility(second, false);
+        Assert.False(f.WorkArea.State.ShowWorkArea);
+        f.Draw();
+        Assert.Equal(3, f.Draws);
+        Assert.Single(f.Active);
+        f.WorkArea.SetVisibility(first, false);
+        Assert.Empty(f.Active);
+        f.WorkArea.SetVisibility(second, true);
+        f.Draw();
+        Assert.Equal(4, f.Draws);
+        Assert.Equal(1, f.Uploads);
+    }
+
+    [Fact]
+    public void MultipleAreasOnlyDrawVisibleValidBoxesInThePlayersCurrentDimension()
+    {
+        using var f = new Fixture();
+        f.Complete();
+        f.Enable();
+        f.WorkArea.CreateArea("Other dimension");
+        f.WorkArea.RestoreEndpoints(new(30, 65, 20, 2), new(34, 67, 23, 2));
+        f.Draw();
+        Assert.Equal(1, f.Draws);
+        f.Player.Entity.Pos.Dimension = 2;
+        f.Binding.Refresh();
+        f.Draw();
+        Assert.Equal(2, f.Draws);
+        Assert.Equal(5.004f, f.Model![0]);
+        f.Player.Entity.Pos.Dimension = 3;
+        f.Binding.Refresh();
+        Assert.Empty(f.Active);
+    }
+
     [Theory]
     [InlineData(false, false, false)]
     [InlineData(false, true, false)]

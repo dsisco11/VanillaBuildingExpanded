@@ -18,6 +18,43 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 public sealed class WorkAreaGizmoSessionTests
 {
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void SelectingOrDeletingDuringCaptureRollsBackAndOnlyTheSelectedAreaOwnsGizmos(bool grabbed, bool delete)
+    {
+        using var f = new Fixture(grabbed);
+        var h = f.H;
+        h.WorkArea.RestoreEndpoints(new(-30, 65, -200, 0), new(30, 75, -200, 0));
+        var first = h.WorkArea.SelectedId!.Value;
+        var second = h.WorkArea.CreateArea("Other");
+        h.WorkArea.RestoreEndpoints(new(-20, 60, -220, 0), new(20, 80, -180, 0));
+        h.WorkArea.SelectArea(first);
+        h.Enable();
+        h.Frame();
+        h.Aim(h.Session.Start!.Value.Coordinates);
+        Assert.True(h.Down().Handled);
+        h.MoveCenterTo(new(-50, 70, -200, 0));
+        Assert.True(h.WorkArea.IsEditing);
+        if (delete) h.WorkArea.DeleteArea(first);
+        else h.WorkArea.SelectArea(second);
+        Assert.False(h.WorkArea.IsEditing);
+        Assert.Null(h.Session.Manager.CapturedGizmo);
+        Assert.Equal(3, h.Session.Manager.Count);
+        Assert.Equal(WorkAreaGizmoCoordinates.ToAnchor(h.WorkArea.State.Start!.Value, WorkAreaEndpointRole.Start),
+            h.Session.Start!.Value);
+        Assert.True(h.Up().Handled);
+        Assert.Equal(0, h.Commits);
+        if (!delete) Assert.Equal(-30, h.WorkArea.Areas[0].Start!.Value.X);
+        h.WorkArea.SetVisibility(false);
+        Assert.False(h.Session.Start.Visible);
+        h.WorkArea.DeleteArea(second);
+        if (delete) Assert.Equal(0, h.Session.Manager.Count);
+        h.AssertNoTargeting();
+    }
+
+    [Theory]
     [InlineData(false, 0)]
     [InlineData(true, 0)]
     [InlineData(false, 1)]

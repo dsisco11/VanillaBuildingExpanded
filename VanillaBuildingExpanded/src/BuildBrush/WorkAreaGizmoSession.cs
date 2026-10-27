@@ -21,6 +21,7 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
     private PositionGizmo? start, end, center;
     private bool publishing, syncing, disposed, pending, explicitlyCanceled;
     private bool wasShown, wasEnabled, mismatched;
+    private Guid? selectedId;
 
     internal GizmoManager Manager => manager;
     internal GizmoRenderAdapter Renderer => renderer;
@@ -61,6 +62,13 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
         try
         {
             var state = workArea.State;
+            if (selectedId != workArea.SelectedId)
+            {
+                selectedId = workArea.SelectedId;
+                pending = false;
+                explicitlyCanceled = false;
+                manager.Cancel();
+            }
             if ((!wasShown && state.ShowWorkArea) || (!wasEnabled && state.IsBuildModeEnabled))
                 explicitlyCanceled = false;
             wasShown = state.ShowWorkArea;
