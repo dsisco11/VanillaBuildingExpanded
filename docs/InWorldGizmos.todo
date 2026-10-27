@@ -146,29 +146,57 @@ Phase 1 evidence boundary: the source-backed native paths and deterministic cont
 Prerequisites: Phase 1 contracts.
 Outcome: A test gizmo can publish values and participate in manager arbitration without ruler or global gameplay dependencies.
 
-    ☐ Add abstract Gizmo : IDisposable with the proposal's shared instance responsibilities.
-        ☐ Encapsulate identity, visible/enabled state, hovered/captured handle and lifecycle notifications.
-        ☐ Expose rendering/hit-testing and interaction hooks through shared camera/world context; add an interface only for a demonstrated consumer need.
-        ☐ Keep ruler cells, grid policy, brush placement and config side effects out of the base.
-    ☐ Add Gizmo<TValue> with initial value, public Value getter/setter and OnValueChanged.
-        ☐ Compare before storing/notifying; changed owner and manipulation assignments use the same event path.
-        ☐ Suppress equal assignments, snapped duplicates and identical callback echoes; do not add SetValue or a silent synchronization escape hatch.
-        ☐ Restore the initial drag value on cancellation with a change notification only when needed; never signal a successful commit for cancellation.
-        ☐ Support owner-coordinated cancel-before-external-replacement without applying rollback after the replacement.
-        ☐ Document immutable-value expectations rather than claiming to detect mutation inside arbitrary reference values.
-    ☐ Add a small client-owned manager for instance membership and arbitration.
-        ☐ Select one deterministic hit, prioritize a center over its own arrow roots, and grant at most one capture.
-        ☐ Retain the captured gizmo/handle until completion or cancellation, including pointer movement outside the silhouette.
-        ☐ Hidden/disabled/removed/disposed instances lose eligibility and active capture safely; repeated removal/disposal is harmless.
-        ☐ Keep global input/render event registration in adapters/session composition, not per-instance or per-frame registration.
-    ☐ Add focused base/typed/manager tests using a minimal test gizmo.
-        ☐ Assert event values/count/order for owner edits, manipulation, equal echoes, cancellation and external replacement.
-        ☐ Assert deterministic hit/capture ownership and disposal without ruler/config/world mutations.
+    ✔ Add abstract Gizmo : IDisposable with the proposal's shared instance responsibilities.
+        ✔ Encapsulate identity, visible/enabled state, hovered/captured handle and lifecycle notifications.
+        ✔ Expose rendering/hit-testing and interaction hooks through shared camera/world context; add an interface only for a demonstrated consumer need.
+        ✔ Keep ruler cells, grid policy, brush placement and config side effects out of the base.
+    ✔ Add Gizmo<TValue> with initial value, public Value getter/setter and OnValueChanged.
+        ✔ Compare before storing/notifying; changed owner and manipulation assignments use the same event path.
+        ✔ Suppress equal assignments, snapped duplicates and identical callback echoes; do not add SetValue or a silent synchronization escape hatch.
+        ✔ Restore the initial drag value on cancellation with a change notification only when needed; never signal a successful commit for cancellation.
+        ✔ Support owner-coordinated cancel-before-external-replacement without applying rollback after the replacement.
+        ✔ Document immutable-value expectations rather than claiming to detect mutation inside arbitrary reference values.
+    ✔ Add a small client-owned manager for instance membership and arbitration.
+        ✔ Select one deterministic hit, prioritize a center over its own arrow roots, and grant at most one capture.
+        ✔ Retain the captured gizmo/handle until completion or cancellation, including pointer movement outside the silhouette.
+        ✔ Hidden/disabled/removed/disposed instances lose eligibility and active capture safely; repeated removal/disposal is harmless.
+        ✔ Keep global input/render event registration in adapters/session composition, not per-instance or per-frame registration.
+    ✔ Add focused base/typed/manager tests using a minimal test gizmo.
+        ✔ Assert event values/count/order for owner edits, manipulation, equal echoes, cancellation and external replacement.
+        ✔ Assert deterministic hit/capture ownership and disposal without ruler/config/world mutations.
 
 Completion criteria:
 
-    ☐ Typed property events and lifecycle/manager behavior pass focused tests without ruler-specific dependencies.
-    ☐ No new global gameplay adapter is active yet; the existing ruler is not partially replaced.
+    ✔ Typed property events and lifecycle/manager behavior pass focused tests without ruler-specific dependencies.
+    ✔ No new global gameplay adapter is active yet; the existing ruler is not partially replaced.
+
+### Phase 2 implementation traceability
+
+All groups inherit the complete proposal and Phase 1 reusable instance/value/manager
+contract. Native input, projection/positioning geometry, ruler transactions and cutover
+remain in their assigned later phases; the existing ruler is unchanged.
+
+| Phase 2 task group | Controlling requirements | Implementation and evidence |
+| --- | --- | --- |
+| Base and shared context | Proposal: Non-generic Gizmo; visibility/rendering/lifecycle. Phase 1: reusable contract. | [Gizmo](../VanillaBuildingExpanded/src/Gizmos/Gizmo.cs) has identity, eligibility, opaque handles and lifecycle/render/hit hooks. [Context carriers](../VanillaBuildingExpanded/src/Gizmos/GizmoContext.cs) provide shared frame identity/dimension and validated double visual rays. Projection data and positioning shapes are Phase 3 work. |
+| Typed events and transactions | Proposal: Generic Gizmo<TValue>; Phase 1 setter/baseline/external replacement ordering. | The same Value setter handles owner updates, previews and rollback with default equality. [Base/typed tests](../VanillaBuildingExpanded.Tests/Gizmos/GizmoTests.cs) assert synchronous values/count/order, equal echoes, no-op/changed rollback, cancel-before-replacement and reentrant removal/disposal. Immutable-value expectations are documented in the API and [architecture](./BuildBrushArchitecture.md). |
+| Manager and ownership | Proposal: Activation/capture and visibility/lifecycle; Phase 1 priority/depth/insertion contract. | [Manager](../VanillaBuildingExpanded/src/Gizmos/GizmoManager.cs) owns membership and exclusive capture, prioritizes instance-provided handles and quantized depth/insertion across instances, and requires successful rendering in the matching frame. [Manager tests](../VanillaBuildingExpanded.Tests/Gizmos/GizmoManagerTests.cs) cover eligibility, arbitration, removal, dimension/context loss, render failure and teardown; base tests repeat 100 complete/cancel cycles. No native registrations or ruler/config dependencies are introduced. |
+
+Verification/review evidence (2026-10-26): direct second review completed. The independent
+audit found reentrant capture acquisition during hit arbitration; acquisition and hover
+arbitration now hold a nesting-safe transition guard across callbacks and revalidate
+membership/eligibility before capture. Exact nested-hit and terminal-callback regressions
+were added and directly reviewed. Final subagent verification: 204 Gizmos/Ruler tests
+passed (0 failed/skipped), normal build/ValidateJson passed, git diff --check passed.
+Independent affected-requirements recheck confirmed the finding resolved and all Phase 2
+gates satisfied, retaining the full audit's still-valid findings. Phase 2 markers were
+checked only after that verdict; later phases remain unchecked.
+Existing build warnings are not resolved by this phase. No live-game evidence is claimed.
+
+Follow-up coordinate representation: visual rays use the built-in SIMD
+Vector256<double> with (X, Y, Z, 0) lanes, not a custom vector type or float-only
+Vector3. Normalization uses vector dot/division; double coordinate precision and
+finite/nonzero validation are retained.
 
 ## Phase 3: Implement reusable positioning geometry, drawing and drag math
 

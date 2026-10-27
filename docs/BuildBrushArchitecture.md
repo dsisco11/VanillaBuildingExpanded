@@ -50,6 +50,22 @@ Death and join reset mode and hide the panel. World departure and system disposa
 
 ## Client-only ruler
 
+Reusable [gizmo instances and typed values](../VanillaBuildingExpanded/src/Gizmos/Gizmo.cs),
+[shared context/ray/hit carriers](../VanillaBuildingExpanded/src/Gizmos/GizmoContext.cs)
+and a [session manager](../VanillaBuildingExpanded/src/Gizmos/GizmoManager.cs) are available
+as inactive foundations for the [in-world gizmo plan](InWorldGizmos.todo).
+They do not register native input/render callbacks or replace any ruler path yet.
+The manager owns its remaining instances on disposal; removing an instance cancels and
+detaches it without disposing it. Changed `Value` assignments notify synchronously using
+default equality; immutable values are expected. Owners cancel an active edit before
+assigning a genuinely different authoritative value. Cancellation restores through the
+same notifying setter before the cancellation event; completion alone is not a value event.
+Only successfully rendered, eligible instances in the matching shared frame can acquire
+capture. Context currently supplies frame identity/dimension and a separate validated visual
+ray using built-in `Vector256<double>` SIMD coordinates in `(X, Y, Z, 0)` lanes,
+preserving double precision without a custom vector type. Projection data, positioning
+geometry and native adapters belong to later phases.
+
 On local join, the client system creates a fresh ruler controller, restores endpoints through persistence, then creates the render binding. Visibility remains unchecked and mode disabled. The input adapter is created lazily once enabled and alive, independent of brush placement eligibility. The 50-ms client tick refreshes context before brush early-outs; mode transitions refresh it immediately.
 
 Picking observes the original player's `BlockSelection`, not the resolved brush target or its snap/face offset, and uses normal selection reach. It rejects sky/entity targets and pauses capture for dialogs/free cursor. Per-button ownership survives successful selection returning the picker to Idle, suppressing hold/repeat/release actions in both native action families; right-click cancellation precedes `TryPlaceBlock`. The installed 1.22.7 public event API lacks a focus callback, so the adapter uses the native client world's focus-listener list and explicitly detaches it. Collapsing the section has no state effect. Dimension events cancel picking even with no visible HUD.
