@@ -15,8 +15,9 @@ internal sealed partial class BuildModeHud
     private readonly CollapsibleSection workAreaSection;
     private GuiElementTable? workAreaTable;
     private bool workAreaDirty;
-    private WorkAreaSelector? workAreaSelector;
-    private readonly HashSet<EnumMouseButton> workAreaMenuGestures = [];
+    private int workAreaListFirst;
+    private Guid? workAreaListSelection;
+    private readonly HashSet<EnumMouseButton> workAreaBlurGestures = [];
     private GuiDialog? workAreaDialog;
     private GuiElementTable WorkAreaTable => workAreaTable
         ?? throw new InvalidOperationException("Work area content is only available during HUD composition.");
@@ -25,12 +26,11 @@ internal sealed partial class BuildModeHud
     private static string WorkAreaText(string key, params object[] args) =>
         Lang.Get($"vanillabuildingexpanded:build-info-workarea-{key}", args);
 
-    private void CancelWorkAreaInput(bool preserveMenuGestures = false)
+    private void CancelWorkAreaInput(bool preserveBlurGestures = false)
     {
         FinishWorkAreaSizeEdit(commit: false);
         ActiveWorkAreaTable?.CancelInput();
-        workAreaSelector?.OnFocusLost();
-        if (!preserveMenuGestures) workAreaMenuGestures.Clear();
+        if (!preserveBlurGestures) workAreaBlurGestures.Clear();
     }
 
     private void CloseWorkAreaDialog()
@@ -87,7 +87,7 @@ internal sealed partial class BuildModeHud
 
     private void ResetHudComposition()
     {
-        CancelWorkAreaInput(preserveMenuGestures: true);
+        CancelWorkAreaInput(preserveBlurGestures: true);
         foreach (var section in sections) section.CancelInput();
         ClearComposers();
     }
@@ -111,15 +111,14 @@ internal sealed partial class BuildModeHud
             double Width(string text) => Math.Ceiling(font.GetTextExtents(text).Width / RuntimeEnv.GUIScale) + 4;
             double height = MeasureTextHeight(font);
             var entries = workArea?.Areas.ToArray() ?? [];
-            var ids = entries.Select(area => area.Id.ToString("N")).ToArray();
-            var names = entries.Select(area => area.Name.Replace("&", "&amp;").Replace("<", "&lt;")
-                .Replace(">", "&gt;")).ToArray();
             int selected = Array.FindIndex(entries, area => area.Id == workArea?.SelectedId);
-            workAreaSelector = new WorkAreaSelector(capi, ids, names, selected,
-                (code, _) => workArea?.SelectArea(Guid.ParseExact(code, "N")),
-                ElementBounds.Fixed(0, 0, 280, 28));
-            table.AddRowCells([new TableCell(workAreaSelector, "select", input: TableInput.Pointer,
-                cancelInput: workAreaSelector.CancelPress)]);
+            var list = new WorkAreaListBox(capi, entries, workArea?.SelectedId,
+                id => workArea?.SelectArea(id), workAreaListFirst,
+                workAreaListSelection != workArea?.SelectedId, first => workAreaListFirst = first);
+            workAreaListFirst = list.FirstVisible;
+            workAreaListSelection = workArea?.SelectedId;
+            table.AddRowCells([new TableCell(list, "select", input: TableInput.Pointer,
+                cancelInput: list.CancelPress)]);
             var commands = new GuiElementTable(capi, ElementBounds.Fixed(0, 0, 0, 0),
                 new TableOptions(columnGap: 8));
             AddNestedRow(table, commands, "commands", () =>
@@ -212,48 +211,6 @@ internal sealed partial class BuildModeHud
             if (e.KeyCode == (int)GlKeys.Escape) TryClose();
             else base.OnKeyDown(e);
             e.Handled = true;
-        }
-    }
-
-    private sealed class WorkAreaSelector : GuiElementDropDown
-    {
-        private bool pressed;
-        public WorkAreaSelector(ICoreClientAPI api, string[] ids, string[] names, int selected,
-            SelectionChangedDelegate changed, ElementBounds bounds)
-            : base(api, ids, names, selected, changed, bounds,
-                CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize), false)
-        {
-            enabled = ids.Length != 0;
-        }
-
-        public override bool Focusable => false;
-        public void CancelPress() => pressed = false;
-
-        public override void OnMouseDown(ICoreClientAPI api, MouseEvent e)
-        {
-            if (e.Handled || api.Input.MouseGrabbed || e.Button != EnumMouseButton.Left) return;
-            if (listMenu.IsOpened) { base.OnMouseDown(api, e); return; }
-            if (!IsPositionInside(e.X, e.Y)) return;
-            pressed = Enabled;
-            e.Handled = true;
-        }
-
-        public override void OnMouseUp(ICoreClientAPI api, MouseEvent e)
-        {
-            if (e.Button != EnumMouseButton.Left) return;
-            bool open = pressed && !e.Handled && !api.Input.MouseGrabbed && IsPositionInside(e.X, e.Y);
-            bool owned = pressed;
-            CancelPress();
-            if (open) listMenu.Open();
-            if (owned) e.Handled = true;
-        }
-
-        public override void Dispose()
-        {
-            // Native dropdown disposal omits its current-value texture and rich text.
-            currentValueTexture.Dispose();
-            richTextElem.Dispose();
-            base.Dispose();
         }
     }
 

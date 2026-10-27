@@ -44,7 +44,7 @@ Shift + mouse wheel provides an additional orientation control using either Shif
 
 [BuildModeIndicatorBinding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) observes local controller mode transitions independently of preview eligibility. It lazily owns a [BuildModeHud](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs), the top-left information panel with the mod icon, snapping/rotation state and collapsible Room, Work area and Controls sections. The HUD takes native focus and captures keyboard/gameplay input only while a work area size field is being edited; otherwise it remains non-focusing. Only section toggles, actual work area control hits, outstanding captures and hover exit receive pointer routing while the cursor is free; passive text and panel space pass through unless a field edit is ending.
 
-The Work area section contains four rows: the area selector, management buttons, visibility, and localized inclusive X/Y/Z numeric inputs (disabled dashes while incomplete). Native checkbox artwork is retained with activation deferred to valid captured release. The shared table input layer owns nested hit routing and cancellation; it does not route the entire panel through native dialog defaults. State changes queue HUD rebuilding until outside control dispatch. Collapse, hide, scale/locale changes, structural Room changes and disposal cancel HUD captures before composer retirement without changing world handles, endpoints or visibility preference. Unchecking Show work area cancels world manipulation and hides both handles and box.
+The Work area section contains four rows: a compact area list, management buttons, visibility, and localized inclusive X/Y/Z numeric inputs (disabled dashes while incomplete). Native checkbox artwork is retained with activation deferred to valid captured release. The shared table input layer owns nested hit routing and cancellation; it does not route the entire panel through native dialog defaults. State changes queue HUD rebuilding until outside control dispatch. Collapse, hide, scale/locale changes, structural Room changes and disposal cancel HUD captures before composer retirement without changing world handles, endpoints or visibility preference. Unchecking Show work area cancels world manipulation and hides both handles and box.
 
 [Dimension editing](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.WorkAreaSize.cs)
 owns native text focus independently of the table's per-release pointer cleanup.
@@ -80,14 +80,19 @@ Deleting the last area leaves no active selection and disables world creation
 until an area is created through New. Selection and independent visibility remain
 session-only; restoration selects the first saved area and hides every area.
 
-The HUD exposes a native named-area dropdown, New/Rename/Delete controls, the
-selected area's visibility checkbox and editable size fields. Popup input is routed beyond
-the table footprint, with outside presses dismissing it and complete per-button
-gestures retained through recomposition. Hiding/closing the HUD or grabbing the
-mouse cancels popup gesture
-reservations, so a mouse-up lost while the HUD is inactive cannot block later
-gizmo input after reopening. Names are escaped before native rich-text
-display. [Naming dialogs](../VanillaBuildingExpanded/src/BuildBrush/Hud/WorkAreaNameDialog.cs)
+The HUD exposes a [compact named-area listbox](../VanillaBuildingExpanded/src/BuildBrush/Hud/WorkAreaListBox.cs),
+New/Rename/Delete controls, the selected area's visibility checkbox and editable
+size fields. The list shows at most three 22-unit rows, highlights the selection,
+and uses wheel scrolling or a native compact scrollbar for additional entries.
+Names are drawn as plain text and clipped inside the fixed-width viewport.
+Selection requires press and release on the same row; scrolling during a row press
+cancels its pending selection. Only the list footprint and outstanding captures
+reserve pointer input, with no popup or outside-dismissal gesture. Recomposition
+preserves the scroll position, while selection changes reveal the selected row.
+Hiding/closing the HUD or grabbing the mouse cancels captures so a lost release
+cannot block later gizmo input. Dimension-blur gestures alone retain their release
+reservation across recomposition.
+[Naming dialogs](../VanillaBuildingExpanded/src/BuildBrush/Hud/WorkAreaNameDialog.cs)
 take native focus and capture keyboard input; validation errors keep the dialog
 open. Escape/Cancel do not mutate the collection. Deletion requires confirmation.
 Hiding/disposal, death, locale changes and scale changes close management dialogs.

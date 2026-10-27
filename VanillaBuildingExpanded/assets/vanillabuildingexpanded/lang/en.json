@@ -48,6 +48,7 @@
   "build-info-workarea-size-y": "Y",
   "build-info-workarea-size-z": "Z",
   "build-info-workarea-unset": "-",
+  "build-info-workarea-empty": "No work areas",
   "build-info-room-type-label": "Type:",
   "build-info-room-dimensions-label": "Dimensions:",
   "build-info-room-sunlight-label": "Sunlight:",

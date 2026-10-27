@@ -59,13 +59,18 @@ Room information refreshes every half-second while the section is expanded and t
 The expanded-by-default **Work area** section sits between Room and Controls:
 
 ```text
-[Work area 1              v]
+| > Work area 1            |
+|   Workshop               |
+|   Garden                 |
 [New] [Rename] [Delete]
 [ ] Show work area
 Size: X [<x>] Y [<y>] Z [<z>]
 ```
 
-Use the selector to switch between named areas in this world. **New** creates an empty,
+Click a name in the compact list to switch between named areas in this world.
+The selected row is highlighted. Up to three rows are visible; use the mouse wheel
+or scrollbar for additional areas. Long names are clipped to keep the list compact.
+**New** creates an empty,
 selected, visible area after you save its name; **Rename** changes only its name.
 Names are trimmed, unique within the world without regard to case, and limited to
 64 characters without control characters. Naming uses a focused dialog so typing

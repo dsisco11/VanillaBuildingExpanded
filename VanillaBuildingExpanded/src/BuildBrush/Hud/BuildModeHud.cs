@@ -66,14 +66,14 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     public override bool UnregisterOnClose => true;
     /// <summary>Routes only actual controls, captures, and hover exit with a free cursor.</summary>
     public override bool ShouldReceiveMouseEvents() => !disposed && IsOpened() && !capi.Input.MouseGrabbed
-        && (focusedWorkAreaSize is not null || workAreaSelector?.listMenu.IsOpened == true || workAreaMenuGestures.Count != 0
+        && (focusedWorkAreaSize is not null || workAreaBlurGestures.Count != 0
             || ActiveWorkAreaTable?.WantsPointerEvents(capi.Input.MouseX, capi.Input.MouseY) == true
             || sections.Any(section => section.ToggleButton is { } button && (button.IsPressed
                 || button.IsPositionInside(capi.Input.MouseX, capi.Input.MouseY))));
     public override bool ShouldReceiveKeyboardEvents() => focusedWorkAreaSize is not null;
 
     internal bool ReservesPointer(int x, int y) => !disposed && IsOpened() && !capi.Input.MouseGrabbed
-        && (focusedWorkAreaSize is not null || workAreaSelector?.listMenu.IsOpened == true || workAreaMenuGestures.Count != 0
+        && (focusedWorkAreaSize is not null || workAreaBlurGestures.Count != 0
             || ActiveWorkAreaTable?.ReservesPointer(x, y) == true
             || sections.Any(section => section.ToggleButton is { } button
                 && (button.IsPressed || button.IsPositionInside(x, y))));
@@ -89,19 +89,10 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
                 FinishWorkAreaSizeEdit(commit: true);
                 if (!controlHit)
                 {
-                    workAreaMenuGestures.Add(args.Button);
+                    workAreaBlurGestures.Add(args.Button);
                     args.Handled = true;
                     return;
                 }
-            }
-            if (workAreaSelector?.listMenu.IsOpened == true && !args.Handled)
-            {
-                workAreaMenuGestures.Add(args.Button);
-                if (args.Button == EnumMouseButton.Left && workAreaSelector.IsPositionInside(args.X, args.Y))
-                    workAreaSelector.OnMouseDown(capi, args);
-                else workAreaSelector.OnFocusLost();
-                args.Handled = true;
-                return;
             }
             ActiveWorkAreaTable?.OnMouseDown(capi, args);
             foreach (var section in sections)
@@ -111,9 +102,8 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
 
     public override void OnMouseUp(MouseEvent args)
     {
-        if (workAreaMenuGestures.Remove(args.Button))
+        if (workAreaBlurGestures.Remove(args.Button))
         {
-            workAreaSelector?.listMenu.OnMouseUp(capi, args);
             args.Handled = true;
             return;
         }
@@ -130,20 +120,11 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     public override void OnMouseMove(MouseEvent args)
     {
         if (!disposed && IsOpened() && !capi.Input.MouseGrabbed)
-        {
-            if (workAreaSelector?.listMenu.IsOpened == true)
-                workAreaSelector.OnMouseMove(capi, args);
-            else ActiveWorkAreaTable?.OnMouseMove(capi, args);
-        }
+            ActiveWorkAreaTable?.OnMouseMove(capi, args);
     }
     public override void OnMouseWheel(MouseWheelEventArgs args)
     {
-        if (!disposed && IsOpened() && !capi.Input.MouseGrabbed && workAreaSelector?.listMenu.IsOpened == true)
-        {
-            workAreaSelector.listMenu.OnMouseWheel(capi, args);
-            args.SetHandled(true);
-        }
-        else if (!disposed && IsOpened() && !capi.Input.MouseGrabbed)
+        if (!disposed && IsOpened() && !capi.Input.MouseGrabbed)
             ActiveWorkAreaTable?.OnMouseWheel(capi, args);
     }
 

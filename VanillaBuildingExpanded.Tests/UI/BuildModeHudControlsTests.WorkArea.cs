@@ -15,17 +15,14 @@ public sealed partial class BuildModeHudControlsTests
     [InlineData("hide")]
     [InlineData("close")]
     [InlineData("grab")]
-    public void PopupCaptureDoesNotReserveWorldInputAfterHudContextRetirement(string transition)
+    public void ListCaptureDoesNotReserveWorldInputAfterHudContextRetirement(string transition)
     {
         using var f = WorkAreaFixture();
         using var hud = new BuildModeHud(f.Api.Object, () => default, ActiveWorkArea());
         hud.SetVisible(true);
-        var selector = Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select"));
+        var selector = Assert.IsType<WorkAreaListBox>(WorkAreaTable(hud).GetElement("select"));
         var press = WorkAreaMouse(f, selector);
         hud.OnMouseDown(press);
-        hud.OnMouseUp(new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0));
-        Assert.True(selector.listMenu.IsOpened);
-        hud.OnMouseDown(new MouseEvent(-100, -100, EnumMouseButton.Left, 0));
         Assert.True(hud.ReservesPointer(-100, -100));
         switch (transition)
         {
@@ -39,13 +36,13 @@ public sealed partial class BuildModeHudControlsTests
         }
         hud.SetVisible(true);
         Assert.False(hud.ReservesPointer(-100, -100));
-        selector = Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select"));
+        selector = Assert.IsType<WorkAreaListBox>(WorkAreaTable(hud).GetElement("select"));
         press = WorkAreaMouse(f, selector);
         hud.OnMouseDown(press);
         var release = new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0);
         hud.OnMouseUp(release);
         Assert.True(release.Handled);
-        Assert.True(selector.listMenu.IsOpened);
+        Assert.False(hud.ReservesPointer(-100, -100));
     }
 
     [Theory]
@@ -53,7 +50,7 @@ public sealed partial class BuildModeHudControlsTests
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(true, true)]
-    public void ReopenedBuildMenuRestoresGizmoInteractionAfterHiddenPointerRelease(bool grabbed, bool popup)
+    public void ReopenedBuildMenuRestoresGizmoInteractionAfterHiddenPointerRelease(bool grabbed, bool listPress)
     {
         using var f = WorkAreaFixture();
         var world = Mock.Get(f.Api.Object.World);
@@ -71,15 +68,12 @@ public sealed partial class BuildModeHudControlsTests
         h.Enable();
         for (int repeat = 0; repeat < 3; repeat++)
         {
-            if (popup)
+            if (listPress)
             {
                 h.Grabbed = false;
-                var selector = Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select"));
+                var selector = Assert.IsType<WorkAreaListBox>(WorkAreaTable(hud).GetElement("select"));
                 var press = WorkAreaMouse(f, selector);
                 hud.OnMouseDown(press);
-                hud.OnMouseUp(new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0));
-                Assert.True(selector.listMenu.IsOpened);
-                hud.OnMouseDown(new MouseEvent(-100, -100, EnumMouseButton.Left, 0));
                 h.Raw.Left = true;
             }
             workArea.SetContext(false, false);
@@ -123,62 +117,67 @@ public sealed partial class BuildModeHudControlsTests
     }
 
     [Fact]
-    public void NamedSelectorEscapesUserTextAndCanceledPressDoesNotOpenItsPopup()
+    public void NamedListUsesLiteralUserTextAndCanceledPressDoesNotSelect()
     {
         using var f = WorkAreaFixture();
         var workArea = ActiveWorkArea();
         workArea.RenameArea(workArea.SelectedId!.Value, "<Garden> & Home");
+        var other = workArea.CreateArea("Other");
         using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
-        var selector = Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select"));
-        Assert.Equal("&lt;Garden&gt; &amp; Home", selector.listMenu.Names[0]);
-        var press = WorkAreaMouse(f, selector);
+        var selector = Assert.IsType<WorkAreaListBox>(WorkAreaTable(hud).GetElement("select"));
+        Assert.Equal("<Garden> & Home", selector.Areas[0].Name);
+        var press = WorkAreaListMouse(f, selector, 0);
         hud.OnMouseDown(press);
         Assert.True(press.Handled);
         var release = new MouseEvent(-100, -100, EnumMouseButton.Left, 0);
         hud.OnMouseUp(release);
         Assert.True(release.Handled);
-        Assert.False(selector.listMenu.IsOpened);
+        Assert.Equal(other, workArea.SelectedId);
     }
 
-    [Fact]
-    public void NamedAreaSelectorRoutesPopupOutsideTheTableAndConsumesItsCompleteGesture()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1.33)]
+    [InlineData(2)]
+    public void NamedAreaListIsCompactScrollableAndSelectsOnlyOnMatchingRelease(float scale)
     {
-        using var f = WorkAreaFixture();
+        using var f = WorkAreaFixture(scale);
         var workArea = ActiveWorkArea();
         for (int i = 1; i <= 6; i++) workArea.CreateArea("Area " + i);
         using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
-        var selector = Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select"));
-        var press = WorkAreaMouse(f, selector);
-        hud.OnMouseDown(press);
-        Assert.True(press.Handled);
-        Assert.False(selector.listMenu.IsOpened);
-        hud.OnMouseUp(new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0));
-        Assert.True(selector.listMenu.IsOpened);
-        f.MouseX = (int)selector.Bounds.renderX + 10;
-        f.MouseY = (int)(selector.listMenu.Bounds.renderY + selector.listMenu.Bounds.InnerHeight + 5.5 * 30);
-        Assert.False(WorkAreaTable(hud).IsPositionInside(f.MouseX, f.MouseY));
-        Assert.True(hud.ReservesPointer(f.MouseX, f.MouseY));
-        var choose = new MouseEvent(f.MouseX, f.MouseY, EnumMouseButton.Left, 0);
+        var selector = Assert.IsType<WorkAreaListBox>(WorkAreaTable(hud).GetElement("select"));
+        Assert.Equal(3, selector.VisibleRows);
+        Assert.Equal(66, selector.Bounds.fixedHeight);
+        Assert.Equal(4, selector.FirstVisible);
+        Assert.Equal(workArea.SelectedId, selector.SelectedId);
+        WorkAreaListMouse(f, selector, 0);
+        for (int i = 0; i < 4; i++)
+        {
+            var wheel = new MouseWheelEventArgs { delta = 1, deltaPrecise = 1 };
+            hud.OnMouseWheel(wheel);
+            Assert.True(wheel.IsHandled);
+        }
+        Assert.Equal(0, selector.FirstVisible);
+        var before = workArea.SelectedId;
+        var choose = WorkAreaListMouse(f, selector, 1);
         hud.OnMouseDown(choose);
         Assert.True(choose.Handled);
-        Assert.Equal(workArea.Areas[5].Id, workArea.SelectedId);
-        hud.OnRenderGUI(0);
-        var release = new MouseEvent(-100, -100, EnumMouseButton.Left, 0);
+        Assert.Equal(before, workArea.SelectedId);
+        var release = new MouseEvent(choose.X, choose.Y, EnumMouseButton.Left, 0);
         hud.OnMouseUp(release);
         Assert.True(release.Handled);
+        Assert.Equal(workArea.Areas[1].Id, workArea.SelectedId);
+        hud.OnRenderGUI(0);
         Assert.False(hud.ReservesPointer(-100, -100));
-        selector = Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select"));
-        var reopen = WorkAreaMouse(f, selector);
-        hud.OnMouseDown(reopen);
-        hud.OnMouseUp(new MouseEvent(reopen.X, reopen.Y, EnumMouseButton.Left, 0));
-        Assert.True(selector.listMenu.IsOpened);
-        hud.OnMouseDown(new MouseEvent(-100, -100, EnumMouseButton.Left, 0));
-        Assert.False(selector.listMenu.IsOpened);
+        selector = Assert.IsType<WorkAreaListBox>(WorkAreaTable(hud).GetElement("select"));
+        Assert.Equal(workArea.SelectedId, selector.SelectedId);
+        Assert.Equal(0, selector.FirstVisible);
         var outside = new MouseEvent(-100, -100, EnumMouseButton.Left, 0);
-        hud.OnMouseUp(outside);
-        Assert.True(outside.Handled);
+        hud.OnMouseDown(outside);
+        Assert.False(outside.Handled);
+        Assert.False(hud.ReservesPointer(-100, -100));
     }
 
     [Fact]
@@ -262,7 +261,7 @@ public sealed partial class BuildModeHudControlsTests
         if (confirm)
         {
             Assert.False(workArea.State.CanPick);
-            Assert.False(Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select")).Enabled);
+            Assert.False(Assert.IsType<WorkAreaListBox>(WorkAreaTable(hud).GetElement("select")).Enabled);
             ClickWorkAreaCommand(hud, f, "new");
             Assert.True(dialogs.OfType<WorkAreaNameDialog>().Last().IsOpened());
         }
@@ -537,9 +536,9 @@ public sealed partial class BuildModeHudControlsTests
         hud.SetVisible(true);
         var table = WorkAreaTable(hud);
         Assert.Equal(4, table.Bounds.ChildBounds.Count);
-        var selector = Assert.IsAssignableFrom<GuiElementDropDown>(table.GetElement("select"));
-        Assert.Equal(workArea.SelectedId!.Value.ToString("N"), selector.SelectedValue);
-        Assert.Equal(new[] { "Work area 1" }, selector.listMenu.Names);
+        var selector = Assert.IsType<WorkAreaListBox>(table.GetElement("select"));
+        Assert.Equal(workArea.SelectedId, selector.SelectedId);
+        Assert.Equal(new[] { "Work area 1" }, selector.Areas.Select(area => area.Name));
         var commands = Assert.IsType<GuiElementTable>(table.GetElement("commands"));
         Assert.Equal(3, commands.Bounds.ChildBounds.Count);
         Assert.True(selector.Bounds.renderY + selector.Bounds.OuterHeight <= commands.Bounds.renderY);
@@ -720,6 +719,7 @@ public sealed partial class BuildModeHudControlsTests
             "vanillabuildingexpanded:build-info-workarea-default-name" => string.Format("Work area {0}", args),
             "vanillabuildingexpanded:build-info-workarea-show" => "Show work area",
             "vanillabuildingexpanded:build-info-workarea-unset" => "-",
+            "vanillabuildingexpanded:build-info-workarea-empty" => "No work areas",
             "vanillabuildingexpanded:build-info-workarea-size" => "Size:",
             "vanillabuildingexpanded:build-info-workarea-size-x" => "X",
             "vanillabuildingexpanded:build-info-workarea-size-y" => "Y",
@@ -759,5 +759,12 @@ public sealed partial class BuildModeHudControlsTests
         hud.OnMouseUp(release);
         Assert.True(release.Handled);
         hud.OnRenderGUI(0);
+    }
+
+    private static MouseEvent WorkAreaListMouse(Fixture f, WorkAreaListBox list, int row)
+    {
+        f.MouseX = (int)list.Bounds.renderX + 10;
+        f.MouseY = (int)(list.Bounds.renderY + (row + 0.5) * WorkAreaListBox.RowHeight * RuntimeEnv.GUIScale);
+        return new MouseEvent(f.MouseX, f.MouseY, EnumMouseButton.Left, 0);
     }
 }
