@@ -1,5 +1,6 @@
 using Moq;
 using VanillaBuildingExpanded.BuildBrush;
+using VanillaBuildingExpanded.Gizmos;
 using VanillaBuildingExpanded.UI;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -10,6 +11,75 @@ namespace VanillaBuildingExpanded.Tests.UI;
 
 public sealed partial class BuildModeHudControlsTests
 {
+    [Theory]
+    [InlineData("control")]
+    [InlineData("passive")]
+    [InlineData("native-hud")]
+    public void GizmoInput_ReservesActualHudHitsButNotPassiveTextOrStaleHover(string target)
+    {
+        using var f = RulerFixture();
+        using var hud = new BuildModeHud(f.Api.Object, () => default, ActiveRuler());
+        hud.SetVisible(true);
+        var player = BuildBrush.RulerRenderingTests.CreatePlayer();
+        player.OverrideCameraMode = EnumCameraMode.FirstPerson;
+        f.Api.SetupGet(a => a.World.Player).Returns(player);
+        var dialogs = new List<GuiDialog> { hud };
+        f.Gui.Setup(g => g.OpenedGuis).Returns(dialogs);
+        var raw = new MouseButtonState();
+        f.Api.Setup(a => a.Input.MouseButton).Returns(raw);
+        f.Api.Setup(a => a.Input.InWorldMouseButton).Returns(new MouseButtonState());
+        var show = RulerElement(hud, "show");
+        hud.OnMouseMove(RulerMouse(f, show));
+        var e = RulerMouse(f, target == "control" ? show : RulerTable(hud).GetElement("size"));
+        using var receiver = new ReceivingHud(f.Api.Object);
+        if (target == "native-hud")
+        {
+            var bounds = ElementBounds.Fixed(e.X - 5, e.Y - 5, 10, 10).WithEmptyParent();
+            bounds.CalcWorldBounds();
+            receiver.SingleComposer = f.Composer(bounds);
+            dialogs.Add(receiver);
+        }
+        var context = Gizmos.PositionGizmoTests.Camera(1920, 1080);
+        var pointer = context.Camera!.CreatePointer(context, e.X, e.Y);
+        using var manager = new GizmoManager();
+        using var renderer = new GizmoRenderAdapter(f.Api.Object, manager, () => context,
+            new BuildBrush.RulerRenderingTests.FakeState());
+        var gizmo = new PositionGizmo(new(pointer.Ray.Origin + pointer.Ray.Direction * 20, 0), _ => { }, _ => null);
+        manager.Add(gizmo);
+        using var input = new GizmoInputAdapter(f.Api.Object, manager, renderer, () => true, []);
+        renderer.SetActive(true);
+        renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
+        renderer.OnRenderFrame(0, EnumRenderStage.AfterBlit);
+        raw.Left = true;
+        var events = Mock.Get(f.Api.Object.Event);
+        events.Raise(ev => ev.MouseDown += null!, e);
+        Assert.Equal(target == "passive", e.Handled);
+        Assert.Equal(target == "passive", ReferenceEquals(gizmo, manager.CapturedGizmo));
+        if (target == "control")
+        {
+            hud.OnMouseDown(e);
+            Assert.True(e.Handled);
+            Assert.True(hud.ReservesPointer(-100, -100));
+        }
+        else if (target == "passive")
+        {
+            f.ScaleWatcher!(1.25f);
+            f.ChangeLocale();
+            hud.OnRenderGUI(0);
+            input.Refresh();
+            Assert.Same(gizmo, manager.CapturedGizmo);
+        }
+        raw.Left = false;
+        var up = new MouseEvent(e.X, e.Y, EnumMouseButton.Left, 0);
+        events.Raise(ev => ev.MouseUp += null!, up);
+        if (target == "control") hud.OnMouseUp(up);
+    }
+
+    private sealed class ReceivingHud(ICoreClientAPI api) : HudElement(api)
+    {
+        public override bool ShouldReceiveMouseEvents() => true;
+    }
+
     [Fact]
     public void RulerDrawingFailure_LeavesSizesAndControlsUsableAcrossHudRebuilds()
     {
@@ -211,6 +281,7 @@ public sealed partial class BuildModeHudControlsTests
         Assert.True(press.Handled);
         Assert.True(RulerTable(hud).HasPointerCapture);
         f.MouseX = f.MouseY = -100;
+        Assert.True(hud.ReservesPointer(-100, -100));
         Assert.True(hud.ShouldReceiveMouseEvents());
         hud.OnMouseMove(new MouseEvent(-100, -100));
         var release = new MouseEvent(-100, -100, EnumMouseButton.Left, 0);
@@ -227,6 +298,7 @@ public sealed partial class BuildModeHudControlsTests
         })
         {
             var e = RulerMouse(f, passive);
+            Assert.False(hud.ReservesPointer(e.X, e.Y));
             hud.OnMouseMove(e);
             Assert.False(hud.ShouldReceiveMouseEvents());
             hud.OnMouseDown(e);

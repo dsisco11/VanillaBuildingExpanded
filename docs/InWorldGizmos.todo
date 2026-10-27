@@ -414,29 +414,88 @@ no float-evaluation source references remain and git diff --check passed.
 Prerequisites: Phases 1-3.
 Outcome: The manager can receive native-adapter gestures safely in a test composition, ready for a single-owner gameplay cutover.
 
-    ☐ Implement one native input adapter for manager interactions.
-        ☐ Respect earlier handled input, open/capturing dialogs and actual HUD hits before new gizmo capture.
-        ☐ Use free-cursor rays without camera look and reticle rays while retaining camera look needed for aiming.
-        ☐ Begin only on a fresh left press over an eligible handle; do not change targets during capture.
-        ☐ Leave presses outside handles on the normal path except explicitly pending creation.
-    ☐ Implement full-gesture suppression and repeatability.
-        ☐ Suppress captured hold/repeat/release and late native world/control action callbacks before brush placement.
-        ☐ Release completes once; right-click and Escape cancel/restore without placement, item use or unintended dialog activation.
-        ☐ Own the right-cancel gesture and safely retire latches without blocking the next fresh edit.
-        ☐ Handle hidden releases and focus changes using the qualified native ordering, not assumed callback delivery.
-    ☐ Cancel interaction on dialog opening, focus loss, pointer-mode change, build-mode exit, death, dimension change and departure.
-        ☐ Cancel before losing the context needed to restore preview state.
-        ☐ Do not treat unrelated HUD recomposition as a world-gizmo cancellation.
-    ☐ Test the actual adapter/manager route with native carriers and service doubles where appropriate.
-        ☐ Cover both pointer modes, GUI/handled priority, drag outside handles, cancellation and hidden/late releases.
-        ☐ Assert no modeled mining/attack/use/placement callbacks or packets for owned gestures and intact ordinary input otherwise.
-        ☐ Repeat completed and canceled captures many times; verify no stale latches, duplicate callbacks or registrations.
-        ☐ Keep native engine ordering evidence separate from modeled downstream suppression evidence.
+    ☑ Implement one native input adapter for manager interactions.
+        ☑ Respect earlier handled input, open/capturing dialogs and actual HUD hits before new gizmo capture.
+        ☑ Use free-cursor rays without camera look and reticle rays while retaining camera look needed for aiming.
+        ☑ Begin only on a fresh left press over an eligible handle; do not change targets during capture.
+        ☑ Leave presses outside handles on the normal path except explicitly pending creation.
+    ☑ Implement full-gesture suppression and repeatability.
+        ☑ Suppress captured hold/repeat/release and late native world/control action callbacks before brush placement.
+        ☑ Release completes once; right-click and Escape cancel/restore without placement, item use or unintended dialog activation.
+        ☑ Own the right-cancel gesture and safely retire latches without blocking the next fresh edit.
+        ☑ Handle hidden releases and focus changes using the qualified native ordering, not assumed callback delivery.
+    ☑ Cancel interaction on dialog opening, focus loss, pointer-mode change, build-mode exit, death, dimension change and departure.
+        ☑ Cancel before losing the context needed to restore preview state.
+        ☑ Do not treat unrelated HUD recomposition as a world-gizmo cancellation.
+    ☑ Test the actual adapter/manager route with native carriers and service doubles where appropriate.
+        ☑ Cover both pointer modes, GUI/handled priority, drag outside handles, cancellation and hidden/late releases.
+        ☑ Assert no modeled mining/attack/use/placement callbacks or packets for owned gestures and intact ordinary input otherwise.
+        ☑ Repeat completed and canceled captures many times; verify no stale latches, duplicate callbacks or registrations.
+        ☑ Keep native engine ordering evidence separate from modeled downstream suppression evidence.
 
 Completion criteria:
 
-    ☐ Both pointer modes and complete gesture retirement pass focused adapter/manager tests.
-    ☐ Adapter activation in normal gameplay remains gated on Phase 6 cutover; old/new ruler adapters never compete.
+    ☑ Both pointer modes and complete gesture retirement pass focused adapter/manager tests.
+    ☑ Adapter activation in normal gameplay remains gated on Phase 6 cutover; old/new ruler adapters never compete.
+
+### Phase 4 implementation and evidence
+
+Controlling sources: complete proposal, especially input/dragging, visibility/lifecycle
+and verification; Phase 1 native input ownership/pointer/creation contracts above;
+the linked RulerInput, BuildBrushSystem_Client, BuildModeHud and architecture context.
+Native event/focus ordering remains the installed 1.22.7 source qualification recorded
+in Phase 1, not a new live compatibility claim.
+
+Traceability:
+- Native route/priority -> proposal activation and Phase 1 ownership ->
+  GizmoInputAdapter subscribes once per explicitly constructed session to mouse,
+  Escape, dimension, departure and native focus callbacks, and renderer ContextReady.
+  Its owner must route HandleWorldAction before brush placement and call Refresh
+  when eligibility changes even if rendering is inactive. No production composition
+  constructs the adapter; Phase 6 retains atomic old/new ownership cutover.
+- Actual pointers/capture -> Phase 1 perspective-frame contract -> free press/release
+  uses event coordinates and the last successfully drawn context; Opaque updates use
+  the new camera after native aiming. MouseMove only records coordinates, never handles
+  movement or changes camera/cursor settings. Manager retains the captured handle.
+- GUI reservation -> Phase 1 exact HUD contract -> BuildModeHud.ReservesPointer and
+  GuiElementTable.ReservesPointer test real controls/captures without stale hover-exit
+  routing or passive panel bounds; other receiving native HUD composers reserve bounds.
+  Modal/raw/all-input dialogs prevent capture and cancel previews without stealing keys.
+- Full gesture/termination -> proposal no gameplay side effects and Phase 1 latches ->
+  per-button Owned/Retired states suppress both native action families through late
+  callbacks until a fresh physical press; owned world-button fields are explicitly
+  cleared. Hidden releases cancel, visible valid releases apply the final pointer then
+  complete once. Right/Escape cancel; focus/context loss rolls back before retirement.
+  Raw KeyboardKeyStateRaw (IInputAPI) also retires a hidden Escape release outside
+  key callbacks, without depending on raw-key update order inside KeyDown/KeyUp.
+- Lifecycle/failure -> proposal session ownership -> eligibility is checked on buttons,
+  keys, world actions and frames, including mode/death/world/dimension, pointer/camera
+  mode and viewport. Disposal cancels before detaching all subscriptions; recognized
+  input failures log/notify once and disable input for the session. HUD rebuilds alone
+  do not invalidate world capture.
+- Pending-creation seam -> Phase 1 handle-before-creation policy ->
+  IGizmoCreationInput receives only a miss from a fresh owned press, including sessions
+  with no instances; cancellation distinguishes explicit Right/Escape from context
+  retirement so the future owner can preserve its rearming policy. Actual terrain resolution, ruler creation and durable transactions
+  remain Phases 5/6; the adapter owns cancellation and suppression, not ruler state.
+
+Focused evidence: GizmoInputAdapterTests uses the actual manager, PositionGizmo and
+two-stage renderer with native ClientPlayer/EntityPlayer carriers and API service doubles.
+It covers free/reticle and first-/third-person pointers, beyond-reach handles, priority,
+final release, out-of-bounds drag, hidden releases, cancellation/rollback, late actions,
+held-at-construction, focus reset, creation, failures, teardown and 120 complete/cancel
+cycles per pointer mode. BuildModeHudControlsTests adds actual composed control/passive/
+native-HUD routing and stale-hover/recomposition checks. Downstream mining/attack/use/
+placement/packet gates are modeled, not a live engine or multiplayer execution proof.
+Verification subagent: 390 focused tests passed, zero failed/skipped, using Release
+and filter Gizmos|Ruler|BuildModeHudControlsTests|TableInputTests. Normal
+.\build.ps1 --target=Build passed (including ValidateJson), and git diff --check
+passed. Existing nullable warnings and CakeBuild Pkcs 10.0.12 advisories remain.
+Direct second review covered the implementation, tests and inherited contracts;
+it added exact axis/hidden-Escape/creation-retirement checks and confirmed no production
+instantiation. Fresh independent read-only completion audit inspected controlling sources,
+implementation and evidence and found Phase 4 fully satisfied, with no unresolved required
+findings. Phase 4 is complete; later phases and their live-game gates remain unchanged.
 
 ## Phase 5: Add ruler endpoint transactions and persistence boundaries
 

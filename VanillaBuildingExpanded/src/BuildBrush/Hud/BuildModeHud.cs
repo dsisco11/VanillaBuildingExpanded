@@ -70,6 +70,11 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     /// <summary>Leaves keyboard input entirely to gameplay and existing dialogs.</summary>
     public override bool ShouldReceiveKeyboardEvents() => false;
 
+    internal bool ReservesPointer(int x, int y) => !disposed && IsOpened() && !capi.Input.MouseGrabbed
+        && (ActiveRulerTable?.ReservesPointer(x, y) == true
+            || sections.Any(section => section.ToggleButton is { } button
+                && (button.IsPressed || button.IsPositionInside(x, y))));
+
     public override void OnMouseDown(MouseEvent args)
     {
         if (!disposed && IsOpened() && !capi.Input.MouseGrabbed)

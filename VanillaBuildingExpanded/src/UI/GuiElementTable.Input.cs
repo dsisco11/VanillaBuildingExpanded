@@ -20,8 +20,11 @@ internal sealed partial class GuiElementTable
 
     internal bool HasPointerCapture => pointerCaptures.Count > 0;
 
-    internal bool WantsPointerEvents(int x, int y) => !disposed && (HasPointerCapture
-        || hoveredChild is not null || PointerHitOrder().Any(entry => IsPointerHit(entry, x, y)));
+    internal bool ReservesPointer(int x, int y) => !disposed && (HasPointerCapture
+        || PointerHitOrder().Any(entry => IsPointerHit(entry, x, y)));
+
+    internal bool WantsPointerEvents(int x, int y) => !disposed
+        && (hoveredChild is not null || ReservesPointer(x, y));
 
     /// <summary>Only explicit keyboard participants with native focus capability make the group focusable.</summary>
     public override bool Focusable => !disposed && elements.Values.Any(IsKeyboardEligible);

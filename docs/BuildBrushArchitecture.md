@@ -77,8 +77,22 @@ publishes camera context at Opaque 0.49 and draws overlays at AfterBlit 0.49, sh
 arrow/circle/diamond meshes and the ruler's extracted native line-state restoration.
 It restores shader/depth/write/line state without changing blending, invalidates hits
 immediately on failure/retirement, and defers callback-requested renderer membership and
-GPU teardown outside native live-list iteration. No client composition activates it yet;
-native input, ruler policies/transactions and UI cutover remain in later phases.
+GPU teardown outside native live-list iteration. No client composition activates it yet.
+
+The [inactive native input adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoInputAdapter.cs)
+uses the renderer's perspective updates for drag previews and last drawn context for
+button hits/final release. Its session eligibility callback covers owner mode/visibility;
+native checks additionally guard focus, dialogs, player life, world/dimension, camera/pointer
+mode and viewport. Free-cursor events retain their coordinates; reticle motion remains
+unhandled for native aiming. Exact BuildModeHud/table control reservation excludes
+passive text and stale hover-exit requests. Per-button ownership suppresses both native
+action families, including late callbacks; hidden releases cancel and owned world-button
+fields are explicitly cleared. Right/Escape cancel and session teardown detaches observers.
+The eventual owner must call Refresh on eligibility changes even without rendering and
+route HandleWorldAction before brush placement. Pending creation has an owner seam, not
+implemented ruler/terrain policy. Tests exercise actual adapter/manager routing with native
+carriers and modeled downstream gates; they are not live-game qualification. Ruler
+transactions, native activation and HUD cutover remain in later phases.
 
 On local join, the client system creates a fresh ruler controller, restores endpoints through persistence, then creates the render binding. Visibility remains unchecked and mode disabled. The input adapter is created lazily once enabled and alive, independent of brush placement eligibility. The 50-ms client tick refreshes context before brush early-outs; mode transitions refresh it immediately.
 

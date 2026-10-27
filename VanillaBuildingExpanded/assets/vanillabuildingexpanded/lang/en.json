@@ -17,6 +17,7 @@
   "ruler-dimension-mismatch": "The ruler belongs to another dimension. Return there to see it, or set a new endpoint here.",
   "ruler-render-unavailable": "The ruler wireframe is unavailable for this world session. Sizes still work; check the game log.",
   "gizmo-render-unavailable": "In-world editing controls are unavailable for this world session. Measurements and saved values still work; check the game log.",
+  "gizmo-input-unavailable": "In-world editing input is unavailable for this world session. Measurements and saved values still work; check the game log.",
   "build-info-title": "Build Mode",
   "build-info-suspended": "Build Mode (suspended)",
   "build-info-snapping-label": "Snapping:",
