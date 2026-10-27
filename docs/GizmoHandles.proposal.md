@@ -78,6 +78,18 @@ Replace the positioning-only generated-part assumption with immutable resolved g
 
 The default geometry-backed hit target and renderer consume the same camera/value/appearance snapshot. A custom hit target can provide deliberate pick padding or independent picking geometry without changing the interaction solver; its relationship to the visible handle must be explicit and tested. Shape, size or frame changes invalidate affected geometry; color-only changes do not require rebuilding spatial data. Preserve existing screen-sized controls, pick tolerances, overlay priority and distant-coordinate precision.
 
+### Positioning compatibility baseline
+
+Preserve these existing implementation details during the refactor:
+
+- Arrow length is 64 GUI-scaled pixels converted to world units and clamped to `[0.125, 8]`; center radius is `7/64` of that reference length. Pick padding is 4 GUI-scaled pixels. Clipped parts are omitted from drawing and picking.
+- Arrow-head bases are at `0.8125` of length with lateral extent `0.09375`. Circles use 16 segments; diamonds use 4. Center pick priority is 0, arrows 1.
+- Local hit ordering is priority, distance, then stable ID. Cross-owner ordering retains the manager's `1e-6` distance bins and insertion order. Validate actual handle ownership again before consuming hits, including after callbacks.
+- Axis start rejects perpendicular-ray squared magnitude `<= 1e-4`. Intersections reject absolute ray/normal dot `<= 0.01`, behind-ray values, nonfinite results or distances beyond `10000 * max(1, initial eye-anchor distance)`. Accepted-step limit is `max(64, 8 * initial distance)` from the last accepted unsnapped measurement.
+- Colors are X `(1, 0.2, 0.2)`, Y `(0.2, 1, 0.2)`, Z `(0.25, 0.5, 1)` and center `(1, 0.85, 0.25)`. Normal/highlight opacity is `0.8/1`, line width `1.6/2.8`.
+- Input uses current perspective context for previews and last drawn context for picking/release. Preserve handled-input/HUD/dialog checks and suppression of both native action families; invalidation cancels rather than commits.
+- Renderer resources remain session-owned: shared line meshes, memory shaders, label textures and one quad. Opaque/AfterBlit callbacks retain order `0.49`, deferred membership/teardown outside native callback iteration, existing state guards and visible/logged failure handling.
+
 ## Appearance contract
 
 Use the approved names exactly:
@@ -100,6 +112,23 @@ The initial states are:
 `Selected` retains the project's existing meaning of held/captured, not persistent application selection. Capture takes precedence over hover. Hidden or ineligible handles are not made interactive by an appearance state.
 
 Keep the mutable dictionary encapsulated. Expose a read-only view and validated configuration operations so mutations cannot bypass validation or invalidation. Retain the required `Default` entry throughout the handle's attached lifetime.
+
+### Appearance fields and validation
+
+Every field below is nullable in `AppearenceProperties`. `Default` supplies every shape-required field and all label fields when a label is attached. Validate every configured state before publishing a mutation, including states overriding the shape.
+
+| Fields | Units and validation |
+|---|---|
+| Shape | A supported `GizmoShape`; no new catalog is introduced. |
+| Size | Finite positive nominal logical-pixel extent: arrow 64, center radius 7. Convert using the clamped 64-pixel reference above to preserve sizing. |
+| Red, Green, Blue, Opacity | Finite normalized `[0, 1]` channels; defaults as above. |
+| LineWidth | Finite positive native framebuffer line width, default 1.6; hovered/selected override 2.8. |
+| LabelTextRed/Green/Blue/Opacity | Finite `[0, 1]`, default white and opaque. |
+| LabelBackgroundRed/Green/Blue/Opacity | Finite `[0, 1]`, default black with opacity 0.65. |
+| LabelFontFamily, LabelFontSize, LabelBold | Nonblank native font name, finite positive logical-pixel size and Boolean weight; defaults standard font, 14 and bold. |
+| LabelPadding | Finite nonnegative logical pixels, default 3; text/padding follow GUI scale. |
+
+Shape/size/frame changes invalidate spatial and pick snapshots and label anchors. Color/opacity/line-width changes affect drawing only. Label font/color/background/padding changes invalidate raster content; text/offset/visibility remain `GizmoLabel` configuration. Offset/visibility changes neither rerasterize nor cancel.
 
 ### Per-property fallback
 
@@ -195,6 +224,12 @@ During dragging, parameter sources update the value source and existing owner pr
 
 Existing lifecycle code may continue performing baseline restoration internally. The edit-state adapter coordinates that same path rather than restoring twice or separately invoking owner handlers already reached by lifecycle notifications.
 
+The prepared session begins parameter bookkeeping before the edit-state scope. A parameter initializer that throws unwinds its partial bookkeeping. An edit initializer that rejects or throws unwinds its own partial owner scope; the session then ends initialized parameter bookkeeping and releases capture-local resources. No successful-start, completion or commit follows failed initialization.
+
+Clear active session/capture references before terminal callbacks and reject begins during initialization or termination. Repeated terminal calls are no-ops; disposal cancels unfinished work. Release capture-local resources exactly once even when callbacks fail, and propagate failures to the existing logging/notice path. If parameter cleanup fails during release, cancel the owner scope instead of committing it. Surface owner-commit failures without a successful completion notification or an invented rollback of already committed state; preserve dirty-save/retry semantics.
+
+The input behavior owns its accepted session. Sessions borrow frame, parameter, value and edit-state configuration, whose lifetime belongs to the gizmo/session composition; sessions do not dispose shared sources. The manager retains global membership/capture, `Gizmo` retains its interaction baseline, `WorkAreaController` retains the endpoint-pair baseline, and `WorkAreaGizmoSession` retains synchronization and preview/commit/cancel binding. Adapt these same paths and remove superseded wiring at cutover.
+
 ```mermaid
 flowchart LR
     Hit["Hit target: handle, distance and priority"] --> Input["Input behavior and manager capture"]
@@ -267,7 +302,7 @@ Key label caches by persistent handle identity within the owner. Refresh only re
 
 Existing ID constants may remain convenient named identifiers, but must not be required for generic renderer or interaction behavior. Update in-repository callers together; no persisted data format changes or legacy configuration migration are needed.
 
-This proposal supersedes the earlier component-level handle assumptions in [InWorldGizmos.proposal.md](InWorldGizmos.proposal.md), not its established input, precision or cancellation requirements. [BuildBrushArchitecture.md](BuildBrushArchitecture.md) should be updated when implementation changes, rather than describing this proposal as already shipped.
+This proposal supersedes the earlier component-level handle assumptions in the [historical InWorldGizmos.proposal.md](https://github.com/dsisco11/VanillaBuildingExtended/blob/04172078d76652ec9fc5610351b926c66daf0399/docs/InWorldGizmos.proposal.md), not its established input, precision or cancellation requirements. That completed document was retired from the worktree; the linked immutable revision remains available locally with `git show 04172078d76652ec9fc5610351b926c66daf0399:docs/InWorldGizmos.proposal.md`. [BuildBrushArchitecture.md](BuildBrushArchitecture.md) should be updated when implementation changes, rather than describing this proposal as already shipped.
 
 All new or changed public contracts and non-obvious lifecycle details require Doxygen-compatible XML documentation, including parameters, return values and validation exceptions.
 

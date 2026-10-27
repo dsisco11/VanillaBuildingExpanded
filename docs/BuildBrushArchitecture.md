@@ -213,6 +213,24 @@ Work-area handles use hover labels for X/Y/Z and endpoint Center markers.
 The whole-area midpoint's center label uses the selected work area's name,
 including renames; all names are rendered as literal text rather than markup.
 
+### Reusable interaction contracts
+
+[Interaction contracts](../VanillaBuildingExpanded/src/Gizmos/GizmoInteractionContracts.cs)
+define separate APIs for gesture routing, hit targets, logical frames, measurement
+sessions, typed parameters, edited values and edit-state coordination. They do not
+register native handlers or own global capture/render resources.
+
+`GizmoValueSource<TValue>` borrows a gizmo and forwards access to its notifying
+`Value` setter without subscriptions or copied storage. `IGizmoHandle` exposes
+identity/ownership. [GizmoHandleHit](../VanillaBuildingExpanded/src/Gizmos/GizmoHandleHit.cs)
+validates attached handle references and positive finite distances; local ordering
+is priority, distance, then ID. [GizmoFrame](../VanillaBuildingExpanded/src/Gizmos/GizmoFrame.cs)
+validates finite coordinates, normalized directions, orthogonal paired tangents and
+context dimensions. Frame normalization uses a `1e-12` floor and orthogonality a
+`1e-8` dot tolerance, independently of positioning solver guards.
+
+### Native input and work-area transactions
+
 The [native input adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoInputAdapter.cs)
 uses the renderer's perspective updates for drag previews and last drawn context for
 button hits/final release. Its session eligibility callback covers owner mode/visibility;

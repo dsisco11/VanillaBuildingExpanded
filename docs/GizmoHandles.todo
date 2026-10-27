@@ -2,7 +2,7 @@
 
 Source proposal: [GizmoHandles.proposal.md](./GizmoHandles.proposal.md)
 
-Status: Approved proposal extrapolated into an execution contract on 2026-10-27. Planning only; no implementation or qualification is claimed. Leave tasks unchecked until their stated verification gates pass.
+Status: Execution in progress. Phase 1 was implemented and independently audited on 2026-10-27; later phases remain unchecked. The foundation is inactive in gameplay. Leave tasks unchecked until their stated verification gates pass.
 
 ## Goal and scope
 
@@ -37,27 +37,38 @@ Non-goals: new production rotation/scaling tools, new shape catalogs, design-mod
 Prerequisites: None.
 Outcome: Each boundary has a documented, testable contract and a single integration path into current systems.
 
-    ☐ Read the complete proposal and trace its linked implementation before adding abstractions.
-        ☐ Trace Gizmo, Gizmo<TValue>, manager/input routing, PositionGizmo, geometry/render adapters and WorkAreaGizmoSession.
-        ☐ Identify current baseline restoration, value events, owner preview/commit/cancel notifications, capture suppression and error-reporting paths.
-        ☐ Record existing visual dimensions, pick tolerances, solver thresholds and resource ownership to preserve.
-    ☐ Define the seven replaceable contracts and typed/delegate adapters needed by current positioning.
-        ☐ Separate gesture routing, hit testing, spatial frames, measurement, parameter modification, value access and edit-state coordination.
-        ☐ Define hit results containing owned handle identity, finite valid distance and deterministic priority/tie ordering.
-        ☐ Define scalar and two-dimensional parameter contracts without requiring all values to be transforms.
-        ☐ Keep typed parameter/value implementations behind non-generic input lifecycle; avoid boxing, runtime value casts and silent setters.
-    ☐ Specify lifecycle and failure contracts before their consumers.
-        ☐ Validate/initialize measurement before accepted begin; initialize parameter modification and edit-state scope before successful-start notification.
-        ☐ Specify unwind for each partially initialized scope, explicit rejection/error reporting and exactly-once cleanup.
-        ☐ Specify end-modification as bookkeeping only, normal completion as commit and forced termination as cancellation.
-        ☐ Preserve notifying baseline restoration before cancellation notification; avoid duplicate owner notifications or rollback.
-        ☐ Define capture-local versus shared configuration ownership and reentrancy rules.
-    ☐ Add contract-level tests/fakes demonstrating independent replacement of the seven boundaries.
+    ✔ Read the complete proposal and trace its linked implementation before adding abstractions.
+        ✔ Trace Gizmo, Gizmo<TValue>, manager/input routing, PositionGizmo, geometry/render adapters and WorkAreaGizmoSession.
+        ✔ Identify current baseline restoration, value events, owner preview/commit/cancel notifications, capture suppression and error-reporting paths.
+        ✔ Record existing visual dimensions, pick tolerances, solver thresholds and resource ownership to preserve.
+    ✔ Define the seven replaceable contracts and typed/delegate adapters needed by current positioning.
+        ✔ Separate gesture routing, hit testing, spatial frames, measurement, parameter modification, value access and edit-state coordination.
+        ✔ Define hit results containing owned handle identity, finite valid distance and deterministic priority/tie ordering.
+        ✔ Define scalar and two-dimensional parameter contracts without requiring all values to be transforms.
+        ✔ Keep typed parameter/value implementations behind non-generic input lifecycle; avoid boxing, runtime value casts and silent setters.
+    ✔ Specify lifecycle and failure contracts before their consumers.
+        ✔ Validate/initialize measurement before accepted begin; initialize parameter modification and edit-state scope before successful-start notification.
+        ✔ Specify unwind for each partially initialized scope, explicit rejection/error reporting and exactly-once cleanup.
+        ✔ Specify end-modification as bookkeeping only, normal completion as commit and forced termination as cancellation.
+        ✔ Preserve notifying baseline restoration before cancellation notification; avoid duplicate owner notifications or rollback.
+        ✔ Define capture-local versus shared configuration ownership and reentrancy rules.
+    ✔ Add contract-level tests/fakes demonstrating independent replacement of the seven boundaries.
 
 Completion criteria:
 
-    ☐ Contracts compile and focused tests establish lifecycle ordering and boundary independence without activating a new gameplay path.
-    ☐ Every existing input, value and transaction responsibility has one documented owner; no duplicated capture, rollback or persistence owner is required.
+    ✔ Contracts compile and focused tests establish lifecycle ordering and boundary independence without activating a new gameplay path.
+    ✔ Every existing input, value and transaction responsibility has one documented owner; no duplicated capture, rollback or persistence owner is required.
+
+Verification and traceability (2026-10-27):
+
+- Source qualification -> proposal [positioning compatibility baseline](GizmoHandles.proposal.md#positioning-compatibility-baseline), [appearance fields and validation](GizmoHandles.proposal.md#appearance-fields-and-validation), and [edit-state targets](GizmoHandles.proposal.md#edit-state-targets), recording preservation requirements and integration decisions. [Architecture documentation](BuildBrushArchitecture.md#reusable-interaction-contracts) describes the implemented contract APIs, not execution history. Inherited input/precision/cancellation requirements were consulted at immutable revision `04172078d76652ec9fc5610351b926c66daf0399`; the retired proposal reference identifies that revision.
+- Seven boundaries and typed access -> proposal Required architectural boundaries -> [GizmoInteractionContracts.cs](../VanillaBuildingExpanded/src/Gizmos/GizmoInteractionContracts.cs), including the real notifying value adapter. IGizmoHandle defines identity/ownership for the later concrete class, not a second wrapper.
+- Owned hit/frame contracts -> proposal Geometry snapshots and Spatial-frame sources -> [GizmoHandleHit.cs](../VanillaBuildingExpanded/src/Gizmos/GizmoHandleHit.cs) and [GizmoFrame.cs](../VanillaBuildingExpanded/src/Gizmos/GizmoFrame.cs), with validation, local tie ordering and current-dimension checks.
+- Lifecycle/replacement evidence -> proposal Edit-state targets and Capture, cancellation and mutation -> [GizmoInteractionContractTests.cs](../VanillaBuildingExpanded.Tests/Gizmos/GizmoInteractionContractTests.cs), using independent fakes and the real notifying value source. Production measurement, input and transaction adapters remain later-phase work.
+- Delegated Release/net10.0 regression command: `dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj -c Release --framework net10.0 --filter "FullyQualifiedName~Gizmos|FullyQualifiedName~WorkAreaGizmoSession"` with `VINTAGE_STORY=G:\Vintagestory`: 277 passed, 0 failed/skipped. This includes 20 new contract cases.
+- After fixing new test nullable-flow warnings, the delegated `FullyQualifiedName~GizmoInteractionContractTests` rerun passed 20/20 with no new-source/test warnings. Existing unrelated nullable/analyzer and package-advisory warnings remain.
+- Delegated normal `.\build.ps1 --target=Build` and ValidateJson passed; whitespace checks passed. No packaging or live-game qualification was claimed.
+- Second implementation review completed; the fresh read-only audit-stage-completion audit independently consulted governing documents and sources and concluded Phase 1 fully satisfied with no required issues or evidence gaps. Only this phase is checked complete.
 
 ## Phase 2: Implement persistent handle ownership and appearance resolution
 
