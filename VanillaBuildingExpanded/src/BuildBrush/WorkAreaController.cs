@@ -229,6 +229,41 @@ internal sealed class WorkAreaController
         return true;
     }
 
+    public bool TryResize(long sizeX, long sizeY, long sizeZ, IBlockAccessor accessor)
+    {
+        ArgumentNullException.ThrowIfNull(accessor);
+        if (!State.CanPick) return false;
+        var (start, end) = CommittedEndpoints;
+        if (start is not { } first || end is not { } last
+            || sizeX < 1 || sizeX > 1L << 32 || sizeY < 1 || sizeY > Vintagestory.API.MathTools.BlockPos.DimensionBoundary
+            || sizeZ < 1 || sizeZ > 1L << 32)
+        {
+            NoticeRequested?.Invoke(WorkAreaNotice.InvalidSize);
+            return false;
+        }
+        var bounds = new WorkAreaBounds(first, last);
+        static long Offset(long current, long requested)
+        {
+            long difference = current - requested;
+            // Round half-block ties toward the positive axis, including negative coordinates.
+            return difference / 2 + (difference > 0 && difference % 2 != 0 ? 1 : 0);
+        }
+        long x = Offset(bounds.SizeX, sizeX), y = Offset(bounds.SizeY, sizeY), z = Offset(bounds.SizeZ, sizeZ);
+        if (!bounds.MinCell.TryTranslate(x, y, z, accessor, out var min)
+            || !bounds.MaxCell.TryTranslate(x + sizeX - bounds.SizeX, y + sizeY - bounds.SizeY,
+                z + sizeZ - bounds.SizeZ, accessor, out var max))
+        {
+            NoticeRequested?.Invoke(WorkAreaNotice.InvalidSize);
+            return false;
+        }
+        if (min == first && max == last)
+        {
+            CancelEndpointEdit();
+            return true;
+        }
+        return TrySetEndpoints(min, max, accessor);
+    }
+
     private bool RejectEndpoint()
     {
         NoticeRequested?.Invoke(WorkAreaNotice.InvalidEndpoint);

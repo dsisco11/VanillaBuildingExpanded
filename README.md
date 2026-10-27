@@ -14,7 +14,7 @@ A Vintage Story mod that adds quality-of-life improvements for building while st
 
 ### Build Mode
 
-Press the backtick key (`) to toggle **Build Mode**, then select a placeable block on your hotbar. The preview shows the target placement and orientation. Entering or leaving the mode displays a status notice. A top-left build-info panel contains the official mod icon at 85% opacity, the current snapping mode, and rotation state. Rotation shows the current orientation number and total available orientations for variant-based blocks, or just the angle for mesh-rotated blocks. Blocks without rotation support are labeled accordingly. Muted warm-gray labels and brighter ivory values appear in aligned columns; unavailable or unsupported rotation values use muted gray. The panel has a translucent black background with a darker title band and fades to transparent at its right and bottom edges. It remains visible while the brush has no target or is suspended; suspension is labeled and rotation is marked unavailable. It scales with the GUI and never takes keyboard focus. Section collapse buttons and work area controls handle pointer clicks only while the mouse cursor is ungrabbed; passive text and unused panel space do not.
+Press the backtick key (`) to toggle **Build Mode**, then select a placeable block on your hotbar. The preview shows the target placement and orientation. Entering or leaving the mode displays a status notice. A top-left build-info panel contains the official mod icon at 85% opacity, the current snapping mode, and rotation state. Rotation shows the current orientation number and total available orientations for variant-based blocks, or just the angle for mesh-rotated blocks. Blocks without rotation support are labeled accordingly. Muted warm-gray labels and brighter ivory values appear in aligned columns; unavailable or unsupported rotation values use muted gray. The panel has a translucent black background with a darker title band and fades to transparent at its right and bottom edges. It remains visible while the brush has no target or is suspended; suspension is labeled and rotation is marked unavailable. It scales with the GUI and takes keyboard focus only while editing a work area dimension. Section collapse buttons and work area controls handle pointer clicks only while the mouse cursor is ungrabbed; passive text and unused panel space do not, except for the click that finishes a dimension edit.
 
 Build mode stays enabled when you change hotbar slots. Selecting a tool, an unsupported item, or an empty slot suspends brush placement; ordinary interactions remain available unless a work area pick is armed. Selecting a supported block resumes the brush. Mode starts off when you join and turns off on death. Snapping preferences persist across toggles within the session; held face offset does not.
 
@@ -62,7 +62,7 @@ The expanded-by-default **Work area** section sits between Room and Controls:
 [Work area 1              v]
 [New] [Rename] [Delete]
 [ ] Show work area
-Size: <x>, <y>, <z>
+Size: X [<x>] Y [<y>] Z [<z>]
 ```
 
 Use the selector to switch between named areas in this world. **New** creates an empty,
@@ -80,7 +80,18 @@ saving its preview, and shows the selected area's size and visibility preference
 
 With build mode enabled and your player alive, check **Show work area**. If no endpoints exist, one world block click creates both on that cell. A restored partial work area offers the same click for its missing endpoint. Creation targets loaded terrain through the camera far plane without a player-reach cap, using the actual free cursor or mouse-look reticle, never brush placement offsets. Sky/entity/unloaded targets leave creation pending with feedback.
 
-Drag either corner's center handle or RGB axis arrows with the free cursor or reticle. The center translates across a camera-facing plane fixed at press, preserving the grab offset; it does not follow terrain or independently change depth normal to that plane. Use arrows for independent axis/depth adjustment. Existing handles remain movable over sky, entities and absent terrain. Both endpoints snap to whole blocks throughout motion. Start always marks the minimum corner and End the exclusive maximum corner; crossing normalizes both roles without losing capture. The work area measures whole block cells, including slabs, stairs, and chiseled blocks: the same cell at both ends measures `1, 1, 1`; `(10, 65, 20)` through `(14, 67, 23)` measures `5, 3, 4`. Until both endpoints exist, the readout is `Size: -, -, -`.
+Drag either corner's center handle or RGB axis arrows with the free cursor or reticle. The center translates across a camera-facing plane fixed at press, preserving the grab offset; it does not follow terrain or independently change depth normal to that plane. Use arrows for independent axis/depth adjustment. Existing handles remain movable over sky, entities and absent terrain. Both endpoints snap to whole blocks throughout motion. Start always marks the minimum corner and End the exclusive maximum corner; crossing normalizes both roles without losing capture. The work area measures whole block cells, including slabs, stairs, and chiseled blocks: the same cell at both ends measures `1, 1, 1`; `(10, 65, 20)` through `(14, 67, 23)` measures `5, 3, 4`. Until both endpoints exist, the numeric size fields show dashes and cannot be edited.
+
+Edit the **X**, **Y**, or **Z** size with positive whole-block numbers. Enter or
+leaving the field applies and saves that axis; Tab/Shift+Tab applies and moves
+between fields. Escape discards the draft. The area resizes around its center,
+leaving the other axes unchanged. Changing between odd and even sizes shifts the
+center half a block toward the positive axis; otherwise the center stays exact.
+Invalid sizes or changes that would leave valid world coordinates are rejected
+with feedback, without changing either corner. Arrow buttons, Up/Down, and the
+mouse wheel adjust the draft in whole blocks (Shift: 10, Ctrl: 100). Typing captures
+gameplay input only until the edit ends. Hiding/closing the HUD, losing its editing
+context, or rebuilding it for scale/locale changes discards an unfinished draft.
 
 A third gizmo at the midpoint of a complete selection moves the entire box. Drag its center across the captured camera plane or use its axis arrows to translate both corners together in whole-block steps without changing the size. Release saves both corners once; cancel restores both. A move that would put either corner outside valid coordinates is rejected without moving the other corner. Partial work areas have only their existing endpoint handle.
 

@@ -556,6 +556,7 @@ public class BuildBrushSystem_Client : ModSystem
         string key = notice switch
         {
             WorkAreaNotice.InvalidEndpoint => "workarea-invalid-endpoint",
+            WorkAreaNotice.InvalidSize => "workarea-invalid-size",
             _ => throw new ArgumentOutOfRangeException(nameof(notice), notice, null)
         };
         string code = $"vanillabuildingexpanded:{key}";

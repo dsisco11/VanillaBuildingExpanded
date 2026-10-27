@@ -786,6 +786,7 @@ public sealed partial class BuildModeHudControlsTests
             Api.SetupGet(api => api.Input.MouseX).Returns(() => MouseX);
             Api.SetupGet(api => api.Input.MouseY).Returns(() => MouseY);
             Api.SetupGet(api => api.Input.MouseGrabbed).Returns(() => MouseGrabbed);
+            Api.SetupGet(api => api.Input.KeyboardKeyStateRaw).Returns(new bool[512]);
             foreach (string code in new[] { "vbe.ToggleBuildMode", "vbe.RotateBuildCursor_Forward",
                 "vbe.RotateBuildCursor_Backward", "vbe.CycleSnappingMode_Forward",
                 "vbe.CycleSnappingMode_Backward", "vbe.ToggleFaceOffsetPlacement" })

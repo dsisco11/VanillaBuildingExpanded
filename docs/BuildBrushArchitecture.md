@@ -17,7 +17,7 @@ BuildBrush resolves placement intent locally and applies native block rules on b
 | [Validation contract](../VanillaBuildingExpanded/src/BuildBrush/Placement/IBrushPlacementValidator.cs) and [native adapter](../VanillaBuildingExpanded/src/BuildBrush/Placement/PlayerBrushPlacementValidator.cs) | The adapter retains the actual world/player and directly calls the selected block's virtual `CanPlaceBlock`, forwarding the failure-code reference. Native claims, collision and block behaviors retain their side effects. |
 | [Preview dimension](../VanillaBuildingExpanded/src/BuildBrush/BrushDimension.cs) | Owns preview contents and native chunk synchronization. |
 | [Preview entity](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushEntity.cs) and [renderer](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushEntityRenderer.cs) | Publish/render watched validity, ownership, bounds and dirty state with mini-dimension contents. Local entity association checks the owner UID; rendering uses the local camera's real player context. |
-| [HUD binding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) and [HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs) | Observe enabled mode independently of brush eligibility and lazily own the non-focusing information panel. The [Work area partial](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.WorkArea.cs) observes shared work area state and issues commands without owning coordinates, config or GPU resources. |
+| [HUD binding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) and [HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs) | Observe enabled mode independently of brush eligibility and lazily own the information panel, with keyboard focus only during dimension editing. The [Work area partial](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.WorkArea.cs) observes shared work area state and issues commands without owning coordinates, config or GPU resources. |
 | [Work area state](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaState.cs) and [controller](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaController.cs) | Own the named-area collection, stable IDs, selected-area projection, per-area session visibility, copied local-Y/dimension endpoints, inclusive bounds and direct endpoint transactions. Coordinate validation is shared with the world-facing adapters. |
 | [Work area persistence](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaPersistence.cs) | Uses native mod-config APIs for schema-2 per-savegame named-area collections, validates without requiring loaded blocks, preserves unrelated entries and retries dirty edits. |
 | [Work area gizmo session](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaGizmoSession.cs) | Owns one manager/render/input composition, per-endpoint positioning controls and a whole-selection midpoint control, controller transaction binding and explicit missing-endpoint creation. Creation-only [terrain targeting](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaTerrainTarget.cs) raycasts the finite visual near/far segment without changing native selection or loading terrain; handle movement never invokes it. |
@@ -42,9 +42,25 @@ Shift + mouse wheel provides an additional orientation control using either Shif
 
 ## Build-mode HUD
 
-[BuildModeIndicatorBinding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) observes local controller mode transitions independently of preview eligibility. It lazily owns a [BuildModeHud](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs), the top-left information panel with the mod icon, snapping/rotation state and collapsible Room, Work area and Controls sections. The HUD never takes keyboard focus or grabs the cursor. Only section toggles, actual work area control hits, outstanding captures and hover exit receive pointer routing while the cursor is free; passive text and panel space pass through.
+[BuildModeIndicatorBinding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) observes local controller mode transitions independently of preview eligibility. It lazily owns a [BuildModeHud](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs), the top-left information panel with the mod icon, snapping/rotation state and collapsible Room, Work area and Controls sections. The HUD takes native focus and captures keyboard/gameplay input only while a work area size field is being edited; otherwise it remains non-focusing. Only section toggles, actual work area control hits, outstanding captures and hover exit receive pointer routing while the cursor is free; passive text and panel space pass through unless a field edit is ending.
 
-The Work area section contains exactly two rows: Show work area and localized inclusive X/Y/Z size text (dashes while incomplete). Native checkbox artwork is retained with activation deferred to valid captured release. The shared table input layer owns nested hit routing and cancellation; it does not route the entire panel through native dialog defaults. State changes queue HUD rebuilding until outside control dispatch. Collapse, hide, scale/locale changes, structural Room changes and disposal cancel HUD captures before composer retirement without changing world handles, endpoints or visibility preference. Unchecking Show work area cancels world manipulation and hides both handles and box.
+The Work area section contains four rows: the area selector, management buttons, visibility, and localized inclusive X/Y/Z numeric inputs (disabled dashes while incomplete). Native checkbox artwork is retained with activation deferred to valid captured release. The shared table input layer owns nested hit routing and cancellation; it does not route the entire panel through native dialog defaults. State changes queue HUD rebuilding until outside control dispatch. Collapse, hide, scale/locale changes, structural Room changes and disposal cancel HUD captures before composer retirement without changing world handles, endpoints or visibility preference. Unchecking Show work area cancels world manipulation and hides both handles and box.
+
+[Dimension editing](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.WorkAreaSize.cs)
+owns native text focus independently of the table's per-release pointer cleanup.
+Enter/blur commits one axis; Tab commits and traverses, and Escape cancels. An
+outside blur click consumes its complete gesture rather than reaching world
+interaction. Context retirement discards drafts; clicking another HUD control
+first commits on blur. Successful size edits refresh the numeric values in place
+so clicking or tabbing between fields does not lose the incoming focus to a HUD
+rebuild. External state changes cancel the draft before rebuilding.
+
+The controller resizes committed bounds atomically around their center using
+inclusive Int64 sizes. Half-block parity ties round toward the positive axis,
+including at negative coordinates. Both candidate corners must pass coordinate,
+dimension and world validation before any state mutation or the single endpoint
+commit notification. No-op edits do not save; invalid sizes produce localized
+feedback. Metadata, other areas, selection and visibility are unchanged.
 
 Death and join reset mode and hide the panel. World departure and system disposal detach the binding and release its dialog, scale watcher and composer textures. A new session starts hidden. An empty slot, unsupported item or absent target does not hide an enabled-mode panel or prevent work area interaction.
 
@@ -65,7 +81,7 @@ until an area is created through New. Selection and independent visibility remai
 session-only; restoration selects the first saved area and hides every area.
 
 The HUD exposes a native named-area dropdown, New/Rename/Delete controls, the
-selected area's visibility checkbox and its size. Popup input is routed beyond
+selected area's visibility checkbox and editable size fields. Popup input is routed beyond
 the table footprint, with outside presses dismissing it and complete per-button
 gestures retained through recomposition. Hiding/closing the HUD or grabbing the
 mouse cancels popup gesture

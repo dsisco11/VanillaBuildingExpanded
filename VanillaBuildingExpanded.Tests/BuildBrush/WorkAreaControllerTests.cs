@@ -8,6 +8,106 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 
 public sealed class WorkAreaControllerTests
 {
+    [Theory]
+    [InlineData(7, 7, 7, -13, 61, -33, -7, 67, -27)]
+    [InlineData(6, 6, 6, -12, 62, -32, -7, 67, -27)]
+    [InlineData(2, 2, 2, -10, 64, -30, -9, 65, -29)]
+    [InlineData(1, 1, 1, -10, 64, -30, -10, 64, -30)]
+    public void ResizeKeepsCenterWithPositiveHalfBlockRoundingAndCommitsOnce(long x, long y, long z,
+        int minX, int minY, int minZ, int maxX, int maxY, int maxZ)
+    {
+        var controller = new WorkAreaController();
+        controller.SetContext(true, true);
+        controller.RestoreEndpoints(new(-12, 62, -32, 2), new(-8, 66, -28, 2));
+        int commits = 0;
+        controller.EndpointsCommitted += () => commits++;
+        Assert.True(controller.TryResize(x, y, z, Accessor()));
+        Assert.Equal(new WorkAreaEndpoint(minX, minY, minZ, 2), controller.State.Start);
+        Assert.Equal(new WorkAreaEndpoint(maxX, maxY, maxZ, 2), controller.State.End);
+        var bounds = controller.State.Bounds!.Value;
+        Assert.Equal((x, y, z), (bounds.SizeX, bounds.SizeY, bounds.SizeZ));
+        Assert.Equal(1, commits);
+        Assert.True(controller.TryResize(x, y, z, Accessor()));
+        Assert.Equal(1, commits);
+    }
+
+    [Theory]
+    [InlineData(0, 3, 3)]
+    [InlineData(3, -1, 3)]
+    [InlineData(3, 3, 4294967297L)]
+    [InlineData(long.MaxValue, 3, 3)]
+    [InlineData(3, 32769, 3)]
+    public void ResizeRejectsInvalidSizesAtomicallyWithFeedback(long x, long y, long z)
+    {
+        var controller = new WorkAreaController();
+        controller.SetContext(true, true);
+        controller.RestoreEndpoints(new(10, 60, 10, 0), new(12, 62, 12, 0));
+        var before = controller.State;
+        int commits = 0;
+        var notices = new List<WorkAreaNotice>();
+        controller.EndpointsCommitted += () => commits++;
+        controller.NoticeRequested += notices.Add;
+        Assert.False(controller.TryResize(x, y, z, Accessor()));
+        Assert.Equal(before, controller.State);
+        Assert.Equal([WorkAreaNotice.InvalidSize], notices);
+        Assert.Equal(0, commits);
+    }
+
+    [Fact]
+    public void ResizeUsesCommittedBoundsNotPreviewAndTouchesOnlySelectedArea()
+    {
+        var controller = new WorkAreaController();
+        controller.SetContext(true, true);
+        controller.RestoreEndpoints(new(10, 60, 10, 0), new(14, 64, 14, 0));
+        var first = controller.Areas[0];
+        controller.CreateArea("Other");
+        controller.RestoreEndpoints(new(20, 70, 20, 2), new(24, 74, 24, 2));
+        Assert.True(controller.BeginTranslation());
+        Assert.True(controller.PreviewTranslation(100, 100, 100, Accessor()));
+        Assert.True(controller.TryResize(7, 5, 5, Accessor()));
+        Assert.False(controller.IsEditing);
+        Assert.Equal(new WorkAreaEndpoint(19, 70, 20, 2), controller.State.Start);
+        Assert.Equal(new WorkAreaEndpoint(25, 74, 24, 2), controller.State.End);
+        Assert.Equal(first, controller.Areas[0]);
+    }
+
+    [Fact]
+    public void ResizeRejectsCoordinateOverflowAndWorldInvalidityWithoutClamping()
+    {
+        var controller = new WorkAreaController();
+        controller.SetContext(true, true);
+        foreach (var endpoint in new[] { new WorkAreaEndpoint(int.MaxValue, 0, 0, 0),
+            new WorkAreaEndpoint(int.MinValue, 0, 0, 0), new WorkAreaEndpoint(0, 32767, 0, 0) })
+        {
+            controller.RestoreEndpoints(endpoint, endpoint);
+            var before = controller.State;
+            Assert.False(controller.TryResize(3, 3, 3, Accessor()));
+            Assert.Equal(before, controller.State);
+        }
+        controller.RestoreEndpoints(new(10, 60, 10, 0), new(12, 62, 12, 0));
+        var invalid = new Mock<IBlockAccessor>();
+        invalid.Setup(a => a.IsValidPos(It.IsAny<BlockPos>())).Returns(false);
+        var saved = controller.State;
+        Assert.False(controller.TryResize(5, 5, 5, invalid.Object));
+        Assert.Equal(saved, controller.State);
+    }
+
+    [Fact]
+    public void ResizeSupportsFullCoordinateSpansAndRequiresCompleteActiveBounds()
+    {
+        var controller = new WorkAreaController();
+        controller.SetContext(true, true);
+        Assert.False(controller.TryResize(1, 1, 1, Accessor()));
+        controller.RestoreEndpoints(new(int.MinValue, 0, int.MinValue, 0),
+            new(int.MaxValue, 32767, int.MaxValue, 0));
+        Assert.True(controller.TryResize(4294967294, 32766, 4294967294, Accessor()));
+        Assert.True(controller.TryResize(4294967296, 32768, 4294967296, Accessor()));
+        var bounds = controller.State.Bounds!.Value;
+        Assert.Equal((4294967296L, 32768L, 4294967296L), (bounds.SizeX, bounds.SizeY, bounds.SizeZ));
+        controller.SetContext(false, true);
+        Assert.False(controller.TryResize(1, 1, 1, Accessor()));
+    }
+
     [Fact]
     public void NamedAreas_SelectRenameAndToggleIndependentlyWithoutMutatingOtherBounds()
     {

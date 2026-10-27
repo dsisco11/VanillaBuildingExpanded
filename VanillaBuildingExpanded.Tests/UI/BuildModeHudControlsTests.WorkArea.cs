@@ -383,7 +383,7 @@ public sealed partial class BuildModeHudControlsTests
         f.Api.Setup(a => a.Input.InWorldMouseButton).Returns(new MouseButtonState());
         var show = WorkAreaElement(hud, "show");
         hud.OnMouseMove(WorkAreaMouse(f, show));
-        var e = WorkAreaMouse(f, target == "control" ? show : WorkAreaTable(hud).GetElement("size"));
+        var e = WorkAreaMouse(f, target == "control" ? show : WorkAreaSizeTable(hud).GetElement("label"));
         using var receiver = new ReceivingHud(f.Api.Object);
         if (target == "native-hud")
         {
@@ -545,11 +545,13 @@ public sealed partial class BuildModeHudControlsTests
         Assert.True(selector.Bounds.renderY + selector.Bounds.OuterHeight <= commands.Bounds.renderY);
         Assert.True(commands.Bounds.renderY + commands.Bounds.OuterHeight <= table.GetElement("visibility").Bounds.renderY);
         var visibility = Assert.IsType<GuiElementTable>(table.GetElement("visibility"));
-        var size = Assert.IsType<GuiElementStaticText>(table.GetElement("size"));
+        var size = WorkAreaSizeTable(hud);
         Assert.Equal(2, visibility.Bounds.ChildBounds.Count);
         Assert.Equal("Show work area", Assert.IsType<GuiElementStaticText>(visibility.GetElement("label")).GetText());
         Assert.Throws<KeyNotFoundException>(() => table.GetElement("endpoints"));
-        Assert.Equal("Size: -, -, -", size.GetText());
+        Assert.Equal("Size: -, -, -", WorkAreaSize(hud));
+        foreach (string axis in new[] { "x", "y", "z" })
+            Assert.False(Assert.IsAssignableFrom<GuiElementNumberInput>(size.GetElement(axis)).Enabled);
         Assert.True(visibility.Bounds.renderY + visibility.Bounds.OuterHeight <= size.Bounds.renderY);
         Assert.True(hud.SingleComposer.GetElement("room-toggle").Bounds.renderY < table.Bounds.renderY);
         Assert.True(size.Bounds.renderY < hud.SingleComposer.GetElement("controls-title").Bounds.renderY);
@@ -608,7 +610,7 @@ public sealed partial class BuildModeHudControlsTests
         Assert.False(workArea.State.ShowWorkArea);
         foreach (GuiElement passive in new[]
         {
-            WorkAreaTable(hud).GetElement("size"),
+            WorkAreaSizeTable(hud).GetElement("label"),
             ((GuiElementTable)WorkAreaTable(hud).GetElement("visibility")).GetElement("label"),
             hud.SingleComposer.GetElement("workArea-title")
         })
@@ -718,7 +720,10 @@ public sealed partial class BuildModeHudControlsTests
             "vanillabuildingexpanded:build-info-workarea-default-name" => string.Format("Work area {0}", args),
             "vanillabuildingexpanded:build-info-workarea-show" => "Show work area",
             "vanillabuildingexpanded:build-info-workarea-unset" => "-",
-            "vanillabuildingexpanded:build-info-workarea-size" => string.Format("Size: {0}, {1}, {2}", args),
+            "vanillabuildingexpanded:build-info-workarea-size" => "Size:",
+            "vanillabuildingexpanded:build-info-workarea-size-x" => "X",
+            "vanillabuildingexpanded:build-info-workarea-size-y" => "Y",
+            "vanillabuildingexpanded:build-info-workarea-size-z" => "Z",
             _ => key.Split(':').Last()
         };
         return fixture;
@@ -727,8 +732,12 @@ public sealed partial class BuildModeHudControlsTests
     private static GuiElementTable WorkAreaTable(BuildModeHud hud) =>
         Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("workarea-table"));
 
+    private static GuiElementTable WorkAreaSizeTable(BuildModeHud hud) =>
+        Assert.IsType<GuiElementTable>(WorkAreaTable(hud).GetElement("size"));
+
     private static string WorkAreaSize(BuildModeHud hud) =>
-        Assert.IsType<GuiElementStaticText>(WorkAreaTable(hud).GetElement("size")).GetText();
+        "Size: " + string.Join(", ", new[] { "x", "y", "z" }.Select(axis =>
+            Assert.IsAssignableFrom<GuiElementNumberInput>(WorkAreaSizeTable(hud).GetElement(axis)).GetText()));
 
     private static GuiElement WorkAreaElement(BuildModeHud hud, string key) =>
         ((GuiElementTable)WorkAreaTable(hud).GetElement("visibility")).GetElement(key);

@@ -10,7 +10,7 @@ using Vintagestory.API.Config;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-/// <summary>Draws a non-focusing, GUI-scaled build information panel.</summary>
+/// <summary>Draws a GUI-scaled build information panel with opt-in dimension editing.</summary>
 internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
 {
     private const double KeycapSpacing = 3;
@@ -58,21 +58,22 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
         api.Settings.Float.AddWatcher("guiScale", OnGuiScaleChanged);
     }
 
-    /// <summary>Never takes focus from gameplay or other dialogs.</summary>
-    public override bool Focusable => false;
+    /// <summary>Takes focus only while a work area dimension is being edited.</summary>
+    public override bool Focusable => focusedWorkAreaSize is not null;
+    public override bool CaptureAllInputs() => focusedWorkAreaSize is not null;
+    public override bool DisableMouseGrab => focusedWorkAreaSize is not null;
     /// <summary>Removes the closed HUD from native dialog routing.</summary>
     public override bool UnregisterOnClose => true;
     /// <summary>Routes only actual controls, captures, and hover exit with a free cursor.</summary>
     public override bool ShouldReceiveMouseEvents() => !disposed && IsOpened() && !capi.Input.MouseGrabbed
-        && (workAreaSelector?.listMenu.IsOpened == true || workAreaMenuGestures.Count != 0
+        && (focusedWorkAreaSize is not null || workAreaSelector?.listMenu.IsOpened == true || workAreaMenuGestures.Count != 0
             || ActiveWorkAreaTable?.WantsPointerEvents(capi.Input.MouseX, capi.Input.MouseY) == true
             || sections.Any(section => section.ToggleButton is { } button && (button.IsPressed
                 || button.IsPositionInside(capi.Input.MouseX, capi.Input.MouseY))));
-    /// <summary>Leaves keyboard input entirely to gameplay and existing dialogs.</summary>
-    public override bool ShouldReceiveKeyboardEvents() => false;
+    public override bool ShouldReceiveKeyboardEvents() => focusedWorkAreaSize is not null;
 
     internal bool ReservesPointer(int x, int y) => !disposed && IsOpened() && !capi.Input.MouseGrabbed
-        && (workAreaSelector?.listMenu.IsOpened == true || workAreaMenuGestures.Count != 0
+        && (focusedWorkAreaSize is not null || workAreaSelector?.listMenu.IsOpened == true || workAreaMenuGestures.Count != 0
             || ActiveWorkAreaTable?.ReservesPointer(x, y) == true
             || sections.Any(section => section.ToggleButton is { } button
                 && (button.IsPressed || button.IsPositionInside(x, y))));
@@ -81,6 +82,18 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     {
         if (!disposed && IsOpened() && !capi.Input.MouseGrabbed)
         {
+            if (!args.Handled && focusedWorkAreaSize is { } input && !input.IsPositionInside(args.X, args.Y))
+            {
+                bool controlHit = ActiveWorkAreaTable?.ReservesPointer(args.X, args.Y) == true
+                    || sections.Any(section => section.ToggleButton?.IsPositionInside(args.X, args.Y) == true);
+                FinishWorkAreaSizeEdit(commit: true);
+                if (!controlHit)
+                {
+                    workAreaMenuGestures.Add(args.Button);
+                    args.Handled = true;
+                    return;
+                }
+            }
             if (workAreaSelector?.listMenu.IsOpened == true && !args.Handled)
             {
                 workAreaMenuGestures.Add(args.Button);
@@ -130,6 +143,8 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
             workAreaSelector.listMenu.OnMouseWheel(capi, args);
             args.SetHandled(true);
         }
+        else if (!disposed && IsOpened() && !capi.Input.MouseGrabbed)
+            ActiveWorkAreaTable?.OnMouseWheel(capi, args);
     }
 
     public override void OnRenderGUI(float deltaTime)

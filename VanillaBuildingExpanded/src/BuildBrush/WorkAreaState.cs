@@ -9,7 +9,8 @@ internal enum WorkAreaEndpointRole { Start, End }
 
 internal enum WorkAreaNotice
 {
-    InvalidEndpoint
+    InvalidEndpoint,
+    InvalidSize
 }
 
 internal enum WorkAreaNameError { None, Invalid, Duplicate }

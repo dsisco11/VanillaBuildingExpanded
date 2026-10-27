@@ -25,14 +25,9 @@ internal sealed partial class BuildModeHud
     private static string WorkAreaText(string key, params object[] args) =>
         Lang.Get($"vanillabuildingexpanded:build-info-workarea-{key}", args);
 
-    private string WorkAreaSize() => workArea?.State.Bounds is { } bounds
-        ? WorkAreaText("size", bounds.SizeX, bounds.SizeY, bounds.SizeZ)
-        : WorkAreaText("size", WorkAreaText("unset"), WorkAreaText("unset"), WorkAreaText("unset"));
-
-    private void OnWorkAreaChanged(WorkAreaState _) => workAreaDirty = true;
-
     private void CancelWorkAreaInput(bool preserveMenuGestures = false)
     {
+        FinishWorkAreaSizeEdit(commit: false);
         ActiveWorkAreaTable?.CancelInput();
         workAreaSelector?.OnFocusLost();
         if (!preserveMenuGestures) workAreaMenuGestures.Clear();
@@ -153,10 +148,27 @@ internal sealed partial class BuildModeHud
                     CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor])), "label")]);
             });
 
-            string size = WorkAreaSize();
-            table.AddRowCells([new TableCell(new GuiElementStaticText(capi, size, EnumTextOrientation.Left,
-                ElementBounds.Fixed(0, 0, Width(size), height),
-                CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.ValueColor])), "size")]);
+            var size = new GuiElementTable(capi, ElementBounds.Fixed(0, 0, 0, 0),
+                new TableOptions(columnGap: 6, verticalAlignment: EnumVerticalAlign.Middle));
+            AddNestedRow(table, size, "size", () =>
+            {
+                GuiElementStaticText Label(string text) => new(capi, text, EnumTextOrientation.Left,
+                    ElementBounds.Fixed(0, 0, Width(text), height),
+                    CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor]));
+                var cells = new List<TableCell> { new(Label(WorkAreaText("size")), "label") };
+                workAreaSizeInputs = new WorkAreaSizeInput[3];
+                for (int axis = 0; axis < 3; axis++)
+                {
+                    string key = axis == 0 ? "x" : axis == 1 ? "y" : "z";
+                    var input = new WorkAreaSizeInput(capi, axis, Math.Max(86, Width("4294967296") + 24),
+                        WorkAreaDimensionText(axis), workArea?.State.CanPick == true && workArea.State.Bounds is not null,
+                        FocusWorkAreaSizeInput, InvalidWorkAreaSize);
+                    workAreaSizeInputs[axis] = input;
+                    cells.Add(new(Label(WorkAreaText("size-" + key)), key + "-label"));
+                    cells.Add(new(input, key, input: TableInput.Pointer, cancelInput: input.CancelPress));
+                }
+                size.AddRowCells(cells);
+            });
             complete = true;
             return table;
         }
