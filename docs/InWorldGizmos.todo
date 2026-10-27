@@ -203,33 +203,100 @@ finite/nonzero validation are retained.
 Prerequisites: Phases 1-2.
 Outcome: PositionGizmo can render and mathematically manipulate a position under controlled camera/target inputs.
 
-    ☐ Implement PositionGizmo : Gizmo<GizmoPosition> with immutable double coordinates and explicit dimension.
-        ☐ Support a center icon and X/Y/Z shafts/heads; show hover/active state without relying on color alone.
-        ☐ Keep generic values continuous; supply ruler-specific grid/validation and block target behavior through the qualified integration seam.
-    ☐ Implement camera/ray projection and handle hit shapes using Phase 1 contracts.
-        ☐ Match visible center/arrow targets with pixel-aware hit tolerances and bounded screen/world sizing.
-        ☐ Cover free-cursor positions, reticle rays, viewport/aspect/GUI-scale changes and deterministic overlapping/projected hits.
-    ☐ Implement axis-constrained dragging.
-        ☐ Capture the initial axis/grab relationship and preserve its offset without jumping to the arrow tip.
-        ☐ Change only the selected component; hold the other two at drag-start values.
-        ☐ Reject unusable starts or retain the last valid update at documented degeneracy thresholds, with meaningful feedback.
-        ☐ Prevent NaN/infinity/extreme jumps and apply supplied snapping/validation before publishing user changes.
-    ☐ Implement center dragging with a supplied valid target.
-        ☐ Support block-following integration without a required empty-space/plane mode.
-        ☐ Retain the last valid value on rejected/missing targets; never silently substitute a camera-facing plane.
-    ☐ Implement a shared render adapter and reusable arrow/icon resources.
-        ☐ Draw eligible handles as overlays; keep explicit visibility in sync with manager hit eligibility.
-        ☐ Use double camera-relative subtraction and dimension conversion only at the drawing boundary.
-        ☐ Restore shader/depth/blend/line state including failure paths; avoid per-frame uploads, GPU-readback picking, block tessellation and spawned entities.
-        ☐ Log/notify setup/render failure and make affected handles noninteractive; dispose shared resources exactly once.
-    ☐ Add focused numerical, geometry, projection and render-adapter tests.
-        ☐ Assert exact X/Y/Z changes, unchanged components, grab offsets, negative/large coordinates and degeneracy thresholds.
-        ☐ Assert rendering inputs, mesh reuse, hit/render visibility agreement and cleanup, not just draw callback counts.
+    ✔ Implement PositionGizmo : Gizmo<GizmoPosition> with immutable double coordinates and explicit dimension.
+        ✔ Support a center icon and X/Y/Z shafts/heads; show hover/active state without relying on color alone.
+        ✔ Keep generic values continuous; supply ruler-specific grid/validation and block target behavior through the qualified integration seam.
+    ✔ Implement camera/ray projection and handle hit shapes using Phase 1 contracts.
+        ✔ Match visible center/arrow targets with pixel-aware hit tolerances and bounded screen/world sizing.
+        ✔ Cover free-cursor positions, reticle rays, viewport/aspect/GUI-scale changes and deterministic overlapping/projected hits.
+    ✔ Implement axis-constrained dragging.
+        ✔ Capture the initial axis/grab relationship and preserve its offset without jumping to the arrow tip.
+        ✔ Change only the selected component; hold the other two at drag-start values.
+        ✔ Reject unusable starts or retain the last valid update at documented degeneracy thresholds, with meaningful feedback.
+        ✔ Prevent NaN/infinity/extreme jumps and apply supplied snapping/validation before publishing user changes.
+    ✔ Implement center dragging with a supplied valid target.
+        ✔ Support block-following integration without a required empty-space/plane mode.
+        ✔ Retain the last valid value on rejected/missing targets; never silently substitute a camera-facing plane.
+    ✔ Implement a shared render adapter and reusable arrow/icon resources.
+        ✔ Draw eligible handles as overlays; keep explicit visibility in sync with manager hit eligibility.
+        ✔ Use double camera-relative subtraction and dimension conversion only at the drawing boundary.
+        ✔ Restore shader/depth/blend/line state including failure paths; avoid per-frame uploads, GPU-readback picking, block tessellation and spawned entities.
+        ✔ Log/notify setup/render failure and make affected handles noninteractive; dispose shared resources exactly once.
+    ✔ Add focused numerical, geometry, projection and render-adapter tests.
+        ✔ Assert exact X/Y/Z changes, unchanged components, grab offsets, negative/large coordinates and degeneracy thresholds.
+        ✔ Assert rendering inputs, mesh reuse, hit/render visibility agreement and cleanup, not just draw callback counts.
 
 Completion criteria:
 
-    ☐ Positioning math and drawing contracts are verified under synthetic camera/world-target inputs.
-    ☐ The type is reusable without ruler state; native visual appearance remains a later live check.
+    ✔ Positioning math and drawing contracts are verified under synthetic camera/world-target inputs.
+    ✔ The type is reusable without ruler state; native visual appearance remains a later live check.
+
+### Phase 3 implementation traceability
+
+All task groups inherit the complete proposal and Phase 1 pointer, reusable, numerical
+and visual contracts. Phase 2 API contracts remain in force; coordinates/math use built-in
+Vector256<double>. Existing ruler interaction/composition remains active and unchanged.
+
+| Phase 3 task group | Controlling sources/requirements | Implementation and evidence |
+| --- | --- | --- |
+| Position and motion | Proposal PositionGizmo, Axis/Center handles, verification; Phase 1 numerical/value contracts | [PositionGizmo](../VanillaBuildingExpanded/src/Gizmos/PositionGizmo.cs) provides immutable SIMD-double position/dimension, fixed-plane axis/grab-offset math, nullable center resolver and pre-publish constraint hook. [Position tests](../VanillaBuildingExpanded.Tests/Gizmos/PositionGizmoTests.cs) cover component preservation, continuous/negative/large values, supplied snapping/rejection, notices, callback cancellation and threshold boundaries. Native block selection and actual ruler grid policy remain Phases 4-6. |
+| Projection and hit/draw geometry | Proposal Activation/capture and visibility; Phase 1 pointer/size/arbitration contracts | [Camera](../VanillaBuildingExpanded/src/Gizmos/GizmoCamera.cs) copies guarded native matrices and derives pointer-collinear near/far rays with explicit local-Y reference conversion. [Geometry](../VanillaBuildingExpanded/src/Gizmos/PositionGizmoGeometry.cs) shares arrow/circle/diamond shapes with native uploads, clamps actual axis size and applies pixel padding to the drawn size. A part crossing the clip interval is omitted from both drawing and hits. [Camera/geometry tests](../VanillaBuildingExpanded.Tests/Gizmos/GizmoCameraTests.cs) exercise cursor/reticle, odd/portrait/wide viewports, GUI scales, third-person offsets, clip boundaries, overlap and hidden targets. |
+| Shared rendering and cleanup | Proposal Rendering/lifecycle; Phase 1 stages/state/deferred membership contracts; existing RulerRenderer/RulerRenderState precedent | [Render adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs) owns the explicit two-stage registration and shared native meshes, publishes context even with zero instances, and exposes only successfully drawn contexts to new captures. [Shared native line state](../VanillaBuildingExpanded/src/Rendering/LineRenderState.cs) preserves the old ruler behavior without copying its GL snapshots. [Render tests](../VanillaBuildingExpanded.Tests/Gizmos/GizmoRenderAdapterTests.cs) assert shapes, transforms, native shader/depth/blend/line behavior, reuse, failure rollback/notification and deferred retirement/disposal. No production input/render registration is introduced. |
+
+Verification/review evidence (2026-10-26): direct second review completed. Independent
+audit found a dimension-boundary evidence gap; added native camera-capture tests using
+real native player/entity carriers and controlled render/input services for dimensions
+2/15, local Y 0/32767/32768 and large fractional X/Z. They assert encoded-to-local
+conversion, explicit dimension preservation, pointer projection/unprojection/far point,
+center hit ownership and exact camera-relative model-view translation. Ray hit probing
+uses an interior point on the same visual segment to avoid near-plane roundoff at large
+coordinates. These affected changes were directly reviewed. Final subagent verification:
+258 Gizmos/Ruler tests passed (0 failed/skipped), normal Build/ValidateJson and
+git diff --check passed. Independent affected-requirements recheck confirmed the gap
+resolved and all Phase 3 gates satisfied, retaining the full audit's valid findings.
+Phase 3 markers were checked only after that verdict; later phases remain unchecked.
+Existing build/dependency warnings remain outside this phase.
+Tests use synthetic cameras/targets and native service doubles/carriers, not live-game
+visual/input qualification.
+
+### Phase 3.1: Evaluate camera-relative float matrix transformations
+
+Prerequisites: Completed Phase 3 implementation.
+Outcome: An evidence-backed decision on using built-in System.Numerics.Matrix4x4/Vector4
+for camera-relative transformations instead of the current double-precision matrix path.
+This follow-up is pending; it does not invalidate the completed Phase 3 implementation
+or require migration merely to complete the evaluation.
+
+Controlling sources: [proposal](./InWorldGizmos.proposal.md), especially positioning,
+dragging, rendering and verification; Phase 1 pointer/numerical contracts;
+[camera transformations](../VanillaBuildingExpanded/src/Gizmos/GizmoCamera.cs);
+[geometry/picking](../VanillaBuildingExpanded/src/Gizmos/PositionGizmoGeometry.cs);
+and [render transformations](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs).
+
+    ☐ Define the candidate precision boundary and comparison criteria before evaluating.
+        ☐ Keep absolute world positions, dimension conversion and camera-reference subtraction in double precision; convert only camera-relative inputs to float.
+        ☐ Identify which projection, inverse/unprojection and final render transformations can use Matrix4x4/Vector4, accounting for native column-vector versus System.Numerics row-vector conventions and multiplication order.
+        ☐ Set explicit screen-space, ray/target-distance and manipulation-error budgets for the tested near/far ranges; retain existing coordinate validity, dimension identity, snapping and unchanged-component guarantees.
+    ☐ Compare a bounded candidate against the current double implementation using existing test infrastructure.
+        ☐ Cover free cursor and reticle, first-/third-person offsets, odd/portrait/wide viewports and GUI scales.
+        ☐ Cover large positive/negative world coordinates with small relative offsets, nonzero dimensions and boundary-local Y.
+        ☐ Measure projection/unprojection round trips, inverse conditioning, near/far clip classification and finite far-point reconstruction, including targets beyond player reach.
+        ☐ Compare visible handle geometry, hit ownership/tie ordering, grab offsets, axis degeneracy guards and snapped endpoint results, including near decision boundaries.
+        ☐ Record failing cases and worst observed errors rather than relaxing existing contracts to make the candidate pass.
+    ☐ Evaluate performance and implementation cost before recommending adoption.
+        ☐ Use existing benchmark facilities to compare representative repeated transforms and camera-snapshot inversion/setup, accounting for conversion costs and allocations.
+        ☐ Record runtime, hardware/SIMD support, workload and measured results; do not infer a speedup from API choice alone.
+        ☐ Compare a rendering-only float path with broader projection/unprojection use if the latter fails precision requirements.
+    ☐ Record the decision and concise evidence in this plan.
+        ☐ Recommend retaining doubles, adopting float only at a safe boundary, or a separately scoped migration, with supported limitations and affected consumers.
+        ☐ Keep production behavior unchanged during evaluation; remove temporary prototype code unless retained as a justified test/benchmark fixture.
+        ☐ Do not treat synthetic precision/performance results as live-game qualification or silently introduce a precision fallback.
+
+Completion criteria:
+
+    ☐ Correctness/error budgets and representative performance results support a documented decision, even if the candidate is rejected.
+    ☐ Any recommended migration has explicit scope and regression obligations; evaluation completion alone does not authorize or claim that migration.
+    ☐ Second review and independent completion audit confirm the evaluation evidence and decision satisfy this subphase.
 
 ## Phase 4: Implement native input capture for both pointer modes
 

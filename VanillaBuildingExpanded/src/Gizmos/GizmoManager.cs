@@ -19,6 +19,7 @@ public sealed class GizmoManager : IDisposable
     private readonly List<Entry> entries = [];
     private long nextInsertionId;
     private int transitionDepth;
+    private long frameRevision;
     public bool IsDisposed { get; private set; }
     public int Count => entries.Count;
     public Gizmo? CapturedGizmo { get; private set; }
@@ -58,6 +59,7 @@ public sealed class GizmoManager : IDisposable
         ArgumentNullException.ThrowIfNull(context);
         if (CapturedGizmo is { } captured && !captured.IsEligible(context.Dimension))
             Cancel();
+        long revision = frameRevision;
         foreach (var entry in entries.ToArray()) entry.RenderedContext = null;
         foreach (var entry in entries.ToArray())
         {
@@ -69,6 +71,7 @@ public sealed class GizmoManager : IDisposable
                 if (!gizmo.IsDisposed) gizmo.Enabled = false;
                 throw;
             }
+            if (IsDisposed || frameRevision != revision) return;
             if (!IsDisposed && Find(gizmo) == entry && gizmo.IsEligible(context.Dimension))
                 entry.RenderedContext = context;
         }
@@ -153,6 +156,14 @@ public sealed class GizmoManager : IDisposable
         transitionDepth++;
         try { gizmo.CancelInteraction(); }
         finally { transitionDepth--; }
+    }
+
+    public void InvalidateFrame()
+    {
+        frameRevision++;
+        foreach (var entry in entries) entry.RenderedContext = null;
+        ClearHover();
+        Cancel();
     }
 
     private (Entry Entry, GizmoHit Hit)? Select(GizmoPointer pointer)

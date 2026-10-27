@@ -61,10 +61,24 @@ default equality; immutable values are expected. Owners cancel an active edit be
 assigning a genuinely different authoritative value. Cancellation restores through the
 same notifying setter before the cancellation event; completion alone is not a value event.
 Only successfully rendered, eligible instances in the matching shared frame can acquire
-capture. Context currently supplies frame identity/dimension and a separate validated visual
+capture. Context supplies frame identity/dimension and a separate validated visual
 ray using built-in `Vector256<double>` SIMD coordinates in `(X, Y, Z, 0)` lanes,
-preserving double precision without a custom vector type. Projection data, positioning
-geometry and native adapters belong to later phases.
+preserving double precision without a custom vector type.
+
+[PositionGizmo](../VanillaBuildingExpanded/src/Gizmos/PositionGizmo.cs) supplies continuous
+SIMD double positions, fixed-plane axis dragging, center-target resolution and a nullable
+owner constraint hook before publishing values. Rejected motion retains the last valid
+value and requests a reasoned notice. [Camera snapshots](../VanillaBuildingExpanded/src/Gizmos/GizmoCamera.cs)
+copy perspective matrices, project/unproject the actual cursor or integer reticle center,
+and retain local-Y dimension identity. [Shared geometry](../VanillaBuildingExpanded/src/Gizmos/PositionGizmoGeometry.cs)
+drives both line meshes and hit shapes, with clipped parts omitted from both paths.
+[The inactive render adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs)
+publishes camera context at Opaque 0.49 and draws overlays at AfterBlit 0.49, sharing
+arrow/circle/diamond meshes and the ruler's extracted native line-state restoration.
+It restores shader/depth/write/line state without changing blending, invalidates hits
+immediately on failure/retirement, and defers callback-requested renderer membership and
+GPU teardown outside native live-list iteration. No client composition activates it yet;
+native input, ruler policies/transactions and UI cutover remain in later phases.
 
 On local join, the client system creates a fresh ruler controller, restores endpoints through persistence, then creates the render binding. Visibility remains unchecked and mode disabled. The input adapter is created lazily once enabled and alive, independent of brush placement eligibility. The 50-ms client tick refreshes context before brush early-outs; mode transitions refresh it immediately.
 

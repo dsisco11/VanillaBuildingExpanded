@@ -22,7 +22,7 @@ public readonly record struct GizmoRay
     internal bool IsValid => IsCoordinate(Origin) && IsCoordinate(Direction)
         && !Vector256.EqualsAll(Direction, Vector256<double>.Zero);
 
-    private static bool IsCoordinate(Vector256<double> value) =>
+    internal static bool IsCoordinate(Vector256<double> value) =>
         double.IsFinite(value[0]) && double.IsFinite(value[1]) && double.IsFinite(value[2])
         && value[3] == 0;
 }
@@ -34,11 +34,13 @@ public readonly record struct GizmoRay
 public sealed class GizmoContext
 {
     public int Dimension { get; }
+    public GizmoCamera? Camera { get; }
 
-    public GizmoContext(int dimension)
+    public GizmoContext(int dimension, GizmoCamera? camera = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(dimension);
         Dimension = dimension;
+        Camera = camera;
     }
 }
 
@@ -46,13 +48,17 @@ public readonly record struct GizmoPointer
 {
     public GizmoContext Context { get; }
     public GizmoRay Ray { get; }
+    public Vector256<double>? FarPoint { get; }
 
-    public GizmoPointer(GizmoContext context, GizmoRay ray)
+    public GizmoPointer(GizmoContext context, GizmoRay ray, Vector256<double>? farPoint = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (!ray.IsValid) throw new ArgumentException("A valid visual ray is required.", nameof(ray));
+        if (farPoint is { } far && !GizmoRay.IsCoordinate(far))
+            throw new ArgumentOutOfRangeException(nameof(farPoint));
         Context = context;
         Ray = ray;
+        FarPoint = farPoint;
     }
 
     internal void Validate()
