@@ -12,21 +12,21 @@ using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-internal sealed class RulerPersistence : IDisposable
+internal sealed class WorkAreaPersistence : IDisposable
 {
-    public const string ConfigFileName = "vanillabuildingexpanded-rulers.json";
+    public const string ConfigFileName = "vanillabuildingexpanded-workareas.json";
     private const int SchemaVersion = 1;
     private readonly ICoreClientAPI api;
     private readonly IClientWorldAccessor world;
-    private readonly RulerController controller;
+    private readonly WorkAreaController controller;
     private readonly string? worldId;
-    private RulerEndpoint? savedStart;
-    private RulerEndpoint? savedEnd;
+    private WorkAreaEndpoint? savedStart;
+    private WorkAreaEndpoint? savedEnd;
     private bool disposed;
 
     public bool IsDirty { get; private set; }
 
-    public RulerPersistence(ICoreClientAPI api, RulerController controller)
+    public WorkAreaPersistence(ICoreClientAPI api, WorkAreaController controller)
     {
         this.api = api;
         this.controller = controller;
@@ -35,7 +35,7 @@ internal sealed class RulerPersistence : IDisposable
         controller.RestoreEndpoints(null, null);
         if (string.IsNullOrWhiteSpace(worldId))
         {
-            Report("ruler-persistence-no-world", "SavegameIdentifier is unavailable; this ruler is memory-only.");
+            Report("workarea-persistence-no-world", "SavegameIdentifier is unavailable; this work area is memory-only.");
         }
         else
         {
@@ -69,11 +69,11 @@ internal sealed class RulerPersistence : IDisposable
         }
         catch (NotSupportedException error)
         {
-            Report("ruler-persistence-unsupported", error.ToString());
+            Report("workarea-persistence-unsupported", error.ToString());
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
         {
-            Report("ruler-persistence-save-failed", error.ToString());
+            Report("workarea-persistence-save-failed", error.ToString());
         }
         return false;
     }
@@ -107,7 +107,7 @@ internal sealed class RulerPersistence : IDisposable
             try
             {
                 if (entry is not JObject record || !record.ContainsKey("start") || !record.ContainsKey("end"))
-                    throw new InvalidDataException("The saved ruler must contain nullable start and end records.");
+                    throw new InvalidDataException("The saved work area must contain nullable start and end records.");
                 var start = ReadEndpoint(record["start"]!);
                 var end = ReadEndpoint(record["end"]!);
                 ValidatePair(start, end);
@@ -115,16 +115,16 @@ internal sealed class RulerPersistence : IDisposable
             }
             catch (InvalidDataException error)
             {
-                Report("ruler-persistence-invalid-entry", error.ToString());
+                Report("workarea-persistence-invalid-entry", error.ToString());
             }
         }
         catch (NotSupportedException error)
         {
-            Report("ruler-persistence-unsupported", error.ToString());
+            Report("workarea-persistence-unsupported", error.ToString());
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
         {
-            Report("ruler-persistence-load-failed", error.ToString());
+            Report("workarea-persistence-load-failed", error.ToString());
         }
     }
 
@@ -134,21 +134,21 @@ internal sealed class RulerPersistence : IDisposable
         if (loaded is null)
             return new JObject { ["schemaVersion"] = SchemaVersion, ["worlds"] = new JObject() };
         if (loaded.Token is not JObject document)
-            throw new InvalidDataException("The ruler configuration must be a JSON object.");
+            throw new InvalidDataException("The work area configuration must be a JSON object.");
         int version = ReadInteger(document, "schemaVersion");
         if (version != SchemaVersion)
-            throw new NotSupportedException($"Unsupported ruler schema version {version}.");
+            throw new NotSupportedException($"Unsupported work area schema version {version}.");
         if (document["worlds"] is not JObject)
-            throw new InvalidDataException("The ruler configuration must contain a worlds dictionary.");
+            throw new InvalidDataException("The work area configuration must contain a worlds dictionary.");
         return (JObject)document.DeepClone();
     }
 
-    private static RulerEndpoint? ReadEndpoint(JToken token)
+    private static WorkAreaEndpoint? ReadEndpoint(JToken token)
     {
         if (token.Type == JTokenType.Null) return null;
         if (token is not JObject record)
             throw new InvalidDataException("An endpoint must be null or a coordinate record.");
-        return new RulerEndpoint(ReadInteger(record, "x"), ReadInteger(record, "y"),
+        return new WorkAreaEndpoint(ReadInteger(record, "x"), ReadInteger(record, "y"),
             ReadInteger(record, "z"), ReadInteger(record, "dimension"));
     }
 
@@ -160,20 +160,20 @@ internal sealed class RulerPersistence : IDisposable
         return result;
     }
 
-    private void ValidatePair(RulerEndpoint? start, RulerEndpoint? end)
+    private void ValidatePair(WorkAreaEndpoint? start, WorkAreaEndpoint? end)
     {
         if ((start is { } first && !IsValidEndpoint(first)) || (end is { } second && !IsValidEndpoint(second)))
-            throw new InvalidDataException("A ruler endpoint is outside the world's coordinate/dimension bounds.");
+            throw new InvalidDataException("A work area endpoint is outside the world's coordinate/dimension bounds.");
         if (start is { } a && end is { } b && a.Dimension != b.Dimension)
-            throw new InvalidDataException("Saved ruler endpoints belong to different dimensions.");
+            throw new InvalidDataException("Saved work area endpoints belong to different dimensions.");
     }
 
-    private bool IsValidEndpoint(RulerEndpoint endpoint)
+    private bool IsValidEndpoint(WorkAreaEndpoint endpoint)
     {
         return endpoint.IsValid(world.BlockAccessor);
     }
 
-    private static JToken WriteEndpoint(RulerEndpoint? endpoint) => endpoint is { } value
+    private static JToken WriteEndpoint(WorkAreaEndpoint? endpoint) => endpoint is { } value
         ? new JObject { ["x"] = value.X, ["y"] = value.Y, ["z"] = value.Z, ["dimension"] = value.Dimension }
         : JValue.CreateNull();
 
@@ -192,14 +192,14 @@ internal sealed class RulerPersistence : IDisposable
             try { File.Delete(stagingPath); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
-                Report("ruler-persistence-cleanup-failed", error.ToString());
+                Report("workarea-persistence-cleanup-failed", error.ToString());
             }
         }
     }
 
     private void Report(string key, string details)
     {
-        api.Logger.Error("[Ruler] {0}: {1}", key, details);
+        api.Logger.Error("[WorkArea] {0}: {1}", key, details);
         string code = $"vanillabuildingexpanded:{key}";
         api.TriggerIngameError(this, code, Lang.Get(code));
     }

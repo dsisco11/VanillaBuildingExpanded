@@ -9,40 +9,40 @@ namespace VanillaBuildingExpanded.BuildBrush;
 
 internal sealed partial class BuildModeHud
 {
-    private readonly RulerController? ruler;
-    private readonly CollapsibleSection rulerSection;
-    private GuiElementTable? rulerTable;
-    private bool rulerDirty;
-    private GuiElementTable RulerTable => rulerTable
-        ?? throw new InvalidOperationException("Ruler content is only available during HUD composition.");
-    private GuiElementTable? ActiveRulerTable => SingleComposer?.GetElement("ruler-table") as GuiElementTable;
+    private readonly WorkAreaController? workArea;
+    private readonly CollapsibleSection workAreaSection;
+    private GuiElementTable? workAreaTable;
+    private bool workAreaDirty;
+    private GuiElementTable WorkAreaTable => workAreaTable
+        ?? throw new InvalidOperationException("Work area content is only available during HUD composition.");
+    private GuiElementTable? ActiveWorkAreaTable => SingleComposer?.GetElement("workarea-table") as GuiElementTable;
 
-    private static string RulerText(string key, params object[] args) =>
-        Lang.Get($"vanillabuildingexpanded:build-info-ruler-{key}", args);
+    private static string WorkAreaText(string key, params object[] args) =>
+        Lang.Get($"vanillabuildingexpanded:build-info-workarea-{key}", args);
 
-    private string RulerSize() => ruler?.State.Bounds is { } bounds
-        ? RulerText("size", bounds.SizeX, bounds.SizeY, bounds.SizeZ)
-        : RulerText("size", RulerText("unset"), RulerText("unset"), RulerText("unset"));
+    private string WorkAreaSize() => workArea?.State.Bounds is { } bounds
+        ? WorkAreaText("size", bounds.SizeX, bounds.SizeY, bounds.SizeZ)
+        : WorkAreaText("size", WorkAreaText("unset"), WorkAreaText("unset"), WorkAreaText("unset"));
 
-    private void OnRulerChanged(RulerState _) => rulerDirty = true;
+    private void OnWorkAreaChanged(WorkAreaState _) => workAreaDirty = true;
 
-    private void CancelRulerInput() => ActiveRulerTable?.CancelInput();
+    private void CancelWorkAreaInput() => ActiveWorkAreaTable?.CancelInput();
 
     private void ResetHudComposition()
     {
-        CancelRulerInput();
+        CancelWorkAreaInput();
         foreach (var section in sections) section.CancelInput();
         ClearComposers();
     }
 
     public override void OnGuiClosed()
     {
-        CancelRulerInput();
+        CancelWorkAreaInput();
         foreach (var section in sections) section.CancelInput();
         base.OnGuiClosed();
     }
 
-    private GuiElementTable CreateRulerTable()
+    private GuiElementTable CreateWorkAreaTable()
     {
         var table = new GuiElementTable(capi, ElementBounds.Fixed(0, 0, 0, 0),
             new TableOptions(rowGap: 6, verticalAlignment: EnumVerticalAlign.Middle));
@@ -56,16 +56,16 @@ internal sealed partial class BuildModeHud
                 new TableOptions(columnGap: 8, verticalAlignment: EnumVerticalAlign.Middle));
             AddNestedRow(table, visibility, "visibility", () =>
             {
-                var checkbox = new RulerSwitch(capi, ElementBounds.Fixed(0, 0, 22, 22),
-                    value => ruler?.SetVisibility(value)) { On = ruler?.State.ShowRuler == true };
+                var checkbox = new WorkAreaSwitch(capi, ElementBounds.Fixed(0, 0, 22, 22),
+                    value => workArea?.SetVisibility(value)) { On = workArea?.State.ShowWorkArea == true };
                 visibility.AddRowCells([new TableCell(checkbox, "show", input: TableInput.Pointer,
                     cancelInput: checkbox.CancelPress),
-                    new TableCell(new GuiElementStaticText(capi, RulerText("show"),
-                    EnumTextOrientation.Left, ElementBounds.Fixed(0, 0, Width(RulerText("show")), height),
+                    new TableCell(new GuiElementStaticText(capi, WorkAreaText("show"),
+                    EnumTextOrientation.Left, ElementBounds.Fixed(0, 0, Width(WorkAreaText("show")), height),
                     CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor])), "label")]);
             });
 
-            string size = RulerSize();
+            string size = WorkAreaSize();
             table.AddRowCells([new TableCell(new GuiElementStaticText(capi, size, EnumTextOrientation.Left,
                 ElementBounds.Fixed(0, 0, Width(size), height),
                 CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.ValueColor])), "size")]);
@@ -94,20 +94,20 @@ internal sealed partial class BuildModeHud
         }
     }
 
-    private void ComposeRulerContent(GuiComposer composer, ElementBounds _)
+    private void ComposeWorkAreaContent(GuiComposer composer, ElementBounds _)
     {
-        if (!composer.TryAddTable(RulerTable, "ruler-table"))
-            throw new InvalidOperationException("The ruler table was unexpectedly skipped during HUD composition.");
+        if (!composer.TryAddTable(WorkAreaTable, "workarea-table"))
+            throw new InvalidOperationException("The work area table was unexpectedly skipped during HUD composition.");
     }
 
     // Native controls activate on mouse-down and have no non-activating cancellation API.
     // Defer their activation to a captured, in-bounds release without changing native artwork.
-    private sealed class RulerSwitch : GuiElementSwitch
+    private sealed class WorkAreaSwitch : GuiElementSwitch
     {
         private bool pressed;
         public override bool Focusable => false;
 
-        public RulerSwitch(ICoreClientAPI api, ElementBounds bounds, Action<bool> toggle)
+        public WorkAreaSwitch(ICoreClientAPI api, ElementBounds bounds, Action<bool> toggle)
             : base(api, toggle, bounds, 22, 3) { }
 
         public void CancelPress() => pressed = false;

@@ -60,7 +60,7 @@ public sealed class GizmoRenderAdapterTests
             var api = TestHelpers.CreateMockCapi();
             var render = new Mock<IRenderAPI>();
             var world = new Mock<IClientWorldAccessor>();
-            var player = RulerRenderingTests.CreatePlayer();
+            var player = WorkAreaRenderingTests.CreatePlayer();
             var input = new Mock<IInputAPI>();
             var entity = player.Entity;
             entity.Pos.Dimension = dimension;

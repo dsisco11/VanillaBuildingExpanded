@@ -6,13 +6,13 @@ using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-internal sealed class RulerRenderer : IRenderer
+internal sealed class WorkAreaRenderer : IRenderer
 {
     internal const double VisualExpansion = 0.002;
     private readonly ICoreClientAPI api;
-    private readonly System.Func<RulerBounds?> getBounds;
+    private readonly System.Func<WorkAreaBounds?> getBounds;
     private readonly Action<Exception> onFailure;
-    private readonly IRulerRenderState renderState;
+    private readonly IWorkAreaRenderState renderState;
     private readonly Matrixf model = new();
     private MeshRef? mesh;
     private bool failed;
@@ -22,13 +22,13 @@ internal sealed class RulerRenderer : IRenderer
     public double RenderOrder => 0.51;
     public int RenderRange => int.MaxValue;
 
-    public RulerRenderer(ICoreClientAPI api, System.Func<RulerBounds?> getBounds,
-        Action<Exception> onFailure, IRulerRenderState? renderState = null)
+    public WorkAreaRenderer(ICoreClientAPI api, System.Func<WorkAreaBounds?> getBounds,
+        Action<Exception> onFailure, IWorkAreaRenderState? renderState = null)
     {
         this.api = api;
         this.getBounds = getBounds;
         this.onFailure = onFailure;
-        this.renderState = renderState ?? new RulerRenderState(api.Render);
+        this.renderState = renderState ?? new WorkAreaRenderState(api.Render);
     }
 
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
@@ -41,9 +41,9 @@ internal sealed class RulerRenderer : IRenderer
             if (shader is null || shader.Disposed || shader.LoadError)
                 throw new InvalidOperationException("The engine wireframe shader is unavailable.");
             mesh ??= api.Render.UploadMesh(CreateUnitCube())
-                ?? throw new InvalidOperationException("Ruler mesh upload returned no mesh.");
+                ?? throw new InvalidOperationException("Work area mesh upload returned no mesh.");
             if (!mesh.Initialized || mesh.Disposed)
-                throw new InvalidOperationException("The ruler mesh is unavailable.");
+                throw new InvalidOperationException("The work area mesh is unavailable.");
             var camera = api.World.Player.Entity.CameraPos;
             SetModelMatrix(model, api.Render.CameraMatrixOriginf, bounds, camera);
             Draw(shader);
@@ -87,7 +87,7 @@ internal sealed class RulerRenderer : IRenderer
         }
     }
 
-    internal static void SetModelMatrix(Matrixf model, float[] cameraMatrix, RulerBounds bounds, Vec3d camera)
+    internal static void SetModelMatrix(Matrixf model, float[] cameraMatrix, WorkAreaBounds bounds, Vec3d camera)
     {
         // Bounds stay local-Y; encode only the draw position to match native CameraPos.
         double dimensionY = (double)bounds.MinCell.Dimension * BlockPos.DimensionBoundary;

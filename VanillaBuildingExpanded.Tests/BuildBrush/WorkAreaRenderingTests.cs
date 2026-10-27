@@ -13,7 +13,7 @@ using Xunit;
 namespace VanillaBuildingExpanded.Tests.BuildBrush;
 
 [Collection("Table composition")]
-public sealed class RulerRenderingTests
+public sealed class WorkAreaRenderingTests
 {
     [Theory]
     [InlineData(false, false, false)]
@@ -26,7 +26,7 @@ public sealed class RulerRenderingTests
         bool depthTest, bool depthWrite, bool failWidth)
     {
         var render = new Mock<IRenderAPI>();
-        var state = new RulerRenderState(render.Object);
+        var state = new WorkAreaRenderState(render.Object);
         SetField(state, "depthTest", depthTest);
         SetField(state, "depthWrite", depthWrite);
         SetField(state, "lineWidth", 1.25f);
@@ -43,7 +43,7 @@ public sealed class RulerRenderingTests
     [Fact]
     public void UnitMesh_HasExactlyTwelveUniqueCellEdgesAndNoWarpOrExtraDepthFlags()
     {
-        var mesh = RulerRenderer.CreateUnitCube();
+        var mesh = WorkAreaRenderer.CreateUnitCube();
         Assert.Equal(EnumDrawMode.Lines, mesh.mode);
         Assert.Equal(8, mesh.VerticesCount);
         Assert.Equal(24, mesh.IndicesCount);
@@ -76,20 +76,20 @@ public sealed class RulerRenderingTests
     public void Matrix_UsesExactInclusiveExtentsAndDoubleRelativeTranslation(
         int ax, int ay, int az, int bx, int by, int bz, int dimension, long sx, long sy, long sz)
     {
-        var bounds = new RulerBounds(new(ax, ay, az, dimension), new(bx, by, bz, dimension));
+        var bounds = new WorkAreaBounds(new(ax, ay, az, dimension), new(bx, by, bz, dimension));
         var before = bounds;
         var camera = new Vec3d(bounds.RenderMinX + 0.125,
             bounds.RenderMinY + (double)dimension * BlockPos.DimensionBoundary + 0.25,
             bounds.RenderMinZ - 0.375);
         var model = new Matrixf();
-        RulerRenderer.SetModelMatrix(model, new Matrixf().Values, bounds, camera);
+        WorkAreaRenderer.SetModelMatrix(model, new Matrixf().Values, bounds, camera);
         Assert.Equal(Math.Min(ax, bx), bounds.RenderMinX);
         Assert.Equal(Math.Max(ax, bx) + 1d, bounds.RenderMaxExclusiveX);
         Assert.Equal(Math.Min(ay, by), bounds.RenderMinY);
         Assert.Equal(Math.Max(ay, by) + 1d, bounds.RenderMaxExclusiveY);
         Assert.Equal(Math.Min(az, bz), bounds.RenderMinZ);
         Assert.Equal(Math.Max(az, bz) + 1d, bounds.RenderMaxExclusiveZ);
-        double expansion = RulerRenderer.VisualExpansion;
+        double expansion = WorkAreaRenderer.VisualExpansion;
         Assert.InRange(expansion, 0.0001, 0.005);
         Assert.Equal((float)(sx + 2 * expansion), model.Values[0]);
         Assert.Equal((float)(sy + 2 * expansion), model.Values[5]);
@@ -104,7 +104,7 @@ public sealed class RulerRenderingTests
     public void Matrix_AppliesNativeCameraRotationAndKeepsLargeBoxWithoutDistanceCulling()
     {
         using var f = new Fixture();
-        f.Ruler.RestoreEndpoints(new(-100000, 65, -100000, 0), new(100000, 67, 100000, 0));
+        f.WorkArea.RestoreEndpoints(new(-100000, 65, -100000, 0), new(100000, 67, 100000, 0));
         f.Enable();
         var cameraMatrix = new Matrixf().RotateY((float)Math.PI / 2);
         f.Render.Setup(r => r.CameraMatrixOriginf).Returns(cameraMatrix.Values);
@@ -113,7 +113,7 @@ public sealed class RulerRenderingTests
         Assert.Single(f.Active);
         Assert.Equal(1, f.Uploads);
         var expected = new Matrixf();
-        RulerRenderer.SetModelMatrix(expected, cameraMatrix.Values, f.Ruler.State.Bounds!.Value,
+        WorkAreaRenderer.SetModelMatrix(expected, cameraMatrix.Values, f.WorkArea.State.Bounds!.Value,
             f.Player.Entity.CameraPos);
         Assert.Equal(expected.Values, f.Model);
     }
@@ -124,10 +124,10 @@ public sealed class RulerRenderingTests
         using var f = new Fixture();
         Assert.Empty(f.Active);
         Assert.Equal(0, f.Uploads);
-        f.Ruler.SetContext(true, true);
-        f.Ruler.SetVisibility(true);
+        f.WorkArea.SetContext(true, true);
+        f.WorkArea.SetVisibility(true);
         Assert.Empty(f.Active);
-        f.Ruler.RestoreEndpoints(new(10, 65, 20, 0), null);
+        f.WorkArea.RestoreEndpoints(new(10, 65, 20, 0), null);
         Assert.Empty(f.Active);
         f.Complete();
         var first = Assert.Single(f.Active);
@@ -136,31 +136,31 @@ public sealed class RulerRenderingTests
         f.Binding.Refresh();
         f.Complete();
         Assert.Same(first, Assert.Single(f.Active));
-        f.Ruler.RestoreEndpoints(new(11, 64, 21, 0), new(19, 70, 30, 0));
+        f.WorkArea.RestoreEndpoints(new(11, 64, 21, 0), new(19, 70, 30, 0));
         f.Draw();
         Assert.Equal(1, f.Registers);
         Assert.Equal(1, f.Uploads);
         Assert.Equal(9.004f, f.Model![0]);
         Assert.Equal(7.004f, f.Model[5]);
         Assert.Equal(10.004f, f.Model[10]);
-        f.Ruler.SetVisibility(false);
+        f.WorkArea.SetVisibility(false);
         Assert.Empty(f.Active);
-        f.Ruler.SetVisibility(true);
+        f.WorkArea.SetVisibility(true);
         Assert.Same(first, Assert.Single(f.Active));
         f.Draw();
         Assert.Equal(1, f.Uploads);
-        f.Ruler.SetContext(false, false);
+        f.WorkArea.SetContext(false, false);
         Assert.Empty(f.Active);
-        Assert.True(f.Ruler.State.ShowRuler);
-        Assert.NotNull(f.Ruler.State.Bounds);
-        f.Ruler.SetContext(true, false);
+        Assert.True(f.WorkArea.State.ShowWorkArea);
+        Assert.NotNull(f.WorkArea.State.Bounds);
+        f.WorkArea.SetContext(true, false);
         Assert.Empty(f.Active);
-        f.Ruler.SetContext(true, true);
+        f.WorkArea.SetContext(true, true);
         Assert.Single(f.Active);
         Assert.Throws<ArgumentException>(() =>
-            f.Ruler.RestoreEndpoints(new(0, 65, 0, 0), new(0, 65, 0, 1)));
+            f.WorkArea.RestoreEndpoints(new(0, 65, 0, 0), new(0, 65, 0, 1)));
         Assert.Single(f.Active);
-        f.Ruler.RestoreEndpoints(new(0, 65, 0, 0), null);
+        f.WorkArea.RestoreEndpoints(new(0, 65, 0, 0), null);
         Assert.Empty(f.Active);
         f.Complete();
         Assert.Single(f.Active);
@@ -179,8 +179,8 @@ public sealed class RulerRenderingTests
         Assert.Equal(f.Registers, f.Unregisters);
         Assert.True(f.Mesh.Disposed);
         Assert.Equal(1, f.Mesh.Disposals);
-        f.Ruler.SetVisibility(false);
-        f.Ruler.SetVisibility(true);
+        f.WorkArea.SetVisibility(false);
+        f.WorkArea.SetVisibility(true);
         f.Events.Raise(e => e.PlayerDimensionChanged += null!, f.Player);
         first.OnRenderFrame(0, EnumRenderStage.Opaque);
         Assert.Empty(f.Active);
@@ -198,7 +198,7 @@ public sealed class RulerRenderingTests
     {
         using var f = new Fixture();
         f.Accessor.Setup(a => a.IsValidPos(It.IsAny<BlockPos>())).Returns<BlockPos>(p => p.X >= 0);
-        f.Ruler.RestoreEndpoints(new(x, y, 0, dimension), new(x, y, 0, dimension));
+        f.WorkArea.RestoreEndpoints(new(x, y, 0, dimension), new(x, y, 0, dimension));
         f.Enable();
         Assert.Empty(f.Active);
         Assert.Equal(0, f.Uploads);
@@ -214,11 +214,11 @@ public sealed class RulerRenderingTests
         f.Enable();
         Assert.Empty(f.Active);
         Assert.Equal(0, f.Uploads);
-        Assert.Single(f.Notices, code => code.EndsWith("ruler-render-unavailable"));
+        Assert.Single(f.Notices, code => code.EndsWith("workarea-render-unavailable"));
         f.RunPending();
         f.Binding.Refresh();
-        f.Ruler.SetVisibility(false);
-        f.Ruler.SetVisibility(true);
+        f.WorkArea.SetVisibility(false);
+        f.WorkArea.SetVisibility(true);
         Assert.Empty(f.Active);
         f.Events.Verify(e => e.RegisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.Opaque,
             It.IsAny<string>()), Times.Once);
@@ -242,36 +242,36 @@ public sealed class RulerRenderingTests
         using var f = new Fixture();
         f.Complete();
         f.Enable();
-        var original = f.Ruler.State.Bounds;
-        f.Ruler.BeginEndpointEdit(RulerEndpointRole.Start);
+        var original = f.WorkArea.State.Bounds;
+        f.WorkArea.BeginEndpointEdit(WorkAreaEndpointRole.Start);
         f.Events.Raise(e => e.PlayerDimensionChanged += null!, CreatePlayer());
         Assert.Single(f.Active);
-        Assert.True(f.Ruler.IsEditing);
+        Assert.True(f.WorkArea.IsEditing);
         f.Player.Entity.Pos.Dimension = 2;
         f.Events.Raise(e => e.PlayerDimensionChanged += null!, f.Player);
         Assert.Empty(f.Active);
-        Assert.False(f.Ruler.IsEditing);
-        Assert.Equal(original, f.Ruler.State.Bounds);
-        Assert.True(f.Ruler.State.ShowRuler);
-        Assert.Single(f.Notices, code => code.EndsWith("ruler-dimension-mismatch"));
+        Assert.False(f.WorkArea.IsEditing);
+        Assert.Equal(original, f.WorkArea.State.Bounds);
+        Assert.True(f.WorkArea.State.ShowWorkArea);
+        Assert.Single(f.Notices, code => code.EndsWith("workarea-dimension-mismatch"));
         f.Binding.Refresh();
-        Assert.Single(f.Notices, code => code.EndsWith("ruler-dimension-mismatch"));
+        Assert.Single(f.Notices, code => code.EndsWith("workarea-dimension-mismatch"));
         f.Player.Entity.Pos.Dimension = 0;
         f.Events.Raise(e => e.PlayerDimensionChanged += null!, f.Player);
         Assert.Single(f.Active);
-        f.Ruler.BeginEndpointEdit(RulerEndpointRole.End);
+        f.WorkArea.BeginEndpointEdit(WorkAreaEndpointRole.End);
         f.Player.Entity.Alive = false;
-        f.Ruler.SetContext(false, false);
+        f.WorkArea.SetContext(false, false);
         Assert.Empty(f.Active);
-        Assert.False(f.Ruler.IsEditing);
-        Assert.Equal(original, f.Ruler.State.Bounds);
+        Assert.False(f.WorkArea.IsEditing);
+        Assert.Equal(original, f.WorkArea.State.Bounds);
         f.Player.Entity.Alive = true;
-        f.Ruler.SetContext(true, true);
+        f.WorkArea.SetContext(true, true);
         Assert.Single(f.Active);
         f.Player.Entity.Pos.Dimension = 2;
         f.Events.Raise(e => e.PlayerDimensionChanged += null!, f.Player);
-        f.Ruler.TrySetEndpoints(new(10, 65, 20, 2), null, f.Api.Object.World.BlockAccessor);
-        Assert.Null(f.Ruler.State.End);
+        f.WorkArea.TrySetEndpoints(new(10, 65, 20, 2), null, f.Api.Object.World.BlockAccessor);
+        Assert.Null(f.WorkArea.State.End);
         Assert.Empty(f.Active);
         f.Player.Entity.Pos.Dimension = 0;
         f.Events.Raise(e => e.PlayerDimensionChanged += null!, f.Player);
@@ -316,7 +316,7 @@ public sealed class RulerRenderingTests
         using var f = new Fixture();
         f.Complete();
         f.Enable();
-        var bounds = f.Ruler.State.Bounds;
+        var bounds = f.WorkArea.State.Bounds;
         var renderer = Assert.Single(f.Active);
         switch (fault)
         {
@@ -344,12 +344,12 @@ public sealed class RulerRenderingTests
             case "restore": f.State.Fault = "restore"; break;
         }
         renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
-        Assert.Single(f.Notices, code => code.EndsWith("ruler-render-unavailable"));
+        Assert.Single(f.Notices, code => code.EndsWith("workarea-render-unavailable"));
         Assert.Single(f.Pending);
         // A callback must not remove itself from the native live indexed render list.
         Assert.Single(f.Active);
-        Assert.Equal(bounds, f.Ruler.State.Bounds);
-        Assert.True(f.Ruler.State.ShowRuler);
+        Assert.Equal(bounds, f.WorkArea.State.Bounds);
+        Assert.True(f.WorkArea.State.ShowWorkArea);
         if (fault is "use" or "uniform" or "draw" or "stop" or "restore")
         {
             Assert.Equal(1, f.State.Restores);
@@ -357,13 +357,13 @@ public sealed class RulerRenderingTests
         }
         f.RunPending();
         Assert.Empty(f.Active);
-        f.Ruler.SetVisibility(false);
-        f.Ruler.SetVisibility(true);
+        f.WorkArea.SetVisibility(false);
+        f.WorkArea.SetVisibility(true);
         f.Binding.Refresh();
         renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
-        Assert.Single(f.Notices, code => code.EndsWith("ruler-render-unavailable"));
+        Assert.Single(f.Notices, code => code.EndsWith("workarea-render-unavailable"));
         Assert.Empty(f.Active);
-        f.Api.Verify(a => a.Logger.Error("[Ruler] Wireframe unavailable for this session: {0}",
+        f.Api.Verify(a => a.Logger.Error("[WorkArea] Wireframe unavailable for this session: {0}",
             It.IsAny<object[]>()), Times.Once);
         f.Binding.Dispose();
         Assert.Equal(f.Uploads > 0 ? 1 : 0, f.Mesh.Disposals);
@@ -407,16 +407,16 @@ public sealed class RulerRenderingTests
         f.Binding.Dispose();
         f.RunPending();
         int registers = f.Registers;
-        f.Ruler.RestoreEndpoints(new(0, 65, 0, 1), new(1, 65, 1, 1));
+        f.WorkArea.RestoreEndpoints(new(0, 65, 0, 1), new(1, 65, 1, 1));
         f.Events.Raise(e => e.PlayerDimensionChanged += null!, f.Player);
         old.OnRenderFrame(0, EnumRenderStage.Opaque);
         Assert.Empty(f.Active);
         Assert.Equal(registers, f.Registers);
         f.Events.VerifyRemove(e => e.PlayerDimensionChanged -= It.IsAny<PlayerCommonDelegate>(), Times.Once);
         using var fresh = new Fixture();
-        Assert.False(fresh.Ruler.State.ShowRuler);
-        Assert.False(fresh.Ruler.State.IsBuildModeEnabled);
-        Assert.Null(fresh.Ruler.State.Bounds);
+        Assert.False(fresh.WorkArea.State.ShowWorkArea);
+        Assert.False(fresh.WorkArea.State.IsBuildModeEnabled);
+        Assert.Null(fresh.WorkArea.State.Bounds);
         Assert.Empty(fresh.Active);
         fresh.Complete();
         fresh.Enable();
@@ -441,7 +441,7 @@ public sealed class RulerRenderingTests
         target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
             .SetValue(target, value);
 
-    internal sealed class FakeState(List<string>? sequence = null) : IRulerRenderState
+    internal sealed class FakeState(List<string>? sequence = null) : IWorkAreaRenderState
     {
         public int Captures;
         public int Restores;
@@ -473,7 +473,7 @@ public sealed class RulerRenderingTests
     private sealed class Fixture : IDisposable
     {
         private readonly string previousLocale = Lang.CurrentLocale;
-        private readonly string locale = $"vbe-ruler-render-tests-{Guid.NewGuid():N}";
+        private readonly string locale = $"vbe-workarea-render-tests-{Guid.NewGuid():N}";
         public readonly Mock<ICoreClientAPI> Api = TestHelpers.CreateMockCapi();
         public readonly Mock<IClientWorldAccessor> World = new();
         public readonly Mock<IClientEventAPI> Events = new();
@@ -483,8 +483,8 @@ public sealed class RulerRenderingTests
         public readonly Mock<IShaderProgram> Shader = new();
         public readonly Mock<IShaderProgram> PreviousShader = new();
         public readonly ClientPlayer Player;
-        public readonly RulerController Ruler = new();
-        public readonly RulerRenderBinding Binding;
+        public readonly WorkAreaController WorkArea = new();
+        public readonly WorkAreaRenderBinding Binding;
         public readonly TestMesh Mesh = new();
         public readonly HashSet<IRenderer> Active = [];
         public readonly List<Action> Pending = [];
@@ -553,11 +553,11 @@ public sealed class RulerRenderingTests
             Shader.Setup(s => s.Stop()).Callback(() => Sequence.Add("stop"));
             PreviousShader.Setup(s => s.Stop()).Callback(() => Sequence.Add("previous-stop"));
             PreviousShader.Setup(s => s.Use()).Callback(() => Sequence.Add("previous-use"));
-            Binding = new RulerRenderBinding(Api.Object, Ruler, State);
+            Binding = new WorkAreaRenderBinding(Api.Object, WorkArea, State);
         }
 
-        public void Complete() => Ruler.RestoreEndpoints(new(10, 65, 20, 0), new(14, 67, 23, 0));
-        public void Enable() { Ruler.SetContext(true, true); Ruler.SetVisibility(true); }
+        public void Complete() => WorkArea.RestoreEndpoints(new(10, 65, 20, 0), new(14, 67, 23, 0));
+        public void Enable() { WorkArea.SetContext(true, true); WorkArea.SetVisibility(true); }
         public void Draw()
         {
             foreach (var renderer in Active.ToArray()) renderer.OnRenderFrame(0, EnumRenderStage.Opaque);

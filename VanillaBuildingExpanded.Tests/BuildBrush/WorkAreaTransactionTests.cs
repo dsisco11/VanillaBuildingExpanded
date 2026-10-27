@@ -10,10 +10,10 @@ using static VanillaBuildingExpanded.Tests.Gizmos.PositionGizmoTests;
 
 namespace VanillaBuildingExpanded.Tests.BuildBrush;
 
-public sealed class RulerTransactionTests
+public sealed class WorkAreaTransactionTests
 {
     [Fact]
-    public void WholeRulerTranslation_PreviewsFromOriginalPairAtomicallyAndPreservesSize()
+    public void WholeWorkAreaTranslation_PreviewsFromOriginalPairAtomicallyAndPreservesSize()
     {
         var controller = Controller();
         var original = controller.State;
@@ -23,7 +23,7 @@ public sealed class RulerTransactionTests
         controller.EndpointsCommitted += () => commits++;
         Assert.True(controller.BeginTranslation());
         Assert.False(controller.BeginTranslation());
-        Assert.False(controller.BeginEndpointEdit(RulerEndpointRole.Start));
+        Assert.False(controller.BeginEndpointEdit(WorkAreaEndpointRole.Start));
         Assert.False(controller.PreviewEndpoint(new(0, 65, 0, 2), accessor));
         foreach (var (x, y, z) in new[] { (3L, 2L, -5L), (-20L, -10L, 100L), (0L, 0L, 0L) })
         {
@@ -59,7 +59,7 @@ public sealed class RulerTransactionTests
     }
 
     [Fact]
-    public void WholeRulerTranslation_RequiresCompletePairAndAllowsWideDeltaWithoutIntegerOverflow()
+    public void WholeWorkAreaTranslation_RequiresCompletePairAndAllowsWideDeltaWithoutIntegerOverflow()
     {
         var controller = Controller();
         controller.RestoreEndpoints(new(int.MinValue, 32766, int.MaxValue - 1, 65535),
@@ -67,8 +67,8 @@ public sealed class RulerTransactionTests
         var original = controller.State;
         Assert.True(controller.BeginTranslation());
         Assert.True(controller.PreviewTranslation(uint.MaxValue - 1L, 0, -uint.MaxValue + 1L, Accessor().Object));
-        Assert.Equal(new RulerEndpoint(int.MaxValue - 1, 32766, int.MinValue, 65535), controller.State.Start);
-        Assert.Equal(new RulerEndpoint(int.MaxValue, 32767, int.MinValue + 1, 65535), controller.State.End);
+        Assert.Equal(new WorkAreaEndpoint(int.MaxValue - 1, 32766, int.MinValue, 65535), controller.State.Start);
+        Assert.Equal(new WorkAreaEndpoint(int.MaxValue, 32767, int.MinValue + 1, 65535), controller.State.End);
         var valid = controller.State;
         Assert.False(controller.PreviewTranslation(uint.MaxValue, 0, 0, Accessor().Object));
         Assert.False(controller.PreviewTranslation(0, 1, 0, Accessor().Object));
@@ -76,7 +76,7 @@ public sealed class RulerTransactionTests
         controller.RestoreEndpoints(original.Start, null);
         Assert.False(controller.IsEditing);
         Assert.False(controller.BeginTranslation());
-        Assert.True(controller.BeginEndpointEdit(RulerEndpointRole.Start));
+        Assert.True(controller.BeginEndpointEdit(WorkAreaEndpointRole.Start));
         Assert.False(controller.PreviewTranslation(0, 0, 0, Accessor().Object));
     }
 
@@ -85,21 +85,21 @@ public sealed class RulerTransactionTests
     [InlineData(0.5, 1)]
     [InlineData(-0.49, 0)]
     [InlineData(-0.5, -1)]
-    public void WholeRulerConstraint_SnapsMidpointDeltasAndRejectsMovesThatInvalidateEitherCorner(double step, int snapped)
+    public void WholeWorkAreaConstraint_SnapsMidpointDeltasAndRejectsMovesThatInvalidateEitherCorner(double step, int snapped)
     {
-        var bounds = new RulerBounds(new(-21, 65, -200, 2), new(30, 75, -180, 2));
-        var center = RulerGizmoCoordinates.ToCenter(bounds);
+        var bounds = new WorkAreaBounds(new(-21, 65, -200, 2), new(30, 75, -180, 2));
+        var center = WorkAreaGizmoCoordinates.ToCenter(bounds);
         Assert.Equal(new GizmoPosition(V(5, 70.5, -189.5), 2), center);
         var candidate = new GizmoPosition(center.Coordinates + V(step, -step, step), 2);
-        var constrained = RulerGizmoCoordinates.ConstrainTranslation(new(center, candidate, PositionGizmo.Center),
+        var constrained = WorkAreaGizmoCoordinates.ConstrainTranslation(new(center, candidate, PositionGizmo.Center),
             bounds, Accessor().Object);
         Assert.Equal(new GizmoPosition(center.Coordinates + V(snapped, -snapped, snapped), 2), constrained);
-        Assert.Null(RulerGizmoCoordinates.ConstrainTranslation(new(center, candidate, PositionGizmo.X),
+        Assert.Null(WorkAreaGizmoCoordinates.ConstrainTranslation(new(center, candidate, PositionGizmo.X),
             bounds, Accessor().Object));
         foreach (var invalid in new[] { new GizmoPosition(center.Coordinates + V(0, -66, 0), 2),
             new(center.Coordinates + V(0, 32768 - 75, 0), 2), new(center.Coordinates, 3),
             new(center.Coordinates + V(int.MaxValue, 0, 0), 2) })
-            Assert.Null(RulerGizmoCoordinates.ConstrainTranslation(new(center, invalid, PositionGizmo.Center),
+            Assert.Null(WorkAreaGizmoCoordinates.ConstrainTranslation(new(center, invalid, PositionGizmo.Center),
                 bounds, Accessor().Object));
     }
 
@@ -110,7 +110,7 @@ public sealed class RulerTransactionTests
     {
         var controller = Controller();
         var baseline = controller.State;
-        var role = start ? RulerEndpointRole.Start : RulerEndpointRole.End;
+        var role = start ? WorkAreaEndpointRole.Start : WorkAreaEndpointRole.End;
         int commits = 0, changes = 0;
         controller.EndpointsCommitted += () => commits++;
         controller.Changed += _ => changes++;
@@ -118,9 +118,9 @@ public sealed class RulerTransactionTests
         Assert.False(controller.BeginEndpointEdit(role));
         for (int i = 0; i < 100; i++)
         {
-            var target = new RulerEndpoint(-i, 80, -i, 2);
+            var target = new WorkAreaEndpoint(-i, 80, -i, 2);
             Assert.True(controller.PreviewEndpoint(target, Accessor().Object));
-            var expected = new RulerBounds(target, (start ? baseline.End : baseline.Start)!.Value);
+            var expected = new WorkAreaBounds(target, (start ? baseline.End : baseline.Start)!.Value);
             Assert.Equal(expected.MinCell, controller.State.Start);
             Assert.Equal(expected.MaxCell, controller.State.End);
             Assert.Equal((baseline.Start, baseline.End), controller.CommittedEndpoints);
@@ -150,7 +150,7 @@ public sealed class RulerTransactionTests
     {
         var controller = Controller();
         var baseline = controller.State;
-        var role = start ? RulerEndpointRole.Start : RulerEndpointRole.End;
+        var role = start ? WorkAreaEndpointRole.Start : WorkAreaEndpointRole.End;
         Assert.True(controller.BeginEndpointEdit(role));
         Assert.True(controller.PreviewEndpoint(new(-50, 90, 100, 2), Accessor().Object));
         Assert.True(controller.PreviewEndpoint((start ? baseline.Start : baseline.End)!.Value, Accessor().Object));
@@ -163,12 +163,12 @@ public sealed class RulerTransactionTests
     [Fact]
     public void Restore_NormalizesMixedAndReversedLegacyCornersWithoutCommitting()
     {
-        var controller = new RulerController();
+        var controller = new WorkAreaController();
         int commits = 0;
         controller.EndpointsCommitted += () => commits++;
         controller.RestoreEndpoints(new(30, 60, -10, 2), new(-20, 80, -40, 2));
-        Assert.Equal(new RulerEndpoint(-20, 60, -40, 2), controller.State.Start);
-        Assert.Equal(new RulerEndpoint(30, 80, -10, 2), controller.State.End);
+        Assert.Equal(new WorkAreaEndpoint(-20, 60, -40, 2), controller.State.Start);
+        Assert.Equal(new WorkAreaEndpoint(30, 80, -10, 2), controller.State.End);
         Assert.Equal(0, commits);
     }
 
@@ -181,15 +181,15 @@ public sealed class RulerTransactionTests
     public void InvalidPreview_KeepsLastValidValueAndReports(int y, int dimension)
     {
         var controller = Controller();
-        Assert.True(controller.BeginEndpointEdit(RulerEndpointRole.Start));
+        Assert.True(controller.BeginEndpointEdit(WorkAreaEndpointRole.Start));
         Assert.True(controller.PreviewEndpoint(new(30, 66, 40, 2), Accessor().Object));
         var before = controller.State;
-        List<RulerNotice> notices = [];
+        List<WorkAreaNotice> notices = [];
         controller.NoticeRequested += notices.Add;
         Assert.False(controller.PreviewEndpoint(new(50, y, 60, dimension), Accessor().Object));
         Assert.False(controller.PreviewEndpoint(new(50, 65, 60, 2), Accessor(false).Object));
         Assert.Equal(before, controller.State);
-        Assert.Equal(new[] { RulerNotice.InvalidEndpoint, RulerNotice.InvalidEndpoint }, notices);
+        Assert.Equal(new[] { WorkAreaNotice.InvalidEndpoint, WorkAreaNotice.InvalidEndpoint }, notices);
     }
 
     [Fact]
@@ -197,15 +197,15 @@ public sealed class RulerTransactionTests
     {
         var controller = Controller();
         var baseline = controller.State;
-        controller.BeginEndpointEdit(RulerEndpointRole.End);
+        controller.BeginEndpointEdit(WorkAreaEndpointRole.End);
         controller.PreviewEndpoint(new(99, 70, 99, 2), Accessor().Object);
         controller.RestoreEndpoints(controller.State.Start, controller.State.End);
         Assert.True(controller.IsEditing);
-        List<RulerState> changes = [];
+        List<WorkAreaState> changes = [];
         int commits = 0;
         controller.Changed += changes.Add;
         controller.EndpointsCommitted += () => commits++;
-        var replacement = new RulerEndpoint(-40, 90, -50, 3);
+        var replacement = new WorkAreaEndpoint(-40, 90, -50, 3);
         controller.RestoreEndpoints(replacement, null);
         Assert.Equal(baseline.Start, changes[0].Start);
         Assert.Equal(baseline.End, changes[0].End);
@@ -222,16 +222,16 @@ public sealed class RulerTransactionTests
     {
         var controller = Controller();
         var originalStart = controller.State.Start;
-        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.BeginEndpointEdit(WorkAreaEndpointRole.Start);
         controller.PreviewEndpoint(new(99, 80, 99, 2), Accessor().Object);
         var preview = controller.State;
-        Assert.False(controller.TrySetEndpoint(RulerEndpointRole.End, new(40, 70, 50, 3), Accessor().Object));
+        Assert.False(controller.TrySetEndpoint(WorkAreaEndpointRole.End, new(40, 70, 50, 3), Accessor().Object));
         Assert.True(controller.IsEditing);
         Assert.Equal(preview, controller.State);
         int commits = 0;
         controller.EndpointsCommitted += () => commits++;
-        var replacement = new RulerEndpoint(40, 70, 50, 2);
-        Assert.True(controller.TrySetEndpoint(RulerEndpointRole.End, replacement, Accessor().Object));
+        var replacement = new WorkAreaEndpoint(40, 70, 50, 2);
+        Assert.True(controller.TrySetEndpoint(WorkAreaEndpointRole.End, replacement, Accessor().Object));
         Assert.Equal(originalStart, controller.State.Start);
         Assert.Equal(replacement, controller.State.End);
         Assert.False(controller.IsEditing);
@@ -246,7 +246,7 @@ public sealed class RulerTransactionTests
     {
         var controller = Controller();
         var baseline = controller.State;
-        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.BeginEndpointEdit(WorkAreaEndpointRole.Start);
         controller.PreviewEndpoint(new(99, 70, 99, 2), Accessor().Object);
         int commits = 0;
         controller.EndpointsCommitted += () => commits++;
@@ -261,15 +261,15 @@ public sealed class RulerTransactionTests
     [Fact]
     public void Begin_RequiresExistingEndpointAndValidContextAndRole()
     {
-        var controller = new RulerController();
-        Assert.False(controller.BeginEndpointEdit(RulerEndpointRole.Start));
+        var controller = new WorkAreaController();
+        Assert.False(controller.BeginEndpointEdit(WorkAreaEndpointRole.Start));
         controller.SetContext(true, true);
-        Assert.False(controller.BeginEndpointEdit(RulerEndpointRole.End));
+        Assert.False(controller.BeginEndpointEdit(WorkAreaEndpointRole.End));
         controller.RestoreEndpoints(new(1, 2, 3, 0), null);
-        Assert.False(controller.BeginEndpointEdit(RulerEndpointRole.End));
-        Assert.Throws<ArgumentOutOfRangeException>(() => controller.BeginEndpointEdit((RulerEndpointRole)99));
+        Assert.False(controller.BeginEndpointEdit(WorkAreaEndpointRole.End));
+        Assert.Throws<ArgumentOutOfRangeException>(() => controller.BeginEndpointEdit((WorkAreaEndpointRole)99));
         Assert.False(controller.PreviewEndpoint(new(1, 2, 3, 0), Accessor().Object));
-        Assert.True(controller.BeginEndpointEdit(RulerEndpointRole.Start));
+        Assert.True(controller.BeginEndpointEdit(WorkAreaEndpointRole.Start));
     }
 
     [Theory]
@@ -277,17 +277,17 @@ public sealed class RulerTransactionTests
     [InlineData(false)]
     public void CellAnchor_RoundTripsExtremeCoordinatesAndDimensionLocalYWithoutLoading(bool start)
     {
-        var role = start ? RulerEndpointRole.Start : RulerEndpointRole.End;
+        var role = start ? WorkAreaEndpointRole.Start : WorkAreaEndpointRole.End;
         var accessor = Accessor();
         foreach (int x in new[] { int.MinValue, -1, 0, int.MaxValue })
         foreach (int y in new[] { 0, 32767 })
         foreach (int dimension in new[] { 0, 2, 65535 })
         {
-            var cell = new RulerEndpoint(x, y, int.MaxValue, dimension);
-            var anchor = RulerGizmoCoordinates.ToAnchor(cell, role);
+            var cell = new WorkAreaEndpoint(x, y, int.MaxValue, dimension);
+            var anchor = WorkAreaGizmoCoordinates.ToAnchor(cell, role);
             Assert.Equal(dimension, anchor.Dimension);
             Assert.Equal(y + (start ? 0d : 1d), anchor.Coordinates[1]);
-            Assert.True(RulerGizmoCoordinates.TryDecode(anchor, role, accessor.Object, out var decoded));
+            Assert.True(WorkAreaGizmoCoordinates.TryDecode(anchor, role, accessor.Object, out var decoded));
             Assert.Equal(cell, decoded);
         }
         accessor.Verify(a => a.IsValidPos(It.Is<BlockPos>(p => p.Y == 32767 && p.dimension == 65535)),
@@ -305,12 +305,12 @@ public sealed class RulerTransactionTests
     [InlineData(2, -1.5, -2)]
     public void AxisPolicy_RoundsDeltaBeforeAddingAndPreservesUntouchedComponents(int component, double delta, double rounded)
     {
-        foreach (var role in new[] { RulerEndpointRole.Start, RulerEndpointRole.End })
+        foreach (var role in new[] { WorkAreaEndpointRole.Start, WorkAreaEndpointRole.End })
         {
-            var initial = RulerGizmoCoordinates.ToAnchor(new(-2000000000, 65, -20, 2), role);
+            var initial = WorkAreaGizmoCoordinates.ToAnchor(new(-2000000000, 65, -20, 2), role);
             var candidate = new GizmoPosition(initial.Coordinates.WithElement(component,
                 initial.Coordinates[component] + delta), 2);
-            var accepted = RulerGizmoCoordinates.Constrain(new(initial, candidate, new(component + 1)), role, Accessor().Object);
+            var accepted = WorkAreaGizmoCoordinates.Constrain(new(initial, candidate, new(component + 1)), role, Accessor().Object);
             Assert.NotNull(accepted);
             Assert.Equal(initial.Coordinates.WithElement(component, initial.Coordinates[component] + rounded),
                 accepted.Value.Coordinates);
@@ -320,11 +320,11 @@ public sealed class RulerTransactionTests
     [Fact]
     public void CenterAndInvalidAnchors_UseCellOffsetsAndRejectRatherThanClampOrInferDimension()
     {
-        var role = RulerEndpointRole.End;
-        var initial = RulerGizmoCoordinates.ToAnchor(new(-10, 65, -20, 2), role);
-        var target = new RulerEndpoint(-40, 32767, -50, 2);
-        var anchor = RulerGizmoCoordinates.ToAnchor(target, role);
-        Assert.Equal(anchor, RulerGizmoCoordinates.Constrain(new(initial, anchor, PositionGizmo.Center), role, Accessor().Object));
+        var role = WorkAreaEndpointRole.End;
+        var initial = WorkAreaGizmoCoordinates.ToAnchor(new(-10, 65, -20, 2), role);
+        var target = new WorkAreaEndpoint(-40, 32767, -50, 2);
+        var anchor = WorkAreaGizmoCoordinates.ToAnchor(target, role);
+        Assert.Equal(anchor, WorkAreaGizmoCoordinates.Constrain(new(initial, anchor, PositionGizmo.Center), role, Accessor().Object));
         foreach (var invalid in new[]
         {
             new GizmoPosition(V(2147483649d, 66, 0), 2),
@@ -332,9 +332,9 @@ public sealed class RulerTransactionTests
             new GizmoPosition(V(0, 66, 0), 3),
             new GizmoPosition(V(double.MaxValue, 66, 0), 2)
         })
-            Assert.Null(RulerGizmoCoordinates.Constrain(new(initial, invalid, PositionGizmo.Center), role, Accessor().Object));
-        Assert.False(RulerGizmoCoordinates.TryDecode(anchor, role, Accessor(false).Object, out _));
-        Assert.Null(RulerGizmoCoordinates.Constrain(new(initial, anchor, PositionGizmo.X), role, Accessor().Object));
+            Assert.Null(WorkAreaGizmoCoordinates.Constrain(new(initial, invalid, PositionGizmo.Center), role, Accessor().Object));
+        Assert.False(WorkAreaGizmoCoordinates.TryDecode(anchor, role, Accessor(false).Object, out _));
+        Assert.Null(WorkAreaGizmoCoordinates.Constrain(new(initial, anchor, PositionGizmo.X), role, Accessor().Object));
     }
 
     [Theory]
@@ -345,16 +345,16 @@ public sealed class RulerTransactionTests
     public void CenterPolicy_RoundsEveryWorldDeltaAwayFromZeroBeforeDecoding(
         bool start, double dx, double dy, double dz, int x, int y, int z)
     {
-        var role = start ? RulerEndpointRole.Start : RulerEndpointRole.End;
-        var initial = RulerGizmoCoordinates.ToAnchor(new(-2000000000, 65, 2000000000, 65535), role);
+        var role = start ? WorkAreaEndpointRole.Start : WorkAreaEndpointRole.End;
+        var initial = WorkAreaGizmoCoordinates.ToAnchor(new(-2000000000, 65, 2000000000, 65535), role);
         var candidate = new GizmoPosition(initial.Coordinates + V(dx, dy, dz), 65535);
         var accessor = Accessor();
-        var accepted = RulerGizmoCoordinates.Constrain(new(initial, candidate, PositionGizmo.Center), role, accessor.Object);
+        var accepted = WorkAreaGizmoCoordinates.Constrain(new(initial, candidate, PositionGizmo.Center), role, accessor.Object);
         Assert.NotNull(accepted);
         Assert.Equal(initial.Coordinates + V(x, y, z), accepted.Value.Coordinates);
-        Assert.True(RulerGizmoCoordinates.TryDecode(accepted.Value, role, accessor.Object, out var cell));
-        Assert.Equal(new RulerEndpoint(-2000000000 + x, 65 + y, 2000000000 + z, 65535), cell);
-        Assert.False(RulerGizmoCoordinates.TryDecode(candidate, role, accessor.Object, out _));
+        Assert.True(WorkAreaGizmoCoordinates.TryDecode(accepted.Value, role, accessor.Object, out var cell));
+        Assert.Equal(new WorkAreaEndpoint(-2000000000 + x, 65 + y, 2000000000 + z, 65535), cell);
+        Assert.False(WorkAreaGizmoCoordinates.TryDecode(candidate, role, accessor.Object, out _));
     }
 
     [Theory]
@@ -362,13 +362,13 @@ public sealed class RulerTransactionTests
     [InlineData(false)]
     public void CenterPolicy_ObliquePlaneSnapsWorldCoordinatesWithoutRebasingOnEcho(bool start)
     {
-        var role = start ? RulerEndpointRole.Start : RulerEndpointRole.End;
-        var initial = RulerGizmoCoordinates.ToAnchor(new(-10, 65, -20, 2), role);
+        var role = start ? WorkAreaEndpointRole.Start : WorkAreaEndpointRole.End;
+        var initial = WorkAreaGizmoCoordinates.ToAnchor(new(-10, 65, -20, 2), role);
         double yaw = Math.PI / 4;
         var context = new GizmoContext(2, Camera(reference: initial.Coordinates + V(-10, 0, 10),
             view: Yaw(yaw)).Camera);
         using var gizmo = new PositionGizmo(initial, _ => { },
-            edit => RulerGizmoCoordinates.Constrain(edit, role, Accessor().Object));
+            edit => WorkAreaGizmoCoordinates.Constrain(edit, role, Accessor().Object));
         var origin = initial.Coordinates - context.Camera!.ViewDirection * 20;
         var right = V(Math.Cos(yaw), 0, Math.Sin(yaw));
         var pointer = new GizmoPointer(context, new(origin, context.Camera.ViewDirection));
@@ -389,9 +389,9 @@ public sealed class RulerTransactionTests
         Assert.InRange(changes, 4, 8);
     }
 
-    private static RulerController Controller()
+    private static WorkAreaController Controller()
     {
-        var controller = new RulerController();
+        var controller = new WorkAreaController();
         controller.SetContext(true, true);
         controller.RestoreEndpoints(new(10, 65, 20, 2), new(14, 67, 23, 2));
         return controller;

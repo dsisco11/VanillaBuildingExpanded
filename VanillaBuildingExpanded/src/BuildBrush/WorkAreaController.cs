@@ -4,45 +4,45 @@ using Vintagestory.API.Common;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-internal sealed class RulerController
+internal sealed class WorkAreaController
 {
-    private readonly record struct Edit(RulerEndpointRole? Role, RulerEndpoint? Start, RulerEndpoint? End);
+    private readonly record struct Edit(WorkAreaEndpointRole? Role, WorkAreaEndpoint? Start, WorkAreaEndpoint? End);
     private Edit? edit;
-    public RulerState State { get; private set; }
+    public WorkAreaState State { get; private set; }
     public bool IsEditing => edit is not null;
-    public (RulerEndpoint? Start, RulerEndpoint? End) CommittedEndpoints =>
+    public (WorkAreaEndpoint? Start, WorkAreaEndpoint? End) CommittedEndpoints =>
         edit is { } baseline ? (baseline.Start, baseline.End) : (State.Start, State.End);
 
-    public event Action<RulerState>? Changed;
-    public event Action<RulerNotice>? NoticeRequested;
+    public event Action<WorkAreaState>? Changed;
+    public event Action<WorkAreaNotice>? NoticeRequested;
     public event Action? EndpointsCommitted;
 
-    public void RestoreEndpoints(RulerEndpoint? start, RulerEndpoint? end)
+    public void RestoreEndpoints(WorkAreaEndpoint? start, WorkAreaEndpoint? end)
     {
         if (start is { } first && end is { } second && first.Dimension != second.Dimension)
-            throw new ArgumentException("Saved ruler endpoints must belong to the same dimension.", nameof(end));
+            throw new ArgumentException("Saved work area endpoints must belong to the same dimension.", nameof(end));
         var next = Normalize(State with { Start = start, End = end });
         if (State.Start != next.Start || State.End != next.End) CancelEndpointEdit();
         SetState(State with { Start = next.Start, End = next.End });
     }
 
-    public bool BeginEndpointEdit(RulerEndpointRole role)
+    public bool BeginEndpointEdit(WorkAreaEndpointRole role)
     {
         ValidateRole(role);
         if (edit is not null || !State.CanPick
-            || (role == RulerEndpointRole.Start ? State.Start : State.End) is null) return false;
+            || (role == WorkAreaEndpointRole.Start ? State.Start : State.End) is null) return false;
         edit = new(role, State.Start, State.End);
         return IsEditing;
     }
 
-    public bool PreviewEndpoint(RulerEndpoint endpoint, IBlockAccessor accessor)
+    public bool PreviewEndpoint(WorkAreaEndpoint endpoint, IBlockAccessor accessor)
     {
         ArgumentNullException.ThrowIfNull(accessor);
         if (edit is not { Role: not null } baseline) return false;
-        var original = baseline.Role == RulerEndpointRole.Start ? baseline.Start : baseline.End;
+        var original = baseline.Role == WorkAreaEndpointRole.Start ? baseline.Start : baseline.End;
         if (endpoint.Dimension != original!.Value.Dimension || !endpoint.IsValid(accessor))
             return RejectEndpoint();
-        var next = Normalize(baseline.Role == RulerEndpointRole.Start
+        var next = Normalize(baseline.Role == WorkAreaEndpointRole.Start
             ? State with { Start = endpoint, End = baseline.End }
             : State with { Start = baseline.Start, End = endpoint });
         if (!ValidEndpoints(next.Start, next.End, accessor)) return RejectEndpoint();
@@ -83,15 +83,15 @@ internal sealed class RulerController
         SetState(State with { Start = baseline.Start, End = baseline.End });
     }
 
-    public bool TrySetEndpoint(RulerEndpointRole role, RulerEndpoint endpoint, IBlockAccessor accessor)
+    public bool TrySetEndpoint(WorkAreaEndpointRole role, WorkAreaEndpoint endpoint, IBlockAccessor accessor)
     {
         ValidateRole(role);
         var (start, end) = CommittedEndpoints;
-        return TrySetEndpoints(role == RulerEndpointRole.Start ? endpoint : start,
-            role == RulerEndpointRole.End ? endpoint : end, accessor);
+        return TrySetEndpoints(role == WorkAreaEndpointRole.Start ? endpoint : start,
+            role == WorkAreaEndpointRole.End ? endpoint : end, accessor);
     }
 
-    public bool TrySetEndpoints(RulerEndpoint? start, RulerEndpoint? end, IBlockAccessor accessor)
+    public bool TrySetEndpoints(WorkAreaEndpoint? start, WorkAreaEndpoint? end, IBlockAccessor accessor)
     {
         ArgumentNullException.ThrowIfNull(accessor);
         if (!State.CanPick) return false;
@@ -106,13 +106,13 @@ internal sealed class RulerController
 
     private bool RejectEndpoint()
     {
-        NoticeRequested?.Invoke(RulerNotice.InvalidEndpoint);
+        NoticeRequested?.Invoke(WorkAreaNotice.InvalidEndpoint);
         return false;
     }
 
-    private static void ValidateRole(RulerEndpointRole role)
+    private static void ValidateRole(WorkAreaEndpointRole role)
     {
-        if (role is not (RulerEndpointRole.Start or RulerEndpointRole.End))
+        if (role is not (WorkAreaEndpointRole.Start or WorkAreaEndpointRole.End))
             throw new ArgumentOutOfRangeException(nameof(role));
     }
 
@@ -129,11 +129,11 @@ internal sealed class RulerController
     public void SetVisibility(bool visible)
     {
         if (!visible) CancelEndpointEdit();
-        if (State.ShowRuler == visible) return;
-        SetState(State with { ShowRuler = visible });
+        if (State.ShowWorkArea == visible) return;
+        SetState(State with { ShowWorkArea = visible });
     }
 
-    private void SetState(RulerState next)
+    private void SetState(WorkAreaState next)
     {
         next = Normalize(next);
         if (State == next) return;
@@ -141,10 +141,10 @@ internal sealed class RulerController
         Changed?.Invoke(next);
     }
 
-    private static RulerState Normalize(RulerState state) => state.Bounds is { } bounds
+    private static WorkAreaState Normalize(WorkAreaState state) => state.Bounds is { } bounds
         ? state with { Start = bounds.MinCell, End = bounds.MaxCell } : state;
 
-    private static bool ValidEndpoints(RulerEndpoint? start, RulerEndpoint? end, IBlockAccessor accessor) =>
+    private static bool ValidEndpoints(WorkAreaEndpoint? start, WorkAreaEndpoint? end, IBlockAccessor accessor) =>
         (start is not { } first || first.IsValid(accessor))
         && (end is not { } second || second.IsValid(accessor))
         && (start is not { } a || end is not { } b || a.Dimension == b.Dimension);

@@ -441,7 +441,7 @@ public sealed class GizmoInputAdapterTests
         public readonly Mock<IRenderAPI> Render = new();
         public readonly Mock<IClientWorldAccessor> World = new();
         public readonly Mock<IClientNetworkAPI> Network = new(MockBehavior.Strict);
-        public readonly ClientPlayer Player = RulerRenderingTests.CreatePlayer();
+        public readonly ClientPlayer Player = WorkAreaRenderingTests.CreatePlayer();
         public readonly MouseButtonState Raw = new(), WorldButtons = new();
         public readonly bool[] Keys = new bool[256];
         public readonly List<Action<bool>> Focus = [];
@@ -488,7 +488,7 @@ public sealed class GizmoInputAdapterTests
             Context = Capture();
             var initialPointer = Context.Camera!.CreatePointer(Context, 400, 300);
             Baseline = new(initialPointer.Ray.Origin + initialPointer.Ray.Direction * 200, 0);
-            Renderer = new(Api.Object, Manager, () => Context, new RulerRenderingTests.FakeState());
+            Renderer = new(Api.Object, Manager, () => Context, new WorkAreaRenderingTests.FakeState());
             Gizmo = new(Baseline, _ => { }, edit =>
             {
                 if (ThrowConstraint) throw new InvalidOperationException("constraint failure");

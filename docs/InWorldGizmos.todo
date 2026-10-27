@@ -6,25 +6,31 @@ Execution checklist derived from the proposal. Tasks remain unchecked until thei
 
 ## Goal and scope
 
-Replace ruler endpoint buttons and one-shot picking with reusable client-owned in-world gizmos. Support both free-cursor and reticle interaction, three analytic axis arrows, a camera-plane center handle, and whole-block ruler snapping throughout a drag. Terrain targeting is reserved for explicit first-use/missing-endpoint creation.
+Replace work area endpoint buttons and one-shot picking with reusable client-owned in-world gizmos. Support both free-cursor and reticle interaction, three analytic axis arrows, a camera-plane center handle, and whole-block work area snapping throughout a drag. Terrain targeting is reserved for explicit first-use/missing-endpoint creation.
 
 Use an abstract Gizmo and typed Gizmo<TValue>. The Value property setter raises OnValueChanged for actual changes from either manipulation or owner assignment; do not introduce a separate SetValue method or silent assignment path.
 
-The ruler has two endpoint positioning-gizmo instances plus a midpoint positioning gizmo when the selection is complete. Start uses its cell's (0, 0, 0) corner; End uses its cell's (1, 1, 1) corner. Start always contains the per-axis minimum cell and End the per-axis maximum cell, preserving inclusive measurements. The midpoint translates both corners together without resizing. Render handles as overlays and retain the depth-tested measurement box. The panel becomes:
+The work area has two endpoint positioning-gizmo instances plus a midpoint positioning gizmo when the selection is complete. Start uses its cell's (0, 0, 0) corner; End uses its cell's (1, 1, 1) corner. Start always contains the per-axis minimum cell and End the per-axis maximum cell, preserving inclusive measurements. The midpoint translates both corners together without resizing. Render handles as overlays and retain the depth-tested measurement box. The panel becomes:
 
 ```text
-[ ] Show ruler
+[ ] Show work area
 Size: <x>, <y>, <z>
 ```
 
-Non-goals: rotation/scaling gizmos, multi-object editing, undo history, numeric editors, multiplayer sharing, unrelated brush compatibility tests, additional ruler selection/cycling controls, new relocation controls, additional planar handles, or an optional legacy terrain-drag mode.
+Non-goals: rotation/scaling gizmos, multi-object editing, undo history, numeric editors, multiplayer sharing, unrelated brush compatibility tests, additional work area selection/cycling controls, new relocation controls, additional planar handles, or an optional legacy terrain-drag mode.
 
 ## Assumptions and qualification gates
+
+Terminology update (2026-10-27): the concept is now Work area throughout code,
+files, UI, localization and persistence identifiers. Historical source names in
+this plan use the current terminology; earlier verification counts remain
+historical. Persistence now uses vanillabuildingexpanded-workareas.json and starts
+fresh. The former config is neither read, migrated, overwritten nor deleted.
 
 Decision update after Phase 7 (2026-10-27): the user added whole-selection
 translation using a third positioning gizmo at the rendered box midpoint. It shares
 analytic center/axis motion, world-grid delta snapping, visual feedback and existing
-transaction/persistence/lifecycle boundaries. Partial rulers omit it; invalid
+transaction/persistence/lifecycle boundaries. Partial work areas omit it; invalid
 translated corners reject the whole move. Earlier phase evidence records the
 two-endpoint implementation at the time, not live qualification of this addition.
 
@@ -35,7 +41,7 @@ is allowed (not clamped); each preview uses the original opposite endpoint so a 
 can cross and return without accumulating extents. Both notifying gizmo values follow
 the normalized anchors while capture remains active. Completed phase records below
 describe their historical contracts where they still mention role preservation.
-Verification for this decision update: 403 focused Release tests passed (ruler,
+Verification for this decision update: 403 focused Release tests passed (work area,
 gizmos, HUD controls and table input), including mixed-axis crossing/return,
 canonical handle synchronization at release, rollback and legacy config round trips.
 Normal Build/ValidateJson and git diff --check passed. Live-game qualification
@@ -54,11 +60,11 @@ qualification phase is now Phase 8 and must verify the replacement after Phase 7
 - There is no existing reusable gizmo implementation in the inspected repository. Recheck before adding new logic; reuse native math/rendering facilities and existing input suppression infrastructure where they meet the new contract.
 - Resolve native cursor-ray/world-hit APIs, camera/input ordering and axis-drag degeneracy against the supported installed engine before implementing their consumers. Missing or unsuitable facilities are a blocker to resolve, not grounds for a center-screen fallback in free-cursor mode.
 - Exact artwork, pixel sizing, world-size limits, hit tolerances, equal-hit tie ordering and axis-degeneracy thresholds need documented/tested implementation choices. Do not treat example circle/diamond artwork as a mandatory asset design.
-- Document precedence between existing-handle interaction and pending missing-endpoint creation, plus how pending creation is offered/retired, before wiring that flow. Do not add a new panel action or overwrite an unrelated-dimension ruler to resolve it.
-- Generic positioning remains continuous and ruler-independent. The ruler binding supplies snapping, endpoint-role offsets and coordinate validity. Phase 7 removes the owner-supplied center target resolver; creation-only targeting must not remain reachable from handle movement.
-- New components remain inactive in normal gameplay until the verified cutover. Keep the existing interaction working during foundational phases; never register old and new competing global ruler mouse adapters together.
+- Document precedence between existing-handle interaction and pending missing-endpoint creation, plus how pending creation is offered/retired, before wiring that flow. Do not add a new panel action or overwrite an unrelated-dimension work area to resolve it.
+- Generic positioning remains continuous and workarea-independent. The work area binding supplies snapping, endpoint-role offsets and coordinate validity. Phase 7 removes the owner-supplied center target resolver; creation-only targeting must not remain reachable from handle movement.
+- New components remain inactive in normal gameplay until the verified cutover. Keep the existing interaction working during foundational phases; never register old and new competing global work area mouse adapters together.
 - The previous repeat-selection bug is unresolved. Replacement success requires repeated edits through the actual new manager/input/controller path, not a claim that the old bug was diagnosed.
-- The earlier ruler live-check waiver does not waive this implementation's live qualification. Missing live access/results remain explicitly blocked and unchecked unless separately directed by the user.
+- The earlier work area live-check waiver does not waive this implementation's live qualification. Missing live access/results remain explicitly blocked and unchecked unless separately directed by the user.
 - Record concise task -> proposal section -> implementation/evidence mappings in this plan as work proceeds. Do not turn intermediate mocked or source-only evidence into a live compatibility guarantee.
 
 ## Phase 1: Qualify native interaction boundaries and define contracts
@@ -67,7 +73,7 @@ Prerequisites: None.
 Outcome: Implementation can use identified native facilities and explicit numerical/input contracts without guessing.
 
     ✔ Consult the complete source proposal and directly relevant linked current implementation.
-        ✔ Trace existing client ownership, ruler/HUD input routing, world/dimension/focus lifecycle and native-config commit behavior.
+        ✔ Trace existing client ownership, work area/HUD input routing, world/dimension/focus lifecycle and native-config commit behavior.
         ✔ Identify reusable native math, mesh/shader and pointer-ray/world-target facilities; record supported game/API version and source locations.
     ✔ Qualify free-cursor and reticle targeting independently.
         ✔ Establish cursor-to-world projection across viewport/GUI scale and native world-hit semantics through the camera far plane, without a player-reach cap, for center dragging and creation.
@@ -99,13 +105,13 @@ All groups inherit the complete [proposal](./InWorldGizmos.proposal.md), especia
 
 | Phase 1 task group | Consulted source and applicable requirements | Observed evidence / consumer contract |
 | --- | --- | --- |
-| Existing ownership and lifecycle | [Client system](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushSystem_Client.cs), Event_PlayerJoin/Event_LeaveWorld/RefreshRulerContext/InWorldAction; [architecture](./BuildBrushArchitecture.md), Build-mode HUD and Client-only ruler | Join restores endpoints before rendering/HUD use; context refresh runs on mode changes and a 50-ms tick before brush early-outs. One world-session composition owns input/render/config; new input must remain ahead of TryPlaceBlock. Cancel a preview before any dirty-exit retry or world identity loss. No brush/server ownership changes. |
-| State and durable edits | [RulerState](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs), [controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs), [persistence](../VanillaBuildingExpanded/src/BuildBrush/RulerPersistence.cs) | Copied local-Y cells and explicit dimension, wide inclusive bounds, native LoadModConfig/StoreModConfig schema 1 keyed by exact SavegameIdentifier. EndpointsCommitted is the durable boundary. Existing TrySelect clears an opposite-dimension endpoint: do not reuse that behavior for direct drag/creation. Dispose currently saves controller state, so preview rollback must precede it. |
-| Existing input and HUD priority | Former RulerInput (removed at Phase 6 cutover; successor [session](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoSession.cs)), [HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs), [Ruler HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.Ruler.cs), [table input](../VanillaBuildingExpanded/src/UI/GuiElementTable.Input.cs) | Reuse the complete-gesture/late-action suppression concept, not its mouse-grabbed-only eligibility or one-shot state. HUD is nonfocusing, controls activate on captured release and text is passive. WantsPointerEvents also includes hover-exit delivery: it is not an exact new-press hit predicate. Removing buttons is Phase 6 work. |
-| Rendering and reuse | [render binding](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderBinding.cs), [renderer](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderer.cs), [render state](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderState.cs), production project references | Box remains independently depth-tested at Opaque order 0.51. Existing camera-relative matrix, native wireframe shader, reusable line meshes, native OpenTK state snapshots and deferred failure retirement are precedents. No existing Gizmo, picking-ray or Mat4d.Invert implementation was found in production C# by the qualification search. |
+| Existing ownership and lifecycle | [Client system](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushSystem_Client.cs), Event_PlayerJoin/Event_LeaveWorld/RefreshWorkAreaContext/InWorldAction; [architecture](./BuildBrushArchitecture.md), Build-mode HUD and Client-only work area | Join restores endpoints before rendering/HUD use; context refresh runs on mode changes and a 50-ms tick before brush early-outs. One world-session composition owns input/render/config; new input must remain ahead of TryPlaceBlock. Cancel a preview before any dirty-exit retry or world identity loss. No brush/server ownership changes. |
+| State and durable edits | [WorkAreaState](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaState.cs), [controller](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaController.cs), [persistence](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaPersistence.cs) | Copied local-Y cells and explicit dimension, wide inclusive bounds, native LoadModConfig/StoreModConfig schema 1 keyed by exact SavegameIdentifier. EndpointsCommitted is the durable boundary. Existing TrySelect clears an opposite-dimension endpoint: do not reuse that behavior for direct drag/creation. Dispose currently saves controller state, so preview rollback must precede it. |
+| Existing input and HUD priority | Former WorkAreaInput (removed at Phase 6 cutover; successor [session](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaGizmoSession.cs)), [HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs), [Work area HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.WorkArea.cs), [table input](../VanillaBuildingExpanded/src/UI/GuiElementTable.Input.cs) | Reuse the complete-gesture/late-action suppression concept, not its mouse-grabbed-only eligibility or one-shot state. HUD is nonfocusing, controls activate on captured release and text is passive. WantsPointerEvents also includes hover-exit delivery: it is not an exact new-press hit predicate. Removing buttons is Phase 6 work. |
+| Rendering and reuse | [render binding](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaRenderBinding.cs), [renderer](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaRenderer.cs), [render state](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaRenderState.cs), production project references | Box remains independently depth-tested at Opaque order 0.51. Existing camera-relative matrix, native wireframe shader, reusable line meshes, native OpenTK state snapshots and deferred failure retirement are precedents. No existing Gizmo, picking-ray or Mat4d.Invert implementation was found in production C# by the qualification search. |
 | Native projection, targeting, input and render qualification | Installed assemblies and API sources catalogued below | Concrete facilities and ordering were inspected directly. Numerical and lifecycle decisions below turn these into testable consumer contracts without claiming future native integration has run. |
 
-The architecture's historical BuildModeRuler.todo link is absent in this checkout. It is not a controlling dependency for this new phase: the current proposal explicitly supersedes the interaction and requires fresh live evidence. Do not recover old acceptance claims from that missing link or treat the old waiver as proof.
+The architecture's historical BuildModeWorkArea.todo link is absent in this checkout. It is not a controlling dependency for this new phase: the current proposal explicitly supersedes the interaction and requires fresh live evidence. Do not recover old acceptance claims from that missing link or treat the old waiver as proof.
 
 #### Native source/version catalogue
 
@@ -142,27 +148,27 @@ Later verification must assert projection/unprojection agreement at edges/center
 
 #### Reusable instance/value/manager contract
 
-- Gizmo : IDisposable owns identity, visible/enabled state, hover/captured handle, render/hit hooks and begin/update/complete/cancel lifecycle. One client-session manager owns membership, deterministic arbitration and exclusive capture; session adapters alone subscribe/register native events/render stages. No ruler, grid, placement, config or entity dependencies in the base.
-- Base handle IDs are opaque and priorities are supplied by each gizmo; only PositionGizmo defines Center, X, Y, Z. Use stable manager insertion IDs for ties. Reject hidden/disabled/disposed/failed/wrong-dimension/behind-camera targets before arbitration. Within a positioning instance prefer a hit center over its arrow roots; otherwise choose minimum positive visual-ray hit distance, then Center/X/Y/Z order for exact ties. Across instances sort candidates by floor(hit distance / 1e-6), then insertion ID, yielding a transitive deterministic depth key rather than a pairwise epsilon comparator. Do not change candidate midcapture or add ruler selection controls.
+- Gizmo : IDisposable owns identity, visible/enabled state, hover/captured handle, render/hit hooks and begin/update/complete/cancel lifecycle. One client-session manager owns membership, deterministic arbitration and exclusive capture; session adapters alone subscribe/register native events/render stages. No work area, grid, placement, config or entity dependencies in the base.
+- Base handle IDs are opaque and priorities are supplied by each gizmo; only PositionGizmo defines Center, X, Y, Z. Use stable manager insertion IDs for ties. Reject hidden/disabled/disposed/failed/wrong-dimension/behind-camera targets before arbitration. Within a positioning instance prefer a hit center over its arrow roots; otherwise choose minimum positive visual-ray hit distance, then Center/X/Y/Z order for exact ties. Across instances sort candidates by floor(hit distance / 1e-6), then insertion ID, yielding a transitive deterministic depth key rather than a pairwise epsilon comparator. Do not change candidate midcapture or add work area selection controls.
 - Gizmo<TValue> accepts an initial value and exposes Value plus Action<TValue> OnValueChanged. EqualityComparer<TValue>.Default compares before storing; store before invoking the event. Differing owner assignments and user updates both notify synchronously once; identical snapped values and identical owner echoes do not. No SetValue, silent update path or notification for internal mutation of an unchanged reference. Use immutable values for positioning.
 - Begin records the generic baseline before owner begin notification. Every accepted drag update uses Value. Complete ends capture and issues one completion notification (no extra equal-value event); the owner decides changed commit versus dirty retry. Cancel restores Value first if changed, then issues cancellation, never completion. Release the manager's capture and ensure one terminal notification even when an owner removes/disposes the instance during notification.
-- The ruler binding handles ordinary Value echoes as no-ops. For a genuinely different external authoritative replacement during capture: cancel/restore the original transaction first, then assign through Value and synchronize the controller outside preview handling. A cancellation must never restore over the incoming value. Preview value events are not config-save events.
+- The work area binding handles ordinary Value echoes as no-ops. For a genuinely different external authoritative replacement during capture: cancel/restore the original transaction first, then assign through Value and synchronize the controller outside preview handling. A cancellation must never restore over the incoming value. Preview value events are not config-save events.
 - Disposal is idempotent and cancels/restores before detaching membership/subscriptions/resources; queued work checks session identity and disposal. Invalid targets/geometry are rejected with reasoned feedback and last valid value; invalid owner arguments are explicit contract errors, not success-shaped defaults. Native input/render failure is logged/notified, cancels and disables affected hit targets without disabling size/config functionality.
 
 #### Position, snapping and axis numerical contract
 
-- GizmoPosition is an immutable value of double X/Y/Z plus int Dimension, with exact component equality and finite coordinates. No implicit block snapping. Ruler conversion uses offsets Start=(0,0,0), End=(1,1,1) without role swapping. Do arithmetic in double/wide integer before any checked int conversion; validate decoded cells with RulerEndpoint.IsValid (local Y in [0,32768), nonnegative encodable dimension and accessor.IsValidPos).
+- GizmoPosition is an immutable value of double X/Y/Z plus int Dimension, with exact component equality and finite coordinates. No implicit block snapping. Work area conversion uses offsets Start=(0,0,0), End=(1,1,1) without role swapping. Do arithmetic in double/wide integer before any checked int conversion; validate decoded cells with WorkAreaEndpoint.IsValid (local Y in [0,32768), nonnegative encodable dimension and accessor.IsValidPos).
 - For an axis, choose a fixed axis-containing drag plane at begin. Let p0 be baseline anchor, a its unit axis, d0 the initial normalized visual ray direction; n = normalize(d0 - a*dot(d0,a)). Reject begin if its squared pre-normalization length <= 1e-4. Keep p0/a/n fixed until terminal interaction.
 - Intersect each current ray o+t*d with that plane: t=dot(p0-o,n)/dot(d,n). Reject abs(dot(d,n)) <= 1e-2, t < 0, nonfinite results, or t > 10000*max(1,initial camera-to-anchor distance). Let s=dot(o+t*d-p0,a); preserve grab offset by using displacement s-s0, not absolute s. Hold the other two components exactly at p0.
 - As an additional huge-jump guard, reject an axis update differing from the last accepted axis coordinate by more than max(64,8*initial camera-to-anchor distance) blocks. Keep the last accepted value and surface a degeneration/invalid-update notice rather than clamping or silently switching axes/planes. These are explicit initial safety thresholds for Phase 3 boundary tests; tune only with recorded numerical/live evidence, not by removing finite/jump guards.
-- Generic motion publishes the accepted continuous anchor. The ruler rounds displacement to whole blocks with MidpointRounding.AwayFromZero before adding it to the baseline axis coordinate; never truncate absolute negative coordinates. Examples: +/-0.49 -> 0; +0.5 -> +1; -0.5 -> -1. Reject invalid decoded cells/dimension changes before publishing; center resolution takes the actual selected cell and reapplies that role's offset with no plane fallback.
-- At begin snapshot both ruler endpoints. Valid value events update the selected endpoint/size/box live and preserve the other. Completion keeps the final preview and issues one changed commit; cancellation restores the pair with no preview save. A no-op explicit completion can retry an earlier dirty commit. Departure cancels a preview before persistence.Dispose can read controller state; existing unreadable/unsupported-document protection and per-world schema stay intact.
+- Generic motion publishes the accepted continuous anchor. The work area rounds displacement to whole blocks with MidpointRounding.AwayFromZero before adding it to the baseline axis coordinate; never truncate absolute negative coordinates. Examples: +/-0.49 -> 0; +0.5 -> +1; -0.5 -> -1. Reject invalid decoded cells/dimension changes before publishing; center resolution takes the actual selected cell and reapplies that role's offset with no plane fallback.
+- At begin snapshot both work area endpoints. Valid value events update the selected endpoint/size/box live and preserve the other. Completion keeps the final preview and issues one changed commit; cancellation restores the pair with no preview save. A no-op explicit completion can retry an earlier dirty commit. Departure cancels a preview before persistence.Dispose can read controller state; existing unreadable/unsupported-document protection and per-world schema stay intact.
 
 #### Creation, rendering and provisional visual contract
 
-- Show ruler on with neither endpoint arms creation only while mode/alive/session eligibility holds. With a same-dimension partial ruler, offer the missing-endpoint creation gesture under the same visibility/eligibility conditions. Hit an existing eligible handle first; only a miss goes to pending creation. That preserves the existing partial handle's editability. An ordinary miss without pending creation passes through.
-- One valid fresh left creation press creates both empty endpoints on that cell, or only the missing endpoint of a partial ruler; commit once and own the full gesture without a simultaneous drag. Invalid block/entity/sky/missing targets consume the attempted creation gesture, notify and stay pending for a fresh press.
-- Right/Escape explicitly cancel pending creation until the next off/on Show ruler request or explicit build-mode re-enable. Hiding, mode/death/focus/dialog/cursor/dimension/session loss retires it; absent an explicit cancellation latch, a remaining empty/partial state may be offered again on the next eligible context, never while a mouse button is already held. A retained endpoint in another dimension prevents creation/automatic relocation there; preserve size/state, hide handles and use a dimension-mismatch notice. No new key, button or selection state.
+- Show work area on with neither endpoint arms creation only while mode/alive/session eligibility holds. With a same-dimension partial work area, offer the missing-endpoint creation gesture under the same visibility/eligibility conditions. Hit an existing eligible handle first; only a miss goes to pending creation. That preserves the existing partial handle's editability. An ordinary miss without pending creation passes through.
+- One valid fresh left creation press creates both empty endpoints on that cell, or only the missing endpoint of a partial work area; commit once and own the full gesture without a simultaneous drag. Invalid block/entity/sky/missing targets consume the attempted creation gesture, notify and stay pending for a fresh press.
+- Right/Escape explicitly cancel pending creation until the next off/on Show work area request or explicit build-mode re-enable. Hiding, mode/death/focus/dialog/cursor/dimension/session loss retires it; absent an explicit cancellation latch, a remaining empty/partial state may be offered again on the next eligible context, never while a mouse button is already held. A retained endpoint in another dimension prevents creation/automatic relocation there; preserve size/state, hide handles and use a dimension-mismatch notice. No new key, button or selection state.
 - Keep box rendering at its existing Opaque 0.51 stage. Use one session gizmo render adapter registered at Opaque and AfterBlit, order 0.49, unregistered from both identically. Opaque refreshes the perspective context/drag preview before the box draw; AfterBlit draws overlay geometry on the default framebuffer before Ortho UI, with depth test/write off, saved matrices and opaque colors (no blend-state mutation). An eligible pending-creation session also needs these context updates with zero instances: publish the valid context without uploading/drawing a handle or inventing a hit target. Handles remain pickable through terrain but not through explicit GUI ownership.
 - Reuse unit line-arrow meshes/native Wireframe shader and line-state snapshot discipline; propose a 16-segment Start circle and End diamond plus RGB arrows, with enlarged geometry/line emphasis for hover/active cues. Share meshes, transform per instance; no per-frame upload/readback/entity/tessellation. Balanced shader/depth/line restoration applies on failure; if blending is ever changed, extend snapshot/restore first.
 - Initial visual targets in window pixels: arrow length 64, center radius 7, arrow-head length 12, pick padding 4; scale these once by GUI scale. Determine world scale from the captured projection's pixels-per-world-unit and clamp axis length to [0.125,8] blocks. Hit geometry uses the resulting actually rendered dimensions plus the pixel padding, not the unclamped requested size. Reject anchors with clip W <= 1e-12 or outside the near/far clip interval; overlay means terrain-independent, not behind-camera picking.
@@ -173,12 +179,12 @@ Phase 1 evidence boundary: the source-backed native paths and deterministic cont
 ## Phase 2: Implement reusable gizmo value and lifecycle foundations
 
 Prerequisites: Phase 1 contracts.
-Outcome: A test gizmo can publish values and participate in manager arbitration without ruler or global gameplay dependencies.
+Outcome: A test gizmo can publish values and participate in manager arbitration without work area or global gameplay dependencies.
 
     ✔ Add abstract Gizmo : IDisposable with the proposal's shared instance responsibilities.
         ✔ Encapsulate identity, visible/enabled state, hovered/captured handle and lifecycle notifications.
         ✔ Expose rendering/hit-testing and interaction hooks through shared camera/world context; add an interface only for a demonstrated consumer need.
-        ✔ Keep ruler cells, grid policy, brush placement and config side effects out of the base.
+        ✔ Keep work area cells, grid policy, brush placement and config side effects out of the base.
     ✔ Add Gizmo<TValue> with initial value, public Value getter/setter and OnValueChanged.
         ✔ Compare before storing/notifying; changed owner and manipulation assignments use the same event path.
         ✔ Suppress equal assignments, snapped duplicates and identical callback echoes; do not add SetValue or a silent synchronization escape hatch.
@@ -192,30 +198,30 @@ Outcome: A test gizmo can publish values and participate in manager arbitration 
         ✔ Keep global input/render event registration in adapters/session composition, not per-instance or per-frame registration.
     ✔ Add focused base/typed/manager tests using a minimal test gizmo.
         ✔ Assert event values/count/order for owner edits, manipulation, equal echoes, cancellation and external replacement.
-        ✔ Assert deterministic hit/capture ownership and disposal without ruler/config/world mutations.
+        ✔ Assert deterministic hit/capture ownership and disposal without work area/config/world mutations.
 
 Completion criteria:
 
-    ✔ Typed property events and lifecycle/manager behavior pass focused tests without ruler-specific dependencies.
-    ✔ No new global gameplay adapter is active yet; the existing ruler is not partially replaced.
+    ✔ Typed property events and lifecycle/manager behavior pass focused tests without workarea-specific dependencies.
+    ✔ No new global gameplay adapter is active yet; the existing work area is not partially replaced.
 
 ### Phase 2 implementation traceability
 
 All groups inherit the complete proposal and Phase 1 reusable instance/value/manager
-contract. Native input, projection/positioning geometry, ruler transactions and cutover
-remain in their assigned later phases; the existing ruler is unchanged.
+contract. Native input, projection/positioning geometry, work area transactions and cutover
+remain in their assigned later phases; the existing work area is unchanged.
 
 | Phase 2 task group | Controlling requirements | Implementation and evidence |
 | --- | --- | --- |
 | Base and shared context | Proposal: Non-generic Gizmo; visibility/rendering/lifecycle. Phase 1: reusable contract. | [Gizmo](../VanillaBuildingExpanded/src/Gizmos/Gizmo.cs) has identity, eligibility, opaque handles and lifecycle/render/hit hooks. [Context carriers](../VanillaBuildingExpanded/src/Gizmos/GizmoContext.cs) provide shared frame identity/dimension and validated double visual rays. Projection data and positioning shapes are Phase 3 work. |
 | Typed events and transactions | Proposal: Generic Gizmo<TValue>; Phase 1 setter/baseline/external replacement ordering. | The same Value setter handles owner updates, previews and rollback with default equality. [Base/typed tests](../VanillaBuildingExpanded.Tests/Gizmos/GizmoTests.cs) assert synchronous values/count/order, equal echoes, no-op/changed rollback, cancel-before-replacement and reentrant removal/disposal. Immutable-value expectations are documented in the API and [architecture](./BuildBrushArchitecture.md). |
-| Manager and ownership | Proposal: Activation/capture and visibility/lifecycle; Phase 1 priority/depth/insertion contract. | [Manager](../VanillaBuildingExpanded/src/Gizmos/GizmoManager.cs) owns membership and exclusive capture, prioritizes instance-provided handles and quantized depth/insertion across instances, and requires successful rendering in the matching frame. [Manager tests](../VanillaBuildingExpanded.Tests/Gizmos/GizmoManagerTests.cs) cover eligibility, arbitration, removal, dimension/context loss, render failure and teardown; base tests repeat 100 complete/cancel cycles. No native registrations or ruler/config dependencies are introduced. |
+| Manager and ownership | Proposal: Activation/capture and visibility/lifecycle; Phase 1 priority/depth/insertion contract. | [Manager](../VanillaBuildingExpanded/src/Gizmos/GizmoManager.cs) owns membership and exclusive capture, prioritizes instance-provided handles and quantized depth/insertion across instances, and requires successful rendering in the matching frame. [Manager tests](../VanillaBuildingExpanded.Tests/Gizmos/GizmoManagerTests.cs) cover eligibility, arbitration, removal, dimension/context loss, render failure and teardown; base tests repeat 100 complete/cancel cycles. No native registrations or work area/config dependencies are introduced. |
 
 Verification/review evidence (2026-10-26): direct second review completed. The independent
 audit found reentrant capture acquisition during hit arbitration; acquisition and hover
 arbitration now hold a nesting-safe transition guard across callbacks and revalidate
 membership/eligibility before capture. Exact nested-hit and terminal-callback regressions
-were added and directly reviewed. Final subagent verification: 204 Gizmos/Ruler tests
+were added and directly reviewed. Final subagent verification: 204 Gizmos/Work area tests
 passed (0 failed/skipped), normal build/ValidateJson passed, git diff --check passed.
 Independent affected-requirements recheck confirmed the finding resolved and all Phase 2
 gates satisfied, retaining the full audit's still-valid findings. Phase 2 markers were
@@ -234,7 +240,7 @@ Outcome: PositionGizmo can render and mathematically manipulate a position under
 
     ✔ Implement PositionGizmo : Gizmo<GizmoPosition> with immutable double coordinates and explicit dimension.
         ✔ Support a center icon and X/Y/Z shafts/heads; show hover/active state without relying on color alone.
-        ✔ Keep generic values continuous; supply ruler-specific grid/validation and block target behavior through the qualified integration seam.
+        ✔ Keep generic values continuous; supply workarea-specific grid/validation and block target behavior through the qualified integration seam.
     ✔ Implement camera/ray projection and handle hit shapes using Phase 1 contracts.
         ✔ Match visible center/arrow targets with pixel-aware hit tolerances and bounded screen/world sizing.
         ✔ Cover free-cursor positions, reticle rays, viewport/aspect/GUI-scale changes and deterministic overlapping/projected hits.
@@ -258,19 +264,19 @@ Outcome: PositionGizmo can render and mathematically manipulate a position under
 Completion criteria:
 
     ✔ Positioning math and drawing contracts are verified under synthetic camera/world-target inputs.
-    ✔ The type is reusable without ruler state; native visual appearance remains a later live check.
+    ✔ The type is reusable without work area state; native visual appearance remains a later live check.
 
 ### Phase 3 implementation traceability
 
 All task groups inherit the complete proposal and Phase 1 pointer, reusable, numerical
 and visual contracts. Phase 2 API contracts remain in force; coordinates/math use built-in
-Vector256<double>. Existing ruler interaction/composition remains active and unchanged.
+Vector256<double>. Existing work area interaction/composition remains active and unchanged.
 
 | Phase 3 task group | Controlling sources/requirements | Implementation and evidence |
 | --- | --- | --- |
-| Position and motion | Proposal PositionGizmo, Axis/Center handles, verification; Phase 1 numerical/value contracts | [PositionGizmo](../VanillaBuildingExpanded/src/Gizmos/PositionGizmo.cs) provides immutable SIMD-double position/dimension, fixed-plane axis/grab-offset math, nullable center resolver and pre-publish constraint hook. [Position tests](../VanillaBuildingExpanded.Tests/Gizmos/PositionGizmoTests.cs) cover component preservation, continuous/negative/large values, supplied snapping/rejection, notices, callback cancellation and threshold boundaries. Native block selection and actual ruler grid policy remain Phases 4-6. |
+| Position and motion | Proposal PositionGizmo, Axis/Center handles, verification; Phase 1 numerical/value contracts | [PositionGizmo](../VanillaBuildingExpanded/src/Gizmos/PositionGizmo.cs) provides immutable SIMD-double position/dimension, fixed-plane axis/grab-offset math, nullable center resolver and pre-publish constraint hook. [Position tests](../VanillaBuildingExpanded.Tests/Gizmos/PositionGizmoTests.cs) cover component preservation, continuous/negative/large values, supplied snapping/rejection, notices, callback cancellation and threshold boundaries. Native block selection and actual work area grid policy remain Phases 4-6. |
 | Projection and hit/draw geometry | Proposal Activation/capture and visibility; Phase 1 pointer/size/arbitration contracts | [Camera](../VanillaBuildingExpanded/src/Gizmos/GizmoCamera.cs) copies guarded native matrices and derives pointer-collinear near/far rays with explicit local-Y reference conversion. [Geometry](../VanillaBuildingExpanded/src/Gizmos/PositionGizmoGeometry.cs) shares arrow/circle/diamond shapes with native uploads, clamps actual axis size and applies pixel padding to the drawn size. A part crossing the clip interval is omitted from both drawing and hits. [Camera/geometry tests](../VanillaBuildingExpanded.Tests/Gizmos/GizmoCameraTests.cs) exercise cursor/reticle, odd/portrait/wide viewports, GUI scales, third-person offsets, clip boundaries, overlap and hidden targets. |
-| Shared rendering and cleanup | Proposal Rendering/lifecycle; Phase 1 stages/state/deferred membership contracts; existing RulerRenderer/RulerRenderState precedent | [Render adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs) owns the explicit two-stage registration and shared native meshes, publishes context even with zero instances, and exposes only successfully drawn contexts to new captures. [Shared native line state](../VanillaBuildingExpanded/src/Rendering/LineRenderState.cs) preserves the old ruler behavior without copying its GL snapshots. [Render tests](../VanillaBuildingExpanded.Tests/Gizmos/GizmoRenderAdapterTests.cs) assert shapes, transforms, native shader/depth/blend/line behavior, reuse, failure rollback/notification and deferred retirement/disposal. No production input/render registration is introduced. |
+| Shared rendering and cleanup | Proposal Rendering/lifecycle; Phase 1 stages/state/deferred membership contracts; existing WorkAreaRenderer/WorkAreaRenderState precedent | [Render adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs) owns the explicit two-stage registration and shared native meshes, publishes context even with zero instances, and exposes only successfully drawn contexts to new captures. [Shared native line state](../VanillaBuildingExpanded/src/Rendering/LineRenderState.cs) preserves the old work area behavior without copying its GL snapshots. [Render tests](../VanillaBuildingExpanded.Tests/Gizmos/GizmoRenderAdapterTests.cs) assert shapes, transforms, native shader/depth/blend/line behavior, reuse, failure rollback/notification and deferred retirement/disposal. No production input/render registration is introduced. |
 
 Verification/review evidence (2026-10-26): direct second review completed. Independent
 audit found a dimension-boundary evidence gap; added native camera-capture tests using
@@ -280,7 +286,7 @@ conversion, explicit dimension preservation, pointer projection/unprojection/far
 center hit ownership and exact camera-relative model-view translation. Ray hit probing
 uses an interior point on the same visual segment to avoid near-plane roundoff at large
 coordinates. These affected changes were directly reviewed. Final subagent verification:
-258 Gizmos/Ruler tests passed (0 failed/skipped), normal Build/ValidateJson and
+258 Gizmos/Work area tests passed (0 failed/skipped), normal Build/ValidateJson and
 git diff --check passed. Independent affected-requirements recheck confirmed the gap
 resolved and all Phase 3 gates satisfied, retaining the full audit's valid findings.
 Phase 3 markers were checked only after that verdict; later phases remain unchecked.
@@ -435,7 +441,7 @@ Direct second review completed, including the expanded intersection/dimension/fa
 render probes. Fresh independent read-only completion audit inspected the controlling
 sources and current implementation, reused applicable verification and found the phase
 fully satisfied with no required findings. Phase 3.1 is complete; later phases unchanged.
-Post-removal verification: 258 remaining Gizmos/Ruler tests passed, zero failed/skipped;
+Post-removal verification: 258 remaining Gizmos/Work area tests passed, zero failed/skipped;
 no float-evaluation source references remain and git diff --check passed.
 
 ## Phase 4: Implement native input capture for both pointer modes
@@ -465,13 +471,13 @@ Outcome: The manager can receive native-adapter gestures safely in a test compos
 Completion criteria:
 
     ☑ Both pointer modes and complete gesture retirement pass focused adapter/manager tests.
-    ☑ Adapter activation in normal gameplay remains gated on Phase 6 cutover; old/new ruler adapters never compete.
+    ☑ Adapter activation in normal gameplay remains gated on Phase 6 cutover; old/new work area adapters never compete.
 
 ### Phase 4 implementation and evidence
 
 Controlling sources: complete proposal, especially input/dragging, visibility/lifecycle
 and verification; Phase 1 native input ownership/pointer/creation contracts above;
-the linked RulerInput, BuildBrushSystem_Client, BuildModeHud and architecture context.
+the linked WorkAreaInput, BuildBrushSystem_Client, BuildModeHud and architecture context.
 Native event/focus ordering remains the installed 1.22.7 source qualification recorded
 in Phase 1, not a new live compatibility claim.
 
@@ -505,8 +511,8 @@ Traceability:
 - Pending-creation seam -> Phase 1 handle-before-creation policy ->
   IGizmoCreationInput receives only a miss from a fresh owned press, including sessions
   with no instances; cancellation distinguishes explicit Right/Escape from context
-  retirement so the future owner can preserve its rearming policy. Actual terrain resolution, ruler creation and durable transactions
-  remain Phases 5/6; the adapter owns cancellation and suppression, not ruler state.
+  retirement so the future owner can preserve its rearming policy. Actual terrain resolution, work area creation and durable transactions
+  remain Phases 5/6; the adapter owns cancellation and suppression, not work area state.
 
 Focused evidence: GizmoInputAdapterTests uses the actual manager, PositionGizmo and
 two-stage renderer with native ClientPlayer/EntityPlayer carriers and API service doubles.
@@ -517,7 +523,7 @@ cycles per pointer mode. BuildModeHudControlsTests adds actual composed control/
 native-HUD routing and stale-hover/recomposition checks. Downstream mining/attack/use/
 placement/packet gates are modeled, not a live engine or multiplayer execution proof.
 Verification subagent: 390 focused tests passed, zero failed/skipped, using Release
-and filter Gizmos|Ruler|BuildModeHudControlsTests|TableInputTests. Normal
+and filter Gizmos|Work area|BuildModeHudControlsTests|TableInputTests. Normal
 .\build.ps1 --target=Build passed (including ValidateJson), and git diff --check
 passed. Existing nullable warnings and CakeBuild Pkcs 10.0.12 advisories remain.
 Direct second review covered the implementation, tests and inherited contracts;
@@ -526,17 +532,17 @@ instantiation. Fresh independent read-only completion audit inspected controllin
 implementation and evidence and found Phase 4 fully satisfied, with no unresolved required
 findings. Phase 4 is complete; later phases and their live-game gates remain unchanged.
 
-## Phase 5: Add ruler endpoint transactions and persistence boundaries
+## Phase 5: Add work area endpoint transactions and persistence boundaries
 
 Prerequisites: Phase 1 endpoint/transaction contracts and Phase 2 value/lifecycle contracts.
-Outcome: Ruler endpoints can preview, commit and roll back direct edits without saving previews or losing previous dirty edits.
+Outcome: Work area endpoints can preview, commit and roll back direct edits without saving previews or losing previous dirty edits.
 
-    ☑ Extend the ruler controller with direct endpoint editing and explicit begin/preview/complete/cancel operations.
+    ☑ Extend the work area controller with direct endpoint editing and explicit begin/preview/complete/cancel operations.
         ☑ Snapshot the endpoint pair at begin; update only the selected endpoint during valid previews.
         ☑ Preserve selected Start/End identity and inclusive sizes when crossing/reversing endpoints.
         ☑ Cancel restores the baseline and presentation without a successful commit; reject invalid cells/dimensions before mutation.
         ☑ Handle external authoritative replacement by canceling first, then applying the replacement without stale rollback.
-    ☑ Implement and test ruler cell/anchor conversion.
+    ☑ Implement and test work area cell/anchor conversion.
         ☑ Map Start to cell + (0, 0, 0) and End to cell + (1, 1, 1); decode by subtracting the role offset.
         ☑ Map center-drag block targets directly to endpoint cells; snap axis movement in whole-block deltas from the initial anchor.
         ☑ Validate decoded cells, not anchors interpreted as encoded BlockPos; cover negative coordinates, extreme values and End anchors at local-Y boundaries.
@@ -558,14 +564,14 @@ Completion criteria:
 
 ### Phase 5 implementation and evidence
 
-Controlling sources: proposal ruler integration/edit transactions, confirmed corner
+Controlling sources: proposal work area integration/edit transactions, confirmed corner
 offsets and verification; Phase 1 position/snapping and transaction contracts;
-Phase 2 notifying-value/cancel ordering; linked RulerState, RulerController,
-RulerPersistence, BuildBrushSystem_Client and BuildBrushArchitecture integration context.
+Phase 2 notifying-value/cancel ordering; linked WorkAreaState, WorkAreaController,
+WorkAreaPersistence, BuildBrushSystem_Client and BuildBrushArchitecture integration context.
 Native config/staging/error behavior and schema remain the existing implementation.
 
 Traceability:
-- Direct editing/transactions -> proposal transaction contract -> RulerController exposes
+- Direct editing/transactions -> proposal transaction contract -> WorkAreaController exposes
   BeginEndpointEdit, PreviewEndpoint, CompleteEndpointEdit, CancelEndpointEdit and
   validated TrySetEndpoint/TrySetEndpoints. Begin snapshots both endpoints; previews
   validate cells/dimension and replace only the chosen role. Cancellation restores
@@ -575,7 +581,7 @@ Traceability:
   Complete signals one explicit commit request, including unchanged completions so
   persistence can retry dirty state; unchanged clean requests perform no writes.
 - Anchor/grid policy -> proposal role offsets and Phase 1 double arithmetic ->
-  RulerGizmoCoordinates uses built-in Vector256<double>, explicit dimensions, double
+  WorkAreaGizmoCoordinates uses built-in Vector256<double>, explicit dimensions, double
   +/- role offsets and checked integral cell conversion. Constrain rounds only the
   selected axis delta AwayFromZero from the initial anchor and validates decoded cells.
   Center targets map cell -> role anchor -> cell without face-adjacent offsets.
@@ -583,7 +589,7 @@ Traceability:
 - Persistence -> proposal durable boundary and orderly departure -> CommittedEndpoints
   exposes the transaction baseline while State exposes live previews. Both commit
   dirty comparison and explicit TrySave use committed endpoints; preview value events
-  do not save. RulerPersistence.Dispose cancels before retry; client departure also
+  do not save. WorkAreaPersistence.Dispose cancels before retry; client departure also
   cancels before retiring session context/rendering. Existing native-config staging,
   merge/world keys, schema version, partial endpoints and error notices are retained.
 - Old consumers/feedback -> proposal staged cutover -> existing one-shot picker remains
@@ -591,16 +597,16 @@ Traceability:
   cross-dimension behavior remain unchanged. New invalid endpoint notices are localized
   and routed through the existing client notifier. No gizmo activation/UI cutover occurs.
 
-Focused evidence: RulerTransactionTests covers role crossing, partial/begin eligibility,
+Focused evidence: WorkAreaTransactionTests covers role crossing, partial/begin eligibility,
 invalid cells, cancellation/external replacement, context/legacy cancellation, exact
 signed/extreme anchor round trips including dimension65535/localY32767 and axis thresholds.
-RulerPersistenceTests routes actual PositionGizmo value events through conversion and
+WorkAreaPersistenceTests routes actual PositionGizmo value events through conversion and
 controller previews to the existing native-config adapter: 100 previews produce no
 writes, one completion writes once and cancellation writes nothing. Further cases
 cover dirty manual saves during previews, failed completion/no-op retries, partial
 dirty departure/restart, extreme-cell fidelity, and actual client departure ordering.
 Verification subagent: 379 focused Release tests passed, zero failed/skipped
-(filter Ruler|Gizmos|BuildModeHudControlsTests); normal .\build.ps1 --target=Build
+(filter Work area|Gizmos|BuildModeHudControlsTests); normal .\build.ps1 --target=Build
 passed including ValidateJson, and git diff --check passed. Existing nullable/analyzer
 warnings and CakeBuild Pkcs 10.0.12 advisories remain unrelated.
 Direct second review covered controller/conversion/persistence/teardown changes,
@@ -610,30 +616,30 @@ or writes an already-saved pair redundantly. Fresh independent read-only complet
 audit inspected the controlling sources, implementation and evidence and found Phase 5
 fully satisfied with no unresolved required findings. Later phases and live gates remain unchanged.
 
-## Phase 6: Replace ruler picking and panel buttons with session-owned gizmos
+## Phase 6: Replace work area picking and panel buttons with session-owned gizmos
 
 Prerequisites: Phases 2-5, with Phase 1 qualification gates satisfied.
 Outcome: The complete replacement is wired locally through one input/renderer/session ownership path.
 
-    ☑ Bind the client ruler session to one positioning gizmo per existing endpoint, including partial rulers.
+    ☑ Bind the client work area session to one positioning gizmo per existing endpoint, including partial work areas.
         ☑ Synchronize via Value and OnValueChanged with equality/echo handling; distinguish owner sync from transaction previews without silent setters.
         ☑ Connect begin/preview/complete/cancel to the verified controller transactions, not the old picking state machine.
         ☑ Display both endpoint markers/arrows with distinguishable icons and role offsets; add no selection/cycle UI.
-        ☑ Keep the box dependent on two valid endpoints, while a partial ruler still has its existing handle.
+        ☑ Keep the box dependent on two valid endpoints, while a partial work area still has its existing handle.
     ☑ Implement first-use and missing-endpoint creation.
-        ☑ Checking Show ruler with no endpoints requests one explicit world click, valid through either pointer mode to rendered terrain up to the camera far plane without a player-reach cap; use the same range for missing-endpoint creation.
+        ☑ Checking Show work area with no endpoints requests one explicit world click, valid through either pointer mode to rendered terrain up to the camera far plane without a player-reach cap; use the same range for missing-endpoint creation.
         ☑ Create both endpoints on that cell, showing Start at offset zero and End at offset one; consume the whole gesture without also beginning a drag.
-        ☑ Invalid targets retain pending creation with feedback; restored partial rulers preserve the existing endpoint and create only the missing one.
+        ☑ Invalid targets retain pending creation with feedback; restored partial work areas preserve the existing endpoint and create only the missing one.
         ☑ Apply the qualified creation/handle precedence and retire pending creation safely when its context disappears.
         ☑ In another dimension, preserve/hide saved endpoints without automatic overwrite from travel or checkbox toggles; add no relocation workflow.
-    ☑ Switch production input ownership atomically from the old ruler adapter to the manager adapter.
+    ☑ Switch production input ownership atomically from the old work area adapter to the manager adapter.
         ☑ Preserve routing ahead of brush placement; detach the old adapter before registering the new one.
         ☑ Remove obsolete one-shot modes, commands, button adapters and now-unused notices/references after migrating consumers/tests.
         ☑ Retain only genuinely shared gesture/native-focus infrastructure; leave no second capture path or temporary compatibility shim.
-    ☑ Update the Ruler HUD to exactly Show ruler and Size.
+    ☑ Update the Work area HUD to exactly Show work area and Size.
         ☑ Remove Set Start/Set end without adding a replacement edit button or status/action row.
         ☑ Preserve localized size, incomplete dashes, free-cursor checkbox behavior, passive text and Room/Controls behavior.
-        ☑ Show ruler controls both eligible box and handles; hiding cancels active manipulation/creation without saving a preview.
+        ☑ Show work area controls both eligible box and handles; hiding cancels active manipulation/creation without saving a preview.
         ☑ HUD collapse/recomposition/scale/locale changes do not reset world handles or issue duplicate endpoint commands.
     ☑ Complete session/context/resource integration.
         ☑ Preserve mode/alive/world/dimension eligibility, session visibility preference and join defaults; loaded endpoints do not enable mode/visibility.
@@ -650,27 +656,27 @@ Outcome: The complete replacement is wired locally through one input/renderer/se
 Completion criteria:
 
     ☑ Production uses one new interaction route, the two-row panel, and repeatable endpoint manipulation with exact value/save results.
-    ☑ Old ruler picking/button infrastructure is removed; existing endpoint files and unrelated brush/UI behavior remain compatible.
+    ☑ Old work area picking/button infrastructure is removed; existing endpoint files and unrelated brush/UI behavior remain compatible.
 
 ### Phase 6 implementation and evidence
 
-Controlling sources: complete proposal (input/dragging, ruler integration/transactions,
+Controlling sources: complete proposal (input/dragging, work area integration/transactions,
 creation, visibility/lifecycle, panel and verification), inherited Phase 1 native
 qualification/numerical/creation contracts, and Phases 2-5 lifecycle/input/transaction
 contracts. Current controller, state, persistence, HUD/table, box rendering and client
-system links supply integration context. Historical RulerInput was removed at cutover;
+system links supply integration context. Historical WorkAreaInput was removed at cutover;
 its original inspection record does not authorize retaining a compatibility route.
 
 Traceability:
 - Endpoint binding -> proposal typed-value/transaction/corner contracts ->
-  RulerGizmoSession owns one manager and input/render adapters, one PositionGizmo per
+  WorkAreaGizmoSession owns one manager and input/render adapters, one PositionGizmo per
   valid existing endpoint, circle/diamond markers and shared RGB arrows. Value owner
   sync and preview notifications use the same notifying setter with equality/echo
   guards. External replacement/context loss cancels before synchronization; completion
-  alone calls the durable boundary. RulerGizmoCoordinates supplies role offsets/grid
+  alone calls the durable boundary. WorkAreaGizmoCoordinates supplies role offsets/grid
   validation; the independent box binding observes live size/bounds, including crossing.
-- Terrain/creation -> proposal first use/partial ruler and Phase 1 finite-ray/filter
-  qualification -> RulerTerrainTarget supplies both center and creation with fresh native
+- Terrain/creation -> proposal first use/partial work area and Phase 1 finite-ray/filter
+  qualification -> WorkAreaTerrainTarget supplies both center and creation with fresh native
   near/far RayTraceForSelection outputs, meta/interactable/nonself filters, unchanged
   liquid policy, explicit native-Y conversion, loaded-chunk and projected clip checks.
   The public renderMetaBlocks setting reads the same native setting qualified in Phase 1.
@@ -680,9 +686,9 @@ Traceability:
   Invalid attempts notify and remain pending; explicit cancellation latches until
   off/on visibility or mode re-enable; other-dimension endpoints never auto-relocate.
 - Atomic route/panel -> proposal approved cutover -> BuildBrushSystem_Client replaces
-  RulerInput with RulerGizmoSession ahead of TryPlaceBlock. Old modes/commands/button
+  WorkAreaInput with WorkAreaGizmoSession ahead of TryPlaceBlock. Old modes/commands/button
   class/notices and old adapter/tests are removed, with consumers migrated to direct
-  transactions. HUD has exactly Show ruler and localized Size (incomplete dashes).
+  transactions. HUD has exactly Show work area and localized Size (incomplete dashes).
   Existing checkbox release capture, passive text, Room/Controls and rebuild behavior
   remain shared table/HUD responsibilities.
 - Lifecycle/failure -> proposal session ownership and Phase 1 callback contract ->
@@ -692,7 +698,7 @@ Traceability:
   gizmo callbacks, so render-time preview rollback cannot mutate the native live list.
   Recognized failures log/notify and remove hit eligibility without disabling sizes/config.
   Architecture describes the active replacement; proposal links follow the new owner.
-- Composition evidence -> proposal verification -> RulerGizmoSessionTests runs native
+- Composition evidence -> proposal verification -> WorkAreaGizmoSessionTests runs native
   service carriers through actual session/renderer/input/manager/binding/controller:
   repeated Start/End drags in both pointer modes, exact previews/commit counts,
   inclusive live sizes and actual box shader extents/camera-relative translations
@@ -700,7 +706,7 @@ Traceability:
   cancel/retry and contextual retirement, negative/crossing/same-cell/End-Y-boundary
   anchors, deterministic projected overlaps, axis grab-offset snapping, terrain filters,
   unloaded/entity/clip rejection, actual client pre-brush action routing, failures and
-  callback-safe retirement. RulerPersistenceTests routes repeated full-session drags
+  callback-safe retirement. WorkAreaPersistenceTests routes repeated full-session drags
   into native config staging/promotion, proves zero preview writes and final-cell
   fidelity, dirty rollback/exit retry and restart defaults. HUD tests exercise actual
   session priority/rebuild capture preservation plus exact two-row localization/layout.
@@ -710,7 +716,7 @@ ordering, persistence boundaries and cleanup. It found and corrected the tightly
 box live-render-list mutation risk during Opaque gizmo rollback; regression cases cover
 both contextual cancellation and disposal during callbacks.
 Verification subagent rebuilt and ran 394 focused Release tests, all passed with zero
-failed/skipped (filter Ruler|Gizmos|BuildModeHudControlsTests|TableInputTests), explicitly
+failed/skipped (filter Work area|Gizmos|BuildModeHudControlsTests|TableInputTests), explicitly
 including the new callback-retirement and cancel/retry regressions. Normal
 .\build.ps1 --target=Build passed including ValidateJson; git diff --check passed.
 Existing nullable/analyzer warnings and CakeBuild Pkcs 10.0.12 advisories remain
@@ -726,7 +732,7 @@ Phase 6 fully satisfied, no unresolved required findings. No Phase 8 live eviden
 ## Phase 7: Replace terrain-following movement with analytic translation
 
 Prerequisites: Phases 1-6 complete, including the normalized minimum/maximum endpoint decision.
-Controlling sources: [proposal confirmed decisions](InWorldGizmos.proposal.md#confirmed-interaction-decisions), [input and dragging](InWorldGizmos.proposal.md#proposed-input-and-dragging), [transactions](InWorldGizmos.proposal.md#ruler-integration-and-edit-transactions), [creation](InWorldGizmos.proposal.md#first-use-incomplete-rulers-and-relocation), and [verification](InWorldGizmos.proposal.md#verification). [BuildBrushArchitecture](BuildBrushArchitecture.md#client-only-ruler) describes the pre-replacement integration, not permission to retain the old movement path.
+Controlling sources: [proposal confirmed decisions](InWorldGizmos.proposal.md#confirmed-interaction-decisions), [input and dragging](InWorldGizmos.proposal.md#proposed-input-and-dragging), [transactions](InWorldGizmos.proposal.md#work-area-integration-and-edit-transactions), [creation](InWorldGizmos.proposal.md#first-use-incomplete-work-areas-and-relocation), and [verification](InWorldGizmos.proposal.md#verification). [BuildBrushArchitecture](BuildBrushArchitecture.md#client-only-work-area) describes the pre-replacement integration, not permission to retain the old movement path.
 Outcome: Existing endpoint handles move using analytic axis/camera-plane math in both pointer modes, with no terrain-based movement route; explicit creation retains its qualified single-click targeting.
 
     ✔ Define the replacement interaction contract before changing consumers.
@@ -738,12 +744,12 @@ Outcome: Existing endpoint handles move using analytic axis/camera-plane math in
         ✔ Define/test near-parallel, behind-ray, nonfinite and extreme-jump guards for center updates. Reject unusable starts; retain the last valid update and deduplicate repeated feedback during a continuing invalid condition.
     ✔ Implement continuous camera-plane movement in PositionGizmo and remove the old generic contract.
         ✔ Replace the centerTarget constructor/delegate dependency and target lookup with captured plane/intersection state using existing Vector256<double>, camera and ray helpers.
-        ✔ Keep generic positions continuous, dimension-explicit and independent of ruler/block/accessor types. Use the existing owner constraint and notifying Value setter, including unchanged-value suppression.
+        ✔ Keep generic positions continuous, dimension-explicit and independent of work area/block/accessor types. Use the existing owner constraint and notifying Value setter, including unchanged-value suppression.
         ✔ Perform only analytic movement calculations during center/axis updates: no world selection, block/entity raycasts, cached terrain targets, custom destination callbacks or terrain fallback.
         ✔ Preserve capture outside handle silhouettes, visual/hit geometry, overlay drawing, double precision, cancellation and renderer/input failure behavior. Do not reintroduce the rejected float-transform candidate.
-    ✔ Migrate ruler binding and snapping after the generic calculation is available.
-        ✔ Remove the center terrain-target lambda from RulerGizmoSession. Keep any target injection needed by creation strictly on that creation path; rename or narrow targeting helpers/interfaces if their contract still implies handle movement.
-        ✔ Extend RulerGizmoCoordinates.Constrain to round all three world-coordinate center deltas from the original anchor using the existing AwayFromZero policy, then decode/validate the role-specific cell. Retain one-component axis snapping.
+    ✔ Migrate work area binding and snapping after the generic calculation is available.
+        ✔ Remove the center terrain-target lambda from WorkAreaGizmoSession. Keep any target injection needed by creation strictly on that creation path; rename or narrow targeting helpers/interfaces if their contract still implies handle movement.
+        ✔ Extend WorkAreaGizmoCoordinates.Constrain to round all three world-coordinate center deltas from the original anchor using the existing AwayFromZero policy, then decode/validate the role-specific cell. Retain one-component axis snapping.
         ✔ Do not round camera-plane basis parameters or use snapped/normalized previews as a new movement baseline. Accept the small departure from the continuous plane caused by world-grid quantization.
         ✔ Preserve Start offset zero, End offset one, explicit local Y/dimension, negative/large coordinates and End anchors at valid cell boundaries.
         ✔ Preserve crossing/return against the original opposite endpoint, per-axis min/max normalization, canonical notifying handle synchronization without capture loss, live size/box updates and exact begin/preview/commit/cancel persistence semantics.
@@ -751,7 +757,7 @@ Outcome: Existing endpoint handles move using analytic axis/camera-plane math in
     ✔ Remove the superseded movement approach completely after migrating its consumers.
         ✔ Remove obsolete constructor arguments, target fixtures, terrain-following movement tests, drag-only missing-terrain notices/localization and documentation references. Retain feedback still required by explicit creation.
         ✔ Leave no compatibility overload, old center resolver, optional terrain movement mode, miss fallback or second input/capture route. Migrate every production and test caller to the single analytic movement contract.
-        ✔ Retain explicit empty/partial ruler creation, handle-before-creation arbitration, pending/rearm/cancel behavior and whole-gesture ownership. Only the explicit creation attempt may invoke terrain targeting.
+        ✔ Retain explicit empty/partial work area creation, handle-before-creation arbitration, pending/rearm/cancel behavior and whole-gesture ownership. Only the explicit creation attempt may invoke terrain targeting.
         ✔ Preserve creation's finite actual pointer/reticle near-to-far ray, no player-reach cap, loaded-terrain/meta/entity/clip/dimension checks and target-cell semantics without brush offsets. Do not load/generate terrain or make creation run continuously during a hold.
     ✔ Add focused numerical and real-composition regression evidence before claiming cutover complete.
         ✔ Test center press/hold/move/release in both pointer modes, off-center grab offsets, perspective camera orientations, GUI scales/aspect ratios, negative/large coordinates and independent X/Y/Z arrows.
@@ -761,7 +767,7 @@ Outcome: Existing endpoint handles move using analytic axis/camera-plane math in
         ✔ Assert creation still calls its terrain resolver only for explicit fresh creation attempts, never handle presses or captured updates; cover empty/partial/other-dimension and invalid/retry cases.
         ✔ Exercise actual session/renderer/input/manager/controller routing: repeated Start/End moves, normalized crossing/return and final canonical anchors, cancellation, live box matrices/sizes, action suppression and contextual teardown.
         ✔ Verify zero preview config writes, exactly the existing completion/dirty-retry behavior, baseline rollback and persisted cell fidelity after restart-style reload.
-        ✔ Run the smallest combined existing test selections covering changed gizmo/ruler/input/persistence/HUD surfaces and normal build.ps1 --target=Build/ValidateJson. Record exact commands/counts/outcomes and diff-check evidence; do not invoke Default/Package, clean Releases or add validation dependencies.
+        ✔ Run the smallest combined existing test selections covering changed gizmo/work area/input/persistence/HUD surfaces and normal build.ps1 --target=Build/ValidateJson. Record exact commands/counts/outcomes and diff-check evidence; do not invoke Default/Package, clean Releases or add validation dependencies.
     ✔ Reconcile replacement documentation and evidence without claiming future live qualification.
         ✔ Update BuildBrushArchitecture component/input/constraint/targeting sections to describe analytic movement and creation-only terrain targeting once implemented; keep the two-row UI and ownership/render/persistence boundaries unchanged.
         ✔ Reconcile the proposal and obsolete active tests/comments/localization with the new contract. Keep completed phase evidence historical and explicitly superseded, rather than rewriting old results as proof of the new movement.
@@ -780,18 +786,18 @@ Completion criteria:
 Traceability (all Phase 7 tasks inherit the proposal and architecture sources above):
 
 - Interaction contract, continuous math and removal -> proposal Confirmed interaction decisions / Axis handles / Center handle -> PositionGizmo and GizmoCamera: captured inverse-view normal, original anchor and relative initial intersection; unchanged axis plane; denominator <=0.01, finite forward distance <=10000*max(1,initial distance), step <=max(64,8*initial distance), one reasoned notice per uninterrupted invalid interval until recovery. Generic positions remain SIMD doubles; no destination callback or movement selection path.
-- Ruler constraints and transactions -> proposal Ruler integration and edit transactions -> RulerGizmoCoordinates rounds original world-component deltas AwayFromZero (all components for center, one for axes); RulerGizmoSession retains normalized owner synchronization and existing controller/persistence boundaries. Creation target is used only by Create.
+- Work area constraints and transactions -> proposal Work area integration and edit transactions -> WorkAreaGizmoCoordinates rounds original world-component deltas AwayFromZero (all components for center, one for axes); WorkAreaGizmoSession retains normalized owner synchronization and existing controller/persistence boundaries. Creation target is used only by Create.
 - Creation/input/render -> proposal Activation and capture / First use / Visibility, rendering and lifecycle -> existing creation-only terrain adapter, manager/input/render composition and lifecycle remain; test evidence must establish fresh-click-only selection, whole-gesture ownership and actual box presentation.
-- Documentation/cleanup -> proposal Verification and scope boundaries / architecture Client-only ruler -> architecture, proposal integration references and README reconciled; completed Phases 1-6 remain historical. Full-HUD recomposition is deliberately unchanged.
+- Documentation/cleanup -> proposal Verification and scope boundaries / architecture Client-only work area -> architecture, proposal integration references and README reconciled; completed Phases 1-6 remain historical. Full-HUD recomposition is deliberately unchanged.
 
 Pre-cutover live timing: a running game process was detected, but this session has no available live game-control/frame-timing interface or comparable recorded baseline. No live frame timings were captured. Comparable stationary/moving center/axis timings in both pointer modes remain an explicit Phase 8 evidence gap; automated zero-selection counts are not a measured frame-time improvement.
 
 Automated verification (2026-10-27, SDK 10.0.401, installed game/API 1.22.7):
 
-- With VINTAGE_STORY=G:\Vintagestory, delegated `dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj -c Release --filter "FullyQualifiedName~Ruler|FullyQualifiedName~Gizmos|FullyQualifiedName~BuildModeHudControlsTests|FullyQualifiedName~TableInputTests" --verbosity minimal`: 443 passed, 0 failed, 0 skipped. The initial attempt exposed a misplaced test-helper brace; corrected before the successful rebuilt run.
+- With VINTAGE_STORY=G:\Vintagestory, delegated `dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj -c Release --filter "FullyQualifiedName~Work area|FullyQualifiedName~Gizmos|FullyQualifiedName~BuildModeHudControlsTests|FullyQualifiedName~TableInputTests" --verbosity minimal`: 443 passed, 0 failed, 0 skipped. The initial attempt exposed a misplaced test-helper brace; corrected before the successful rebuilt run.
 - Delegated `.\build.ps1 --target=Build`: ValidateJson and normal publish passed. Existing nullable warnings and CakeBuild Pkcs NU1902/NU1903 advisories remain unrelated. No Default/Package target or Releases cleanup.
 - `git --no-pager diff HEAD --check`: passed, including staged and unstaged changes.
-- Numerical tests cover view-normal versus off-center ray orientation, grab offsets, perspectives/scales/aspects, camera movement, owner echoes, distant coordinates, finite/parallel/behind/distance/step boundaries, alternating invalid intervals and recovery. Ruler constraint tests cover all-component AwayFromZero rounding and oblique-plane world-grid thresholds.
+- Numerical tests cover view-normal versus off-center ray orientation, grab offsets, perspectives/scales/aspects, camera movement, owner echoes, distant coordinates, finite/parallel/behind/distance/step boundaries, alternating invalid intervals and recovery. Work area constraint tests cover all-component AwayFromZero rounding and oblique-plane world-grid thresholds.
 - Session composition tests drive actual renderer/input/manager/controller paths in both pointer modes: at least 120 stationary captured frames plus repeated center and every-axis motion, zero selection/entity/block targeting (coordinate validity checks allowed), sky/entity/unloaded scenes, canonical normalized anchors, box matrices/sizes, creation-only fresh attempts and gesture/cancellation/lifecycle behavior.
 - Session persistence tests cover zero preview writes, no-op completion, dirty retry/departure rollback, exact committed cells after reload and large-coordinate/local-Y boundary anchors. Actual live gameplay/restart/frame timing remains unverified.
 
@@ -802,7 +808,7 @@ Second review: directly reviewed production changes, numerical/input/geometry ca
 Prerequisites: Phase 7 complete; supported game access for live checks.
 Outcome: Automated/build/output evidence, documentation and separately recorded live results establish the replacement's actual behavior.
 
-    ☐ Run the smallest combined existing test selections covering changed gizmo, ruler, input, HUD/table, persistence and renderer surfaces.
+    ☐ Run the smallest combined existing test selections covering changed gizmo, work area, input, HUD/table, persistence and renderer surfaces.
         ☐ Use the existing xUnit runner and normal build.ps1 --target=Build; do not invoke Default/Package or clean Releases for this feature.
         ☐ Record commands, game/API/SDK version, counts and outcomes; do not install dependencies speculatively or introduce new validation tooling.
         ☐ Verify normal published assembly/localization assets include the replacement, without inventing a packaging/release workflow.

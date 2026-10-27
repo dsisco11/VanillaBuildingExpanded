@@ -16,12 +16,45 @@ using Xunit;
 
 namespace VanillaBuildingExpanded.Tests.BuildBrush;
 
-[CollectionDefinition("Ruler config files", DisableParallelization = true)]
-public sealed class RulerConfigFileCollection;
+[CollectionDefinition("Work area config files", DisableParallelization = true)]
+public sealed class WorkAreaConfigFileCollection;
 
-[Collection("Ruler config files")]
-public sealed class RulerPersistenceTests
+[Collection("Work area config files")]
+public sealed class WorkAreaPersistenceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PreviousConfigIsIgnoredAndUnchangedWhileWorkAreaStartsFreshAndPersistsIndependently(bool malformed)
+    {
+        using var fixture = new Fixture();
+        const string previousName = "vanillabuildingexpanded-rulers.json";
+        string previousPath = Path.Combine(GamePaths.ModConfig, previousName);
+        string original = malformed ? "not-json" : Config(("world-a",
+            Pair(Endpoint(100, 65, 200), Endpoint(110, 75, 210)))).ToString();
+        File.WriteAllText(previousPath, original);
+        var previousWriteTime = File.GetLastWriteTimeUtc(previousPath);
+        using var persistence = fixture.Open();
+        Assert.Equal("vanillabuildingexpanded-workareas.json", WorkAreaPersistence.ConfigFileName);
+        Assert.Null(fixture.Controller.State.Start);
+        Assert.Null(fixture.Controller.State.End);
+        Assert.Empty(fixture.Errors);
+        Assert.Empty(fixture.Writes);
+        Assert.False(File.Exists(fixture.ConfigPath));
+        Commit(fixture.Controller, true, new BlockPos(-10, 70, -20, 0));
+        Commit(fixture.Controller, false, new BlockPos(-5, 75, -15, 0));
+        persistence.Dispose();
+        Assert.Equal(original, File.ReadAllText(previousPath));
+        Assert.Equal(previousWriteTime, File.GetLastWriteTimeUtc(previousPath));
+        fixture.Api.Verify(api => api.LoadModConfig(previousName), Times.Never);
+        fixture.Api.Verify(api => api.StoreModConfig(It.IsAny<JsonObject>(), previousName), Times.Never);
+        Assert.All(fixture.Writes, name => Assert.StartsWith(WorkAreaPersistence.ConfigFileName + ".", name));
+        var restored = new WorkAreaController();
+        using var reopened = fixture.Open(restored);
+        Assert.Equal(new WorkAreaEndpoint(-10, 70, -20, 0), restored.State.Start);
+        Assert.Equal(new WorkAreaEndpoint(-5, 75, -15, 0), restored.State.End);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -30,41 +63,41 @@ public sealed class RulerPersistenceTests
         using var fixture = new Fixture();
         fixture.Write(Config(("world-a", Pair(Endpoint(-30, 65, -200), Endpoint(30, 75, -200)))));
         using var persistence = fixture.Open();
-        using var h = new RulerGizmoSessionTests.Harness(fixture.Api, fixture.World,
+        using var h = new WorkAreaGizmoSessionTests.Harness(fixture.Api, fixture.World,
             fixture.Accessor, fixture.Controller, grabbed);
         h.Enable();
         Move(4, 2);
         Assert.Empty(fixture.Writes);
-        Assert.Equal(new RulerEndpoint(-26, 67, -200, 0), h.Ruler.State.Start);
-        Assert.Equal(new RulerEndpoint(34, 77, -200, 0), h.Ruler.State.End);
+        Assert.Equal(new WorkAreaEndpoint(-26, 67, -200, 0), h.WorkArea.State.Start);
+        Assert.Equal(new WorkAreaEndpoint(34, 77, -200, 0), h.WorkArea.State.End);
         h.Up();
         Assert.Single(fixture.Writes);
-        var saved = h.Ruler.CommittedEndpoints;
+        var saved = h.WorkArea.CommittedEndpoints;
         Move(-10, -1);
-        Assert.Equal(saved, h.Ruler.CommittedEndpoints);
+        Assert.Equal(saved, h.WorkArea.CommittedEndpoints);
         Assert.Single(fixture.Writes);
         h.Key();
         h.Up();
-        Assert.Equal(saved, h.Ruler.CommittedEndpoints);
+        Assert.Equal(saved, h.WorkArea.CommittedEndpoints);
         Assert.Single(fixture.Writes);
         fixture.FailWrites = true;
         Move(2, 1);
         h.Up();
         Assert.True(persistence.IsDirty);
         Assert.Equal(2, fixture.Writes.Count);
-        var committed = h.Ruler.CommittedEndpoints;
+        var committed = h.WorkArea.CommittedEndpoints;
         Move(-6, -2);
         Assert.Equal(2, fixture.Writes.Count);
         fixture.FailWrites = false;
         h.Key();
         h.Up();
-        Assert.Equal(committed, h.Ruler.CommittedEndpoints);
+        Assert.Equal(committed, h.WorkArea.CommittedEndpoints);
         Assert.True(persistence.IsDirty);
         Move(0, 0);
         h.Up();
         Assert.False(persistence.IsDirty);
         Assert.Equal(3, fixture.Writes.Count);
-        var restored = new RulerController();
+        var restored = new WorkAreaController();
         using var reopened = fixture.Open(restored);
         Assert.Equal(committed, restored.CommittedEndpoints);
         Assert.Equal((61L, 11L, 1L), h.Size);
@@ -92,12 +125,12 @@ public sealed class RulerPersistenceTests
         fixture.Write(Config(("world-a", Pair(Endpoint(30, 60, -10), Endpoint(-20, 80, -40)))));
         using var persistence = fixture.Open();
         var controller = fixture.Controller;
-        Assert.Equal(new RulerEndpoint(-20, 60, -40, 0), controller.State.Start);
-        Assert.Equal(new RulerEndpoint(30, 80, -10, 0), controller.State.End);
+        Assert.Equal(new WorkAreaEndpoint(-20, 60, -40, 0), controller.State.Start);
+        Assert.Equal(new WorkAreaEndpoint(30, 80, -10, 0), controller.State.End);
         Assert.Empty(fixture.Writes);
         Assert.False(persistence.IsDirty);
         controller.SetContext(true, true);
-        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.BeginEndpointEdit(WorkAreaEndpointRole.Start);
         controller.PreviewEndpoint(new(50, 70, -100, 0), fixture.Accessor.Object);
         Assert.Empty(fixture.Writes);
         controller.CompleteEndpointEdit();
@@ -106,7 +139,7 @@ public sealed class RulerPersistenceTests
         Assert.Equal(1, saved["schemaVersion"]!.Value<int>());
         Assert.Equal(30, saved["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
         Assert.Equal(50, saved["worlds"]!["world-a"]!["end"]!["x"]!.Value<int>());
-        var restored = new RulerController();
+        var restored = new WorkAreaController();
         using var reopened = fixture.Open(restored);
         Assert.Equal(controller.State.Start, restored.State.Start);
         Assert.Equal(controller.State.End, restored.State.End);
@@ -120,7 +153,7 @@ public sealed class RulerPersistenceTests
         using var fixture = new Fixture();
         fixture.Write(Config(("world-a", Pair(Endpoint(-30, 65, -200), Endpoint(30, 65, -200)))));
         using var persistence = fixture.Open();
-        using var h = new RulerGizmoSessionTests.Harness(fixture.Api, fixture.World,
+        using var h = new WorkAreaGizmoSessionTests.Harness(fixture.Api, fixture.World,
             fixture.Accessor, fixture.Controller, grabbed);
         h.Enable();
         for (int i = 0; i < 8; i++)
@@ -131,7 +164,7 @@ public sealed class RulerPersistenceTests
             h.Aim(instance.Value.Coordinates);
             Assert.True(h.Down().Handled);
             Assert.Same(instance, h.Session.Manager.CapturedGizmo);
-            var cell = new RulerEndpoint(start ? -60 - i : 60 + i, 65 + i, -200, 0);
+            var cell = new WorkAreaEndpoint(start ? -60 - i : 60 + i, 65 + i, -200, 0);
             for (int preview = 0; preview < 5; preview++)
             {
                 h.MoveCenterTo(cell with { X = cell.X + preview });
@@ -141,12 +174,12 @@ public sealed class RulerPersistenceTests
             Assert.True(h.Up().Handled);
             Assert.Equal(i + 1, fixture.Writes.Count);
             var record = fixture.Read()["worlds"]!["world-a"]![start ? "start" : "end"]!;
-            var committedCell = (start ? h.Ruler.State.Start : h.Ruler.State.End)!.Value;
+            var committedCell = (start ? h.WorkArea.State.Start : h.WorkArea.State.End)!.Value;
             Assert.Equal(committedCell.X, record["x"]!.Value<int>());
             Assert.Equal(committedCell.Y, record["y"]!.Value<int>());
             Assert.Equal(committedCell.Z, record["z"]!.Value<int>());
-            Assert.Equal(h.Ruler.State.Bounds!.Value.MinCell, h.Ruler.State.Start);
-            Assert.Equal(h.Ruler.State.Bounds.Value.MaxCell, h.Ruler.State.End);
+            Assert.Equal(h.WorkArea.State.Bounds!.Value.MinCell, h.WorkArea.State.Start);
+            Assert.Equal(h.WorkArea.State.Bounds.Value.MaxCell, h.WorkArea.State.End);
             h.Frame();
             h.Aim(instance.Value.Coordinates);
             Assert.True(h.Down().Handled);
@@ -163,8 +196,8 @@ public sealed class RulerPersistenceTests
         h.Frame();
         h.Up();
         Assert.True(persistence.IsDirty);
-        var committed = h.Ruler.State.Start;
-        var committedEnd = h.Ruler.State.End;
+        var committed = h.WorkArea.State.Start;
+        var committedEnd = h.WorkArea.State.End;
         Assert.Equal(9, fixture.Writes.Count);
         fixture.FailWrites = false;
         h.Frame();
@@ -174,12 +207,12 @@ public sealed class RulerPersistenceTests
         h.Frame();
         Assert.Equal(9, fixture.Writes.Count);
         h.Events.Raise(e => e.LeaveWorld += null!);
-        Assert.Equal(committed, h.Ruler.State.Start);
+        Assert.Equal(committed, h.WorkArea.State.Start);
         persistence.Dispose();
         Assert.False(persistence.IsDirty);
         Assert.Equal(10, fixture.Writes.Count);
         Assert.Equal(committed!.Value.X, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
-        var restored = new RulerController();
+        var restored = new WorkAreaController();
         using var reopened = fixture.Open(restored);
         Assert.Equal(committed, restored.State.Start);
         Assert.Equal(committedEnd, restored.State.End);
@@ -192,7 +225,7 @@ public sealed class RulerPersistenceTests
             Assert.Equal(cell.Dimension, saved["dimension"]!.Value<int>());
         }
         h.AssertNoTargeting();
-        Assert.False(restored.State.ShowRuler);
+        Assert.False(restored.State.ShowWorkArea);
         Assert.False(restored.State.CanPick);
     }
 
@@ -206,7 +239,7 @@ public sealed class RulerPersistenceTests
             Endpoint(-2000000000, 32767, 2000000000, 65535),
             Endpoint(-1999999980, 32767, 2000000020, 65535)))));
         using var persistence = fixture.Open();
-        using var h = new RulerGizmoSessionTests.Harness(fixture.Api, fixture.World,
+        using var h = new WorkAreaGizmoSessionTests.Harness(fixture.Api, fixture.World,
             fixture.Accessor, fixture.Controller, grabbed);
         h.Player.Entity.Pos.Dimension = 65535;
         h.Reference = Gizmos.PositionGizmoTests.V(-2000000000, 32767, 2000000200);
@@ -216,7 +249,7 @@ public sealed class RulerPersistenceTests
             bool start = drag == 0;
             h.Frame();
             var instance = start ? h.Session.Start! : h.Session.End!;
-            var original = (start ? h.Ruler.State.Start : h.Ruler.State.End)!.Value;
+            var original = (start ? h.WorkArea.State.Start : h.WorkArea.State.End)!.Value;
             h.Aim(instance.Value.Coordinates);
             Assert.True(h.Down().Handled);
             Assert.Same(instance, h.Session.Manager.CapturedGizmo);
@@ -229,14 +262,14 @@ public sealed class RulerPersistenceTests
             h.Up();
             Assert.Equal(drag + 1, fixture.Writes.Count);
         }
-        var committed = h.Ruler.CommittedEndpoints;
+        var committed = h.WorkArea.CommittedEndpoints;
         h.AssertNoTargeting();
-        var restored = new RulerController();
+        var restored = new WorkAreaController();
         using var reopened = fixture.Open(restored);
         Assert.Equal(committed, restored.CommittedEndpoints);
-        Assert.Equal(new RulerEndpoint(-1999999998, 32767, 2000000000, 65535), restored.State.Start);
-        Assert.Equal(new RulerEndpoint(-1999999977, 32767, 2000000020, 65535), restored.State.End);
-        Assert.False(restored.State.ShowRuler);
+        Assert.Equal(new WorkAreaEndpoint(-1999999998, 32767, 2000000000, 65535), restored.State.Start);
+        Assert.Equal(new WorkAreaEndpoint(-1999999977, 32767, 2000000020, 65535), restored.State.End);
+        Assert.False(restored.State.ShowWorkArea);
         Assert.False(restored.IsEditing);
     }
 
@@ -250,16 +283,16 @@ public sealed class RulerPersistenceTests
         using var persistence = fixture.Open();
         var controller = fixture.Controller;
         controller.SetContext(true, true);
-        var role = start ? RulerEndpointRole.Start : RulerEndpointRole.End;
+        var role = start ? WorkAreaEndpointRole.Start : WorkAreaEndpointRole.End;
         var initial = (start ? controller.State.Start : controller.State.End)!.Value;
         var target = initial;
-        var initialAnchor = RulerGizmoCoordinates.ToAnchor(initial, role);
+        var initialAnchor = WorkAreaGizmoCoordinates.ToAnchor(initial, role);
         using var gizmo = new PositionGizmo(initialAnchor, _ => { },
-            edit => RulerGizmoCoordinates.Constrain(edit, role, fixture.Accessor.Object));
+            edit => WorkAreaGizmoCoordinates.Constrain(edit, role, fixture.Accessor.Object));
         gizmo.OnInteractionStarted += _ => Assert.True(controller.BeginEndpointEdit(role));
         gizmo.OnValueChanged += anchor =>
         {
-            Assert.True(RulerGizmoCoordinates.TryDecode(anchor, role, fixture.Accessor.Object, out var cell));
+            Assert.True(WorkAreaGizmoCoordinates.TryDecode(anchor, role, fixture.Accessor.Object, out var cell));
             Assert.True(controller.PreviewEndpoint(cell, fixture.Accessor.Object));
         };
         gizmo.OnInteractionCompleted += _ => Assert.True(controller.CompleteEndpointEdit());
@@ -279,7 +312,7 @@ public sealed class RulerPersistenceTests
         }
         gizmo.CompleteInteraction();
         Assert.Single(fixture.Writes);
-        var expected = new RulerBounds(target, start ? new(14, 67, 23, 0) : new(10, 65, 20, 0));
+        var expected = new WorkAreaBounds(target, start ? new(14, 67, 23, 0) : new(10, 65, 20, 0));
         Assert.Equal(expected.MinCell, controller.State.Start);
         Assert.Equal(expected.MaxCell, controller.State.End);
         Assert.Equal(start ? expected.MinCell.X : expected.MaxCell.X,
@@ -307,7 +340,7 @@ public sealed class RulerPersistenceTests
         fixture.FailWrites = true;
         Assert.True(controller.TrySetEndpoints(new(10, 65, 20, 0), new(14, 67, 23, 0), fixture.Accessor.Object));
         Assert.True(persistence.IsDirty);
-        Assert.True(controller.BeginEndpointEdit(RulerEndpointRole.End));
+        Assert.True(controller.BeginEndpointEdit(WorkAreaEndpointRole.End));
         Assert.True(controller.PreviewEndpoint(new(99, 80, 99, 0), fixture.Accessor.Object));
         fixture.FailWrites = false;
         Assert.True(persistence.TrySave());
@@ -328,17 +361,17 @@ public sealed class RulerPersistenceTests
         var controller = fixture.Controller;
         controller.SetContext(true, true);
         fixture.FailWrites = true;
-        controller.TrySetEndpoint(RulerEndpointRole.Start, new(10, 65, 20, 0), fixture.Accessor.Object);
-        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.TrySetEndpoint(WorkAreaEndpointRole.Start, new(10, 65, 20, 0), fixture.Accessor.Object);
+        controller.BeginEndpointEdit(WorkAreaEndpointRole.Start);
         controller.PreviewEndpoint(new(99, 80, 99, 0), fixture.Accessor.Object);
-        var replacement = new RulerEndpoint(-40, 70, -50, 2);
+        var replacement = new WorkAreaEndpoint(-40, 70, -50, 2);
         controller.RestoreEndpoints(null, replacement);
         controller.CancelEndpointEdit();
         Assert.False(controller.IsEditing);
         Assert.Equal(1, fixture.Writes.Count);
         fixture.FailWrites = false;
         Assert.True(persistence.TrySave());
-        var restored = new RulerController();
+        var restored = new WorkAreaController();
         using var fresh = fixture.Open(restored);
         Assert.Null(restored.State.Start);
         Assert.Equal(replacement, restored.State.End);
@@ -351,18 +384,18 @@ public sealed class RulerPersistenceTests
         using var persistence = fixture.Open();
         var controller = fixture.Controller;
         controller.SetContext(true, true);
-        var saved = new RulerEndpoint(10, 65, 20, 0);
-        controller.TrySetEndpoint(RulerEndpointRole.Start, saved, fixture.Accessor.Object);
+        var saved = new WorkAreaEndpoint(10, 65, 20, 0);
+        controller.TrySetEndpoint(WorkAreaEndpointRole.Start, saved, fixture.Accessor.Object);
         fixture.FailWrites = true;
-        controller.TrySetEndpoint(RulerEndpointRole.Start, new(30, 70, 40, 0), fixture.Accessor.Object);
-        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.TrySetEndpoint(WorkAreaEndpointRole.Start, new(30, 70, 40, 0), fixture.Accessor.Object);
+        controller.BeginEndpointEdit(WorkAreaEndpointRole.Start);
         controller.PreviewEndpoint(new(99, 80, 99, 0), fixture.Accessor.Object);
         fixture.FailWrites = false;
         controller.CancelEndpointEdit();
         Assert.True(persistence.IsDirty);
         Assert.Equal(2, fixture.Writes.Count);
         Assert.Equal(30, controller.State.Start!.Value.X);
-        controller.TrySetEndpoint(RulerEndpointRole.Start, saved, fixture.Accessor.Object);
+        controller.TrySetEndpoint(WorkAreaEndpointRole.Start, saved, fixture.Accessor.Object);
         Assert.False(persistence.IsDirty);
         Assert.Equal(2, fixture.Writes.Count);
         Assert.Equal(saved.X, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
@@ -375,21 +408,21 @@ public sealed class RulerPersistenceTests
         using var persistence = fixture.Open();
         var controller = fixture.Controller;
         controller.SetContext(true, true);
-        controller.TrySetEndpoint(RulerEndpointRole.Start, new(10, 65, 20, 0), fixture.Accessor.Object);
+        controller.TrySetEndpoint(WorkAreaEndpointRole.Start, new(10, 65, 20, 0), fixture.Accessor.Object);
         fixture.FailWrites = true;
-        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.BeginEndpointEdit(WorkAreaEndpointRole.Start);
         controller.PreviewEndpoint(new(30, 70, 40, 0), fixture.Accessor.Object);
         controller.CompleteEndpointEdit();
         Assert.True(persistence.IsDirty);
         Assert.Equal(30, controller.State.Start!.Value.X);
-        Assert.Contains("vanillabuildingexpanded:ruler-persistence-save-failed", fixture.Errors);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-save-failed", fixture.Errors);
         fixture.FailWrites = false;
-        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.BeginEndpointEdit(WorkAreaEndpointRole.Start);
         controller.CompleteEndpointEdit();
         Assert.False(persistence.IsDirty);
         Assert.Equal(30, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
         int writes = fixture.Writes.Count;
-        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.BeginEndpointEdit(WorkAreaEndpointRole.Start);
         controller.CompleteEndpointEdit();
         Assert.Equal(writes, fixture.Writes.Count);
     }
@@ -402,15 +435,15 @@ public sealed class RulerPersistenceTests
         var controller = fixture.Controller;
         controller.SetContext(true, true);
         fixture.FailWrites = true;
-        controller.TrySetEndpoint(RulerEndpointRole.End, new(14, 67, 23, 2), fixture.Accessor.Object);
+        controller.TrySetEndpoint(WorkAreaEndpointRole.End, new(14, 67, 23, 2), fixture.Accessor.Object);
         Assert.True(persistence.IsDirty);
-        controller.BeginEndpointEdit(RulerEndpointRole.End);
+        controller.BeginEndpointEdit(WorkAreaEndpointRole.End);
         controller.PreviewEndpoint(new(99, 80, 99, 2), fixture.Accessor.Object);
         fixture.FailWrites = false;
         persistence.Dispose();
         Assert.False(controller.IsEditing);
-        Assert.Equal(new RulerEndpoint(14, 67, 23, 2), controller.State.End);
-        var restored = new RulerController();
+        Assert.Equal(new WorkAreaEndpoint(14, 67, 23, 2), controller.State.End);
+        var restored = new WorkAreaController();
         using var fresh = fixture.Open(restored);
         Assert.Null(restored.State.Start);
         Assert.Equal(controller.State.End, restored.State.End);
@@ -424,11 +457,11 @@ public sealed class RulerPersistenceTests
         using var fixture = new Fixture();
         using var persistence = fixture.Open();
         fixture.Controller.SetContext(true, true);
-        var end = new RulerEndpoint(int.MaxValue, 32767, int.MinValue, 65535);
-        var anchor = RulerGizmoCoordinates.ToAnchor(end, RulerEndpointRole.End);
-        Assert.True(RulerGizmoCoordinates.TryDecode(anchor, RulerEndpointRole.End, fixture.Accessor.Object, out var decoded));
-        Assert.True(fixture.Controller.TrySetEndpoint(RulerEndpointRole.End, decoded, fixture.Accessor.Object));
-        var restored = new RulerController();
+        var end = new WorkAreaEndpoint(int.MaxValue, 32767, int.MinValue, 65535);
+        var anchor = WorkAreaGizmoCoordinates.ToAnchor(end, WorkAreaEndpointRole.End);
+        Assert.True(WorkAreaGizmoCoordinates.TryDecode(anchor, WorkAreaEndpointRole.End, fixture.Accessor.Object, out var decoded));
+        Assert.True(fixture.Controller.TrySetEndpoint(WorkAreaEndpointRole.End, decoded, fixture.Accessor.Object));
+        var restored = new WorkAreaController();
         using var fresh = fixture.Open(restored);
         Assert.Equal(end, restored.State.End);
         Assert.Null(restored.State.Start);
@@ -473,13 +506,13 @@ public sealed class RulerPersistenceTests
             if (hasEnd) Commit(fixture.Controller, false, new BlockPos(-5, 70, -15, dimension));
         }
         var saved = fixture.Controller.State;
-        var fresh = new RulerController();
+        var fresh = new WorkAreaController();
         using var reopened = fixture.Open(fresh);
 
         Assert.Equal(saved.Start, fresh.State.Start);
         Assert.Equal(saved.End, fresh.State.End);
         Assert.Equal(saved.Bounds, fresh.State.Bounds);
-        Assert.False(fresh.State.ShowRuler);
+        Assert.False(fresh.State.ShowWorkArea);
         Assert.False(fresh.State.IsBuildModeEnabled);
         Assert.False(fresh.State.IsPlayerAlive);
         Assert.False(fresh.IsEditing);
@@ -519,7 +552,7 @@ public sealed class RulerPersistenceTests
         for (int i = 0; i < ids.Length; i++)
         {
             fixture.WorldId = ids[i];
-            var controller = new RulerController();
+            var controller = new WorkAreaController();
             using var persistence = fixture.Open(controller);
             Assert.Null(controller.State.Start);
             Commit(controller, true, new BlockPos(i + 10, 65, 20, 0));
@@ -528,9 +561,9 @@ public sealed class RulerPersistenceTests
         for (int i = 0; i < ids.Length; i++)
         {
             fixture.WorldId = ids[i];
-            var controller = new RulerController();
+            var controller = new WorkAreaController();
             using var persistence = fixture.Open(controller);
-            Assert.Equal(new RulerEndpoint(i + 10, 65, 20, 0), controller.State.Start);
+            Assert.Equal(new WorkAreaEndpoint(i + 10, 65, 20, 0), controller.State.Start);
         }
         Assert.Empty(fixture.Errors);
     }
@@ -583,7 +616,7 @@ public sealed class RulerPersistenceTests
     {
         using var fixture = new Fixture { WorldId = id };
         using var persistence = fixture.Open();
-        Assert.Contains("vanillabuildingexpanded:ruler-persistence-no-world", fixture.Errors);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-no-world", fixture.Errors);
         Assert.Equal(0, fixture.ReadCount);
         Commit(fixture.Controller, true, new BlockPos(10, 65, 20, 0));
         Assert.True(persistence.IsDirty);
@@ -610,7 +643,7 @@ public sealed class RulerPersistenceTests
         using var fixture = new Fixture();
         File.WriteAllText(fixture.ConfigPath, json);
         using var persistence = fixture.Open();
-        Assert.Contains("vanillabuildingexpanded:ruler-persistence-load-failed", fixture.Errors);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-load-failed", fixture.Errors);
         Commit(fixture.Controller, true, new BlockPos(10, 65, 20, 0));
         Assert.True(persistence.IsDirty);
         Assert.False(persistence.TrySave());
@@ -631,7 +664,7 @@ public sealed class RulerPersistenceTests
         using var persistence = fixture.Open();
         Commit(fixture.Controller, true, new BlockPos(10, 65, 20, 0));
 
-        Assert.Contains("vanillabuildingexpanded:ruler-persistence-unsupported", fixture.Errors);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-unsupported", fixture.Errors);
         Assert.Equal(original, File.ReadAllText(fixture.ConfigPath));
         Assert.True(persistence.IsDirty);
         Assert.Empty(fixture.Writes);
@@ -666,7 +699,7 @@ public sealed class RulerPersistenceTests
 
         Assert.Null(fixture.Controller.State.Start);
         Assert.Null(fixture.Controller.State.End);
-        Assert.Contains("vanillabuildingexpanded:ruler-persistence-invalid-entry", fixture.Errors);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-invalid-entry", fixture.Errors);
         Assert.Equal(original, File.ReadAllText(fixture.ConfigPath));
         Assert.Empty(fixture.Writes);
         Assert.False(persistence.IsDirty);
@@ -686,12 +719,12 @@ public sealed class RulerPersistenceTests
         using (var invalid = fixture.Open())
         {
             Assert.Null(fixture.Controller.State.Start);
-            Assert.Contains("vanillabuildingexpanded:ruler-persistence-invalid-entry", fixture.Errors);
+            Assert.Contains("vanillabuildingexpanded:workarea-persistence-invalid-entry", fixture.Errors);
         }
         fixture.Write(Config(("world-a", Pair(Endpoint(10, 65, 20, 2), null))));
-        var fresh = new RulerController();
+        var fresh = new WorkAreaController();
         using var valid = fixture.Open(fresh);
-        Assert.Equal(new RulerEndpoint(10, 65, 20, 2), fresh.State.Start);
+        Assert.Equal(new WorkAreaEndpoint(10, 65, 20, 2), fresh.State.Start);
         fixture.Accessor.Verify(a => a.IsValidPos(It.Is<BlockPos>(p => p.Y == 65 && p.dimension == 2)), Times.Once);
         // Strict mocks have no block/chunk reads or dimension-loading setup.
         Assert.False(valid.IsDirty);
@@ -708,7 +741,7 @@ public sealed class RulerPersistenceTests
         Assert.True(persistence.IsDirty);
         Assert.NotNull(fixture.Controller.State.Start);
         Assert.Empty(fixture.Writes);
-        Assert.Contains("vanillabuildingexpanded:ruler-persistence-save-failed", fixture.Errors);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-save-failed", fixture.Errors);
     }
 
     [Theory]
@@ -724,9 +757,9 @@ public sealed class RulerPersistenceTests
         Commit(fixture.Controller, true, new BlockPos(10, 65, 20, 0));
 
         Assert.Equal(original, File.ReadAllText(fixture.ConfigPath));
-        Assert.Equal(new RulerEndpoint(10, 65, 20, 0), fixture.Controller.State.Start);
+        Assert.Equal(new WorkAreaEndpoint(10, 65, 20, 0), fixture.Controller.State.Start);
         Assert.True(persistence.IsDirty);
-        Assert.Contains("vanillabuildingexpanded:ruler-persistence-save-failed", fixture.Errors);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-save-failed", fixture.Errors);
         Assert.Empty(Directory.GetFiles(GamePaths.ModConfig, "*.tmp"));
         fixture.FailWrites = false;
         Commit(fixture.Controller, true, new BlockPos(10, 65, 20, 0));
@@ -763,7 +796,7 @@ public sealed class RulerPersistenceTests
         Assert.True(persistence.IsDirty);
         Assert.Equal(original, File.ReadAllText(fixture.ConfigPath));
         Assert.Empty(fixture.Writes);
-        Assert.Contains("vanillabuildingexpanded:ruler-persistence-load-failed", fixture.Errors);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-load-failed", fixture.Errors);
         fixture.ReadFailure = null;
         Assert.True(persistence.TrySave());
     }
@@ -792,17 +825,17 @@ public sealed class RulerPersistenceTests
     [Fact]
     public void RestoreEndpoints_DoesNotCommitOrRestoreTransientStateAndRejectsMismatchedPairs()
     {
-        var controller = new RulerController();
+        var controller = new WorkAreaController();
         int commits = 0;
         controller.EndpointsCommitted += () => commits++;
-        controller.RestoreEndpoints(new RulerEndpoint(10, 65, 20, 2), null);
+        controller.RestoreEndpoints(new WorkAreaEndpoint(10, 65, 20, 2), null);
 
         Assert.Equal(0, commits);
         Assert.False(controller.State.IsBuildModeEnabled);
-        Assert.False(controller.State.ShowRuler);
+        Assert.False(controller.State.ShowWorkArea);
         var before = controller.State;
         Assert.Throws<ArgumentException>(() => controller.RestoreEndpoints(
-            before.Start, new RulerEndpoint(14, 67, 23, 0)));
+            before.Start, new WorkAreaEndpoint(14, 67, 23, 0)));
         Assert.Equal(before, controller.State);
     }
 
@@ -811,7 +844,7 @@ public sealed class RulerPersistenceTests
     {
         using var fixture = new Fixture();
         // The native interface's inherited range overloads cannot be proxied by Moq.
-        var player = RulerRenderingTests.CreatePlayer();
+        var player = WorkAreaRenderingTests.CreatePlayer();
         var other = Assert.IsType<ClientPlayer>(RuntimeHelpers.GetUninitializedObject(typeof(ClientPlayer)));
         fixture.Api.Setup(a => a.Render).Returns(new Mock<IRenderAPI>().Object);
         fixture.Api.Setup(a => a.Event).Returns(new Mock<IClientEventAPI>().Object);
@@ -827,48 +860,48 @@ public sealed class RulerPersistenceTests
             Invoke(system, "Event_PlayerJoin", other);
             Assert.Equal(0, fixture.ReadCount);
             Invoke(system, "Event_PlayerJoin", player);
-            var ruler = Assert.IsType<RulerController>(GetField(system, "ruler"));
-            var rendering = Assert.IsType<RulerRenderBinding>(GetField(system, "rulerRendering"));
-            Assert.False(ruler.State.ShowRuler);
-            Assert.False(ruler.State.IsBuildModeEnabled);
+            var workArea = Assert.IsType<WorkAreaController>(GetField(system, "workArea"));
+            var rendering = Assert.IsType<WorkAreaRenderBinding>(GetField(system, "workAreaRendering"));
+            Assert.False(workArea.State.ShowWorkArea);
+            Assert.False(workArea.State.IsBuildModeEnabled);
             int reads = fixture.ReadCount;
             Invoke(system, "Event_PlayerJoin", player);
-            Assert.Same(ruler, GetField(system, "ruler"));
-            Assert.Same(rendering, GetField(system, "rulerRendering"));
+            Assert.Same(workArea, GetField(system, "workArea"));
+            Assert.Same(rendering, GetField(system, "workAreaRendering"));
             Assert.Equal(reads, fixture.ReadCount);
             fixture.FailWrites = true;
-            Commit(ruler, true, new BlockPos(10, 65, 20, 0));
-            Assert.True(ruler.BeginEndpointEdit(RulerEndpointRole.Start));
-            Assert.True(ruler.PreviewEndpoint(new(99, 80, 99, 0), fixture.Accessor.Object));
+            Commit(workArea, true, new BlockPos(10, 65, 20, 0));
+            Assert.True(workArea.BeginEndpointEdit(WorkAreaEndpointRole.Start));
+            Assert.True(workArea.PreviewEndpoint(new(99, 80, 99, 0), fixture.Accessor.Object));
             fixture.FailWrites = false;
             Invoke(system, "Event_LeaveWorld");
-            Assert.False(ruler.IsEditing);
-            Assert.Equal(10, ruler.State.Start!.Value.X);
-            Assert.Null(GetField(system, "ruler"));
-            Assert.Null(GetField(system, "rulerPersistence"));
-            Assert.Null(GetField(system, "rulerRendering"));
+            Assert.False(workArea.IsEditing);
+            Assert.Equal(10, workArea.State.Start!.Value.X);
+            Assert.Null(GetField(system, "workArea"));
+            Assert.Null(GetField(system, "workAreaPersistence"));
+            Assert.Null(GetField(system, "workAreaRendering"));
             Assert.Equal(10, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
             int writes = fixture.Writes.Count;
-            Commit(ruler, false, new BlockPos(14, 67, 23, 0));
+            Commit(workArea, false, new BlockPos(14, 67, 23, 0));
             Assert.Equal(writes, fixture.Writes.Count);
             Invoke(system, "Event_PlayerJoin", player);
-            var fresh = Assert.IsType<RulerController>(GetField(system, "ruler"));
-            Assert.NotSame(ruler, fresh);
-            Assert.NotSame(rendering, GetField(system, "rulerRendering"));
-            Assert.Equal(new RulerEndpoint(10, 65, 20, 0), fresh.State.Start);
+            var fresh = Assert.IsType<WorkAreaController>(GetField(system, "workArea"));
+            Assert.NotSame(workArea, fresh);
+            Assert.NotSame(rendering, GetField(system, "workAreaRendering"));
+            Assert.Equal(new WorkAreaEndpoint(10, 65, 20, 0), fresh.State.Start);
             Assert.Null(fresh.State.End);
-            Assert.False(fresh.State.ShowRuler);
+            Assert.False(fresh.State.ShowWorkArea);
             Assert.False(fresh.State.IsBuildModeEnabled);
         }
         finally { Invoke(system, "Event_LeaveWorld"); }
     }
 
-    private static void Commit(RulerController controller, bool start, BlockPos position)
+    private static void Commit(WorkAreaController controller, bool start, BlockPos position)
     {
         controller.SetContext(true, true);
         var accessor = new Mock<IBlockAccessor>();
         accessor.Setup(a => a.IsValidPos(It.IsAny<BlockPos>())).Returns(true);
-        var cell = new RulerEndpoint(position.X, position.Y, position.Z, position.dimension);
+        var cell = new WorkAreaEndpoint(position.X, position.Y, position.Z, position.dimension);
         var opposite = start ? controller.State.End : controller.State.Start;
         if (opposite?.Dimension != cell.Dimension) opposite = null;
         Assert.True(controller.TrySetEndpoints(start ? cell : opposite, start ? opposite : cell, accessor.Object));
@@ -900,12 +933,12 @@ public sealed class RulerPersistenceTests
     {
         private readonly string originalDataPath = GamePaths.DataPath;
         private readonly string originalLocale = Lang.CurrentLocale;
-        private const string Locale = "vbe-ruler-persistence-tests";
-        private readonly string root = Path.Combine(Path.GetTempPath(), $"vbe-ruler-tests-{Guid.NewGuid():N}");
+        private const string Locale = "vbe-workarea-persistence-tests";
+        private readonly string root = Path.Combine(Path.GetTempPath(), $"vbe-workarea-tests-{Guid.NewGuid():N}");
         public readonly Mock<ICoreClientAPI> Api = new(MockBehavior.Strict);
         public readonly Mock<IClientWorldAccessor> World = new(MockBehavior.Strict);
         public readonly Mock<IBlockAccessor> Accessor = new(MockBehavior.Strict);
-        public RulerController Controller { get; } = new();
+        public WorkAreaController Controller { get; } = new();
         public string? WorldId { get; set; } = "world-a";
         public System.Func<BlockPos, bool> ValidPosition { get; set; } = _ => true;
         public bool FailWrites { get; set; }
@@ -915,7 +948,7 @@ public sealed class RulerPersistenceTests
         public List<string> Writes { get; } = [];
         public List<string> Errors { get; } = [];
         public List<string> LogErrors { get; } = [];
-        public string ConfigPath => Path.Combine(GamePaths.ModConfig, RulerPersistence.ConfigFileName);
+        public string ConfigPath => Path.Combine(GamePaths.ModConfig, WorkAreaPersistence.ConfigFileName);
 
         public Fixture()
         {
@@ -937,14 +970,14 @@ public sealed class RulerPersistenceTests
                 .Callback<object, string, string>((_, code, text) =>
                 {
                     Assert.Equal($"translated {code}", text);
-                    if (code.Contains(":ruler-persistence-", StringComparison.Ordinal))
+                    if (code.Contains(":workarea-persistence-", StringComparison.Ordinal))
                         Assert.NotEmpty(LogErrors);
                     Errors.Add(code);
                 });
             World.Setup(w => w.SavegameIdentifier).Returns(() => WorldId!);
             World.Setup(w => w.BlockAccessor).Returns(Accessor.Object);
             Accessor.Setup(a => a.IsValidPos(It.IsAny<BlockPos>())).Returns((BlockPos p) => ValidPosition(p));
-            Api.Setup(a => a.LoadModConfig(RulerPersistence.ConfigFileName)).Returns(() =>
+            Api.Setup(a => a.LoadModConfig(WorkAreaPersistence.ConfigFileName)).Returns(() =>
             {
                 ReadCount++;
                 if (ReadFailure is { } failure) throw failure;
@@ -964,7 +997,7 @@ public sealed class RulerPersistenceTests
                 });
         }
 
-        public RulerPersistence Open(RulerController? controller = null) => new(Api.Object, controller ?? Controller);
+        public WorkAreaPersistence Open(WorkAreaController? controller = null) => new(Api.Object, controller ?? Controller);
         public JObject Read() => JObject.Parse(File.ReadAllText(ConfigPath));
         public string Write(JObject value)
         {

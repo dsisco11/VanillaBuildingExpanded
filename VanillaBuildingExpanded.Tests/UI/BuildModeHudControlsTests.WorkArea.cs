@@ -12,37 +12,37 @@ namespace VanillaBuildingExpanded.Tests.UI;
 public sealed partial class BuildModeHudControlsTests
 {
     [Fact]
-    public void RulerSession_HudPriorityAndRecompositionLeaveWorldCaptureAndSessionIntact()
+    public void WorkAreaSession_HudPriorityAndRecompositionLeaveWorldCaptureAndSessionIntact()
     {
-        using var f = RulerFixture();
+        using var f = WorkAreaFixture();
         var world = Mock.Get(f.Api.Object.World);
         var accessor = Mock.Get(f.Api.Object.World.BlockAccessor);
-        var ruler = ActiveRuler();
-        ruler.RestoreEndpoints(new(-30, 65, -200, 0), new(30, 65, -200, 0));
-        using var h = new BuildBrush.RulerGizmoSessionTests.Harness(f.Api, world, accessor, ruler);
+        var workArea = ActiveWorkArea();
+        workArea.RestoreEndpoints(new(-30, 65, -200, 0), new(30, 65, -200, 0));
+        using var h = new BuildBrush.WorkAreaGizmoSessionTests.Harness(f.Api, world, accessor, workArea);
         h.Input.Setup(i => i.MouseX).Returns(() => f.MouseX);
         h.Input.Setup(i => i.MouseY).Returns(() => f.MouseY);
         h.Input.Setup(i => i.GetHotKeyByCode(It.IsAny<string>())).Returns((string code) => f.Hotkeys[code]);
         h.Render.Setup(r => r.BitmapCreateFromPng(It.IsAny<byte[]>())).Returns(() => new BitmapExternal(1, 1));
-        using var hud = new BuildModeHud(f.Api.Object, () => default, ruler);
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         h.Dialogs.Add(hud);
         hud.SetVisible(true);
-        ClickRuler(hud, f, "show");
+        ClickWorkArea(hud, f, "show");
         h.Frame();
-        var check = RulerMouse(f, RulerElement(hud, "show"));
+        var check = WorkAreaMouse(f, WorkAreaElement(hud, "show"));
         Assert.False(h.Down(check.X, check.Y).Handled);
         hud.OnMouseDown(check);
         var release = h.Up(check.X, check.Y);
         hud.OnMouseUp(release);
-        Assert.False(ruler.State.ShowRuler);
+        Assert.False(workArea.State.ShowWorkArea);
         hud.OnRenderGUI(0);
-        ClickRuler(hud, f, "show");
+        ClickWorkArea(hud, f, "show");
         h.Frame();
         var gizmo = h.Session.Start!;
         h.Aim(gizmo.Value.Coordinates);
         Assert.True(h.Down().Handled);
         Assert.Same(gizmo, h.Session.Manager.CapturedGizmo);
-        ClickToggle(hud, f, "ruler");
+        ClickToggle(hud, f, "workArea");
         f.ScaleWatcher!(1.25f);
         f.ChangeLocale();
         hud.OnRenderGUI(0);
@@ -52,8 +52,8 @@ public sealed partial class BuildModeHudControlsTests
         h.MoveCenterTo(new(-50, 70, -200, 0));
         h.Frame();
         h.Up();
-        Assert.Equal(new RulerEndpoint(-50, 65, -200, 0), ruler.State.Start);
-        Assert.Equal(new RulerEndpoint(30, 70, -200, 0), ruler.State.End);
+        Assert.Equal(new WorkAreaEndpoint(-50, 65, -200, 0), workArea.State.Start);
+        Assert.Equal(new WorkAreaEndpoint(30, 70, -200, 0), workArea.State.End);
         Assert.Equal(1, h.Commits);
     }
 
@@ -63,10 +63,10 @@ public sealed partial class BuildModeHudControlsTests
     [InlineData("native-hud")]
     public void GizmoInput_ReservesActualHudHitsButNotPassiveTextOrStaleHover(string target)
     {
-        using var f = RulerFixture();
-        using var hud = new BuildModeHud(f.Api.Object, () => default, ActiveRuler());
+        using var f = WorkAreaFixture();
+        using var hud = new BuildModeHud(f.Api.Object, () => default, ActiveWorkArea());
         hud.SetVisible(true);
-        var player = BuildBrush.RulerRenderingTests.CreatePlayer();
+        var player = BuildBrush.WorkAreaRenderingTests.CreatePlayer();
         player.OverrideCameraMode = EnumCameraMode.FirstPerson;
         f.Api.SetupGet(a => a.World.Player).Returns(player);
         var dialogs = new List<GuiDialog> { hud };
@@ -74,9 +74,9 @@ public sealed partial class BuildModeHudControlsTests
         var raw = new MouseButtonState();
         f.Api.Setup(a => a.Input.MouseButton).Returns(raw);
         f.Api.Setup(a => a.Input.InWorldMouseButton).Returns(new MouseButtonState());
-        var show = RulerElement(hud, "show");
-        hud.OnMouseMove(RulerMouse(f, show));
-        var e = RulerMouse(f, target == "control" ? show : RulerTable(hud).GetElement("size"));
+        var show = WorkAreaElement(hud, "show");
+        hud.OnMouseMove(WorkAreaMouse(f, show));
+        var e = WorkAreaMouse(f, target == "control" ? show : WorkAreaTable(hud).GetElement("size"));
         using var receiver = new ReceivingHud(f.Api.Object);
         if (target == "native-hud")
         {
@@ -89,7 +89,7 @@ public sealed partial class BuildModeHudControlsTests
         var pointer = context.Camera!.CreatePointer(context, e.X, e.Y);
         using var manager = new GizmoManager();
         using var renderer = new GizmoRenderAdapter(f.Api.Object, manager, () => context,
-            new BuildBrush.RulerRenderingTests.FakeState());
+            new BuildBrush.WorkAreaRenderingTests.FakeState());
         var gizmo = new PositionGizmo(new(pointer.Ray.Origin + pointer.Ray.Direction * 20, 0), _ => { });
         manager.Add(gizmo);
         using var input = new GizmoInputAdapter(f.Api.Object, manager, renderer, () => true, []);
@@ -127,15 +127,15 @@ public sealed partial class BuildModeHudControlsTests
     }
 
     [Fact]
-    public void RulerDrawingFailure_LeavesSizesAndControlsUsableAcrossHudRebuilds()
+    public void WorkAreaDrawingFailure_LeavesSizesAndControlsUsableAcrossHudRebuilds()
     {
-        using var f = RulerFixture();
-        var player = BuildBrush.RulerRenderingTests.CreatePlayer();
+        using var f = WorkAreaFixture();
+        var player = BuildBrush.WorkAreaRenderingTests.CreatePlayer();
         f.Api.SetupGet(a => a.World.Player).Returns(player);
         f.Api.Setup(a => a.World.BlockAccessor.IsValidPos(It.IsAny<Vintagestory.API.MathTools.BlockPos>()))
             .Returns(true);
-        var ruler = ActiveRuler();
-        ruler.RestoreEndpoints(new(10, 65, 20, 0), new(14, 67, 23, 0));
+        var workArea = ActiveWorkArea();
+        workArea.RestoreEndpoints(new(10, 65, 20, 0), new(14, 67, 23, 0));
         IRenderer? renderer = null;
         int registrations = 0, unregistrations = 0;
         f.Api.Setup(a => a.Event.RegisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.Opaque, It.IsAny<string>()))
@@ -149,10 +149,10 @@ public sealed partial class BuildModeHudControlsTests
         var shader = new Mock<IShaderProgram>();
         shader.SetupGet(s => s.LoadError).Returns(true);
         f.Api.Setup(a => a.Shader.GetProgram((int)EnumShaderProgram.Wireframe)).Returns(shader.Object);
-        using var binding = new RulerRenderBinding(f.Api.Object, ruler, new BuildBrush.RulerRenderingTests.FakeState());
-        using var hud = new BuildModeHud(f.Api.Object, () => default, ruler);
+        using var binding = new WorkAreaRenderBinding(f.Api.Object, workArea, new BuildBrush.WorkAreaRenderingTests.FakeState());
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
-        ClickRuler(hud, f, "show");
+        ClickWorkArea(hud, f, "show");
         Assert.NotNull(renderer);
         var originalRenderer = renderer;
         f.ScaleWatcher!(1.25f);
@@ -165,21 +165,21 @@ public sealed partial class BuildModeHudControlsTests
         binding.Refresh();
         Assert.Equal(1, unregistrations);
         hud.OnRenderGUI(0);
-        Assert.Equal("Size: 5, 3, 4", RulerSize(hud));
-        Assert.Equal(2, RulerTable(hud).Bounds.ChildBounds.Count);
-        ruler.RestoreEndpoints(new(10, 65, 20, 0), new(20, 68, 24, 0));
+        Assert.Equal("Size: 5, 3, 4", WorkAreaSize(hud));
+        Assert.Equal(2, WorkAreaTable(hud).Bounds.ChildBounds.Count);
+        workArea.RestoreEndpoints(new(10, 65, 20, 0), new(20, 68, 24, 0));
         hud.OnRenderGUI(0);
-        Assert.Equal("Size: 11, 4, 5", RulerSize(hud));
+        Assert.Equal("Size: 11, 4, 5", WorkAreaSize(hud));
         Assert.Equal(1, registrations);
         f.Api.Verify(a => a.TriggerIngameError(It.IsAny<object>(),
-            "vanillabuildingexpanded:ruler-render-unavailable", It.IsAny<string>()), Times.Once);
+            "vanillabuildingexpanded:workarea-render-unavailable", It.IsAny<string>()), Times.Once);
     }
 
     [Fact]
-    public void RulerBinding_RemainsLazyAndSharesSessionStateWithSuspendedHud()
+    public void WorkAreaBinding_RemainsLazyAndSharesSessionStateWithSuspendedHud()
     {
-        using var f = RulerFixture();
-        var ruler = ActiveRuler();
+        using var f = WorkAreaFixture();
+        var workArea = ActiveWorkArea();
         var world = BuildBrush.TestHelpers.CreateMockWorld();
         var inputs = new BuildBrush.BrushTestInputs();
         inputs.Inventory.Setup(i => i.ActiveHotbarSlot).Returns(new DummySlot());
@@ -187,8 +187,8 @@ public sealed partial class BuildModeHudControlsTests
         var owner = new BuildBrushSystem_Client();
         typeof(BuildBrushSystem_Client).GetField("api", System.Reflection.BindingFlags.Instance
             | System.Reflection.BindingFlags.NonPublic)!.SetValue(owner, f.Api.Object);
-        typeof(BuildBrushSystem_Client).GetField("ruler", System.Reflection.BindingFlags.Instance
-            | System.Reflection.BindingFlags.NonPublic)!.SetValue(owner, ruler);
+        typeof(BuildBrushSystem_Client).GetField("workArea", System.Reflection.BindingFlags.Instance
+            | System.Reflection.BindingFlags.NonPublic)!.SetValue(owner, workArea);
         BuildModeHud? hud = null;
         using var binding = new BuildModeIndicatorBinding(brush, () =>
             hud = Assert.IsType<BuildModeHud>(typeof(BuildBrushSystem_Client).GetMethod("CreateModeHud",
@@ -199,20 +199,20 @@ public sealed partial class BuildModeHudControlsTests
         Assert.NotNull(hud);
         Assert.True(hud.IsOpened());
         Assert.False(brush.CanUseBrushControls);
-        ClickRuler(hud, f, "show");
-        Assert.True(ruler.State.ShowRuler);
-        ruler.RestoreEndpoints(new(10, 65, 20, 0), new(14, 67, 23, 0));
+        ClickWorkArea(hud, f, "show");
+        Assert.True(workArea.State.ShowWorkArea);
+        workArea.RestoreEndpoints(new(10, 65, 20, 0), new(14, 67, 23, 0));
         hud.OnRenderGUI(0);
-        Assert.Equal("Size: 5, 3, 4", RulerSize(hud));
+        Assert.Equal("Size: 5, 3, 4", WorkAreaSize(hud));
         var previous = hud;
         brush.SetBuildMode(false, null);
         Assert.False(hud.IsOpened());
         brush.SetBuildMode(true, null);
         Assert.Same(previous, hud);
-        Assert.True(Assert.IsAssignableFrom<GuiElementSwitch>(RulerElement(hud, "show")).On);
+        Assert.True(Assert.IsAssignableFrom<GuiElementSwitch>(WorkAreaElement(hud, "show")).On);
         binding.Dispose();
         Assert.False(hud.IsOpened());
-        ruler.SetVisibility(false);
+        workArea.SetVisibility(false);
         brush.SetBuildMode(false, null);
         brush.SetBuildMode(true, null);
         Assert.False(hud.IsOpened());
@@ -222,67 +222,67 @@ public sealed partial class BuildModeHudControlsTests
     [InlineData(1)]
     [InlineData(1.33)]
     [InlineData(2)]
-    public void RulerSection_HasExactlyTwoOrderedRowsAndSharedInclusiveSizes(float scale)
+    public void WorkAreaSection_HasExactlyTwoOrderedRowsAndSharedInclusiveSizes(float scale)
     {
-        using var f = RulerFixture(scale);
-        var ruler = ActiveRuler();
-        using var hud = new BuildModeHud(f.Api.Object, () => default, ruler);
+        using var f = WorkAreaFixture(scale);
+        var workArea = ActiveWorkArea();
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
-        var table = RulerTable(hud);
+        var table = WorkAreaTable(hud);
         Assert.Equal(2, table.Bounds.ChildBounds.Count);
         var visibility = Assert.IsType<GuiElementTable>(table.GetElement("visibility"));
         var size = Assert.IsType<GuiElementStaticText>(table.GetElement("size"));
         Assert.Equal(2, visibility.Bounds.ChildBounds.Count);
-        Assert.Equal("Show ruler", Assert.IsType<GuiElementStaticText>(visibility.GetElement("label")).GetText());
+        Assert.Equal("Show work area", Assert.IsType<GuiElementStaticText>(visibility.GetElement("label")).GetText());
         Assert.Throws<KeyNotFoundException>(() => table.GetElement("endpoints"));
         Assert.Equal("Size: -, -, -", size.GetText());
         Assert.True(visibility.Bounds.renderY + visibility.Bounds.OuterHeight <= size.Bounds.renderY);
         Assert.True(hud.SingleComposer.GetElement("room-toggle").Bounds.renderY < table.Bounds.renderY);
         Assert.True(size.Bounds.renderY < hud.SingleComposer.GetElement("controls-title").Bounds.renderY);
-        ruler.RestoreEndpoints(new(10, 65, 20, 0), new(14, 67, 23, 0));
+        workArea.RestoreEndpoints(new(10, 65, 20, 0), new(14, 67, 23, 0));
         hud.OnRenderGUI(0);
-        Assert.Equal("Size: 5, 3, 4", RulerSize(hud));
-        ruler.RestoreEndpoints(new(14, 67, 23, 0), new(10, 65, 20, 0));
+        Assert.Equal("Size: 5, 3, 4", WorkAreaSize(hud));
+        workArea.RestoreEndpoints(new(14, 67, 23, 0), new(10, 65, 20, 0));
         hud.OnRenderGUI(0);
-        Assert.Equal("Size: 5, 3, 4", RulerSize(hud));
+        Assert.Equal("Size: 5, 3, 4", WorkAreaSize(hud));
         Assert.False(hud.Focusable);
         Assert.False(hud.ShouldReceiveKeyboardEvents());
-        Assert.False(RulerTable(hud).Focusable);
+        Assert.False(WorkAreaTable(hud).Focusable);
     }
 
     [Fact]
-    public void RulerControls_ActivateOnReleaseSwitchCancelAndNotifyOutsideCollapsedContent()
+    public void WorkAreaControls_ActivateOnReleaseSwitchCancelAndNotifyOutsideCollapsedContent()
     {
-        using var f = RulerFixture();
-        var ruler = ActiveRuler();
-        using var hud = new BuildModeHud(f.Api.Object, () => default, ruler);
+        using var f = WorkAreaFixture();
+        var workArea = ActiveWorkArea();
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
-        ClickRuler(hud, f, "show");
-        Assert.True(ruler.State.ShowRuler);
-        Assert.True(Assert.IsAssignableFrom<GuiElementSwitch>(RulerElement(hud, "show")).On);
-        var state = ruler.State;
-        ClickToggle(hud, f, "ruler");
-        Assert.Null(hud.SingleComposer.GetElement("ruler-table"));
-        Assert.Equal(state, ruler.State);
-        ClickToggle(hud, f, "ruler");
-        Assert.True(Assert.IsAssignableFrom<GuiElementSwitch>(RulerElement(hud, "show")).On);
-        Assert.Null(ruler.State.Start);
-        Assert.Null(ruler.State.End);
+        ClickWorkArea(hud, f, "show");
+        Assert.True(workArea.State.ShowWorkArea);
+        Assert.True(Assert.IsAssignableFrom<GuiElementSwitch>(WorkAreaElement(hud, "show")).On);
+        var state = workArea.State;
+        ClickToggle(hud, f, "workArea");
+        Assert.Null(hud.SingleComposer.GetElement("workarea-table"));
+        Assert.Equal(state, workArea.State);
+        ClickToggle(hud, f, "workArea");
+        Assert.True(Assert.IsAssignableFrom<GuiElementSwitch>(WorkAreaElement(hud, "show")).On);
+        Assert.Null(workArea.State.Start);
+        Assert.Null(workArea.State.End);
     }
 
     [Theory]
     [InlineData("show")]
-    public void RulerControls_DragOutsideCancelsAndPassiveAreasNeverTakeInput(string key)
+    public void WorkAreaControls_DragOutsideCancelsAndPassiveAreasNeverTakeInput(string key)
     {
-        using var f = RulerFixture();
-        var ruler = ActiveRuler();
-        using var hud = new BuildModeHud(f.Api.Object, () => default, ruler);
+        using var f = WorkAreaFixture();
+        var workArea = ActiveWorkArea();
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
-        var control = RulerElement(hud, key);
-        var press = RulerMouse(f, control);
+        var control = WorkAreaElement(hud, key);
+        var press = WorkAreaMouse(f, control);
         hud.OnMouseDown(press);
         Assert.True(press.Handled);
-        Assert.True(RulerTable(hud).HasPointerCapture);
+        Assert.True(WorkAreaTable(hud).HasPointerCapture);
         f.MouseX = f.MouseY = -100;
         Assert.True(hud.ReservesPointer(-100, -100));
         Assert.True(hud.ShouldReceiveMouseEvents());
@@ -290,16 +290,16 @@ public sealed partial class BuildModeHudControlsTests
         var release = new MouseEvent(-100, -100, EnumMouseButton.Left, 0);
         hud.OnMouseUp(release);
         Assert.True(release.Handled);
-        Assert.False(RulerTable(hud).HasPointerCapture);
-        Assert.False(ruler.State.ShowRuler);
+        Assert.False(WorkAreaTable(hud).HasPointerCapture);
+        Assert.False(workArea.State.ShowWorkArea);
         foreach (GuiElement passive in new[]
         {
-            RulerTable(hud).GetElement("size"),
-            ((GuiElementTable)RulerTable(hud).GetElement("visibility")).GetElement("label"),
-            hud.SingleComposer.GetElement("ruler-title")
+            WorkAreaTable(hud).GetElement("size"),
+            ((GuiElementTable)WorkAreaTable(hud).GetElement("visibility")).GetElement("label"),
+            hud.SingleComposer.GetElement("workArea-title")
         })
         {
-            var e = RulerMouse(f, passive);
+            var e = WorkAreaMouse(f, passive);
             Assert.False(hud.ReservesPointer(e.X, e.Y));
             hud.OnMouseMove(e);
             Assert.False(hud.ShouldReceiveMouseEvents());
@@ -307,8 +307,8 @@ public sealed partial class BuildModeHudControlsTests
             hud.OnMouseUp(new MouseEvent(e.X, e.Y, EnumMouseButton.Left, 0));
             Assert.False(e.Handled);
         }
-        ClickRuler(hud, f, key);
-        Assert.Equal(key == "show", ruler.State.ShowRuler);
+        ClickWorkArea(hud, f, key);
+        Assert.Equal(key == "show", workArea.State.ShowWorkArea);
     }
 
     [Theory]
@@ -318,23 +318,23 @@ public sealed partial class BuildModeHudControlsTests
     [InlineData("locale")]
     [InlineData("dispose")]
     [InlineData("grab")]
-    public void RulerCaptures_CancelBeforeLifecycleRebuildWithoutDuplicateCommands(string change)
+    public void WorkAreaCaptures_CancelBeforeLifecycleRebuildWithoutDuplicateCommands(string change)
     {
-        using var f = RulerFixture();
-        var ruler = ActiveRuler();
+        using var f = WorkAreaFixture();
+        var workArea = ActiveWorkArea();
         int changes = 0;
-        ruler.Changed += _ => changes++;
-        using var hud = new BuildModeHud(f.Api.Object, () => default, ruler);
+        workArea.Changed += _ => changes++;
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
-        var press = RulerMouse(f, RulerElement(hud, "show"));
+        var press = WorkAreaMouse(f, WorkAreaElement(hud, "show"));
         hud.OnMouseDown(press);
         Assert.True(press.Handled);
-        var table = RulerTable(hud);
+        var table = WorkAreaTable(hud);
         Assert.True(table.HasPointerCapture);
         switch (change)
         {
             case "hide": hud.SetVisible(false); break;
-            case "collapse": ClickToggle(hud, f, "ruler"); break;
+            case "collapse": ClickToggle(hud, f, "workArea"); break;
             case "scale": RuntimeEnv.GUIScale = 1.25f; f.ScaleWatcher!(1.25f); break;
             case "locale":
                 f.ChangeLocale();
@@ -346,17 +346,17 @@ public sealed partial class BuildModeHudControlsTests
         Assert.False(table.HasPointerCapture);
         hud.OnMouseUp(new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0));
         Assert.Equal(0, changes);
-        Assert.False(ruler.State.ShowRuler);
+        Assert.False(workArea.State.ShowWorkArea);
         if (change != "dispose")
         {
             f.MouseGrabbed = false;
             hud.SetVisible(true);
-            if (change == "collapse") ClickToggle(hud, f, "ruler");
-            ClickRuler(hud, f, "show");
+            if (change == "collapse") ClickToggle(hud, f, "workArea");
+            ClickWorkArea(hud, f, "show");
             Assert.Equal(1, changes);
         }
         hud.Dispose();
-        ruler.SetVisibility(true);
+        workArea.SetVisibility(true);
         Assert.All(f.Uploads, upload => Assert.True(upload.Texture.Disposed));
     }
 
@@ -364,20 +364,20 @@ public sealed partial class BuildModeHudControlsTests
     [InlineData(1)]
     [InlineData(1.33)]
     [InlineData(2)]
-    public void RulerLayout_LongTranslationsAndWideSizesFitWithoutChangingRoomControls(float scale)
+    public void WorkAreaLayout_LongTranslationsAndWideSizesFitWithoutChangingRoomControls(float scale)
     {
-        using var f = RulerFixture(scale);
+        using var f = WorkAreaFixture(scale);
         var original = f.Translate;
-        f.Translate = (key, args) => key.StartsWith("vanillabuildingexpanded:build-info-ruler", StringComparison.Ordinal)
-            ? "Long translated ruler text " + original(key, args) + " with more translated words"
+        f.Translate = (key, args) => key.StartsWith("vanillabuildingexpanded:build-info-workarea", StringComparison.Ordinal)
+            ? "Long translated work area text " + original(key, args) + " with more translated words"
             : original(key, args);
-        var ruler = ActiveRuler();
-        ruler.RestoreEndpoints(new(int.MinValue, 0, int.MinValue, 0), new(int.MaxValue, 32767, int.MaxValue, 0));
-        using var hud = new BuildModeHud(f.Api.Object, () => default, ruler);
+        var workArea = ActiveWorkArea();
+        workArea.RestoreEndpoints(new(int.MinValue, 0, int.MinValue, 0), new(int.MaxValue, 32767, int.MaxValue, 0));
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
-        var table = RulerTable(hud);
-        Assert.Contains("4294967296", RulerSize(hud));
-        Assert.Contains("32768", RulerSize(hud));
+        var table = WorkAreaTable(hud);
+        Assert.Contains("4294967296", WorkAreaSize(hud));
+        Assert.Contains("32768", WorkAreaSize(hud));
         foreach (var row in table.Bounds.ChildBounds)
             Assert.True(row.fixedX + row.fixedWidth <= table.Measure().Width);
         Assert.True(table.Bounds.renderY + table.Bounds.OuterHeight
@@ -385,49 +385,49 @@ public sealed partial class BuildModeHudControlsTests
         Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("room-table"));
         ClickToggle(hud, f, "controls");
         Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("controls-table"));
-        Assert.Contains("4294967296", RulerSize(hud));
+        Assert.Contains("4294967296", WorkAreaSize(hud));
     }
 
-    private static RulerController ActiveRuler()
+    private static WorkAreaController ActiveWorkArea()
     {
-        var ruler = new RulerController();
-        ruler.SetContext(true, true);
-        return ruler;
+        var workArea = new WorkAreaController();
+        workArea.SetContext(true, true);
+        return workArea;
     }
 
-    private static Fixture RulerFixture(float scale = 1)
+    private static Fixture WorkAreaFixture(float scale = 1)
     {
         var fixture = new Fixture(scale);
         fixture.Translate = (key, args) => key switch
         {
-            "vanillabuildingexpanded:build-info-ruler" => "Ruler",
-            "vanillabuildingexpanded:build-info-ruler-show" => "Show ruler",
-            "vanillabuildingexpanded:build-info-ruler-unset" => "-",
-            "vanillabuildingexpanded:build-info-ruler-size" => string.Format("Size: {0}, {1}, {2}", args),
+            "vanillabuildingexpanded:build-info-workarea" => "Work area",
+            "vanillabuildingexpanded:build-info-workarea-show" => "Show work area",
+            "vanillabuildingexpanded:build-info-workarea-unset" => "-",
+            "vanillabuildingexpanded:build-info-workarea-size" => string.Format("Size: {0}, {1}, {2}", args),
             _ => key.Split(':').Last()
         };
         return fixture;
     }
 
-    private static GuiElementTable RulerTable(BuildModeHud hud) =>
-        Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("ruler-table"));
+    private static GuiElementTable WorkAreaTable(BuildModeHud hud) =>
+        Assert.IsType<GuiElementTable>(hud.SingleComposer.GetElement("workarea-table"));
 
-    private static string RulerSize(BuildModeHud hud) =>
-        Assert.IsType<GuiElementStaticText>(RulerTable(hud).GetElement("size")).GetText();
+    private static string WorkAreaSize(BuildModeHud hud) =>
+        Assert.IsType<GuiElementStaticText>(WorkAreaTable(hud).GetElement("size")).GetText();
 
-    private static GuiElement RulerElement(BuildModeHud hud, string key) =>
-        ((GuiElementTable)RulerTable(hud).GetElement("visibility")).GetElement(key);
+    private static GuiElement WorkAreaElement(BuildModeHud hud, string key) =>
+        ((GuiElementTable)WorkAreaTable(hud).GetElement("visibility")).GetElement(key);
 
-    private static MouseEvent RulerMouse(Fixture f, GuiElement element)
+    private static MouseEvent WorkAreaMouse(Fixture f, GuiElement element)
     {
         f.MouseX = (int)(element.Bounds.renderX + element.Bounds.OuterWidth / 2);
         f.MouseY = (int)(element.Bounds.renderY + element.Bounds.OuterHeight / 2);
         return new MouseEvent(f.MouseX, f.MouseY, EnumMouseButton.Left, 0);
     }
 
-    private static void ClickRuler(BuildModeHud hud, Fixture f, string key)
+    private static void ClickWorkArea(BuildModeHud hud, Fixture f, string key)
     {
-        var e = RulerMouse(f, RulerElement(hud, key));
+        var e = WorkAreaMouse(f, WorkAreaElement(hud, key));
         Assert.True(hud.ShouldReceiveMouseEvents());
         hud.OnMouseDown(e);
         Assert.True(e.Handled);

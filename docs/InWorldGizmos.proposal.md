@@ -1,10 +1,10 @@
-# Reusable in-world gizmos and ruler manipulation
+# Reusable in-world gizmos and work area manipulation
 
 Status: Proposal with interaction decisions confirmed below. This document does not implement the system. Unconfirmed API/implementation details remain recommendations.
 
 ## Purpose and confirmed requirements
 
-Replace the ruler's button-driven endpoint picking with direct interaction with controls rendered in the world. Build the interaction as reusable infrastructure, not ruler-specific rendering or mouse handlers.
+Replace the work area's button-driven endpoint picking with direct interaction with controls rendered in the world. Build the interaction as reusable infrastructure, not workarea-specific rendering or mouse handlers.
 
 The requested design includes:
 
@@ -12,33 +12,33 @@ The requested design includes:
 - A generic `Gizmo<TValue>` variant whose type describes its input/current value, with an `OnValueChanged` event for downstream owners.
 - A 3D positioning gizmo that marks a position and provides draggable X/Y/Z axis arrows.
 - A central icon/handle for movement without selecting an axis.
-- Separate positioning-gizmo instances associated with the ruler's Start and End positions.
+- Separate positioning-gizmo instances associated with the work area's Start and End positions.
 - A positioning gizmo at a complete selection's geometric midpoint for translating both corners together without resizing.
 
-The ruler remains client-only. Gizmos are controls, not blocks, inventory items or synchronized world entities.
+The work area remains client-only. Gizmos are controls, not blocks, inventory items or synchronized world entities.
 
 ### Confirmed interaction decisions
 
 - Support both the free mouse cursor and mouse-look reticle.
 - Dragging the center translates in a camera-facing mathematical plane captured at drag start, preserving the initial grab offset. It does not target terrain.
 - Only first-use/missing-endpoint creation targets rendered terrain up to the camera far plane, without a player-reach cap.
-- Ruler endpoints snap to whole blocks throughout dragging.
+- Work area endpoints snap to whole blocks throughout dragging.
 - One initial world click creates both endpoints on the selected block.
-- Gizmo handles are overlay controls; the ruler box remains depth-tested.
-- Remove Set Start/Set end from the panel, leaving Show ruler and Size.
+- Gizmo handles are overlay controls; the work area box remains depth-tested.
+- Remove Set Start/Set end from the panel, leaving Show work area and Size.
 - Anchor Start at offset `(0, 0, 0)` within its block and End at offset `(1, 1, 1)` within its block. Do not introduce the previously suggested endpoint-selection/cycling controls.
 
 Decision update (2026-10-27): analytic center translation replaces terrain-following movement entirely. Remove the old center-target resolver contract, production wiring, obsolete tests and drag-only feedback; retain no alternate mode, fallback or compatibility switch. Existing analytic axis dragging remains. Terrain targeting is retained exclusively for explicit first-use/missing-endpoint creation. [Phase 7](InWorldGizmos.todo#phase-7-replace-terrain-following-movement-with-analytic-translation) implements this superseding decision; completed earlier phase records describe historical behavior.
 
 ## Current integration points
 
-- [Ruler state](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs) stores copied block coordinates with explicit local Y and dimension. Start always represents the per-axis minimum cell and End the per-axis maximum cell of the inclusive bounds.
-- [Ruler controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs) exposes direct endpoint editing and preview/commit/cancel transactions.
-- [Ruler session](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoSession.cs) replaces the former one-shot ruler input owner. Retain one path for the ruler; do not layer a second independently capturing mouse adapter over it.
-- [Ruler HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.Ruler.cs) shows only Show ruler and Size, following the approved removal of endpoint buttons.
-- [Client system](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushSystem_Client.cs) owns the world session and routes ruler input before brush placement. Retain one explicit composition/ownership path.
-- [Ruler rendering](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderBinding.cs) already separates wireframe eligibility from HUD composition. Keep the measurement box independent of gizmo handle rendering.
-- [Persistence](../VanillaBuildingExpanded/src/BuildBrush/RulerPersistence.cs) saves endpoint commits through native mod-config APIs. Drag previews must not produce config writes every frame.
+- [Work area state](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaState.cs) stores copied block coordinates with explicit local Y and dimension. Start always represents the per-axis minimum cell and End the per-axis maximum cell of the inclusive bounds.
+- [Work area controller](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaController.cs) exposes direct endpoint editing and preview/commit/cancel transactions.
+- [Work area session](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaGizmoSession.cs) replaces the former one-shot work area input owner. Retain one path for the work area; do not layer a second independently capturing mouse adapter over it.
+- [Work area HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.WorkArea.cs) shows only Show work area and Size, following the approved removal of endpoint buttons.
+- [Client system](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushSystem_Client.cs) owns the world session and routes work area input before brush placement. Retain one explicit composition/ownership path.
+- [Work area rendering](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaRenderBinding.cs) already separates wireframe eligibility from HUD composition. Keep the measurement box independent of gizmo handle rendering.
+- [Persistence](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaPersistence.cs) saves endpoint commits through native mod-config APIs. Drag previews must not produce config writes every frame.
 - [Architecture documentation](BuildBrushArchitecture.md) describes the existing implementation, not approval of this replacement.
 
 The reported inability to replace an endpoint after initial selection is unresolved. This proposal changes the interaction model; it does not claim that the existing bug has been diagnosed or fixed.
@@ -57,7 +57,7 @@ The base encapsulates:
 - Begin, update, complete and cancel interaction hooks.
 - Idempotent resource/subscription cleanup.
 
-The base does not know ruler endpoints, block-grid rules, mod-config files or brush placement.
+The base does not know work area endpoints, block-grid rules, mod-config files or brush placement.
 
 A small client-owned gizmo manager coordinates instances, selects a hit, and grants exclusive capture to at most one gizmo/handle. Its input and renderer adapters use the existing client event/render pipelines. An individual gizmo must not independently compete for global mouse events or register a renderer every frame.
 
@@ -89,7 +89,7 @@ The owner owns application state and persistence. The generic class owns the int
 
 Introduce a reusable positioning gizmo, provisionally `PositionGizmo : Gizmo<GizmoPosition>`.
 
-Recommend an immutable `GizmoPosition` containing double-precision X/Y/Z and an explicit dimension. Generic positioning supports continuous coordinates; the ruler supplies its grid/validation policy. Do not make every positioning gizmo inherently block-snapped.
+Recommend an immutable `GizmoPosition` containing double-precision X/Y/Z and an explicit dimension. Generic positioning supports continuous coordinates; the work area supplies its grid/validation policy. Do not make every positioning gizmo inherently block-snapped.
 
 Each instance has:
 
@@ -98,7 +98,7 @@ Each instance has:
 - Hover/active feedback that does not depend on color alone.
 - Stable screen-sized visual and pick targets, within sensible world-size limits.
 
-The ruler uses distinguishable Start/End center icons, for example a circle and a diamond. Start marks the normalized minimum corner and End the normalized maximum corner.
+The work area uses distinguishable Start/End center icons, for example a circle and a diamond. Start marks the normalized minimum corner and End the normalized maximum corner.
 
 ## Proposed input and dragging
 
@@ -134,13 +134,18 @@ For each update, intersect the current free-cursor or reticle ray with the captu
 
 Reject unusable starts with feedback; invalid, behind-ray, near-parallel or nonfinite updates retain the last valid value without repeated per-frame notices. Define/test numerical guards against extreme jumps. Do not query world selection, block/entity intersections or a custom destination resolver while dragging. Mathematical pointer rays remain necessary; a world raycast does not.
 
-Keep the reusable positioning type continuous, double-precision and independent of block coordinates. The ruler constraint snaps each world-coordinate delta from the original anchor to whole blocks before decoding the role-specific cell. Grid quantization may move the published point slightly off the continuous plane. Do not snap plane-basis parameters instead of world-grid coordinates, or accumulate rounded previews as a new baseline. No terrain movement option, additional planar handles or new input modes are introduced.
+Keep the reusable positioning type continuous, double-precision and independent of block coordinates. The work area constraint snaps each world-coordinate delta from the original anchor to whole blocks before decoding the role-specific cell. Grid quantization may move the published point slightly off the continuous plane. Do not snap plane-basis parameters instead of world-grid coordinates, or accumulate rounded previews as a new baseline. No terrain movement option, additional planar handles or new input modes are introduced.
 
 Explicit first-use and missing-endpoint creation remain separate single-click terrain operations through the camera far plane without a player-reach cap. Use loaded terrain only, preserve target filters and clip/dimension checks, copy the targeted cell without brush offsets, and never load or generate terrain for picking.
 
-## Ruler integration and edit transactions
+## Work area integration and edit transactions
 
 Preserve inclusive block-cell measurements, native per-world endpoint persistence and dimension isolation.
+
+Terminology update (2026-10-27): Work area replaces the former name in the UI,
+source and persistence identifiers. The new config is
+`vanillabuildingexpanded-workareas.json`. By explicit user decision it starts
+fresh; the previous config is not read, migrated, overwritten or deleted.
 
 Use role-specific corner anchors in local coordinates:
 
@@ -149,13 +154,13 @@ Start anchor = startCell + (0, 0, 0)
 End anchor   = endCell   + (1, 1, 1)
 ```
 
-The positioning gizmo's value is its anchor position. The ruler binding adds the corresponding offset when synchronizing from an endpoint and subtracts it when converting an edited anchor back to the endpoint cell. Center dragging snaps all world-coordinate deltas from the original anchor; axis dragging snaps only the selected component while keeping the other two fixed. Both preserve integer alignment and correct negative-coordinate behavior.
+The positioning gizmo's value is its anchor position. The work area binding adds the corresponding offset when synchronizing from an endpoint and subtracts it when converting an edited anchor back to the endpoint cell. Center dragging snaps all world-coordinate deltas from the original anchor; axis dragging snaps only the selected component while keeping the other two fixed. Both preserve integer alignment and correct negative-coordinate behavior.
 
 These are marker offsets, not changes to stored endpoints or inclusive measurements. For the same selected cell, Start marks its minimum corner and End marks its exclusive maximum corner, so the two handles are separated without offsetting the measurement itself. Preserve explicit dimension identity even when an End anchor lies at a local-Y boundary; validate the decoded cell rather than interpreting the anchor as a dimension-encoded block position.
 
 Updated decision (2026-10-26): Start and End always contain the per-axis minimum and maximum cell coordinates, respectively, including previews and restored legacy values. Crossing is allowed: normalize both endpoints, rather than clamping or retaining mixed min/max coordinates. Offsets and marker shapes remain associated with the minimum/maximum roles. This supersedes the earlier selected-endpoint identity preservation decision.
 
-Create one positioning-gizmo instance for each existing endpoint, even for an incomplete ruler. The box still requires both endpoints.
+Create one positioning-gizmo instance for each existing endpoint, even for an incomplete work area. The box still requires both endpoints.
 
 Decision update (2026-10-27, after Phase 7): a complete selection additionally has
 a third positioning gizmo at `(minCell + maxCell + 1) / 2`. Its center and arrows
@@ -163,7 +168,7 @@ translate the original endpoint pair by the same snapped world-grid displacement
 preserving all inclusive sizes. Validate both translated corners before publishing
 either; reject the whole move if either is invalid. The same release/commit,
 cancel/rollback, persistence and contextual cancellation rules apply to both corners
-as one edit. Endpoint edits refresh this midpoint, and partial rulers omit it.
+as one edit. Endpoint edits refresh this midpoint, and partial work areas omit it.
 
 During a drag:
 
@@ -178,23 +183,23 @@ The current `EndpointsCommitted` persistence hook can remain the durable-save bo
 
 Orderly departure cancels an active preview first, then retries any previously committed dirty edit while world identity is available. Rejoining restores committed endpoints, not a canceled drag preview.
 
-### First use, incomplete rulers and relocation
+### First use, incomplete work areas and relocation
 
-Dragging existing handles does not solve creation of a ruler with no saved endpoints.
+Dragging existing handles does not solve creation of a work area with no saved endpoints.
 
-Checking Show ruler with no endpoints requests a single in-world creation click. A valid block click creates both endpoints at that cell, then exposes Start at its `(0, 0, 0)` corner and End at its `(1, 1, 1)` corner. Consume the full creation gesture; it must not also start a drag or gameplay action. Invalid targets keep creation pending with a notice.
+Checking Show work area with no endpoints requests a single in-world creation click. A valid block click creates both endpoints at that cell, then exposes Start at its `(0, 0, 0)` corner and End at its `(1, 1, 1)` corner. Consume the full creation gesture; it must not also start a drag or gameplay action. Invalid targets keep creation pending with a notice.
 
-For restored partial rulers, show the existing marker and offer the same explicit world creation gesture for the missing endpoint. Do not invent a distant endpoint or silently replace a saved partial ruler.
+For restored partial work areas, show the existing marker and offer the same explicit world creation gesture for the missing endpoint. Do not invent a distant endpoint or silently replace a saved partial work area.
 
 In another dimension, retained endpoints stay stored and hidden, without automatic overwrite on travel or checkbox toggling. A new cross-dimension relocation workflow is not part of this proposal; no extra selection/relocation key or panel action is introduced.
 
-Display both endpoint gizmos with their own arrows. The approved corner offsets replace the suggested selected-endpoint-only/cycling scheme. Keep deterministic hit arbitration for intersecting/projected handles as a generic manager requirement; do not add a ruler-specific selection UI or alter measured coordinates. Corner offsets separate same-cell anchors, but are not a guarantee against every overlap after endpoints are moved or projected onto the screen.
+Display both endpoint gizmos with their own arrows. The approved corner offsets replace the suggested selected-endpoint-only/cycling scheme. Keep deterministic hit arbitration for intersecting/projected handles as a generic manager requirement; do not add a workarea-specific selection UI or alter measured coordinates. Corner offsets separate same-cell anchors, but are not a guarantee against every overlap after endpoints are moved or projected onto the screen.
 
 ## Visibility, rendering and lifecycle
 
 Confirmed distinction:
 
-- Keep the ruler box depth-tested and terrain-occluded.
+- Keep the work area box depth-tested and terrain-occluded.
 - Render/pick gizmo handles as an in-world overlay while manipulation is enabled, so a corner handle obscured by adjacent solid blocks remains accessible.
 
 The overlay policy keeps handles accessible even when their corner is obscured by adjacent terrain. Explicitly hidden or disabled gizmos must not retain invisible hit targets.
@@ -203,18 +208,18 @@ Share reusable arrow/icon meshes and rendering services where practical. Use cam
 
 Qualify actual cursor/reticle rays and camera-view orientation for analytic dragging. Only explicit creation needs world-hit facilities; the existing center-screen `BlockSelection` alone is not sufficient for free-cursor creation. Existing-handle manipulation must not call native selection/world-hit APIs, regardless of terrain visibility.
 
-The session owner disposes the manager, instances, input subscriptions and GPU resources on departure/system disposal. Renderer/input failures must be logged and surfaced, cancel active edits safely, and leave ruler size/persistence usable. A render failure must not leave invisible interactive handles.
+The session owner disposes the manager, instances, input subscriptions and GPU resources on departure/system disposal. Renderer/input failures must be logged and surfaced, cancel active edits safely, and leave work area size/persistence usable. A render failure must not leave invisible interactive handles.
 
 ## Confirmed panel change
 
 Replace the two endpoint buttons with entirely in-world editing, retaining only:
 
 ```text
-[ ] Show ruler
+[ ] Show work area
 Size: <x>, <y>, <z>
 ```
 
-This intentionally replaces the previous three-row layout. Show ruler controls both the eligible box and endpoint handles, with direct manipulation available through either supported pointer mode; no additional edit-mode button is proposed.
+This intentionally replaces the previous three-row layout. Show work area controls both the eligible box and endpoint handles, with direct manipulation available through either supported pointer mode; no additional edit-mode button is proposed.
 
 ## Verification
 
@@ -226,9 +231,9 @@ Use existing test infrastructure and add focused cases for:
 4. Preview updates, one durable commit, cancel rollback, dirty retries and no per-frame config writes.
 5. Repeated Start and End edits after successful completion, including many consecutive drags and cancel/retry cycles, with actual manager/input/controller routing.
 6. No mining/attack/use/placement during captured/creation/cancellation gestures; ordinary input outside handles and already-handled GUI input remain intact.
-7. Mode/death/focus/dialog/dimension/world transitions, partial/restored rulers, no stale callbacks/resources, and size usability when gizmos fail.
+7. Mode/death/focus/dialog/dimension/world transitions, partial/restored work areas, no stale callbacks/resources, and size usability when gizmos fail.
 
-Separately qualify live-game pointer routing, camera control, handle readability/picking, coincident endpoints, terrain/transparent-material behavior and restart persistence. The earlier ruler live-check waiver is not evidence that this new interaction works, and does not automatically waive validation of a future implementation.
+Separately qualify live-game pointer routing, camera control, handle readability/picking, coincident endpoints, terrain/transparent-material behavior and restart persistence. The earlier work area live-check waiver is not evidence that this new interaction works, and does not automatically waive validation of a future implementation.
 
 ## Decision record and remaining implementation qualification
 
@@ -237,16 +242,16 @@ Separately qualify live-game pointer routing, camera control, handle readability
 | Interaction mode | Both existing free cursor and mouse-look reticle. |
 | Center movement | Translate across a camera-facing plane fixed at drag start, preserving the initial grab offset; no terrain targeting or alternate legacy path. |
 | Block-target range | Rendered terrain up to the camera far plane, without a player-reach cap; applies only to first-use/missing-endpoint creation. |
-| Ruler snapping | Whole block-cell steps throughout dragging; reusable positioning is not inherently block-only. |
-| Initial creation | One world click creates a one-cell ruler; restored partial rulers complete only the missing endpoint. |
+| Work area snapping | Whole block-cell steps throughout dragging; reusable positioning is not inherently block-only. |
+| Initial creation | One world click creates a one-cell work area; restored partial work areas complete only the missing endpoint. |
 | Gizmo occlusion | Overlay handles, depth-tested measurement box. |
-| Panel | Remove Set Start/Set end; keep Show ruler and Size. |
+| Panel | Remove Set Start/Set end; keep Show work area and Size. |
 | Marker anchors | Start block offset `(0, 0, 0)`; End block offset `(1, 1, 1)`; both gizmos expose arrows without a cycle/select control. |
 
 Before implementing the replacement, qualify camera-plane orientation, pointer/camera ordering, numerical guards and world-grid snapping against the existing camera/input contracts. Preserve qualified creation targeting and analytic axis behavior. Final handle artwork, screen-space sizing and hit tolerances are implementation recommendations to test, not additional confirmed feature requirements. No further user decision is currently required to retain this proposal.
 
 ## Scope boundaries
 
-This proposal covers reusable gizmo infrastructure, one positioning-gizmo type and ruler integration. Rotation/scaling gizmos, multi-object editing, undo history, numeric coordinate editors, multiplayer sharing and unrelated brush compatibility smoke tests are outside the initial scope.
+This proposal covers reusable gizmo infrastructure, one positioning-gizmo type and work area integration. Rotation/scaling gizmos, multi-object editing, undo history, numeric coordinate editors, multiplayer sharing and unrelated brush compatibility smoke tests are outside the initial scope.
 
 The interaction decisions above are recorded; implementation still requires a separate request/checklist. No production code is changed by this proposal.

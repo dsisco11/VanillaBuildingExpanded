@@ -7,11 +7,11 @@ using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-internal sealed class RulerTerrainTarget(ICoreClientAPI api)
+internal sealed class WorkAreaTerrainTarget(ICoreClientAPI api)
 {
     private readonly IClientWorldAccessor world = api.World;
 
-    public RulerEndpoint? Resolve(GizmoPointer pointer)
+    public WorkAreaEndpoint? Resolve(GizmoPointer pointer)
     {
         if (!ReferenceEquals(api.World, world) || world.Player?.Entity is not { } player
             || player.Pos.Dimension != pointer.Context.Dimension || pointer.Context.Camera is not { } camera
@@ -28,7 +28,7 @@ internal sealed class RulerTerrainTarget(ICoreClientAPI api)
             value => value.IsInteractable && value.EntityId != player.EntityId);
         if (entity is not null || block?.Position is not { } position || block.HitPosition is not { } hit
             || position.dimension != pointer.Context.Dimension) return null;
-        var cell = new RulerEndpoint(position.X, position.Y, position.Z, position.dimension);
+        var cell = new WorkAreaEndpoint(position.X, position.Y, position.Z, position.dimension);
         if (!cell.IsValid(world.BlockAccessor) || world.BlockAccessor.GetChunkAtBlockPos(position) is null)
             return null;
         var localHit = Vector256.Create(position.X + hit.X,

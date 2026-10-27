@@ -26,10 +26,10 @@ public class BuildBrushSystem_Client : ModSystem
     private BuildBrushControllerClient? controller;
     private BuildModeIndicatorBinding? modeIndicator;
     private BuildBrushWheelInput? wheelInput;
-    private RulerController? ruler;
-    private RulerPersistence? rulerPersistence;
-    private RulerGizmoSession? rulerGizmos;
-    private RulerRenderBinding? rulerRendering;
+    private WorkAreaController? workArea;
+    private WorkAreaPersistence? workAreaPersistence;
+    private WorkAreaGizmoSession? workAreaGizmos;
+    private WorkAreaRenderBinding? workAreaRendering;
     private IInventory? subscribedHotbar;
     private long fastTickId;
     private long slowTickId;
@@ -62,7 +62,7 @@ public class BuildBrushSystem_Client : ModSystem
 
         controller = new BuildBrushControllerClient(api, CreateBrush);
         controller.ModeChanged += SendToServer;
-        controller.ModeChanged += RefreshRulerContext;
+        controller.ModeChanged += RefreshWorkAreaContext;
         modeIndicator = new BuildModeIndicatorBinding(controller, CreateModeHud);
 
         config = VbeConfig.Get(api);
@@ -94,7 +94,7 @@ public class BuildBrushSystem_Client : ModSystem
         if (api is null) return;
         Event_LeaveWorld();
         controller!.ModeChanged -= SendToServer;
-        controller.ModeChanged -= RefreshRulerContext;
+        controller.ModeChanged -= RefreshWorkAreaContext;
         api.Event.UnregisterGameTickListener(fastTickId);
         api.Event.UnregisterGameTickListener(slowTickId);
         api.Event.PlayerJoin -= Event_PlayerJoin;
@@ -170,13 +170,13 @@ public class BuildBrushSystem_Client : ModSystem
         if (byPlayer != Player)
             return;
 
-        if (ruler is null)
+        if (workArea is null)
         {
-            ruler = new RulerController();
-            rulerPersistence = new RulerPersistence(api!, ruler);
-            ruler.NoticeRequested += OnRulerNotice;
-            rulerRendering = new RulerRenderBinding(api!, ruler,
-                deferMembership: () => rulerGizmos?.Renderer.IsInCallback == true);
+            workArea = new WorkAreaController();
+            workAreaPersistence = new WorkAreaPersistence(api!, workArea);
+            workArea.NoticeRequested += OnWorkAreaNotice;
+            workAreaRendering = new WorkAreaRenderBinding(api!, workArea,
+                deferMembership: () => workAreaGizmos?.Renderer.IsInCallback == true);
         }
         if (subscribedHotbar is not null)
             subscribedHotbar.SlotModified -= Event_HotbarSlotModified;
@@ -188,7 +188,7 @@ public class BuildBrushSystem_Client : ModSystem
 
         // New sessions start with mode disabled, regardless of equipment.
         controller!.SetBuildMode(false, null);
-        RefreshRulerContext();
+        RefreshWorkAreaContext();
         modeIndicator ??= new BuildModeIndicatorBinding(controller, CreateModeHud);
         Logger.Audit("[BuildBrush][OnPlayerJoin]: Initializing build brush for player.");
     }
@@ -203,18 +203,18 @@ public class BuildBrushSystem_Client : ModSystem
     /// <summary>Retires session artwork before clearing mode, without sending to a departing server.</summary>
     private void Event_LeaveWorld()
     {
-        ruler?.CancelEndpointEdit();
-        rulerGizmos?.Dispose();
-        rulerRendering?.Dispose();
-        rulerGizmos = null;
-        rulerRendering = null;
-        if (ruler is not null)
+        workArea?.CancelEndpointEdit();
+        workAreaGizmos?.Dispose();
+        workAreaRendering?.Dispose();
+        workAreaGizmos = null;
+        workAreaRendering = null;
+        if (workArea is not null)
         {
-            ruler.NoticeRequested -= OnRulerNotice;
+            workArea.NoticeRequested -= OnWorkAreaNotice;
         }
-        rulerPersistence?.Dispose();
-        rulerPersistence = null;
-        ruler = null;
+        workAreaPersistence?.Dispose();
+        workAreaPersistence = null;
+        workArea = null;
         modeIndicator?.Dispose();
         modeIndicator = null;
         if (subscribedHotbar is not null)
@@ -250,7 +250,7 @@ public class BuildBrushSystem_Client : ModSystem
     /// <summary>Updates local placement from the live selection and sends changed positions.</summary>
     private void Thunk_Client(float dt)
     {
-        RefreshRulerContext();
+        RefreshWorkAreaContext();
         if (Player is null)
             return;
 
@@ -525,7 +525,7 @@ public class BuildBrushSystem_Client : ModSystem
     /// <summary>Routes right-click input through brush placement while preserving default handling otherwise.</summary>
     private void InWorldAction(EnumEntityAction action, bool on, ref EnumHandling handling)
     {
-        rulerGizmos?.HandleWorldAction(action, on, ref handling);
+        workAreaGizmos?.HandleWorldAction(action, on, ref handling);
         if (handling != EnumHandling.PassThrough)
             return;
         if (action == EnumEntityAction.InWorldRightMouseDown && on)
@@ -534,28 +534,28 @@ public class BuildBrushSystem_Client : ModSystem
         }
     }
 
-    private void RefreshRulerContext()
+    private void RefreshWorkAreaContext()
     {
-        if (ruler is null || controller is null) return;
+        if (workArea is null || controller is null) return;
         bool enabled = controller.State.IsActive;
         bool alive = enabled && Player?.Entity?.Alive == true;
-        ruler.SetContext(enabled, alive);
-        rulerRendering?.Refresh();
-        if (enabled && alive && rulerGizmos is null)
+        workArea.SetContext(enabled, alive);
+        workAreaRendering?.Refresh();
+        if (enabled && alive && workAreaGizmos is null)
         {
             // The public event API has no window-focus hook in 1.22.7.
             if (World is not ClientMain game)
-                throw new NotSupportedException("Ruler input requires the supported native client world's focus events.");
-            rulerGizmos = new RulerGizmoSession(api!, ruler, game.eventManager.OnGameWindowFocus);
+                throw new NotSupportedException("Work area input requires the supported native client world's focus events.");
+            workAreaGizmos = new WorkAreaGizmoSession(api!, workArea, game.eventManager.OnGameWindowFocus);
         }
-        rulerGizmos?.Refresh();
+        workAreaGizmos?.Refresh();
     }
 
-    private void OnRulerNotice(RulerNotice notice)
+    private void OnWorkAreaNotice(WorkAreaNotice notice)
     {
         string key = notice switch
         {
-            RulerNotice.InvalidEndpoint => "ruler-invalid-endpoint",
+            WorkAreaNotice.InvalidEndpoint => "workarea-invalid-endpoint",
             _ => throw new ArgumentOutOfRangeException(nameof(notice), notice, null)
         };
         string code = $"vanillabuildingexpanded:{key}";
@@ -563,7 +563,7 @@ public class BuildBrushSystem_Client : ModSystem
     }
 
     private IBuildModeIndicator CreateModeHud() => new BuildModeHud(api!,
-        ruler ?? throw new InvalidOperationException("The ruler session must exist before opening the build HUD."));
+        workArea ?? throw new InvalidOperationException("The work area session must exist before opening the build HUD."));
     #endregion
 
     #region Block Placement

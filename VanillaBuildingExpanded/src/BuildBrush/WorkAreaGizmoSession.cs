@@ -9,12 +9,12 @@ using Vintagestory.API.Config;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
+internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
 {
     private readonly ICoreClientAPI api;
     private readonly IClientWorldAccessor world;
-    private readonly RulerController ruler;
-    private readonly System.Func<GizmoPointer, RulerEndpoint?> creationTarget;
+    private readonly WorkAreaController workArea;
+    private readonly System.Func<GizmoPointer, WorkAreaEndpoint?> creationTarget;
     private readonly GizmoManager manager = new();
     private readonly GizmoRenderAdapter renderer;
     private readonly GizmoInputAdapter input;
@@ -29,30 +29,30 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
     internal PositionGizmo? Center => center;
     public bool IsPending => pending;
 
-    public RulerGizmoSession(ICoreClientAPI api, RulerController ruler, List<Action<bool>> focusListeners,
+    public WorkAreaGizmoSession(ICoreClientAPI api, WorkAreaController workArea, List<Action<bool>> focusListeners,
         Func<GizmoContext>? capture = null, ILineRenderState? renderState = null)
     {
         this.api = api;
         world = api.World;
-        this.ruler = ruler;
-        creationTarget = new RulerTerrainTarget(api).Resolve;
+        this.workArea = workArea;
+        creationTarget = new WorkAreaTerrainTarget(api).Resolve;
         renderer = new(api, manager, capture, renderState);
         input = new(api, manager, renderer, Eligible, focusListeners, this);
-        ruler.Changed += OnChanged;
+        workArea.Changed += OnChanged;
         api.Event.LeaveWorld += Dispose;
         Refresh();
     }
 
     private bool Eligible() => !disposed && ReferenceEquals(api.World, world)
-        && ruler.State.CanPick && ruler.State.ShowRuler && world.Player?.Entity?.Alive == true;
+        && workArea.State.CanPick && workArea.State.ShowWorkArea && world.Player?.Entity?.Alive == true;
 
     private bool MatchesDimension() => world.Player?.Entity is { } player
-        && (ruler.State.Start is not { } a || a.Dimension == player.Pos.Dimension)
-        && (ruler.State.End is not { } b || b.Dimension == player.Pos.Dimension);
+        && (workArea.State.Start is not { } a || a.Dimension == player.Pos.Dimension)
+        && (workArea.State.End is not { } b || b.Dimension == player.Pos.Dimension);
 
-    private bool Missing => ruler.State.Start is null || ruler.State.End is null;
+    private bool Missing => workArea.State.Start is null || workArea.State.End is null;
 
-    private void OnChanged(RulerState _) => Refresh();
+    private void OnChanged(WorkAreaState _) => Refresh();
 
     public void Refresh()
     {
@@ -60,27 +60,27 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
         syncing = true;
         try
         {
-            var state = ruler.State;
-            if ((!wasShown && state.ShowRuler) || (!wasEnabled && state.IsBuildModeEnabled))
+            var state = workArea.State;
+            if ((!wasShown && state.ShowWorkArea) || (!wasEnabled && state.IsBuildModeEnabled))
                 explicitlyCanceled = false;
-            wasShown = state.ShowRuler;
+            wasShown = state.ShowWorkArea;
             wasEnabled = state.IsBuildModeEnabled;
             if (!publishing && manager.CapturedGizmo is PositionGizmo captured)
             {
                 var anchor = ReferenceEquals(captured, center)
-                    ? state.Bounds is { } bounds ? RulerGizmoCoordinates.ToCenter(bounds) : (GizmoPosition?)null
-                    : ReferenceEquals(captured, start) ? Anchor(state.Start, RulerEndpointRole.Start)
-                    : Anchor(state.End, RulerEndpointRole.End);
-                if (!ruler.IsEditing || anchor is null || captured.Value != anchor.Value)
+                    ? state.Bounds is { } bounds ? WorkAreaGizmoCoordinates.ToCenter(bounds) : (GizmoPosition?)null
+                    : ReferenceEquals(captured, start) ? Anchor(state.Start, WorkAreaEndpointRole.Start)
+                    : Anchor(state.End, WorkAreaEndpointRole.End);
+                if (!workArea.IsEditing || anchor is null || captured.Value != anchor.Value)
                     manager.Cancel();
             }
-            Sync(ref start, Anchor(ruler.State.Start, RulerEndpointRole.Start), RulerEndpointRole.Start);
-            Sync(ref end, Anchor(ruler.State.End, RulerEndpointRole.End), RulerEndpointRole.End);
-            Sync(ref center, start is not null && end is not null && ruler.State.Bounds is { } current
-                ? RulerGizmoCoordinates.ToCenter(current) : null, null);
+            Sync(ref start, Anchor(workArea.State.Start, WorkAreaEndpointRole.Start), WorkAreaEndpointRole.Start);
+            Sync(ref end, Anchor(workArea.State.End, WorkAreaEndpointRole.End), WorkAreaEndpointRole.End);
+            Sync(ref center, start is not null && end is not null && workArea.State.Bounds is { } current
+                ? WorkAreaGizmoCoordinates.ToCenter(current) : null, null);
             bool mismatch = !MatchesDimension();
-            if (Eligible() && mismatch && !mismatched && ruler.State.Bounds is null)
-                Notify("ruler-dimension-mismatch");
+            if (Eligible() && mismatch && !mismatched && workArea.State.Bounds is null)
+                Notify("workarea-dimension-mismatch");
             mismatched = mismatch;
             if (!Eligible() || mismatch || !Missing) pending = false;
             renderer.SetActive(Eligible());
@@ -89,15 +89,15 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
         finally { syncing = false; }
     }
 
-    private GizmoPosition? Anchor(RulerEndpoint? cell, RulerEndpointRole role) =>
+    private GizmoPosition? Anchor(WorkAreaEndpoint? cell, WorkAreaEndpointRole role) =>
         cell is { } endpoint && endpoint.IsValid(world.BlockAccessor)
-            ? RulerGizmoCoordinates.ToAnchor(endpoint, role) : null;
+            ? WorkAreaGizmoCoordinates.ToAnchor(endpoint, role) : null;
 
     private GizmoPosition? ConstrainTranslation(PositionGizmoEdit edit) =>
-        ruler.CommittedEndpoints is { Start: { } first, End: { } last }
-            ? RulerGizmoCoordinates.ConstrainTranslation(edit, new(first, last), world.BlockAccessor) : null;
+        workArea.CommittedEndpoints is { Start: { } first, End: { } last }
+            ? WorkAreaGizmoCoordinates.ConstrainTranslation(edit, new(first, last), world.BlockAccessor) : null;
 
-    private void Sync(ref PositionGizmo? gizmo, GizmoPosition? position, RulerEndpointRole? role)
+    private void Sync(ref PositionGizmo? gizmo, GizmoPosition? position, WorkAreaEndpointRole? role)
     {
         if (position is not { } anchor)
         {
@@ -108,33 +108,33 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
         {
             var instance = new PositionGizmo(anchor, renderer.Draw,
                 edit => role is { } endpointRole
-                    ? RulerGizmoCoordinates.Constrain(edit, endpointRole, world.BlockAccessor)
+                    ? WorkAreaGizmoCoordinates.Constrain(edit, endpointRole, world.BlockAccessor)
                     : ConstrainTranslation(edit),
-                role == RulerEndpointRole.End ? GizmoShape.Diamond : GizmoShape.Circle);
+                role == WorkAreaEndpointRole.End ? GizmoShape.Diamond : GizmoShape.Circle);
             instance.OnInteractionStarted += _ =>
             {
-                if (!(role is { } endpointRole ? ruler.BeginEndpointEdit(endpointRole) : ruler.BeginTranslation()))
+                if (!(role is { } endpointRole ? workArea.BeginEndpointEdit(endpointRole) : workArea.BeginTranslation()))
                     manager.Cancel();
             };
             instance.OnValueChanged += value =>
             {
-                if (syncing || !ruler.IsEditing) return;
+                if (syncing || !workArea.IsEditing) return;
                 publishing = true;
                 try
                 {
                     if (role is { } endpointRole)
                     {
-                        if (!RulerGizmoCoordinates.TryDecode(value, endpointRole, world.BlockAccessor, out var selected))
-                            throw new InvalidOperationException("The ruler gizmo published an invalid cell.");
-                        ruler.PreviewEndpoint(selected, world.BlockAccessor);
+                        if (!WorkAreaGizmoCoordinates.TryDecode(value, endpointRole, world.BlockAccessor, out var selected))
+                            throw new InvalidOperationException("The work area gizmo published an invalid cell.");
+                        workArea.PreviewEndpoint(selected, world.BlockAccessor);
                     }
                     else
                     {
-                        var (first, last) = ruler.CommittedEndpoints;
+                        var (first, last) = workArea.CommittedEndpoints;
                         if (first is null || last is null)
-                            throw new InvalidOperationException("Whole-ruler movement requires both endpoints.");
-                        var delta = value.Coordinates - RulerGizmoCoordinates.ToCenter(new(first.Value, last.Value)).Coordinates;
-                        ruler.PreviewTranslation(checked((long)delta[0]), checked((long)delta[1]),
+                            throw new InvalidOperationException("Whole-workarea movement requires both endpoints.");
+                        var delta = value.Coordinates - WorkAreaGizmoCoordinates.ToCenter(new(first.Value, last.Value)).Coordinates;
+                        workArea.PreviewTranslation(checked((long)delta[0]), checked((long)delta[1]),
                             checked((long)delta[2]), world.BlockAccessor);
                     }
                     // A crossed candidate can normalize to unchanged cells without a Changed event.
@@ -142,12 +142,12 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
                 }
                 finally { publishing = false; }
             };
-            instance.OnInteractionCompleted += _ => ruler.CompleteEndpointEdit();
-            instance.OnInteractionCanceled += _ => ruler.CancelEndpointEdit();
+            instance.OnInteractionCompleted += _ => workArea.CompleteEndpointEdit();
+            instance.OnInteractionCanceled += _ => workArea.CancelEndpointEdit();
             instance.NoticeRequested += notice => Notify(notice switch
             {
-                PositionGizmoNotice.InvalidValue => "ruler-invalid-endpoint",
-                _ => "ruler-drag-unavailable"
+                PositionGizmoNotice.InvalidValue => "workarea-invalid-endpoint",
+                _ => "workarea-drag-unavailable"
             });
             gizmo = instance;
             manager.Add(instance);
@@ -161,7 +161,7 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
         if (!explicitlyCanceled && Eligible() && MatchesDimension() && Missing && !pending)
         {
             pending = true;
-            Notify("ruler-create");
+            Notify("workarea-create");
         }
     }
 
@@ -170,10 +170,10 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
         if (!pending || !Eligible() || !MatchesDimension()) return;
         if (creationTarget(pointer) is not { } cell)
         {
-            Notify("ruler-aim-at-block");
+            Notify("workarea-aim-at-block");
             return;
         }
-        ruler.TrySetEndpoints(ruler.State.Start ?? cell, ruler.State.End ?? cell, world.BlockAccessor);
+        workArea.TrySetEndpoints(workArea.State.Start ?? cell, workArea.State.End ?? cell, world.BlockAccessor);
     }
 
     public void Cancel(bool explicitlyCanceled)
@@ -195,7 +195,7 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
     {
         if (disposed) return;
         disposed = true;
-        ruler.Changed -= OnChanged;
+        workArea.Changed -= OnChanged;
         api.Event.LeaveWorld -= Dispose;
         try { input.Dispose(); }
         finally
@@ -203,7 +203,7 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
             try { manager.Dispose(); }
             finally
             {
-                ruler.CancelEndpointEdit();
+                workArea.CancelEndpointEdit();
                 renderer.Dispose();
             }
         }

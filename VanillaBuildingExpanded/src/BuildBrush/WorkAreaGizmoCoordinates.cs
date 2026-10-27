@@ -6,21 +6,21 @@ using Vintagestory.API.Common;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-internal static class RulerGizmoCoordinates
+internal static class WorkAreaGizmoCoordinates
 {
-    public static GizmoPosition ToCenter(RulerBounds bounds) => new(Vector256.Create(
+    public static GizmoPosition ToCenter(WorkAreaBounds bounds) => new(Vector256.Create(
         (bounds.RenderMinX + bounds.RenderMaxExclusiveX) / 2,
         (bounds.RenderMinY + bounds.RenderMaxExclusiveY) / 2,
         (bounds.RenderMinZ + bounds.RenderMaxExclusiveZ) / 2, 0d), bounds.MinCell.Dimension);
 
-    public static GizmoPosition ToAnchor(RulerEndpoint cell, RulerEndpointRole role)
+    public static GizmoPosition ToAnchor(WorkAreaEndpoint cell, WorkAreaEndpointRole role)
     {
         double offset = Offset(role);
         return new(Vector256.Create(cell.X + offset, cell.Y + offset, cell.Z + offset, 0d), cell.Dimension);
     }
 
-    public static bool TryDecode(GizmoPosition anchor, RulerEndpointRole role,
-        IBlockAccessor accessor, out RulerEndpoint cell)
+    public static bool TryDecode(GizmoPosition anchor, WorkAreaEndpointRole role,
+        IBlockAccessor accessor, out WorkAreaEndpoint cell)
     {
         ArgumentNullException.ThrowIfNull(accessor);
         double offset = Offset(role);
@@ -28,30 +28,30 @@ internal static class RulerGizmoCoordinates
         double x = coordinates[0] - offset, y = coordinates[1] - offset, z = coordinates[2] - offset;
         cell = default;
         if (!Integer(x) || !Integer(y) || !Integer(z)) return false;
-        var decoded = new RulerEndpoint(checked((int)x), checked((int)y), checked((int)z), anchor.Dimension);
+        var decoded = new WorkAreaEndpoint(checked((int)x), checked((int)y), checked((int)z), anchor.Dimension);
         if (!decoded.IsValid(accessor)) return false;
         cell = decoded;
         return true;
     }
 
-    public static GizmoPosition? Constrain(PositionGizmoEdit edit, RulerEndpointRole role, IBlockAccessor accessor)
+    public static GizmoPosition? Constrain(PositionGizmoEdit edit, WorkAreaEndpointRole role, IBlockAccessor accessor)
     {
         if (!TryDecode(edit.Start, role, accessor, out _) || Snap(edit) is not { } candidate)
             return null;
         return TryDecode(candidate, role, accessor, out _) ? candidate : null;
     }
 
-    public static GizmoPosition? ConstrainTranslation(PositionGizmoEdit edit, RulerBounds baseline,
+    public static GizmoPosition? ConstrainTranslation(PositionGizmoEdit edit, WorkAreaBounds baseline,
         IBlockAccessor accessor)
     {
         if (edit.Start != ToCenter(baseline) || Snap(edit) is not { } candidate) return null;
         var delta = candidate.Coordinates - edit.Start.Coordinates;
-        var start = ToAnchor(baseline.MinCell, RulerEndpointRole.Start);
-        var end = ToAnchor(baseline.MaxCell, RulerEndpointRole.End);
+        var start = ToAnchor(baseline.MinCell, WorkAreaEndpointRole.Start);
+        var end = ToAnchor(baseline.MaxCell, WorkAreaEndpointRole.End);
         if (!GizmoRay.IsCoordinate(start.Coordinates + delta) || !GizmoRay.IsCoordinate(end.Coordinates + delta))
             return null;
-        return TryDecode(new(start.Coordinates + delta, start.Dimension), RulerEndpointRole.Start, accessor, out _)
-            && TryDecode(new(end.Coordinates + delta, end.Dimension), RulerEndpointRole.End, accessor, out _)
+        return TryDecode(new(start.Coordinates + delta, start.Dimension), WorkAreaEndpointRole.Start, accessor, out _)
+            && TryDecode(new(end.Coordinates + delta, end.Dimension), WorkAreaEndpointRole.End, accessor, out _)
             ? candidate : null;
     }
 
@@ -83,10 +83,10 @@ internal static class RulerGizmoCoordinates
     private static bool Integer(double value) => double.IsFinite(value)
         && value >= int.MinValue && value <= int.MaxValue && value == Math.Truncate(value);
 
-    private static double Offset(RulerEndpointRole role) => role switch
+    private static double Offset(WorkAreaEndpointRole role) => role switch
     {
-        RulerEndpointRole.Start => 0,
-        RulerEndpointRole.End => 1,
+        WorkAreaEndpointRole.Start => 0,
+        WorkAreaEndpointRole.End => 1,
         _ => throw new ArgumentOutOfRangeException(nameof(role))
     };
 }

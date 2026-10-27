@@ -6,35 +6,35 @@ using Vintagestory.API.Config;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-internal sealed class RulerRenderBinding : IDisposable
+internal sealed class WorkAreaRenderBinding : IDisposable
 {
     private const EnumRenderStage Stage = EnumRenderStage.Opaque;
     private readonly ICoreClientAPI api;
     private readonly IClientWorldAccessor world;
-    private readonly RulerController ruler;
-    private readonly RulerRenderer renderer;
+    private readonly WorkAreaController workArea;
+    private readonly WorkAreaRenderer renderer;
     private readonly System.Func<bool>? deferMembership;
-    private RulerBounds? bounds;
+    private WorkAreaBounds? bounds;
     private bool registered;
     private bool mismatched;
     private bool failed;
     private bool disposed;
     private bool queued;
 
-    public RulerRenderBinding(ICoreClientAPI api, RulerController ruler, IRulerRenderState? renderState = null,
+    public WorkAreaRenderBinding(ICoreClientAPI api, WorkAreaController workArea, IWorkAreaRenderState? renderState = null,
         System.Func<bool>? deferMembership = null)
     {
         this.api = api;
         world = api.World;
-        this.ruler = ruler;
+        this.workArea = workArea;
         this.deferMembership = deferMembership;
-        renderer = new RulerRenderer(api, GetEligibleBounds, OnFailure, renderState);
-        ruler.Changed += OnChanged;
+        renderer = new WorkAreaRenderer(api, GetEligibleBounds, OnFailure, renderState);
+        workArea.Changed += OnChanged;
         api.Event.PlayerDimensionChanged += OnDimensionChanged;
-        OnChanged(ruler.State);
+        OnChanged(workArea.State);
     }
 
-    private void OnChanged(RulerState state)
+    private void OnChanged(WorkAreaState state)
     {
         if (disposed) return;
         bounds = state.Start is { } start && state.End is { } end
@@ -42,12 +42,12 @@ internal sealed class RulerRenderBinding : IDisposable
         Refresh();
     }
 
-    private RulerBounds? GetEligibleBounds()
+    private WorkAreaBounds? GetEligibleBounds()
     {
-        var state = ruler.State;
+        var state = workArea.State;
         var player = world.Player?.Entity;
         return !disposed && !failed && ReferenceEquals(api.World, world)
-            && state.CanPick && state.ShowRuler && player?.Alive == true
+            && state.CanPick && state.ShowWorkArea && player?.Alive == true
             && bounds is { } box && player.Pos.Dimension == box.MinCell.Dimension ? box : null;
     }
 
@@ -57,7 +57,7 @@ internal sealed class RulerRenderBinding : IDisposable
         var player = world.Player?.Entity;
         bool mismatch = ReferenceEquals(api.World, world) && player is not null
             && bounds is { } box && player.Pos.Dimension != box.MinCell.Dimension;
-        if (mismatch && !mismatched) Notify("ruler-dimension-mismatch");
+        if (mismatch && !mismatched) Notify("workarea-dimension-mismatch");
         mismatched = mismatch;
         bool eligible = GetEligibleBounds() is not null;
         if (eligible == registered) return;
@@ -66,12 +66,12 @@ internal sealed class RulerRenderBinding : IDisposable
         {
             if (eligible)
             {
-                api.Event.RegisterRenderer(renderer, Stage, "vbe-ruler");
+                api.Event.RegisterRenderer(renderer, Stage, "vbe-workarea");
                 registered = true;
             }
             else Unregister();
         }
-        catch (Exception error) when (RulerRenderer.IsRenderFailure(error))
+        catch (Exception error) when (WorkAreaRenderer.IsRenderFailure(error))
         {
             OnFailure(error);
         }
@@ -88,13 +88,13 @@ internal sealed class RulerRenderBinding : IDisposable
             queued = false;
             if (disposed) Release();
             else Refresh();
-        }, "vbe-ruler-render-membership");
+        }, "vbe-workarea-render-membership");
     }
 
     private void OnDimensionChanged(IPlayer player)
     {
         if (disposed || player != world.Player) return;
-        ruler.CancelEndpointEdit();
+        workArea.CancelEndpointEdit();
         Refresh();
     }
 
@@ -102,13 +102,13 @@ internal sealed class RulerRenderBinding : IDisposable
     {
         if (failed || disposed) return;
         failed = true;
-        api.Logger.Error("[Ruler] Wireframe unavailable for this session: {0}", error);
-        Notify("ruler-render-unavailable");
+        api.Logger.Error("[WorkArea] Wireframe unavailable for this session: {0}", error);
+        Notify("workarea-render-unavailable");
         // Native render-stage iteration indexes the live list, including after callbacks.
         api.Event.EnqueueMainThreadTask(() =>
         {
             if (!disposed) Refresh();
-        }, "vbe-ruler-render-failure");
+        }, "vbe-workarea-render-failure");
     }
 
     private void Notify(string key)
@@ -128,7 +128,7 @@ internal sealed class RulerRenderBinding : IDisposable
     {
         if (disposed) return;
         disposed = true;
-        ruler.Changed -= OnChanged;
+        workArea.Changed -= OnChanged;
         api.Event.PlayerDimensionChanged -= OnDimensionChanged;
         bounds = null;
         if (InRenderCallback) QueueMembership();
