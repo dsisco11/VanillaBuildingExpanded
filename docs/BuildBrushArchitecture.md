@@ -48,6 +48,10 @@ The Work area section contains five rows: a compact area list, management button
 visibility, a shared resize-mode toggle, and localized inclusive X/Y/Z numeric inputs
 (disabled dashes while incomplete). Native checkbox artwork is retained with activation deferred to valid captured release. The shared table input layer owns nested hit routing and cancellation; it does not route the entire panel through native dialog defaults. State changes queue HUD rebuilding until outside control dispatch. Collapse, hide, scale/locale changes, structural Room changes and disposal cancel HUD captures before composer retirement without changing world handles, endpoints or visibility preference. Unchecking Show work area cancels world manipulation and hides both handles and box.
 
+Work-area command and resize-mode buttons use native `GuiElementTextButton`
+instances with pointer-only table registration. Table cancellation sends an
+outside release to clear native pending presses without invoking their actions.
+
 [Dimension editing](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.WorkAreaSize.cs)
 owns native text focus independently of the table's per-release pointer cleanup.
 Enter/blur commits one axis; Tab commits and traverses, and Escape cancels the draft.

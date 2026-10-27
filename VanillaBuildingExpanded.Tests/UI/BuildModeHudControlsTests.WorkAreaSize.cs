@@ -1,5 +1,6 @@
 using Moq;
 using VanillaBuildingExpanded.BuildBrush;
+using VanillaBuildingExpanded.UI;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
@@ -9,6 +10,51 @@ namespace VanillaBuildingExpanded.Tests.UI;
 
 public sealed partial class BuildModeHudControlsTests
 {
+    [Theory]
+    [InlineData("outside")]
+    [InlineData("handled")]
+    [InlineData("cancel")]
+    [InlineData("hide")]
+    [InlineData("grab")]
+    public void NativeWorkAreaButtonsCancelPendingPressesWithoutActivation(string cancellation)
+    {
+        using var f = WorkAreaFixture();
+        var area = EditableWorkArea(f);
+        using var hud = new BuildModeHud(f.Api.Object, () => default, area);
+        hud.SetVisible(true);
+        var table = WorkAreaTable(hud);
+        var commands = Assert.IsType<GuiElementTable>(table.GetElement("commands"));
+        foreach (string key in new[] { "new", "rename", "delete" })
+            Assert.IsType<GuiElementTextButton>(commands.GetElement(key));
+        var button = Assert.IsType<GuiElementTextButton>(table.GetElement("resize-mode"));
+        var initial = area.ResizeMode;
+        var e = WorkAreaMouse(f, button);
+        hud.OnMouseDown(e);
+        Assert.True(e.Handled);
+        switch (cancellation)
+        {
+            case "outside": hud.OnMouseUp(new MouseEvent(-100, -100, EnumMouseButton.Left, 0)); break;
+            case "handled":
+                hud.OnMouseUp(new MouseEvent(e.X, e.Y, EnumMouseButton.Left, 0) { Handled = true });
+                break;
+            case "cancel": table.CancelInput(); break;
+            case "hide": hud.SetVisible(false); break;
+            case "grab":
+                f.MouseGrabbed = true;
+                hud.OnRenderGUI(0);
+                f.MouseGrabbed = false;
+                break;
+        }
+        Assert.Equal(initial, area.ResizeMode);
+        button.OnMouseUp(f.Api.Object, new MouseEvent(e.X, e.Y, EnumMouseButton.Left, 0));
+        Assert.Equal(initial, area.ResizeMode);
+        hud.SetVisible(true);
+        e = WorkAreaMouse(f, WorkAreaTable(hud).GetElement("resize-mode"));
+        hud.OnMouseDown(e);
+        hud.OnMouseUp(new MouseEvent(e.X, e.Y, EnumMouseButton.Left, 0));
+        Assert.NotEqual(initial, area.ResizeMode);
+    }
+
     [Fact]
     public void SharedResizeModeControlChangesPolicyWithoutResizingAndSurvivesReopening()
     {

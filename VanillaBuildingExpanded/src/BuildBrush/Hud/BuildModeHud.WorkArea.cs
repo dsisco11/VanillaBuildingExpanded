@@ -110,6 +110,19 @@ internal sealed partial class BuildModeHud
             using var font = CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize);
             double Width(string text) => Math.Ceiling(font.GetTextExtents(text).Width / RuntimeEnv.GUIScale) + 4;
             double height = MeasureTextHeight(font);
+            TableCell Button(string key, string text, Action click, bool enabled = true, double width = 70)
+            {
+                var button = new GuiElementTextButton(capi, text, CairoFont.WhiteSmallText(),
+                    CairoFont.WhiteSmallText(), () => { click(); return true; },
+                    ElementBounds.Fixed(0, 0, width, 26), EnumButtonStyle.Small) { Enabled = enabled };
+                return new TableCell(button, key, input: TableInput.Pointer, cancelInput: () =>
+                {
+                    if (!button.Bounds.Initialized) return;
+                    // An outside release clears the native pending press without activating the button.
+                    button.OnMouseUp(capi, new MouseEvent((int)Math.Floor(button.Bounds.renderX) - 1,
+                        (int)Math.Floor(button.Bounds.renderY) - 1, EnumMouseButton.Left, 0));
+                });
+            }
             var entries = workArea?.Areas.ToArray() ?? [];
             int selected = Array.FindIndex(entries, area => area.Id == workArea?.SelectedId);
             var list = new WorkAreaListBox(capi, entries, workArea?.SelectedId,
@@ -123,15 +136,10 @@ internal sealed partial class BuildModeHud
                 new TableOptions(columnGap: 8));
             AddNestedRow(table, commands, "commands", () =>
             {
-                var create = new WorkAreaButton(capi, WorkAreaText("new"), () => OpenWorkAreaName(false));
-                var rename = new WorkAreaButton(capi, WorkAreaText("rename"), () => OpenWorkAreaName(true))
-                    { Enabled = selected >= 0 };
-                var delete = new WorkAreaButton(capi, WorkAreaText("delete"), ConfirmDeleteWorkArea)
-                    { Enabled = selected >= 0 };
                 commands.AddRowCells([
-                    new TableCell(create, "new", input: TableInput.Pointer, cancelInput: create.CancelPress),
-                    new TableCell(rename, "rename", input: TableInput.Pointer, cancelInput: rename.CancelPress),
-                    new TableCell(delete, "delete", input: TableInput.Pointer, cancelInput: delete.CancelPress)]);
+                    Button("new", WorkAreaText("new"), () => OpenWorkAreaName(false)),
+                    Button("rename", WorkAreaText("rename"), () => OpenWorkAreaName(true), selected >= 0),
+                    Button("delete", WorkAreaText("delete"), ConfirmDeleteWorkArea, selected >= 0)]);
             });
             var visibility = new GuiElementTable(capi, ElementBounds.Fixed(0, 0, 0, 0),
                 new TableOptions(columnGap: 8, verticalAlignment: EnumVerticalAlign.Middle));
@@ -149,13 +157,10 @@ internal sealed partial class BuildModeHud
 
             string resizeModeText = WorkAreaText("resize-mode",
                 WorkAreaText(workArea?.ResizeMode == WorkAreaResizeMode.Centered ? "resize-centered" : "resize-expansion"));
-            var resizeMode = new WorkAreaButton(capi, resizeModeText, () =>
+            table.AddRowCells([Button("resize-mode", resizeModeText, () =>
                 workArea?.SetResizeMode(workArea.ResizeMode == WorkAreaResizeMode.Expansion
-                    ? WorkAreaResizeMode.Centered : WorkAreaResizeMode.Expansion))
-                { Enabled = workArea is not null };
-            resizeMode.Bounds.fixedWidth = Math.Max(140, Width(resizeModeText) + 24);
-            table.AddRowCells([new TableCell(resizeMode, "resize-mode", input: TableInput.Pointer,
-                cancelInput: resizeMode.CancelPress)]);
+                    ? WorkAreaResizeMode.Centered : WorkAreaResizeMode.Expansion),
+                workArea is not null, Math.Max(140, Width(resizeModeText) + 24))]);
 
             var size = new GuiElementTable(capi, ElementBounds.Fixed(0, 0, 0, 0),
                 new TableOptions(columnGap: 6, verticalAlignment: EnumVerticalAlign.Middle));
@@ -221,41 +226,6 @@ internal sealed partial class BuildModeHud
             if (e.KeyCode == (int)GlKeys.Escape) TryClose();
             else base.OnKeyDown(e);
             e.Handled = true;
-        }
-    }
-
-    private sealed class WorkAreaButton : GuiElementTextButton
-    {
-        private readonly Action click;
-        private bool pressed;
-        public override bool Focusable => false;
-
-        public WorkAreaButton(ICoreClientAPI api, string label, Action click)
-            : base(api, label, CairoFont.WhiteSmallText(), CairoFont.WhiteSmallText(),
-                () => { click(); return true; }, ElementBounds.Fixed(0, 0, 70, 26), EnumButtonStyle.Small)
-        {
-            this.click = click;
-        }
-
-        public void CancelPress() { pressed = false; SetActive(false); }
-
-        public override void OnMouseDown(ICoreClientAPI api, MouseEvent e)
-        {
-            if (e.Handled || api.Input.MouseGrabbed || e.Button != EnumMouseButton.Left
-                || !IsPositionInside(e.X, e.Y)) return;
-            pressed = Enabled;
-            SetActive(pressed);
-            e.Handled = true;
-        }
-
-        public override void OnMouseUp(ICoreClientAPI api, MouseEvent e)
-        {
-            if (e.Button != EnumMouseButton.Left) return;
-            bool activate = pressed && !e.Handled && !api.Input.MouseGrabbed && IsPositionInside(e.X, e.Y);
-            bool owned = pressed;
-            CancelPress();
-            if (owned) e.Handled = true;
-            if (activate) click();
         }
     }
 
