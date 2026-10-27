@@ -18,6 +18,18 @@ internal readonly record struct RulerEndpoint(int X, int Y, int Z, int Dimension
         && Y >= 0 && Y < BlockPos.DimensionBoundary
         && (long)Dimension * BlockPos.DimensionBoundary + Y <= int.MaxValue
         && accessor.IsValidPos(new BlockPos(X, Y, Z, Dimension));
+
+    public bool TryTranslate(long x, long y, long z, IBlockAccessor accessor, out RulerEndpoint translated)
+    {
+        translated = default;
+        if (x < int.MinValue - (long)X || x > int.MaxValue - (long)X
+            || y < -(long)Y || y >= BlockPos.DimensionBoundary - (long)Y
+            || z < int.MinValue - (long)Z || z > int.MaxValue - (long)Z) return false;
+        var candidate = new RulerEndpoint((int)(X + x), (int)(Y + y), (int)(Z + z), Dimension);
+        if (!candidate.IsValid(accessor)) return false;
+        translated = candidate;
+        return true;
+    }
 }
 
 internal readonly record struct RulerBounds

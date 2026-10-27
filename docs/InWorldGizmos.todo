@@ -10,7 +10,7 @@ Replace ruler endpoint buttons and one-shot picking with reusable client-owned i
 
 Use an abstract Gizmo and typed Gizmo<TValue>. The Value property setter raises OnValueChanged for actual changes from either manipulation or owner assignment; do not introduce a separate SetValue method or silent assignment path.
 
-The ruler has two positioning-gizmo instances. Start uses its cell's (0, 0, 0) corner; End uses its cell's (1, 1, 1) corner. Start always contains the per-axis minimum cell and End the per-axis maximum cell, preserving inclusive measurements. Render handles as overlays and retain the depth-tested measurement box. The panel becomes:
+The ruler has two endpoint positioning-gizmo instances plus a midpoint positioning gizmo when the selection is complete. Start uses its cell's (0, 0, 0) corner; End uses its cell's (1, 1, 1) corner. Start always contains the per-axis minimum cell and End the per-axis maximum cell, preserving inclusive measurements. The midpoint translates both corners together without resizing. Render handles as overlays and retain the depth-tested measurement box. The panel becomes:
 
 ```text
 [ ] Show ruler
@@ -20,6 +20,13 @@ Size: <x>, <y>, <z>
 Non-goals: rotation/scaling gizmos, multi-object editing, undo history, numeric editors, multiplayer sharing, unrelated brush compatibility tests, additional ruler selection/cycling controls, new relocation controls, additional planar handles, or an optional legacy terrain-drag mode.
 
 ## Assumptions and qualification gates
+
+Decision update after Phase 7 (2026-10-27): the user added whole-selection
+translation using a third positioning gizmo at the rendered box midpoint. It shares
+analytic center/axis motion, world-grid delta snapping, visual feedback and existing
+transaction/persistence/lifecycle boundaries. Partial rulers omit it; invalid
+translated corners reject the whole move. Earlier phase evidence records the
+two-endpoint implementation at the time, not live qualification of this addition.
 
 Decision update after Phase 6 (2026-10-26): the user superseded the original
 selected-endpoint identity preservation rule. Start/End now always normalize to the

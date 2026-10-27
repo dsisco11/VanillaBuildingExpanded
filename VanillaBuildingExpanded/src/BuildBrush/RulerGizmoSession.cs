@@ -18,7 +18,7 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
     private readonly GizmoManager manager = new();
     private readonly GizmoRenderAdapter renderer;
     private readonly GizmoInputAdapter input;
-    private PositionGizmo? start, end;
+    private PositionGizmo? start, end, center;
     private bool publishing, syncing, disposed, pending, explicitlyCanceled;
     private bool wasShown, wasEnabled, mismatched;
 
@@ -26,6 +26,7 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
     internal GizmoRenderAdapter Renderer => renderer;
     internal PositionGizmo? Start => start;
     internal PositionGizmo? End => end;
+    internal PositionGizmo? Center => center;
     public bool IsPending => pending;
 
     public RulerGizmoSession(ICoreClientAPI api, RulerController ruler, List<Action<bool>> focusListeners,
@@ -66,13 +67,17 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
             wasEnabled = state.IsBuildModeEnabled;
             if (!publishing && manager.CapturedGizmo is PositionGizmo captured)
             {
-                var cell = ReferenceEquals(captured, start) ? state.Start : state.End;
-                var role = ReferenceEquals(captured, start) ? RulerEndpointRole.Start : RulerEndpointRole.End;
-                if (!ruler.IsEditing || cell is null || captured.Value != RulerGizmoCoordinates.ToAnchor(cell.Value, role))
+                var anchor = ReferenceEquals(captured, center)
+                    ? state.Bounds is { } bounds ? RulerGizmoCoordinates.ToCenter(bounds) : (GizmoPosition?)null
+                    : ReferenceEquals(captured, start) ? Anchor(state.Start, RulerEndpointRole.Start)
+                    : Anchor(state.End, RulerEndpointRole.End);
+                if (!ruler.IsEditing || anchor is null || captured.Value != anchor.Value)
                     manager.Cancel();
             }
-            Sync(ref start, ruler.State.Start, RulerEndpointRole.Start);
-            Sync(ref end, ruler.State.End, RulerEndpointRole.End);
+            Sync(ref start, Anchor(ruler.State.Start, RulerEndpointRole.Start), RulerEndpointRole.Start);
+            Sync(ref end, Anchor(ruler.State.End, RulerEndpointRole.End), RulerEndpointRole.End);
+            Sync(ref center, start is not null && end is not null && ruler.State.Bounds is { } current
+                ? RulerGizmoCoordinates.ToCenter(current) : null, null);
             bool mismatch = !MatchesDimension();
             if (Eligible() && mismatch && !mismatched && ruler.State.Bounds is null)
                 Notify("ruler-dimension-mismatch");
@@ -84,22 +89,32 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
         finally { syncing = false; }
     }
 
-    private void Sync(ref PositionGizmo? gizmo, RulerEndpoint? cell, RulerEndpointRole role)
+    private GizmoPosition? Anchor(RulerEndpoint? cell, RulerEndpointRole role) =>
+        cell is { } endpoint && endpoint.IsValid(world.BlockAccessor)
+            ? RulerGizmoCoordinates.ToAnchor(endpoint, role) : null;
+
+    private GizmoPosition? ConstrainTranslation(PositionGizmoEdit edit) =>
+        ruler.CommittedEndpoints is { Start: { } first, End: { } last }
+            ? RulerGizmoCoordinates.ConstrainTranslation(edit, new(first, last), world.BlockAccessor) : null;
+
+    private void Sync(ref PositionGizmo? gizmo, GizmoPosition? position, RulerEndpointRole? role)
     {
-        if (cell is not { } endpoint || !endpoint.IsValid(world.BlockAccessor))
+        if (position is not { } anchor)
         {
             if (gizmo is not null) { manager.Remove(gizmo); gizmo.Dispose(); gizmo = null; }
             return;
         }
-        var anchor = RulerGizmoCoordinates.ToAnchor(endpoint, role);
         if (gizmo is null)
         {
             var instance = new PositionGizmo(anchor, renderer.Draw,
-                edit => RulerGizmoCoordinates.Constrain(edit, role, world.BlockAccessor),
-                role == RulerEndpointRole.Start ? GizmoShape.Circle : GizmoShape.Diamond);
+                edit => role is { } endpointRole
+                    ? RulerGizmoCoordinates.Constrain(edit, endpointRole, world.BlockAccessor)
+                    : ConstrainTranslation(edit),
+                role == RulerEndpointRole.End ? GizmoShape.Diamond : GizmoShape.Circle);
             instance.OnInteractionStarted += _ =>
             {
-                if (!ruler.BeginEndpointEdit(role)) manager.Cancel();
+                if (!(role is { } endpointRole ? ruler.BeginEndpointEdit(endpointRole) : ruler.BeginTranslation()))
+                    manager.Cancel();
             };
             instance.OnValueChanged += value =>
             {
@@ -107,9 +122,21 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
                 publishing = true;
                 try
                 {
-                    if (!RulerGizmoCoordinates.TryDecode(value, role, world.BlockAccessor, out var selected))
-                        throw new InvalidOperationException("The ruler gizmo published an invalid cell.");
-                    ruler.PreviewEndpoint(selected, world.BlockAccessor);
+                    if (role is { } endpointRole)
+                    {
+                        if (!RulerGizmoCoordinates.TryDecode(value, endpointRole, world.BlockAccessor, out var selected))
+                            throw new InvalidOperationException("The ruler gizmo published an invalid cell.");
+                        ruler.PreviewEndpoint(selected, world.BlockAccessor);
+                    }
+                    else
+                    {
+                        var (first, last) = ruler.CommittedEndpoints;
+                        if (first is null || last is null)
+                            throw new InvalidOperationException("Whole-ruler movement requires both endpoints.");
+                        var delta = value.Coordinates - RulerGizmoCoordinates.ToCenter(new(first.Value, last.Value)).Coordinates;
+                        ruler.PreviewTranslation(checked((long)delta[0]), checked((long)delta[1]),
+                            checked((long)delta[2]), world.BlockAccessor);
+                    }
                     // A crossed candidate can normalize to unchanged cells without a Changed event.
                     Refresh();
                 }
@@ -181,6 +208,6 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
             }
         }
         pending = false;
-        start = end = null;
+        start = end = center = null;
     }
 }

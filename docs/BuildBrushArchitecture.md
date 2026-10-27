@@ -20,7 +20,7 @@ BuildBrush resolves placement intent locally and applies native block rules on b
 | [HUD binding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) and [HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs) | Observe enabled mode independently of brush eligibility and lazily own the non-focusing information panel. The [Ruler partial](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.Ruler.cs) observes shared ruler state and issues commands without owning coordinates, config or GPU resources. |
 | [Ruler state](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs) and [controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs) | Own immutable copied endpoints with local Y/dimension, inclusive wide-integer bounds, visibility preference and direct endpoint transactions. Coordinate validation is shared with the world-facing adapters. |
 | [Ruler persistence](../VanillaBuildingExpanded/src/BuildBrush/RulerPersistence.cs) | Uses native mod-config APIs for versioned per-savegame endpoints, validates without requiring loaded blocks, preserves unrelated entries and retries dirty edits. |
-| [Ruler gizmo session](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoSession.cs) | Owns one manager/render/input composition, per-endpoint positioning controls, controller transaction binding and explicit missing-endpoint creation. Creation-only [terrain targeting](../VanillaBuildingExpanded/src/BuildBrush/RulerTerrainTarget.cs) raycasts the finite visual near/far segment without changing native selection or loading terrain; handle movement never invokes it. |
+| [Ruler gizmo session](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoSession.cs) | Owns one manager/render/input composition, per-endpoint positioning controls and a whole-selection midpoint control, controller transaction binding and explicit missing-endpoint creation. Creation-only [terrain targeting](../VanillaBuildingExpanded/src/BuildBrush/RulerTerrainTarget.cs) raycasts the finite visual near/far segment without changing native selection or loading terrain; handle movement never invokes it. |
 | [Ruler render binding](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderBinding.cs) | Observes state and local dimension/session eligibility, balances opaque-stage registration, reports mismatch/render failure, and owns one renderer per session. |
 | [Ruler renderer](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderer.cs) and [render state](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderState.cs) | Reuse one 12-edge mesh with the native wireframe shader, compute double-precision camera-relative drawing and restore the active shader and captured depth/line state without mutating blend state. |
 
@@ -130,6 +130,19 @@ an active edit. Persistence reads only committed endpoints, even on an explicit 
 retry during a preview. Completion requests the durable save; a clean unchanged
 completion causes no write. Cancellation precedes both client departure teardown and
 standalone persistence disposal/dirty retries, so canceled previews cannot be saved.
+
+A complete valid selection also owns a positioning gizmo at the geometric midpoint
+of its rendered bounds, `(minCell + maxCell + 1) / 2`, using double SIMD coordinates
+and explicit dimension. Center/axis motion shares the endpoint gizmo's analytic math,
+snapping and visual feedback. Whole-selection transactions snapshot both corners and
+apply the snapped integer displacement to that original pair on every preview;
+neither a previous preview nor the moving midpoint rebases the drag. Both translated
+corners must validate before one atomic state update. Long displacement checks guard
+integer overflow, including moves between opposite signed-coordinate extremes.
+Size is unchanged; the box and all three controls update live. Only completion saves,
+and cancellation restores both corners. Endpoint edits resynchronize the midpoint.
+Partial rulers do not have this control; visibility, dimension and lifecycle gates
+are shared with the endpoint controls.
 
 On local join, the client system creates a fresh ruler controller, restores endpoints through persistence, then creates the box render binding. Visibility remains unchecked and mode disabled. The gizmo session is created lazily once enabled and alive, independent of brush placement eligibility. The 50-ms client tick refreshes context before brush early-outs; mode transitions refresh it immediately.
 

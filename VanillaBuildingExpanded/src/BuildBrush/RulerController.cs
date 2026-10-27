@@ -6,7 +6,7 @@ namespace VanillaBuildingExpanded.BuildBrush;
 
 internal sealed class RulerController
 {
-    private readonly record struct Edit(RulerEndpointRole Role, RulerEndpoint? Start, RulerEndpoint? End);
+    private readonly record struct Edit(RulerEndpointRole? Role, RulerEndpoint? Start, RulerEndpoint? End);
     private Edit? edit;
     public RulerState State { get; private set; }
     public bool IsEditing => edit is not null;
@@ -38,7 +38,7 @@ internal sealed class RulerController
     public bool PreviewEndpoint(RulerEndpoint endpoint, IBlockAccessor accessor)
     {
         ArgumentNullException.ThrowIfNull(accessor);
-        if (edit is not { } baseline) return false;
+        if (edit is not { Role: not null } baseline) return false;
         var original = baseline.Role == RulerEndpointRole.Start ? baseline.Start : baseline.End;
         if (endpoint.Dimension != original!.Value.Dimension || !endpoint.IsValid(accessor))
             return RejectEndpoint();
@@ -47,6 +47,23 @@ internal sealed class RulerController
             : State with { Start = baseline.Start, End = endpoint });
         if (!ValidEndpoints(next.Start, next.End, accessor)) return RejectEndpoint();
         SetState(next);
+        return true;
+    }
+
+    public bool BeginTranslation()
+    {
+        if (edit is not null || !State.CanPick || State.Bounds is null) return false;
+        edit = new(null, State.Start, State.End);
+        return IsEditing;
+    }
+
+    public bool PreviewTranslation(long x, long y, long z, IBlockAccessor accessor)
+    {
+        ArgumentNullException.ThrowIfNull(accessor);
+        if (edit is not { Role: null, Start: { } start, End: { } end }) return false;
+        if (!start.TryTranslate(x, y, z, accessor, out var first)
+            || !end.TryTranslate(x, y, z, accessor, out var last)) return RejectEndpoint();
+        SetState(State with { Start = first, End = last });
         return true;
     }
 

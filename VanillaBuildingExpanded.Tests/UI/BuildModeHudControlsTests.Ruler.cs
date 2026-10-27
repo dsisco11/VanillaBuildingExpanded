@@ -48,7 +48,7 @@ public sealed partial class BuildModeHudControlsTests
         hud.OnRenderGUI(0);
         h.Session.Refresh();
         Assert.Same(gizmo, h.Session.Manager.CapturedGizmo);
-        Assert.Equal(2, h.Session.Manager.Count);
+        Assert.Equal(3, h.Session.Manager.Count);
         h.MoveCenterTo(new(-50, 70, -200, 0));
         h.Frame();
         h.Up();

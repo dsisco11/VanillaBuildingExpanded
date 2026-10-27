@@ -12,6 +12,97 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 
 public sealed class RulerTransactionTests
 {
+    [Fact]
+    public void WholeRulerTranslation_PreviewsFromOriginalPairAtomicallyAndPreservesSize()
+    {
+        var controller = Controller();
+        var original = controller.State;
+        var size = original.Bounds!.Value;
+        var accessor = Accessor().Object;
+        int commits = 0;
+        controller.EndpointsCommitted += () => commits++;
+        Assert.True(controller.BeginTranslation());
+        Assert.False(controller.BeginTranslation());
+        Assert.False(controller.BeginEndpointEdit(RulerEndpointRole.Start));
+        Assert.False(controller.PreviewEndpoint(new(0, 65, 0, 2), accessor));
+        foreach (var (x, y, z) in new[] { (3L, 2L, -5L), (-20L, -10L, 100L), (0L, 0L, 0L) })
+        {
+            Assert.True(controller.PreviewTranslation(x, y, z, accessor));
+            Assert.Equal(original.Start!.Value with
+                { X = original.Start.Value.X + (int)x, Y = original.Start.Value.Y + (int)y,
+                    Z = original.Start.Value.Z + (int)z }, controller.State.Start);
+            Assert.Equal(original.End!.Value with
+                { X = original.End.Value.X + (int)x, Y = original.End.Value.Y + (int)y,
+                    Z = original.End.Value.Z + (int)z }, controller.State.End);
+            var bounds = controller.State.Bounds!.Value;
+            Assert.Equal((size.SizeX, size.SizeY, size.SizeZ), (bounds.SizeX, bounds.SizeY, bounds.SizeZ));
+            Assert.Equal((original.Start, original.End), controller.CommittedEndpoints);
+            Assert.Equal(0, commits);
+        }
+        Assert.True(controller.PreviewTranslation(2, 1, 3, accessor));
+        var preview = controller.State;
+        foreach (var (x, y, z) in new[] { (long.MaxValue, 0L, 0L), (0L, -1000L, 0L),
+            (0L, 32768L, 0L), (0L, 0L, long.MinValue) })
+        {
+            Assert.False(controller.PreviewTranslation(x, y, z, accessor));
+            Assert.Equal(preview, controller.State);
+        }
+        controller.CancelEndpointEdit();
+        Assert.Equal(original, controller.State);
+        Assert.Equal(0, commits);
+        Assert.True(controller.BeginTranslation());
+        Assert.True(controller.PreviewTranslation(-5, 2, -3, accessor));
+        Assert.True(controller.CompleteEndpointEdit());
+        Assert.False(controller.CompleteEndpointEdit());
+        Assert.Equal(1, commits);
+        Assert.False(controller.PreviewTranslation(0, 0, 0, accessor));
+    }
+
+    [Fact]
+    public void WholeRulerTranslation_RequiresCompletePairAndAllowsWideDeltaWithoutIntegerOverflow()
+    {
+        var controller = Controller();
+        controller.RestoreEndpoints(new(int.MinValue, 32766, int.MaxValue - 1, 65535),
+            new(int.MinValue + 1, 32767, int.MaxValue, 65535));
+        var original = controller.State;
+        Assert.True(controller.BeginTranslation());
+        Assert.True(controller.PreviewTranslation(uint.MaxValue - 1L, 0, -uint.MaxValue + 1L, Accessor().Object));
+        Assert.Equal(new RulerEndpoint(int.MaxValue - 1, 32766, int.MinValue, 65535), controller.State.Start);
+        Assert.Equal(new RulerEndpoint(int.MaxValue, 32767, int.MinValue + 1, 65535), controller.State.End);
+        var valid = controller.State;
+        Assert.False(controller.PreviewTranslation(uint.MaxValue, 0, 0, Accessor().Object));
+        Assert.False(controller.PreviewTranslation(0, 1, 0, Accessor().Object));
+        Assert.Equal(valid, controller.State);
+        controller.RestoreEndpoints(original.Start, null);
+        Assert.False(controller.IsEditing);
+        Assert.False(controller.BeginTranslation());
+        Assert.True(controller.BeginEndpointEdit(RulerEndpointRole.Start));
+        Assert.False(controller.PreviewTranslation(0, 0, 0, Accessor().Object));
+    }
+
+    [Theory]
+    [InlineData(0.49, 0)]
+    [InlineData(0.5, 1)]
+    [InlineData(-0.49, 0)]
+    [InlineData(-0.5, -1)]
+    public void WholeRulerConstraint_SnapsMidpointDeltasAndRejectsMovesThatInvalidateEitherCorner(double step, int snapped)
+    {
+        var bounds = new RulerBounds(new(-21, 65, -200, 2), new(30, 75, -180, 2));
+        var center = RulerGizmoCoordinates.ToCenter(bounds);
+        Assert.Equal(new GizmoPosition(V(5, 70.5, -189.5), 2), center);
+        var candidate = new GizmoPosition(center.Coordinates + V(step, -step, step), 2);
+        var constrained = RulerGizmoCoordinates.ConstrainTranslation(new(center, candidate, PositionGizmo.Center),
+            bounds, Accessor().Object);
+        Assert.Equal(new GizmoPosition(center.Coordinates + V(snapped, -snapped, snapped), 2), constrained);
+        Assert.Null(RulerGizmoCoordinates.ConstrainTranslation(new(center, candidate, PositionGizmo.X),
+            bounds, Accessor().Object));
+        foreach (var invalid in new[] { new GizmoPosition(center.Coordinates + V(0, -66, 0), 2),
+            new(center.Coordinates + V(0, 32768 - 75, 0), 2), new(center.Coordinates, 3),
+            new(center.Coordinates + V(int.MaxValue, 0, 0), 2) })
+            Assert.Null(RulerGizmoCoordinates.ConstrainTranslation(new(center, invalid, PositionGizmo.Center),
+                bounds, Accessor().Object));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

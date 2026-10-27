@@ -18,6 +18,184 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 public sealed class RulerGizmoSessionTests
 {
     [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    [InlineData(false, 1)]
+    [InlineData(true, 1)]
+    [InlineData(false, 2)]
+    [InlineData(true, 2)]
+    [InlineData(false, 3)]
+    [InlineData(true, 3)]
+    public void WholeBoxGizmo_RepeatedActualDragsTranslateBothCornersWithoutResizingOrTargeting(bool grabbed, int handle)
+    {
+        using var f = new Fixture(grabbed);
+        var h = f.H;
+        h.Ruler.RestoreEndpoints(new(-20, 60, -220, 0), new(20, 80, -180, 0));
+        double c = Math.Cos(0.45), s = Math.Sin(0.45);
+        h.View = Mat4d.Multiply(new double[16], Yaw(0.65),
+            [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
+        h.ReticleDistance = 30;
+        h.Enable();
+        for (int repeat = 0; repeat < 3; repeat++)
+        {
+            var before = h.Ruler.State;
+            var bounds = before.Bounds!.Value;
+            var center = RulerGizmoCoordinates.ToCenter(bounds);
+            h.Reference = center.Coordinates - h.Capture().Camera!.ViewDirection * h.ReticleDistance;
+            h.Frame();
+            Assert.Equal(3, h.Session.Manager.Count);
+            Assert.Equal(center, h.Session.Center!.Value);
+            var geometry = PositionGizmoGeometry.Create(h.Session.Renderer.Context!.Camera!, center.Coordinates,
+                GizmoShape.Circle)!;
+            var axis = handle == 0 ? V(1, 0, 0) : V(0, 0, 0).WithElement(handle - 1, 1);
+            var grab = center.Coordinates + (handle == 0 ? V(0, 0, 0) : axis * (geometry.AxisLength * 0.7));
+            h.Aim(grab);
+            Assert.True(h.Down().Handled);
+            Assert.Same(h.Session.Center, h.Session.Manager.CapturedGizmo);
+            Assert.Equal(new GizmoHandleId(handle), h.Session.Manager.CapturedHandle);
+            for (int frame = 0; frame < 120; frame++) h.Frame();
+            Assert.Equal(before, h.Ruler.State);
+            foreach (int amount in new[] { 1, 3, -2, 0, 2 })
+            {
+                var delta = handle == 0 ? h.Capture().Camera!.Billboard(center.Coordinates).Right * amount
+                    : axis * amount;
+                h.Aim(grab + delta);
+                h.Move(h.X, h.Y);
+                h.Frame();
+                var first = h.Ruler.State.Start!.Value;
+                var last = h.Ruler.State.End!.Value;
+                Assert.Equal((int)Math.Round(delta[0], MidpointRounding.AwayFromZero),
+                    first.X - before.Start!.Value.X);
+                Assert.Equal((int)Math.Round(delta[1], MidpointRounding.AwayFromZero),
+                    first.Y - before.Start.Value.Y);
+                Assert.Equal((int)Math.Round(delta[2], MidpointRounding.AwayFromZero),
+                    first.Z - before.Start.Value.Z);
+                Assert.Equal(first.X - before.Start!.Value.X, last.X - before.End!.Value.X);
+                Assert.Equal(first.Y - before.Start.Value.Y, last.Y - before.End.Value.Y);
+                Assert.Equal(first.Z - before.Start.Value.Z, last.Z - before.End.Value.Z);
+                Assert.Equal((bounds.SizeX, bounds.SizeY, bounds.SizeZ), h.Size);
+                Assert.Equal(RulerGizmoCoordinates.ToCenter(h.Ruler.State.Bounds!.Value), h.Session.Center.Value);
+                Assert.Same(h.Session.Center, h.Session.Manager.CapturedGizmo);
+                Assert.Equal(repeat, h.Commits);
+                h.AssertLiveBox();
+                h.AssertOwnedActions();
+            }
+            Assert.NotEqual(before.Start, h.Ruler.State.Start);
+            Assert.True(h.Up().Handled);
+            Assert.Equal(repeat + 1, h.Commits);
+            h.AssertNoTargeting();
+        }
+    }
+
+    [Theory]
+    [InlineData(false, "escape")]
+    [InlineData(true, "right")]
+    [InlineData(false, "hidden")]
+    [InlineData(true, "dimension")]
+    [InlineData(false, "focus")]
+    [InlineData(true, "departure")]
+    public void WholeBoxGizmo_CancelAndContextLossRestoreBothCorners(bool grabbed, string reason)
+    {
+        using var f = new Fixture(grabbed);
+        var h = f.H;
+        h.Ruler.RestoreEndpoints(new(-30, 65, -200, 0), new(30, 75, -200, 0));
+        h.Enable();
+        h.Frame();
+        var before = h.Ruler.State;
+        var center = h.Session.Center!;
+        h.Aim(center.Value.Coordinates);
+        Assert.True(h.Down().Handled);
+        Assert.Same(center, h.Session.Manager.CapturedGizmo);
+        h.Aim(center.Value.Coordinates + V(4, 2, 0));
+        h.Move(h.X, h.Y);
+        h.Frame();
+        Assert.NotEqual(before.Start, h.Ruler.State.Start);
+        switch (reason)
+        {
+            case "escape": h.Key(); break;
+            case "right": h.Down(button: EnumMouseButton.Right); break;
+            case "hidden": h.Ruler.SetVisibility(false); break;
+            case "dimension": h.Player.Entity.Pos.Dimension++; h.Session.Refresh(); break;
+            case "focus": h.Focus.ForEach(callback => callback(false)); break;
+            case "departure": h.Events.Raise(e => e.LeaveWorld += null!); break;
+        }
+        Assert.Equal(before.Start, h.Ruler.State.Start);
+        Assert.Equal(before.End, h.Ruler.State.End);
+        Assert.False(h.Ruler.IsEditing);
+        Assert.Null(h.Session.Manager.CapturedGizmo);
+        Assert.Equal(0, h.Commits);
+        h.Up();
+    }
+
+    [Fact]
+    public void WholeBoxGizmo_ExistsOnlyForCompleteSelectionAndTracksEndpointEditsAndVisibility()
+    {
+        using var f = new Fixture();
+        var h = f.H;
+        h.Enable();
+        h.Frame();
+        Assert.Null(h.Session.Center);
+        var first = new RulerEndpoint(-30, 65, -200, 0);
+        h.Ruler.RestoreEndpoints(first, null);
+        h.Frame();
+        Assert.Null(h.Session.Center);
+        h.Ruler.RestoreEndpoints(first, new(30, 75, -180, 0));
+        h.Frame();
+        var center = h.Session.Center!;
+        Assert.Equal(RulerGizmoCoordinates.ToCenter(h.Ruler.State.Bounds!.Value), center.Value);
+        h.Ruler.TrySetEndpoint(RulerEndpointRole.End, new(50, 80, -160, 0), h.Accessor.Object);
+        Assert.Same(center, h.Session.Center);
+        Assert.Equal(RulerGizmoCoordinates.ToCenter(h.Ruler.State.Bounds!.Value), center.Value);
+        h.Ruler.SetVisibility(false);
+        Assert.False(center.Visible);
+        h.Ruler.SetVisibility(true);
+        Assert.True(center.Visible);
+        h.Ruler.RestoreEndpoints(first, null);
+        Assert.Null(h.Session.Center);
+        Assert.True(center.IsDisposed);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WholeBoxGizmo_InvalidCornerRetainsEntireBoxAndRecoversAtLargeCoordinates(bool grabbed)
+    {
+        using var f = new Fixture(grabbed);
+        var h = f.H;
+        var first = new RulerEndpoint(int.MaxValue - 2, 0, -200, 65535);
+        var last = new RulerEndpoint(int.MaxValue, 32767, -200, 65535);
+        h.Player.Entity.Pos.Dimension = 65535;
+        h.Ruler.RestoreEndpoints(first, last);
+        var center = RulerGizmoCoordinates.ToCenter(h.Ruler.State.Bounds!.Value);
+        h.Reference = center.Coordinates + V(0, 0, 200);
+        h.Enable();
+        h.Frame();
+        h.Aim(center.Coordinates);
+        h.Down();
+        Assert.Same(h.Session.Center, h.Session.Manager.CapturedGizmo);
+        foreach (var invalid in new[] { V(1, 0, 0), V(0, 1, 0), V(0, -1, 0) })
+        {
+            h.Aim(center.Coordinates + invalid);
+            h.Move(h.X, h.Y);
+            for (int frame = 0; frame < 120; frame++) h.Frame();
+            Assert.Equal(first, h.Ruler.State.Start);
+            Assert.Equal(last, h.Ruler.State.End);
+            Assert.Same(h.Session.Center, h.Session.Manager.CapturedGizmo);
+            h.AssertLiveBox();
+        }
+        h.Api.Verify(api => api.TriggerIngameError(It.IsAny<object>(),
+            "vanillabuildingexpanded:ruler-invalid-endpoint", It.IsAny<string>()), Times.Once);
+        h.Aim(center.Coordinates + V(-2, 0, 0));
+        h.Move(h.X, h.Y);
+        h.Frame();
+        Assert.Equal(first with { X = first.X - 2 }, h.Ruler.State.Start);
+        Assert.Equal(last with { X = last.X - 2 }, h.Ruler.State.End);
+        h.Up();
+        Assert.Equal(1, h.Commits);
+        h.AssertNoTargeting();
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void RepeatedBothEndpointDrags_PreviewCrossingAlwaysNormalizesBothCorners(bool grabbed)
@@ -31,7 +209,7 @@ public sealed class RulerGizmoSessionTests
         f.H.Up(100, 100);
         Assert.Equal(1, f.H.Commits);
         Assert.Equal(f.H.Ruler.State.Start, f.H.Ruler.State.End);
-        Assert.Equal(2, f.H.Session.Manager.Count);
+        Assert.Equal(3, f.H.Session.Manager.Count);
         Assert.Equal((1L, 1L, 1L), f.H.Size);
         f.H.Ruler.RestoreEndpoints(new(-30, 65, -200, 0), new(30, 65, -200, 0));
         for (int i = 0; i < 12; i++)

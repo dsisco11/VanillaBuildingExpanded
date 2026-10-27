@@ -13,6 +13,7 @@ The requested design includes:
 - A 3D positioning gizmo that marks a position and provides draggable X/Y/Z axis arrows.
 - A central icon/handle for movement without selecting an axis.
 - Separate positioning-gizmo instances associated with the ruler's Start and End positions.
+- A positioning gizmo at a complete selection's geometric midpoint for translating both corners together without resizing.
 
 The ruler remains client-only. Gizmos are controls, not blocks, inventory items or synchronized world entities.
 
@@ -155,6 +156,14 @@ These are marker offsets, not changes to stored endpoints or inclusive measureme
 Updated decision (2026-10-26): Start and End always contain the per-axis minimum and maximum cell coordinates, respectively, including previews and restored legacy values. Crossing is allowed: normalize both endpoints, rather than clamping or retaining mixed min/max coordinates. Offsets and marker shapes remain associated with the minimum/maximum roles. This supersedes the earlier selected-endpoint identity preservation decision.
 
 Create one positioning-gizmo instance for each existing endpoint, even for an incomplete ruler. The box still requires both endpoints.
+
+Decision update (2026-10-27, after Phase 7): a complete selection additionally has
+a third positioning gizmo at `(minCell + maxCell + 1) / 2`. Its center and arrows
+translate the original endpoint pair by the same snapped world-grid displacement,
+preserving all inclusive sizes. Validate both translated corners before publishing
+either; reject the whole move if either is invalid. The same release/commit,
+cancel/rollback, persistence and contextual cancellation rules apply to both corners
+as one edit. Endpoint edits refresh this midpoint, and partial rulers omit it.
 
 During a drag:
 

@@ -22,6 +22,69 @@ public sealed class RulerConfigFileCollection;
 [Collection("Ruler config files")]
 public sealed class RulerPersistenceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WholeBoxGizmo_PersistsOnlyCompleteTranslationAndRollsBackCanceledPairBeforeDirtyRetry(bool grabbed)
+    {
+        using var fixture = new Fixture();
+        fixture.Write(Config(("world-a", Pair(Endpoint(-30, 65, -200), Endpoint(30, 75, -200)))));
+        using var persistence = fixture.Open();
+        using var h = new RulerGizmoSessionTests.Harness(fixture.Api, fixture.World,
+            fixture.Accessor, fixture.Controller, grabbed);
+        h.Enable();
+        Move(4, 2);
+        Assert.Empty(fixture.Writes);
+        Assert.Equal(new RulerEndpoint(-26, 67, -200, 0), h.Ruler.State.Start);
+        Assert.Equal(new RulerEndpoint(34, 77, -200, 0), h.Ruler.State.End);
+        h.Up();
+        Assert.Single(fixture.Writes);
+        var saved = h.Ruler.CommittedEndpoints;
+        Move(-10, -1);
+        Assert.Equal(saved, h.Ruler.CommittedEndpoints);
+        Assert.Single(fixture.Writes);
+        h.Key();
+        h.Up();
+        Assert.Equal(saved, h.Ruler.CommittedEndpoints);
+        Assert.Single(fixture.Writes);
+        fixture.FailWrites = true;
+        Move(2, 1);
+        h.Up();
+        Assert.True(persistence.IsDirty);
+        Assert.Equal(2, fixture.Writes.Count);
+        var committed = h.Ruler.CommittedEndpoints;
+        Move(-6, -2);
+        Assert.Equal(2, fixture.Writes.Count);
+        fixture.FailWrites = false;
+        h.Key();
+        h.Up();
+        Assert.Equal(committed, h.Ruler.CommittedEndpoints);
+        Assert.True(persistence.IsDirty);
+        Move(0, 0);
+        h.Up();
+        Assert.False(persistence.IsDirty);
+        Assert.Equal(3, fixture.Writes.Count);
+        var restored = new RulerController();
+        using var reopened = fixture.Open(restored);
+        Assert.Equal(committed, restored.CommittedEndpoints);
+        Assert.Equal((61L, 11L, 1L), h.Size);
+        h.AssertNoTargeting();
+
+        void Move(int x, int y)
+        {
+            h.Frame();
+            var center = h.Session.Center!;
+            var origin = center.Value.Coordinates;
+            h.Aim(origin);
+            Assert.True(h.Down().Handled);
+            Assert.Same(center, h.Session.Manager.CapturedGizmo);
+            h.Aim(origin + Gizmos.PositionGizmoTests.V(x, y, 0));
+            h.Move(h.X, h.Y);
+            for (int frame = 0; frame < 120; frame++) h.Frame();
+            h.AssertLiveBox();
+        }
+    }
+
     [Fact]
     public void LegacyMixedCorners_LoadNormalizedAndNextEditPersistsCanonicalPairWithoutSchemaChange()
     {
