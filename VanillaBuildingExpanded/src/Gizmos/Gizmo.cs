@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 
 namespace VanillaBuildingExpanded.Gizmos;
 
-public abstract class Gizmo : IDisposable
+public abstract partial class Gizmo : IDisposable
 {
     private readonly Dictionary<GizmoHandleId, GizmoLabel> labels = [];
     private bool visible = true;
@@ -18,14 +18,28 @@ public abstract class Gizmo : IDisposable
     public bool IsDisposed { get; private set; }
     protected bool IsRestoringInteractionValue { get; private set; }
     public bool IsInteracting => CapturedHandle is not null;
-    public GizmoHandleId? HoveredHandle { get; internal set; }
-    public GizmoHandleId? CapturedHandle { get; private set; }
+    /// <summary>Gets the hovered identity; handle-based compositions also retain the actual owned instance.</summary>
+    public GizmoHandleId? HoveredHandle
+    {
+        get => hoveredHandleId;
+        internal set => SetHandleState(ref hoveredHandleId, ref hoveredHandleInstance, value);
+    }
+    /// <summary>Gets the captured identity; handle-based compositions also retain the actual owned instance.</summary>
+    public GizmoHandleId? CapturedHandle
+    {
+        get => capturedHandleId;
+        private set => SetHandleState(ref capturedHandleId, ref capturedHandleInstance, value);
+    }
 
     /// <summary>Gets optional labels keyed by their owning handle IDs.</summary>
     public IReadOnlyDictionary<GizmoHandleId, GizmoLabel> Labels { get; }
 
-    /// <summary>Initializes the read-only view over the gizmo's label configuration.</summary>
-    protected Gizmo() => Labels = new ReadOnlyDictionary<GizmoHandleId, GizmoLabel>(labels);
+    /// <summary>Initializes read-only views over the gizmo's label and handle configuration.</summary>
+    protected Gizmo()
+    {
+        Labels = new ReadOnlyDictionary<GizmoHandleId, GizmoLabel>(labels);
+        Handles = new ReadOnlyDictionary<GizmoHandleId, GizmoHandle>(handles);
+    }
 
     /// <summary>Adds or replaces a handle's label without changing geometry or interaction state.</summary>
     /// <param name="handle">The handle whose rendered anchor carries the label.</param>
@@ -105,6 +119,12 @@ public abstract class Gizmo : IDisposable
         {
             if (!double.IsFinite(hit.Distance) || hit.Distance <= 0)
                 throw new InvalidOperationException("Gizmo hit geometry returned an invalid ray distance.");
+            if (hasHandleComposition)
+            {
+                if (!handles.TryGetValue(hit.Handle, out var owned))
+                    throw new InvalidOperationException("Hit geometry returned a handle not owned by this gizmo.");
+                if (!owned.IsEligible(pointer.Context.Dimension)) continue;
+            }
             if (best is not { } previous || hit.Priority < previous.Priority
                 || (hit.Priority == previous.Priority && (hit.Distance < previous.Distance
                     || (hit.Distance == previous.Distance && hit.Handle.Value < previous.Handle.Value))))
@@ -118,10 +138,17 @@ public abstract class Gizmo : IDisposable
     internal bool BeginInteraction(GizmoHandleId handle, GizmoPointer pointer)
     {
         if (IsInteracting || ending || !IsEligible(pointer.Context.Dimension)) return false;
+        handles.TryGetValue(handle, out var expectedHandle);
+        if (hasHandleComposition && (expectedHandle is null || !expectedHandle.IsEligible(pointer.Context.Dimension)))
+            return false;
         SaveInteractionValue();
         if (!BeginInteractionCore(handle, pointer)) return false;
         if (!IsEligible(pointer.Context.Dimension)) return false;
+        if (expectedHandle is not null
+            ? !OwnsHandle(expectedHandle) || !expectedHandle.IsEligible(pointer.Context.Dimension)
+            : hasHandleComposition) return false;
         CapturedHandle = handle;
+        if (!IsInteracting || !IsEligible(pointer.Context.Dimension)) return false;
         OnInteractionStarted?.Invoke(handle);
         return IsInteracting;
     }
@@ -139,25 +166,39 @@ public abstract class Gizmo : IDisposable
     /// </summary>
     public void CancelInteraction() => EndInteraction(false);
 
+    /// <summary>Protects termination before state callbacks and finishes cleanup even when observers throw.</summary>
+    /// <param name="complete">Whether to commit instead of restoring the saved value.</param>
     private void EndInteraction(bool complete)
     {
         if (CapturedHandle is not { } handle) return;
         var notification = complete ? OnInteractionCompleted : OnInteractionCanceled;
-        CapturedHandle = null;
-        HoveredHandle = null;
         ending = true;
         try
         {
-            InteractionEnded?.Invoke(this);
-            if (complete) CompleteInteractionCore();
-            else
+            try
             {
-                IsRestoringInteractionValue = true;
-                try { RestoreInteractionValue(); }
-                finally { IsRestoringInteractionValue = false; }
-                CancelInteractionCore();
+                try { CapturedHandle = null; }
+                finally { HoveredHandle = null; }
             }
-            notification?.Invoke(handle);
+            finally
+            {
+                try { InteractionEnded?.Invoke(this); }
+                finally
+                {
+                    if (complete) CompleteInteractionCore();
+                    else
+                    {
+                        try
+                        {
+                            IsRestoringInteractionValue = true;
+                            try { RestoreInteractionValue(); }
+                            finally { IsRestoringInteractionValue = false; }
+                        }
+                        finally { CancelInteractionCore(); }
+                    }
+                    notification?.Invoke(handle);
+                }
+            }
         }
         finally
         {
@@ -177,8 +218,11 @@ public abstract class Gizmo : IDisposable
         }
         finally
         {
-            HoveredHandle = null;
-            try { Invalidated?.Invoke(this); }
+            try
+            {
+                try { HoveredHandle = null; }
+                finally { Invalidated?.Invoke(this); }
+            }
             finally
             {
                 disposing = false;
@@ -194,13 +238,18 @@ public abstract class Gizmo : IDisposable
         try { DisposeCore(); }
         finally
         {
-            OnInteractionStarted = null;
-            OnInteractionCompleted = null;
-            OnInteractionCanceled = null;
-            Invalidated = null;
-            InteractionEnded = null;
-            ClearValueSubscriptions();
-            labels.Clear();
+            try { DisposeHandles(); }
+            finally
+            {
+                OnInteractionStarted = null;
+                OnInteractionCompleted = null;
+                OnInteractionCanceled = null;
+                Invalidated = null;
+                InteractionEnded = null;
+                HandleInvalidated = null;
+                ClearValueSubscriptions();
+                labels.Clear();
+            }
         }
     }
 }

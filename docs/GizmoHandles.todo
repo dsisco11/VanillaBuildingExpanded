@@ -2,7 +2,7 @@
 
 Source proposal: [GizmoHandles.proposal.md](./GizmoHandles.proposal.md)
 
-Status: Execution in progress. Phase 1 was implemented and independently audited on 2026-10-27; later phases remain unchecked. The foundation is inactive in gameplay. Leave tasks unchecked until their stated verification gates pass.
+Status: Execution in progress. Phases 1 and 2 were implemented and independently audited on 2026-10-27; later phases remain unchecked. The foundation is inactive in gameplay. Leave tasks unchecked until their stated verification gates pass.
 
 ## Goal and scope
 
@@ -75,28 +75,36 @@ Verification and traceability (2026-10-27):
 Prerequisites: Phase 1.
 Outcome: Handles are stable owned objects with validated, independently resolved appearance properties.
 
-    ☐ Implement GizmoHandle configuration and controlled owner collection operations.
-        ☐ Include stable ID, owner, local visibility/enabled state, frame/hit/interaction configuration and optional label.
-        ☐ Expose a read-only collection; reject duplicate IDs, double attachment and attachment to another owner.
-        ☐ Require detach before transfer; clear ownership and subscriptions on removal/disposal.
-        ☐ Establish actual-handle hover/capture references for the new path, retaining IDs only where useful for events/diagnostics.
-    ☐ Implement readonly record struct AppearenceProperties and EAppearenceState.
-        ☐ Make every appearance property nullable; include shape, size, color, opacity, line width and configurable label styling.
-        ☐ Encapsulate Dictionary<EAppearenceState, AppearenceProperties>; expose read-only configuration views and atomic validated mutation operations.
-        ☐ Require Default throughout the attached lifetime with all fields required by the configured shape/label.
-        ☐ Resolve each field as activeOverride.Field ?? defaultEntry.Field; absent state entries behave as all-null overrides.
-        ☐ Resolve Selected directly against Default, never through Hover; Selected means captured and takes precedence over Hover.
-        ☐ Reject incomplete/invalid configurations before publishing them; produce fully validated resolved snapshots without renderer fallback values.
-        ☐ Distinguish spatial invalidation from color/style changes and ordinary state transitions.
-    ☐ Test ownership, eligibility and every nullable appearance field.
-        ☐ Cover duplicate IDs, double attachment, transfer, detachment and idempotent disposal.
-        ☐ Cover missing overrides, mixed-field fallback, baseline removal/incompleteness, invalid values and unchanged configuration on rejection.
-        ☐ Cover state precedence and mutations during hover/capture without making hidden/ineligible handles interactive.
+    ✔ Implement GizmoHandle configuration and controlled owner collection operations.
+        ✔ Include stable ID, owner, local visibility/enabled state, frame/hit/interaction configuration and optional label.
+        ✔ Expose a read-only collection; reject duplicate IDs, double attachment and attachment to another owner.
+        ✔ Require detach before transfer; clear ownership and subscriptions on removal/disposal.
+        ✔ Establish actual-handle hover/capture references for the new path, retaining IDs only where useful for events/diagnostics.
+    ✔ Implement readonly record struct AppearenceProperties and EAppearenceState.
+        ✔ Make every appearance property nullable; include shape, size, Vector4 RGBA colors (including opacity), line width and configurable label styling.
+        ✔ Encapsulate Dictionary<EAppearenceState, AppearenceProperties>; expose read-only configuration views and atomic validated mutation operations.
+        ✔ Require Default throughout the attached lifetime with all fields required by the configured shape/label.
+        ✔ Resolve each field as activeOverride.Field ?? defaultEntry.Field; absent state entries behave as all-null overrides.
+        ✔ Resolve Selected directly against Default, never through Hover; Selected means captured and takes precedence over Hover.
+        ✔ Reject incomplete/invalid configurations before publishing them; produce fully validated resolved snapshots without renderer fallback values.
+        ✔ Distinguish spatial invalidation from color/style changes and ordinary state transitions.
+    ✔ Test ownership, eligibility and every nullable appearance field.
+        ✔ Cover duplicate IDs, double attachment, transfer, detachment and idempotent disposal.
+        ✔ Cover missing overrides, mixed-field fallback, baseline removal/incompleteness, invalid values and unchanged configuration on rejection.
+        ✔ Cover state precedence and mutations during hover/capture without making hidden/ineligible handles interactive.
 
 Completion criteria:
 
-    ☐ Focused tests prove per-field resolution and ownership invariants; production positioning remains unchanged.
-    ☐ Configuration cannot bypass validation/invalidation through exposed mutable collections.
+    ✔ Focused tests prove per-field resolution and ownership invariants; production positioning remains unchanged.
+    ✔ Configuration cannot bypass validation/invalidation through exposed mutable collections.
+
+Verification and traceability (2026-10-27):
+
+- Ownership/configuration -> proposal [ownership and component model](GizmoHandles.proposal.md#ownership-and-component-model) and [capture, cancellation and mutation](GizmoHandles.proposal.md#capture-cancellation-and-mutation) -> [GizmoHandle.cs](../VanillaBuildingExpanded/src/Gizmos/GizmoHandle.cs), [Gizmo.Handles.cs](../VanillaBuildingExpanded/src/Gizmos/Gizmo.Handles.cs) and [Gizmo.cs](../VanillaBuildingExpanded/src/Gizmos/Gizmo.cs): controlled membership, actual-instance state, eligibility, cancellation and reentrant cleanup. Removing the last handle does not restore ID-only interaction semantics.
+- Appearance -> proposal [appearance contract](GizmoHandles.proposal.md#appearance-contract) and [appearance fields and validation](GizmoHandles.proposal.md#appearance-fields-and-validation) -> [AppearenceProperties.cs](../VanillaBuildingExpanded/src/Gizmos/AppearenceProperties.cs): ten nullable fields, including three whole RGBA System.Numerics.Vector4 colors, direct Default fallback, complete validated snapshots and differentiated invalidation.
+- [GizmoHandleTests.cs](../VanillaBuildingExpanded.Tests/Gizmos/GizmoHandleTests.cs) covers every nullable field, protected maps, rejected mutations, ownership/transfer/disposal, actual-state precedence and capture mutations. Added regression coverage ensures throwing state observers cannot skip rollback and reentrant disposal defers resources until termination finishes.
+- Final delegated Release/net10.0 regression command: `dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj -c Release --framework net10.0 --filter "FullyQualifiedName~Gizmos|FullyQualifiedName~WorkAreaGizmoSession"` with `VINTAGE_STORY=G:\Vintagestory`: 302 passed, 0 failed/skipped. Normal Build, ValidateJson and `git diff --check` passed; no new-file compiler/analyzer warnings. Existing seven production nullable warnings and dependency advisories remain.
+- Second implementation review and independent read-only completion audit passed after resolving and independently rechecking the lifecycle finding. Production PositionGizmo remains on its existing path; no live graphics result or later-phase completion is claimed.
 
 ## Phase 3: Implement spatial sources, shared geometry and replaceable hit targets
 

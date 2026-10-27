@@ -121,14 +121,14 @@ Every field below is nullable in `AppearenceProperties`. `Default` supplies ever
 |---|---|
 | Shape | A supported `GizmoShape`; no new catalog is introduced. |
 | Size | Finite positive nominal logical-pixel extent: arrow 64, center radius 7. Convert using the clamped 64-pixel reference above to preserve sizing. |
-| Red, Green, Blue, Opacity | Finite normalized `[0, 1]` channels; defaults as above. |
+| Color | Nullable `System.Numerics.Vector4` RGBA; every component must be finite and in `[0, 1]`. Override or inherit the whole color, including alpha; defaults as above. |
 | LineWidth | Finite positive native framebuffer line width, default 1.6; hovered/selected override 2.8. |
-| LabelTextRed/Green/Blue/Opacity | Finite `[0, 1]`, default white and opaque. |
-| LabelBackgroundRed/Green/Blue/Opacity | Finite `[0, 1]`, default black with opacity 0.65. |
+| LabelTextColor | Nullable `System.Numerics.Vector4` RGBA, finite components in `[0, 1]`; default opaque white. |
+| LabelBackgroundColor | Nullable `System.Numerics.Vector4` RGBA, finite components in `[0, 1]`; default black with alpha 0.65. |
 | LabelFontFamily, LabelFontSize, LabelBold | Nonblank native font name, finite positive logical-pixel size and Boolean weight; defaults standard font, 14 and bold. |
 | LabelPadding | Finite nonnegative logical pixels, default 3; text/padding follow GUI scale. |
 
-Shape/size/frame changes invalidate spatial and pick snapshots and label anchors. Color/opacity/line-width changes affect drawing only. Label font/color/background/padding changes invalidate raster content; text/offset/visibility remain `GizmoLabel` configuration. Offset/visibility changes neither rerasterize nor cancel.
+Shape/size/frame changes invalidate spatial and pick snapshots and label anchors. Color/line-width changes affect drawing only. Label font/color/background/padding changes invalidate raster content; text/offset/visibility remain `GizmoLabel` configuration. Offset/visibility changes neither rerasterize nor cancel. Color vectors are atomic appearance properties; individual RGBA components do not have separate fallback.
 
 ### Per-property fallback
 
@@ -161,8 +161,7 @@ For example:
 
 | Property | Default | Hover override | Resolved Hover |
 |---|---|---|---|
-| Color | Red | null | Red |
-| Opacity | 0.8 | 1.0 | 1.0 |
+| Color (RGBA) | `(1, 0.2, 0.2, 0.8)` | `(1, 0.2, 0.2, 1)` | `(1, 0.2, 0.2, 1)` |
 | Line width | 1.6 | 2.8 | 2.8 |
 | Shape | Arrow | null | Arrow |
 

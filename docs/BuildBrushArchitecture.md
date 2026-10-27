@@ -229,6 +229,19 @@ validates finite coordinates, normalized directions, orthogonal paired tangents 
 context dimensions. Frame normalization uses a `1e-12` floor and orthogonality a
 `1e-8` dot tolerance, independently of positioning solver guards.
 
+`Gizmo` exposes a read-only `Handles` map with controlled attachment/detachment.
+[GizmoHandle](../VanillaBuildingExpanded/src/Gizmos/GizmoHandle.cs) owns identity,
+local eligibility, labels and borrowed interaction configuration; removal cancels
+capture and detaches without disposal, while owner disposal releases remaining handles.
+Actual hover/capture references accompany IDs for handle-based compositions.
+[Appearance properties](../VanillaBuildingExpanded/src/Gizmos/AppearenceProperties.cs)
+resolve each nullable state override directly against a validated Default baseline.
+Colors are nullable `System.Numerics.Vector4` RGBA values with whole-color fallback.
+Resolved snapshots contain complete handle values and optional complete label styling.
+Invalidation distinguishes spatial geometry, visual changes and label raster/placement.
+The positioning implementation uses its existing ID-based parts independently of
+these optional handle collections.
+
 ### Native input and work-area transactions
 
 The [native input adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoInputAdapter.cs)
