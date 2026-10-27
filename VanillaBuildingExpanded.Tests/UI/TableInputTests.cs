@@ -12,6 +12,36 @@ namespace VanillaBuildingExpanded.Tests.UI;
 public sealed class TableInputTests
 {
     [Fact]
+    public void NestedPointerQueries_ReportOnlyActualControlsCapturesAndHoverExit()
+    {
+        using var fixture = new Fixture();
+        using var outer = fixture.Table();
+        var nested = fixture.Table(new TableOptions(columnGap: 5));
+        var active = fixture.Cell("active");
+        var passive = fixture.Cell("passive");
+        nested.AddRowCells([fixture.Describe(active), new TableCell(passive)]);
+        nested.Arrange();
+        outer.AddRowCells([new TableCell(nested, preferredSize: nested.Measure(),
+            input: TableInput.Pointer, cancelInput: nested.CancelInput)]);
+        fixture.Arrange(outer);
+        Assert.True(outer.WantsPointerEvents(1, 1));
+        Assert.False(outer.WantsPointerEvents(12, 1));
+        Assert.False(outer.WantsPointerEvents(16, 1));
+        outer.OnMouseMove(fixture.Api.Object, fixture.Mouse());
+        Assert.True(outer.WantsPointerEvents(100, 100));
+        outer.OnMouseMove(fixture.Api.Object, fixture.Mouse(100, 100));
+        Assert.False(outer.WantsPointerEvents(100, 100));
+        outer.OnMouseDown(fixture.Api.Object, fixture.Mouse());
+        Assert.True(outer.HasPointerCapture);
+        Assert.True(nested.HasPointerCapture);
+        Assert.True(outer.WantsPointerEvents(100, 100));
+        outer.CancelInput();
+        Assert.False(outer.HasPointerCapture);
+        Assert.False(nested.HasPointerCapture);
+        Assert.False(outer.WantsPointerEvents(16, 1));
+    }
+
+    [Fact]
     public void PassiveCells_RemainTransparentEvenWhenNativelyFocusableOrClickable()
     {
         using var fixture = new Fixture();

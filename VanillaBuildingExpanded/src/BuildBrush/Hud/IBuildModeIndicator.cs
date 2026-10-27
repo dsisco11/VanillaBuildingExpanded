@@ -2,7 +2,7 @@ using System;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-/// <summary>Owns the passive indicator's presentation and rendering resources.</summary>
+/// <summary>Owns the non-focusing build panel's presentation and rendering resources.</summary>
 internal interface IBuildModeIndicator : IDisposable
 {
     void Update(BuildModeInfo info);

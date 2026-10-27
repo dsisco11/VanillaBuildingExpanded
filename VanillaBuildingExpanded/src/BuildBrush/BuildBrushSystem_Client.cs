@@ -62,7 +62,7 @@ public class BuildBrushSystem_Client : ModSystem
         controller = new BuildBrushControllerClient(api, CreateBrush);
         controller.ModeChanged += SendToServer;
         controller.ModeChanged += RefreshRulerContext;
-        modeIndicator = new BuildModeIndicatorBinding(controller, () => new BuildModeHud(api));
+        modeIndicator = new BuildModeIndicatorBinding(controller, CreateModeHud);
 
         config = VbeConfig.Get(api);
 
@@ -186,7 +186,7 @@ public class BuildBrushSystem_Client : ModSystem
         // New sessions start with mode disabled, regardless of equipment.
         controller!.SetBuildMode(false, null);
         RefreshRulerContext();
-        modeIndicator ??= new BuildModeIndicatorBinding(controller, () => new BuildModeHud(api!));
+        modeIndicator ??= new BuildModeIndicatorBinding(controller, CreateModeHud);
         Logger.Audit("[BuildBrush][OnPlayerJoin]: Initializing build brush for player.");
     }
 
@@ -559,6 +559,9 @@ public class BuildBrushSystem_Client : ModSystem
         string code = $"vanillabuildingexpanded:{key}";
         api!.TriggerIngameError(this, code, Lang.Get(code));
     }
+
+    private IBuildModeIndicator CreateModeHud() => new BuildModeHud(api!,
+        ruler ?? throw new InvalidOperationException("The ruler session must exist before opening the build HUD."));
     #endregion
 
     #region Block Placement

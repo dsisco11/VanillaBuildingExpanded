@@ -34,7 +34,7 @@ internal sealed partial class BuildModeHud
         if (SingleComposer is null) return;
         if (structureChanged)
         {
-            ClearComposers();
+            ResetHudComposition();
             return;
         }
         if (roomInfo.HasDetails && SingleComposer.GetElement("room-table") is GuiElementTable table)

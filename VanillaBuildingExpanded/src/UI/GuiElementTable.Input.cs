@@ -18,6 +18,11 @@ internal sealed partial class GuiElementTable
     private bool cancellingInput;
     private long inputRevision;
 
+    internal bool HasPointerCapture => pointerCaptures.Count > 0;
+
+    internal bool WantsPointerEvents(int x, int y) => !disposed && (HasPointerCapture
+        || hoveredChild is not null || PointerHitOrder().Any(entry => IsPointerHit(entry, x, y)));
+
     /// <summary>Only explicit keyboard participants with native focus capability make the group focusable.</summary>
     public override bool Focusable => !disposed && elements.Values.Any(IsKeyboardEligible);
 
@@ -227,7 +232,9 @@ internal sealed partial class GuiElementTable
     private bool IsPointerHit(CellEntry entry, int x, int y) =>
         arrangedLayout is not null && tableBounds.Initialized && tableBounds.OuterWidth > 0 &&
         tableBounds.OuterHeight > 0 && IsPositionInside(x, y) && entry.Bounds.Initialized &&
-        entry.Bounds.OuterWidth > 0 && entry.Bounds.OuterHeight > 0 && entry.Cell.Element.IsPositionInside(x, y);
+        entry.Bounds.OuterWidth > 0 && entry.Bounds.OuterHeight > 0 && entry.Cell.Element.IsPositionInside(x, y)
+        && (entry.Cell.Element is not GuiElementTable nested
+            || nested.PointerHitOrder().Any(child => nested.IsPointerHit(child, x, y)));
 
     private void UpdateCursor(int x, int y)
     {

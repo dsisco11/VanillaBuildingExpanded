@@ -34,15 +34,24 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     /// <summary>Retains client GUI services; composition is deferred until first activation.</summary>
     public BuildModeHud(ICoreClientAPI api) : this(api, () => BuildModeRoomInfo.Read(api)) { }
 
+    internal BuildModeHud(ICoreClientAPI api, RulerController ruler)
+        : this(api, () => BuildModeRoomInfo.Read(api), ruler) { }
+
     /// <summary>Allows deterministic room samples without replacing the native GUI composition path.</summary>
-    internal BuildModeHud(ICoreClientAPI api, System.Func<BuildModeRoomInfo> sampleRoom) : base(api)
+    internal BuildModeHud(ICoreClientAPI api, System.Func<BuildModeRoomInfo> sampleRoom,
+        RulerController? ruler = null) : base(api)
     {
         this.sampleRoom = sampleRoom ?? throw new ArgumentNullException(nameof(sampleRoom));
+        this.ruler = ruler;
+        if (ruler is not null) ruler.Changed += OnRulerChanged;
         roomSection = new CollapsibleSection("room", "vanillabuildingexpanded:build-info-room",
             () => RoomTable.Measure().Width, _ => RoomTable.Measure().Height, ComposeRoomContent);
+        rulerSection = new CollapsibleSection("ruler", "vanillabuildingexpanded:build-info-ruler",
+            () => RulerTable.Measure().Width, _ => RulerTable.Measure().Height, ComposeRulerContent);
         sections =
         [
             roomSection,
+            rulerSection,
             new CollapsibleSection("controls", "vanillabuildingexpanded:build-info-controls",
                 () => ControlsTable.Measure().Width, _ => ControlsTable.Measure().Height, ComposeControlsContent, collapsed: true)
         ];
@@ -53,29 +62,41 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     public override bool Focusable => false;
     /// <summary>Removes the closed HUD from native dialog routing.</summary>
     public override bool UnregisterOnClose => true;
-    /// <summary>Only section collapse buttons receive pointer input, and only with a free cursor.</summary>
+    /// <summary>Routes only actual controls, captures, and hover exit with a free cursor.</summary>
     public override bool ShouldReceiveMouseEvents() => !disposed && IsOpened() && !capi.Input.MouseGrabbed
-        && sections.Any(section => section.ToggleButton is { } button && (button.IsPressed
-            || button.IsPositionInside(capi.Input.MouseX, capi.Input.MouseY)));
+        && (ActiveRulerTable?.WantsPointerEvents(capi.Input.MouseX, capi.Input.MouseY) == true
+            || sections.Any(section => section.ToggleButton is { } button && (button.IsPressed
+                || button.IsPositionInside(capi.Input.MouseX, capi.Input.MouseY))));
     /// <summary>Leaves keyboard input entirely to gameplay and existing dialogs.</summary>
     public override bool ShouldReceiveKeyboardEvents() => false;
 
     public override void OnMouseDown(MouseEvent args)
     {
         if (!disposed && IsOpened() && !capi.Input.MouseGrabbed)
+        {
+            ActiveRulerTable?.OnMouseDown(capi, args);
             foreach (var section in sections)
                 section.ToggleButton?.OnMouseDown(capi, args);
+        }
     }
 
     public override void OnMouseUp(MouseEvent args)
     {
         if (!disposed && IsOpened())
+        {
+            if (capi.Input.MouseGrabbed) CancelRulerInput();
+            else ActiveRulerTable?.OnMouseUp(capi, args);
             foreach (var section in sections)
                 section.ToggleButton?.OnMouseUp(capi, args);
+        }
     }
 
     // Do not call the dialog defaults: they consume events over the entire panel.
-    public override void OnMouseMove(MouseEvent args) { }
+    public override void OnMouseMove(MouseEvent args)
+    {
+        if (!disposed && IsOpened() && !capi.Input.MouseGrabbed)
+            ActiveRulerTable?.OnMouseMove(capi, args);
+    }
     public override void OnMouseWheel(MouseWheelEventArgs args) { }
 
     public override void OnRenderGUI(float deltaTime)
@@ -83,6 +104,7 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
         if (disposed) return;
         if (IsOpened())
         {
+            if (capi.Input.MouseGrabbed) CancelRulerInput();
             bool roomWasCollapsed = roomSection.IsCollapsed;
             bool sectionsChanged = false;
             foreach (var section in sections)
@@ -91,7 +113,12 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
             {
                 roomRefreshElapsed = 0;
                 if (roomWasCollapsed && !roomSection.IsCollapsed) RefreshRoom();
-                ClearComposers();
+                ResetHudComposition();
+                SetVisible(true);
+            }
+            if (rulerDirty)
+            {
+                ResetHudComposition();
                 SetVisible(true);
             }
             if (!roomSection.IsCollapsed)
@@ -140,6 +167,7 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
             roomRefreshElapsed = 0;
             foreach (var section in sections)
                 section.CancelInput();
+            CancelRulerInput();
             TryClose();
             return;
         }
@@ -147,7 +175,7 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
         if (displayLocale != Lang.CurrentLocale)
         {
             displayLocale = Lang.CurrentLocale;
-            ClearComposers();
+            ResetHudComposition();
         }
         var currentHints = BuildModeKeybinds.Read(capi.Input);
         if (keybindHints.Length != currentHints.Length
@@ -156,8 +184,9 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
                 || !hint.AlternateKeys.SequenceEqual(currentHints[i].AlternateKeys)).Any())
         {
             keybindHints = currentHints;
-            ClearComposers();
+            ResetHudComposition();
         }
+        if (rulerDirty) ResetHudComposition();
         if (SingleComposer is null) ComposeHud();
         if (!IsOpened()) TryOpen(false);
     }
@@ -171,6 +200,8 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
         {
             controlsTable = CreateControlsTable(capi, keybindHints);
             roomTable = CreateRoomTable();
+            rulerTable = CreateRulerTable();
+            rulerDirty = false;
             double width = Math.Max(320, sections.Max(section => section.MeasureWidth()));
             double height = SectionsTop + sections.Sum(section => section.MeasureHeight(width))
                 + (sections.Length - 1) * SectionSpacing + BottomPadding;
@@ -198,8 +229,10 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
         {
             var table = controlsTable;
             var pendingRoom = roomTable;
+            var pendingRuler = rulerTable;
             controlsTable = null;
             roomTable = null;
+            rulerTable = null;
             try { composer?.Dispose(); }
             finally
             {
@@ -216,7 +249,14 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
                     }
                     finally
                     {
-                        if (pendingRoom is { IsRegistered: false }) pendingRoom.Dispose();
+                        try
+                        {
+                            if (pendingRoom is { IsRegistered: false }) pendingRoom.Dispose();
+                        }
+                        finally
+                        {
+                            if (pendingRuler is { IsRegistered: false }) pendingRuler.Dispose();
+                        }
                     }
                 }
             }
@@ -277,6 +317,8 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     {
         if (disposed) return;
         disposed = true;
+        if (ruler is not null) ruler.Changed -= OnRulerChanged;
+        CancelRulerInput();
         roomInfo = default;
         capi.Settings.Float.RemoveWatcher("guiScale", OnGuiScaleChanged);
         TryClose();
@@ -498,7 +540,7 @@ internal sealed partial class BuildModeHud : HudElement, IBuildModeIndicator
     {
         if (disposed) return;
         bool visible = IsOpened();
-        ClearComposers();
+        ResetHudComposition();
         if (visible) SetVisible(true);
     }
 

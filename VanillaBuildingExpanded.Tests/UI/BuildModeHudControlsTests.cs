@@ -12,7 +12,7 @@ using Xunit;
 namespace VanillaBuildingExpanded.Tests.UI;
 
 [Collection("Table composition")]
-public sealed class BuildModeHudControlsTests
+public sealed partial class BuildModeHudControlsTests
 {
     [Fact]
     public void Hud_ControlsStartCollapsedAndStayCollapsedAcrossReopeningAndScaling()
@@ -730,6 +730,7 @@ public sealed class BuildModeHudControlsTests
         private const string Locale = "vbe-controls-tests";
         private readonly string previousLocale = Lang.CurrentLocale;
         private readonly float previousScale = RuntimeEnv.GUIScale;
+        private readonly List<string> extraLocales = [];
         private int nextTexture = 100;
         public Mock<ICoreClientAPI> Api { get; } = new() { DefaultValue = DefaultValue.Mock };
         public Mock<IGuiAPI> Gui { get; } = new();
@@ -807,6 +808,14 @@ public sealed class BuildModeHudControlsTests
             parent.CalcWorldBounds();
         }
 
+        public void ChangeLocale()
+        {
+            string locale = $"vbe-controls-{Guid.NewGuid():N}";
+            Lang.AvailableLanguages.Add(locale, Lang.AvailableLanguages[Lang.CurrentLocale]);
+            extraLocales.Add(locale);
+            Lang.ChangeLanguage(locale);
+        }
+
         private void Upload(ImageSurface surface, bool linearMag, ref LoadedTexture texture)
         {
             if (texture.TextureId == 0) texture.TextureId = ++nextTexture;
@@ -822,6 +831,7 @@ public sealed class BuildModeHudControlsTests
             RuntimeEnv.GUIScale = previousScale;
             Lang.ChangeLanguage(previousLocale);
             Lang.AvailableLanguages.Remove(Locale);
+            foreach (string locale in extraLocales) Lang.AvailableLanguages.Remove(locale);
         }
     }
 }

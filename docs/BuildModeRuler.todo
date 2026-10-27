@@ -161,33 +161,43 @@ Completion criteria:
 Prerequisites: Phases 1-3 controller commands, notifications, persistence, and input adapter.
 Outcome: The existing build-mode panel operates the ruler without gaining focus or intercepting passive panel space.
 
-    ☐ Extend the existing client composition/BuildModeIndicatorBinding path to share one world-session ruler controller with the HUD.
-        ☐ Keep state ownership outside BuildModeHud; retain lazy HUD creation and independence from preview/held-item eligibility.
-    ☐ Compose BuildModeHud.Ruler.cs using existing CollapsibleSection, table, and native checkbox/button patterns.
-        ☐ Insert expanded-by-default Ruler between Room and Controls, with checkbox first, Set Start/Set end buttons second, size third.
-        ☐ Format complete sizes as Size: 5, 3, 4 in X/Y/Z block counts; show Size: -, -, - until complete.
-        ☐ Add no coordinates, bounds/dimension/status rows, extra actions, or Clear control.
-        ☐ Allow checking visibility while incomplete; notify that both endpoints are needed without drawing a box.
-        ☐ Highlight the armed button without extra rows; same button cancels and other button switches.
-        ☐ Route pick prompts, dimension feedback, persistence/render errors, and invalid-target explanations through in-game notifications outside the panel.
-        ☐ Keep collapse purely visual: no endpoint clearing, pick cancellation, or visibility changes.
-    ☐ Extend HUD input routing surgically.
-        ☐ Use existing table pointer opt-in for interactive cells and actual control hits/outstanding captures in ShouldReceiveMouseEvents.
-        ☐ Forward mouse down/up/move as needed, including captured releases outside bounds; preserve existing collapse-button routing.
-        ☐ Cancel captures before collapse, hide, recompose, or disposal; do not leave pressed controls or dispatch duplicate commands.
-        ☐ Keep HUD non-focusing, do not force cursor grabbing, and leave the size readout/headings/unused panel space passive.
-        ☐ Avoid default dialog routing that consumes events across the whole panel.
-    ☐ Add localization in assets\vanillabuildingexpanded\lang\en.json and follow existing scaling/layout conventions.
-        ☐ Localize labels, size format/placeholders, prompts, and all error notifications.
-        ☐ Handle large size values and long translated strings without clipping or overlap; preserve room/control layout behavior.
-    ☐ Extend BuildModeHudControlsTests and relevant table/indicator tests.
-        ☐ Assert exact row order/content, incomplete/complete formatting, armed state, and independent notification feedback while collapsed.
-        ☐ Test control clicks, drag/release outside, passive hit areas, collapse/reopen, hidden HUD, GUI-scale/locale rebuilds, and repeated cleanup.
+Phase 4 traceability and stage boundaries:
+
+- Composition/content -> proposal Existing integration points, Ruler section, Bounds contract, Implementation boundaries -> client binding factory supplies the existing world-session controller to BuildModeHud; BuildModeHud.Ruler.cs creates three owning table rows (checkbox plus passive label, two endpoint buttons, passive localized size) between Room and Controls. State is retained outside the HUD; lazy mode-only indicator creation remains unchanged.
+- Interaction/cancellation -> proposal Ruler section, Endpoint-picking interaction, Implementation boundaries; CollapsibleSection.cs and GuiElementTable.Input.cs/TableLayout.cs -> native switch/toggle-button artwork with release-only adapters and non-activating cancellation; opt-in nested pointer tables, actual child hit/capture queries, deferred state rebuild, cancellation before collapse/hide/recompose/disposal, no default dialog input/focus/cursor grabbing. Collapsing does not issue controller commands.
+- Layout/localization -> proposal Ruler section / Verification item 4, en.json -> measured localized labels/buttons/full long-sized text in logical GUI units; Room/Controls still use their existing measured layout. Prompts/config errors retain native session notifications independent of HUD collapse. Dimension-mismatch lifecycle notification and rendering errors remain Phase 5 responsibilities, not added panel rows.
+- Evidence planned -> BuildModeHudControlsTests (exact content/order, formatting, commands, actual click/release and drag-out cancellation, passive regions, collapse/reopen, hidden/scale/locale/dispose, long translations/extreme sizes), existing table/indicator tests plus ruler input/state/persistence regressions; separate verification agent runs focused suites and normal Build. Second source review and independent completion audit remain gates before checking entries.
+- Second implementation review: directly checked the new HUD partial/native release adapters, client factory sharing, every HUD invalidation/capture-cleanup path, nested table hit queries, localization, and UI tests against all extracted Phase 4 requirements. Corrected passive nested-row hover/hit routing and ensured rejected endpoint commands immediately restore authoritative armed artwork. Added production-factory/lazy/suspended binding coverage and a nested table query/cancellation regression. Later renderer/dimension lifecycle work remains explicitly Phase 5, and native smoke acceptance remains Phase 6.
+- Verification: separate verification agent ran BuildModeHudControlsTests, TableInputTests, BuildModeIndicatorTests, and all Ruler tests: 216/216 passed, no failed/skipped (shell 380). Normal .\build.ps1 --target=Build succeeded, including JSON validation and clean/publish (shell 381). Existing compiler/analyzer warnings and package advisories remain outside this phase. No live-game validation is claimed.
+- Independent completion audit: a fresh read-only reviewer applied audit-stage-completion and directly consulted the full proposal, inherited gates, current source/diff, native-control APIs, tests, traceability, and final verification. Verdict: Phase 4 fully satisfied at its implementation-stage boundary, with no confirmed issues, partial requirements, or blocking evidence gaps. Only Phase 4 entries were checked after this verdict. Renderer/dimension lifecycle remains Phase 5, and supported-game input/visual acceptance remains Phase 6.
+
+    ✔ Extend the existing client composition/BuildModeIndicatorBinding path to share one world-session ruler controller with the HUD.
+        ✔ Keep state ownership outside BuildModeHud; retain lazy HUD creation and independence from preview/held-item eligibility.
+    ✔ Compose BuildModeHud.Ruler.cs using existing CollapsibleSection, table, and native checkbox/button patterns.
+        ✔ Insert expanded-by-default Ruler between Room and Controls, with checkbox first, Set Start/Set end buttons second, size third.
+        ✔ Format complete sizes as Size: 5, 3, 4 in X/Y/Z block counts; show Size: -, -, - until complete.
+        ✔ Add no coordinates, bounds/dimension/status rows, extra actions, or Clear control.
+        ✔ Allow checking visibility while incomplete; notify that both endpoints are needed without drawing a box.
+        ✔ Highlight the armed button without extra rows; same button cancels and other button switches.
+        ✔ Route pick prompts, dimension feedback, persistence/render errors, and invalid-target explanations through in-game notifications outside the panel.
+        ✔ Keep collapse purely visual: no endpoint clearing, pick cancellation, or visibility changes.
+    ✔ Extend HUD input routing surgically.
+        ✔ Use existing table pointer opt-in for interactive cells and actual control hits/outstanding captures in ShouldReceiveMouseEvents.
+        ✔ Forward mouse down/up/move as needed, including captured releases outside bounds; preserve existing collapse-button routing.
+        ✔ Cancel captures before collapse, hide, recompose, or disposal; do not leave pressed controls or dispatch duplicate commands.
+        ✔ Keep HUD non-focusing, do not force cursor grabbing, and leave the size readout/headings/unused panel space passive.
+        ✔ Avoid default dialog routing that consumes events across the whole panel.
+    ✔ Add localization in assets\vanillabuildingexpanded\lang\en.json and follow existing scaling/layout conventions.
+        ✔ Localize labels, size format/placeholders, prompts, and all error notifications.
+        ✔ Handle large size values and long translated strings without clipping or overlap; preserve room/control layout behavior.
+    ✔ Extend BuildModeHudControlsTests and relevant table/indicator tests.
+        ✔ Assert exact row order/content, incomplete/complete formatting, armed state, and independent notification feedback while collapsed.
+        ✔ Test control clicks, drag/release outside, passive hit areas, collapse/reopen, hidden HUD, GUI-scale/locale rebuilds, and repeated cleanup.
 
 Completion criteria:
 
-    ☐ GUI/integration tests prove the exact three-row contract and usable controls, not merely element existence.
-    ☐ Existing Room/Controls and non-focusing/passive-input behavior remain covered and working.
+    ✔ GUI/integration tests prove the exact three-row contract and usable controls, not merely element existence.
+    ✔ Existing Room/Controls and non-focusing/passive-input behavior remain covered and working.
 
 ## Phase 5: Render the wireframe and finish lifecycle ownership
 
