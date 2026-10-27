@@ -264,7 +264,7 @@ visual/input qualification.
 Prerequisites: Completed Phase 3 implementation.
 Outcome: An evidence-backed decision on using built-in System.Numerics.Matrix4x4/Vector4
 for camera-relative transformations instead of the current double-precision matrix path.
-This follow-up is pending; it does not invalidate the completed Phase 3 implementation
+This follow-up does not invalidate the completed Phase 3 implementation
 or require migration merely to complete the evaluation.
 
 Controlling sources: [proposal](./InWorldGizmos.proposal.md), especially positioning,
@@ -273,30 +273,141 @@ dragging, rendering and verification; Phase 1 pointer/numerical contracts;
 [geometry/picking](../VanillaBuildingExpanded/src/Gizmos/PositionGizmoGeometry.cs);
 and [render transformations](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs).
 
-    ☐ Define the candidate precision boundary and comparison criteria before evaluating.
-        ☐ Keep absolute world positions, dimension conversion and camera-reference subtraction in double precision; convert only camera-relative inputs to float.
-        ☐ Identify which projection, inverse/unprojection and final render transformations can use Matrix4x4/Vector4, accounting for native column-vector versus System.Numerics row-vector conventions and multiplication order.
-        ☐ Set explicit screen-space, ray/target-distance and manipulation-error budgets for the tested near/far ranges; retain existing coordinate validity, dimension identity, snapping and unchanged-component guarantees.
-    ☐ Compare a bounded candidate against the current double implementation using existing test infrastructure.
-        ☐ Cover free cursor and reticle, first-/third-person offsets, odd/portrait/wide viewports and GUI scales.
-        ☐ Cover large positive/negative world coordinates with small relative offsets, nonzero dimensions and boundary-local Y.
-        ☐ Measure projection/unprojection round trips, inverse conditioning, near/far clip classification and finite far-point reconstruction, including targets beyond player reach.
-        ☐ Compare visible handle geometry, hit ownership/tie ordering, grab offsets, axis degeneracy guards and snapped endpoint results, including near decision boundaries.
-        ☐ Record failing cases and worst observed errors rather than relaxing existing contracts to make the candidate pass.
-    ☐ Evaluate performance and implementation cost before recommending adoption.
-        ☐ Use existing benchmark facilities to compare representative repeated transforms and camera-snapshot inversion/setup, accounting for conversion costs and allocations.
-        ☐ Record runtime, hardware/SIMD support, workload and measured results; do not infer a speedup from API choice alone.
-        ☐ Compare a rendering-only float path with broader projection/unprojection use if the latter fails precision requirements.
-    ☐ Record the decision and concise evidence in this plan.
-        ☐ Recommend retaining doubles, adopting float only at a safe boundary, or a separately scoped migration, with supported limitations and affected consumers.
-        ☐ Keep production behavior unchanged during evaluation; remove temporary prototype code unless retained as a justified test/benchmark fixture.
-        ☐ Do not treat synthetic precision/performance results as live-game qualification or silently introduce a precision fallback.
+    ☑ Define the candidate precision boundary and comparison criteria before evaluating.
+        ☑ Keep absolute world positions, dimension conversion and camera-reference subtraction in double precision; convert only camera-relative inputs to float.
+        ☑ Identify which projection, inverse/unprojection and final render transformations can use Matrix4x4/Vector4, accounting for native column-vector versus System.Numerics row-vector conventions and multiplication order.
+        ☑ Set explicit screen-space, ray/target-distance and manipulation-error budgets for the tested near/far ranges; retain existing coordinate validity, dimension identity, snapping and unchanged-component guarantees.
+    ☑ Compare a bounded candidate against the current double implementation using existing test infrastructure.
+        ☑ Cover free cursor and reticle, first-/third-person offsets, odd/portrait/wide viewports and GUI scales.
+        ☑ Cover large positive/negative world coordinates with small relative offsets, nonzero dimensions and boundary-local Y.
+        ☑ Measure projection/unprojection round trips, inverse conditioning, near/far clip classification and finite far-point reconstruction, including targets beyond player reach.
+        ☑ Compare visible handle geometry, hit ownership/tie ordering, grab offsets, axis degeneracy guards and snapped endpoint results, including near decision boundaries.
+        ☑ Record failing cases and worst observed errors rather than relaxing existing contracts to make the candidate pass.
+    ☑ Evaluate performance and implementation cost before recommending adoption.
+        ☑ Use existing benchmark facilities to compare representative repeated transforms and camera-snapshot inversion/setup, accounting for conversion costs and allocations.
+        ☑ Record runtime, hardware/SIMD support, workload and measured results; do not infer a speedup from API choice alone.
+        ☑ Compare a rendering-only float path with broader projection/unprojection use if the latter fails precision requirements.
+    ☑ Record the decision and concise evidence in this plan.
+        ☑ Recommend retaining doubles, adopting float only at a safe boundary, or a separately scoped migration, with supported limitations and affected consumers.
+        ☑ Keep production behavior unchanged during evaluation; remove temporary prototype code unless retained as a justified test/benchmark fixture.
+        ☑ Do not treat synthetic precision/performance results as live-game qualification or silently introduce a precision fallback.
 
 Completion criteria:
 
-    ☐ Correctness/error budgets and representative performance results support a documented decision, even if the candidate is rejected.
-    ☐ Any recommended migration has explicit scope and regression obligations; evaluation completion alone does not authorize or claim that migration.
-    ☐ Second review and independent completion audit confirm the evaluation evidence and decision satisfy this subphase.
+    ☑ Correctness/error budgets and representative performance results support a documented decision, even if the candidate is rejected.
+    ☑ Any recommended migration has explicit scope and regression obligations; evaluation completion alone does not authorize or claim that migration.
+    ☑ Second review and independent completion audit confirm the evaluation evidence and decision satisfy this subphase.
+
+#### Phase 3.1 evaluation criteria (set before execution)
+
+The evaluated candidate used System.Numerics.Matrix4x4/Vector4 only after double
+camera-reference subtraction, retaining double absolute positions and explicit dimensions.
+Native column-major matrices map to transposed row-vector matrices; composition becomes
+view * projection, and a model-view transform becomes model * view. No native projection
+builder is replaced (the existing OpenGL depth convention must remain intact).
+
+Acceptance budgets for this evaluation: maximum projected/round-trip/handle-vertex error
+0.25 window pixels; near/far/target reconstruction and ray-intersection error 0.001 blocks;
+unsnapped axis/grab-offset error 0.0001 blocks; matrix/inverse identity residual 0.00001.
+All outputs must be finite. Existing clip tolerance (NDC 0.000001), degeneracy/jump guards,
+dimension identity, selected handle/tie ordering, snapped cell results and untouched axis
+components must not change in the tested cases, including threshold-adjacent probes.
+Measure near=0.1 with far=128/1000/10000, varied pointer/viewport/GUI scale/camera offsets,
+large signed world references and nonzero-dimension local-Y boundaries. Budget failures
+reject that candidate scope, not the evaluation. A narrower render-only candidate retains
+double picking/inversion/drag math and compares final GPU matrix/vertex inputs separately.
+
+#### Phase 3.1 evaluation evidence and decision
+
+Historical evaluation traceability (the controlling sources above apply to each group):
+- Precision boundary -> proposal positioning/rendering, Phase 1 numerical contracts,
+  GizmoCamera -> the test-only candidate retained double reference subtraction,
+  explicit dimensions and the native projection; transposed matrix conventions before
+  Matrix4x4 composition/inversion. No production source changed.
+- Correctness -> proposal verification, Phase 1 pointer/drag contracts, GizmoCamera,
+  PositionGizmoGeometry and PositionGizmo -> evaluation probes compared the actual double camera, shared geometry,
+  manager hit/tie arbitration and drag implementation against float-derived inputs.
+- Rendering/performance -> proposal rendering, GizmoRenderAdapter.ModelView ->
+  rendering probes compared the same parts through native-compatible float GPU arrays;
+  microbenchmarks measured transforms, setup/inversion and final model-view construction.
+  After evaluation, the user rejected adoption and requested removal of all float
+  prototypes, including the rendering-only variant, evaluation test and benchmark
+  switch. They have been removed; the measurements below are historical evidence,
+  not a retained runnable evaluation. Production double math remains unchanged.
+
+Coverage: 108 configurations, 432 pointer samples, 1296 targets, 11016 handle/render
+vertices each, 648 hit probes, 7128 axis probes and 648 clip probes. Viewport/scale
+pairs are 801x601/1, 400x900/0.75 and 1920x500/2, in free-cursor/reticle and
+first-/third-person modes (third-person relative offset -3,-2,-4). Near=0.1;
+far=128/1000/10000. References include fractional positive/negative X/Z near
+2 billion, dimensions 0/2/15, and local Y 32768/-0.25. Targets cover 0.25, 5
+and 75% of far distance; rendered geometry covers 0.25, 10 and 75% of far.
+Actual synthetic target-plane intersections supplement same-distance ray comparisons.
+Axis probes include a 0.75 grab offset, all axes, half-block snapping boundaries,
+and begin/update degeneracy thresholds; coincident circle/diamond handles test ties.
+
+Observed maximum errors (not relaxed to obtain acceptance):
+- Projection/handle vertices 0.000932343 pixels; round trip 0.006014792 pixels.
+- Near reconstruction 0.000000719354 blocks; far reconstruction 55.4342803 blocks.
+- Target and target-plane intersection 0.0152320475 blocks.
+- Unsnapped axis displacement 0.000001907349 blocks; geometry axis-length
+  difference 0.00118177816 blocks (diagnostic, not a separate acceptance budget).
+- Inverse identity residual 0.00000572508; infinity-norm condition estimate 831.828493.
+- No nonfinite outputs, axis-acceptance differences, dimension differences or
+  untouched-component differences. However: 20 clip differences, 6 hit differences
+  and 746 snapped-delta differences. Broad candidate FAILS the existing contracts.
+- Rendering-only candidate: maximum 0.001102686 pixels, GPU model-view coefficient
+  difference 0.000161171, no clip differences/nonfinite matrices; PASSES the tested
+  screen-space budget. Matrix coefficient error is diagnostic, not an inverse residual.
+
+Representative failures: far reconstruction peaks at 1920x500/scale2, free cursor,
+first person, far10000, dimension2, reference (2000000000.125,32768,-2000000000.25),
+pointer (1919,499). A far128 third-person clip probe at
+(3.1611615431964957,5.25,3.4067672654393966), dimension0, is accepted only by doubles.
+At 801x601/scale1, dimension0, pointer (411.50010000000009,300.5), the same instance
+selects double handle3 versus float handle0. A requested X delta0.5 becomes
+0.49999999219708213 in the float-ray path versus 0.5 in doubles, changing AwayFromZero
+snapping. Small screen error therefore does not establish safe world-space picking.
+
+Final local microbenchmark: Release, .NET 10.0.14, Windows 10.0.26200, X64,
+Intel64 Family 6 Model151 Stepping2 GenuineIntel; Vector128/Vector256/Vector4 hardware
+support true. DOTNET_TieredCompilation=0; 50000 warmup iterations and seven trials;
+500000 transform, 10000 setup and 100000 model-view iterations per trial. Transform
+inputs cycle 128 values, model origins vary, and checksums consume results.
+
+Operation                                      Median ns/op    Range ns/op        B/op
+Double transform                                   6.413       5.113-11.380          0
+Double transform + reference subtraction            5.685       4.638-6.872           0
+Float transform, preconverted                       2.689       1.967-5.494           0
+Float transform + conversion                        3.971       3.043-7.030           0
+Double camera setup                             4185.470    2423.280-5265.080       904
+Float conversion/inversion kernel                2930.610    1516.630-6078.480       336
+Double render model-view + GPU array              252.053     218.593-414.859        544
+Float render model-view + conversion/GPU array     267.296     153.069-399.351         88
+
+The float setup kernel borrows existing immutable camera metadata: this is not an
+end-to-end camera replacement measurement. Timings vary substantially on this shared
+host; the final render median is not faster despite fewer allocations. Neither API
+choice nor these noisy microbenchmarks establish a frame-time/FPS improvement.
+
+Decision: retain double camera projection/inversion, pointer rays, position values,
+dimension handling, geometry sizing/hits and drag/snapping. Reject the evaluated
+broad float pipeline, without claiming every relative-float design is impossible.
+The rendering-only variant met the tested visual budget but is also declined and
+removed at the user's request. No float migration is planned or authorized. Any future
+reconsideration requires a new scoped evaluation and numerical/native-render regressions,
+with native order/GPU output, state/error handling and retirement preserved. This
+evaluation provides no live-game evidence.
+
+Pre-removal verification subagent: 259 passed, zero failed/skipped; .\build.ps1 --target=Build
+passed including ValidateJson; git diff --check passed. Existing nullable warnings
+and CakeBuild System.Security.Cryptography.Pkcs 10.0.12 advisories remain unrelated.
+Direct second review completed, including the expanded intersection/dimension/far
+render probes. Fresh independent read-only completion audit inspected the controlling
+sources and current implementation, reused applicable verification and found the phase
+fully satisfied with no required findings. Phase 3.1 is complete; later phases unchanged.
+Post-removal verification: 258 remaining Gizmos/Ruler tests passed, zero failed/skipped;
+no float-evaluation source references remain and git diff --check passed.
 
 ## Phase 4: Implement native input capture for both pointer modes
 
