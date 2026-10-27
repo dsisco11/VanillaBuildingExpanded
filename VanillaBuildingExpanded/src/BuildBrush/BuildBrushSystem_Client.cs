@@ -202,6 +202,7 @@ public class BuildBrushSystem_Client : ModSystem
     /// <summary>Retires session artwork before clearing mode, without sending to a departing server.</summary>
     private void Event_LeaveWorld()
     {
+        ruler?.CancelEndpointEdit();
         rulerInput?.Dispose();
         rulerInput = null;
         rulerRendering?.Dispose();
@@ -559,6 +560,7 @@ public class BuildBrushSystem_Client : ModSystem
             RulerNotice.AimAtBlock => "ruler-aim-at-block",
             RulerNotice.SetOtherEndpoint => "ruler-set-other-endpoint",
             RulerNotice.SetBothEndpoints => "ruler-set-both-endpoints",
+            RulerNotice.InvalidEndpoint => "ruler-invalid-endpoint",
             _ => throw new ArgumentOutOfRangeException(nameof(notice), notice, null)
         };
         string code = $"vanillabuildingexpanded:{key}";

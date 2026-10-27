@@ -502,30 +502,84 @@ findings. Phase 4 is complete; later phases and their live-game gates remain unc
 Prerequisites: Phase 1 endpoint/transaction contracts and Phase 2 value/lifecycle contracts.
 Outcome: Ruler endpoints can preview, commit and roll back direct edits without saving previews or losing previous dirty edits.
 
-    ☐ Extend the ruler controller with direct endpoint editing and explicit begin/preview/complete/cancel operations.
-        ☐ Snapshot the endpoint pair at begin; update only the selected endpoint during valid previews.
-        ☐ Preserve selected Start/End identity and inclusive sizes when crossing/reversing endpoints.
-        ☐ Cancel restores the baseline and presentation without a successful commit; reject invalid cells/dimensions before mutation.
-        ☐ Handle external authoritative replacement by canceling first, then applying the replacement without stale rollback.
-    ☐ Implement and test ruler cell/anchor conversion.
-        ☐ Map Start to cell + (0, 0, 0) and End to cell + (1, 1, 1); decode by subtracting the role offset.
-        ☐ Map center-drag block targets directly to endpoint cells; snap axis movement in whole-block deltas from the initial anchor.
-        ☐ Validate decoded cells, not anchors interpreted as encoded BlockPos; cover negative coordinates, extreme values and End anchors at local-Y boundaries.
-    ☐ Preserve native-config persistence while separating preview and durable state.
-        ☐ Do not save from OnValueChanged, preview updates or render ticks.
-        ☐ Complete a changed drag with one endpoint commit; permit an explicit no-op completion to retry an already dirty save without redundant writes.
-        ☐ Retain committed in-memory edits and existing failure notifications/retries when final saving fails.
-        ☐ Cancel active previews before orderly-exit dirty retries; persist previously committed dirty edits, never canceled preview coordinates.
-        ☐ Preserve existing schema/world keys, partial endpoints and save fidelity; introduce no speculative format migration.
-    ☐ Add controller/conversion/native-config-adapter tests.
-        ☐ Verify many preview updates produce zero writes and one completion produces the expected final write.
-        ☐ Verify cancel/no-op/external replacement, failure retry, and departure with both a dirty committed edit and an active preview.
-        ☐ Keep old one-shot controller consumers functional until the Phase 6 cutover, without adding a permanent compatibility shim.
+    ☑ Extend the ruler controller with direct endpoint editing and explicit begin/preview/complete/cancel operations.
+        ☑ Snapshot the endpoint pair at begin; update only the selected endpoint during valid previews.
+        ☑ Preserve selected Start/End identity and inclusive sizes when crossing/reversing endpoints.
+        ☑ Cancel restores the baseline and presentation without a successful commit; reject invalid cells/dimensions before mutation.
+        ☑ Handle external authoritative replacement by canceling first, then applying the replacement without stale rollback.
+    ☑ Implement and test ruler cell/anchor conversion.
+        ☑ Map Start to cell + (0, 0, 0) and End to cell + (1, 1, 1); decode by subtracting the role offset.
+        ☑ Map center-drag block targets directly to endpoint cells; snap axis movement in whole-block deltas from the initial anchor.
+        ☑ Validate decoded cells, not anchors interpreted as encoded BlockPos; cover negative coordinates, extreme values and End anchors at local-Y boundaries.
+    ☑ Preserve native-config persistence while separating preview and durable state.
+        ☑ Do not save from OnValueChanged, preview updates or render ticks.
+        ☑ Complete a changed drag with one endpoint commit; permit an explicit no-op completion to retry an already dirty save without redundant writes.
+        ☑ Retain committed in-memory edits and existing failure notifications/retries when final saving fails.
+        ☑ Cancel active previews before orderly-exit dirty retries; persist previously committed dirty edits, never canceled preview coordinates.
+        ☑ Preserve existing schema/world keys, partial endpoints and save fidelity; introduce no speculative format migration.
+    ☑ Add controller/conversion/native-config-adapter tests.
+        ☑ Verify many preview updates produce zero writes and one completion produces the expected final write.
+        ☑ Verify cancel/no-op/external replacement, failure retry, and departure with both a dirty committed edit and an active preview.
+        ☑ Keep old one-shot controller consumers functional until the Phase 6 cutover, without adding a permanent compatibility shim.
 
 Completion criteria:
 
-    ☐ Direct endpoint transactions, exact anchor round trips and persistence boundaries pass focused tests.
-    ☐ Existing durable endpoint/config behavior remains compatible; canceled previews cannot survive restart through an exit retry.
+    ☑ Direct endpoint transactions, exact anchor round trips and persistence boundaries pass focused tests.
+    ☑ Existing durable endpoint/config behavior remains compatible; canceled previews cannot survive restart through an exit retry.
+
+### Phase 5 implementation and evidence
+
+Controlling sources: proposal ruler integration/edit transactions, confirmed corner
+offsets and verification; Phase 1 position/snapping and transaction contracts;
+Phase 2 notifying-value/cancel ordering; linked RulerState, RulerController,
+RulerPersistence, BuildBrushSystem_Client and BuildBrushArchitecture integration context.
+Native config/staging/error behavior and schema remain the existing implementation.
+
+Traceability:
+- Direct editing/transactions -> proposal transaction contract -> RulerController exposes
+  BeginEndpointEdit, PreviewEndpoint, CompleteEndpointEdit, CancelEndpointEdit and
+  validated TrySetEndpoint/TrySetEndpoints. Begin snapshots both endpoints; previews
+  validate cells/dimension and replace only the chosen role. Cancellation restores
+  endpoints, not stale visibility/context flags. Differing RestoreEndpoints cancels
+  before replacement; identical owner echoes do not terminate a preview. Explicit
+  direct edits use the committed pair, never an unrelated endpoint's preview.
+  Complete signals one explicit commit request, including unchanged completions so
+  persistence can retry dirty state; unchanged clean requests perform no writes.
+- Anchor/grid policy -> proposal role offsets and Phase 1 double arithmetic ->
+  RulerGizmoCoordinates uses built-in Vector256<double>, explicit dimensions, double
+  +/- role offsets and checked integral cell conversion. Constrain rounds only the
+  selected axis delta AwayFromZero from the initial anchor and validates decoded cells.
+  Center targets map cell -> role anchor -> cell without face-adjacent offsets.
+  Fractional/out-of-range/wrong-dimension cells are rejected, not clamped or re-encoded.
+- Persistence -> proposal durable boundary and orderly departure -> CommittedEndpoints
+  exposes the transaction baseline while State exposes live previews. Both commit
+  dirty comparison and explicit TrySave use committed endpoints; preview value events
+  do not save. RulerPersistence.Dispose cancels before retry; client departure also
+  cancels before retiring session context/rendering. Existing native-config staging,
+  merge/world keys, schema version, partial endpoints and error notices are retained.
+- Old consumers/feedback -> proposal staged cutover -> existing one-shot picker remains
+  in production. Arming it cancels any direct preview; its existing commit and
+  cross-dimension behavior remain unchanged. New invalid endpoint notices are localized
+  and routed through the existing client notifier. No gizmo activation/UI cutover occurs.
+
+Focused evidence: RulerTransactionTests covers role crossing, partial/begin eligibility,
+invalid cells, cancellation/external replacement, context/legacy cancellation, exact
+signed/extreme anchor round trips including dimension65535/localY32767 and axis thresholds.
+RulerPersistenceTests routes actual PositionGizmo value events through conversion and
+controller previews to the existing native-config adapter: 100 previews produce no
+writes, one completion writes once and cancellation writes nothing. Further cases
+cover dirty manual saves during previews, failed completion/no-op retries, partial
+dirty departure/restart, extreme-cell fidelity, and actual client departure ordering.
+Verification subagent: 379 focused Release tests passed, zero failed/skipped
+(filter Ruler|Gizmos|BuildModeHudControlsTests); normal .\build.ps1 --target=Build
+passed including ValidateJson, and git diff --check passed. Existing nullable/analyzer
+warnings and CakeBuild Pkcs 10.0.12 advisories remain unrelated.
+Direct second review covered controller/conversion/persistence/teardown changes,
+tests and inherited contracts; additional native-config regressions confirm dirty
+cancellation does not retry and external replacement/reversion never saves stale previews
+or writes an already-saved pair redundantly. Fresh independent read-only completion
+audit inspected the controlling sources, implementation and evidence and found Phase 5
+fully satisfied with no unresolved required findings. Later phases and live gates remain unchanged.
 
 ## Phase 6: Replace ruler picking and panel buttons with session-owned gizmos
 

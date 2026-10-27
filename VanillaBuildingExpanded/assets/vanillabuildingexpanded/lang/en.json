@@ -12,6 +12,7 @@
   "ruler-select-start": "Ruler: return to mouse-look and left-click a block to set the start. Right-click cancels.",
   "ruler-select-end": "Ruler: return to mouse-look and left-click a block to set the end. Right-click cancels.",
   "ruler-aim-at-block": "Aim at a block",
+  "ruler-invalid-endpoint": "That ruler position is outside valid coordinates or belongs to another dimension.",
   "ruler-set-other-endpoint": "Ruler moved to this dimension. Set the other endpoint.",
   "ruler-set-both-endpoints": "Set both ruler endpoints to show the ruler.",
   "ruler-dimension-mismatch": "The ruler belongs to another dimension. Return there to see it, or set a new endpoint here.",

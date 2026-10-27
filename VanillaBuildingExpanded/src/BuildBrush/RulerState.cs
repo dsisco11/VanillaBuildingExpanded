@@ -12,13 +12,16 @@ internal enum RulerPickMode
     PickingEnd
 }
 
+internal enum RulerEndpointRole { Start, End }
+
 internal enum RulerNotice
 {
     SelectStart,
     SelectEnd,
     AimAtBlock,
     SetOtherEndpoint,
-    SetBothEndpoints
+    SetBothEndpoints,
+    InvalidEndpoint
 }
 
 internal readonly record struct RulerEndpoint(int X, int Y, int Z, int Dimension)

@@ -5,6 +5,7 @@ using Moq;
 using Newtonsoft.Json.Linq;
 
 using VanillaBuildingExpanded.BuildBrush;
+using VanillaBuildingExpanded.Gizmos;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -21,6 +22,194 @@ public sealed class RulerConfigFileCollection;
 [Collection("Ruler config files")]
 public sealed class RulerPersistenceTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GizmoValuePreviews_WriteNothingUntilOneCompletionAndNeverSaveCancellation(bool start)
+    {
+        using var fixture = new Fixture();
+        fixture.Write(Config(("world-a", Pair(Endpoint(10, 65, 20), Endpoint(14, 67, 23)))));
+        using var persistence = fixture.Open();
+        var controller = fixture.Controller;
+        controller.SetContext(true, true);
+        var role = start ? RulerEndpointRole.Start : RulerEndpointRole.End;
+        var initial = (start ? controller.State.Start : controller.State.End)!.Value;
+        var target = initial;
+        using var gizmo = new PositionGizmo(RulerGizmoCoordinates.ToAnchor(initial, role), _ => { },
+            _ => RulerGizmoCoordinates.ToAnchor(target, role),
+            edit => RulerGizmoCoordinates.Constrain(edit, role, fixture.Accessor.Object));
+        gizmo.OnInteractionStarted += _ => Assert.True(controller.BeginEndpointEdit(role));
+        gizmo.OnValueChanged += anchor =>
+        {
+            Assert.True(RulerGizmoCoordinates.TryDecode(anchor, role, fixture.Accessor.Object, out var cell));
+            Assert.True(controller.PreviewEndpoint(cell, fixture.Accessor.Object));
+        };
+        gizmo.OnInteractionCompleted += _ => Assert.True(controller.CompleteEndpointEdit());
+        gizmo.OnInteractionCanceled += _ => controller.CancelEndpointEdit();
+        var pointer = new GizmoPointer(new(0), new(
+            Gizmos.PositionGizmoTests.V(0, 0, 10), Gizmos.PositionGizmoTests.V(0, 0, -1)));
+        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, pointer));
+        for (int i = 1; i <= 100; i++)
+        {
+            target = new(initial.X + i, initial.Y, initial.Z, initial.Dimension);
+            gizmo.UpdateInteraction(pointer);
+            Assert.Empty(fixture.Writes);
+            Assert.False(persistence.IsDirty);
+            Assert.True(persistence.TrySave());
+        }
+        gizmo.CompleteInteraction();
+        Assert.Single(fixture.Writes);
+        Assert.Equal(target, start ? controller.State.Start : controller.State.End);
+        Assert.Equal(target.X, fixture.Read()["worlds"]!["world-a"]![start ? "start" : "end"]!["x"]!.Value<int>());
+        var committed = controller.State;
+        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, pointer));
+        target = target with { X = target.X + 50 };
+        gizmo.UpdateInteraction(pointer);
+        gizmo.CancelInteraction();
+        Assert.Equal(committed, controller.State);
+        Assert.Single(fixture.Writes);
+        Assert.False(persistence.IsDirty);
+    }
+
+    [Fact]
+    public void ExplicitSaveDuringDirtyPreview_WritesCommittedPairWithoutCancelingTheEdit()
+    {
+        using var fixture = new Fixture();
+        using var persistence = fixture.Open();
+        var controller = fixture.Controller;
+        controller.SetContext(true, true);
+        fixture.FailWrites = true;
+        Assert.True(controller.TrySetEndpoints(new(10, 65, 20, 0), new(14, 67, 23, 0), fixture.Accessor.Object));
+        Assert.True(persistence.IsDirty);
+        Assert.True(controller.BeginEndpointEdit(RulerEndpointRole.End));
+        Assert.True(controller.PreviewEndpoint(new(99, 80, 99, 0), fixture.Accessor.Object));
+        fixture.FailWrites = false;
+        Assert.True(persistence.TrySave());
+        Assert.True(controller.IsEditing);
+        Assert.Equal(99, controller.State.End!.Value.X);
+        Assert.Equal(14, fixture.Read()["worlds"]!["world-a"]!["end"]!["x"]!.Value<int>());
+        Assert.False(persistence.IsDirty);
+        controller.CancelEndpointEdit();
+        Assert.Equal(14, controller.State.End!.Value.X);
+        Assert.Equal(2, fixture.Writes.Count);
+    }
+
+    [Fact]
+    public void ExternalReplacementDuringDirtyPreview_SavesIncomingAuthorityNotStalePreviewOrRollback()
+    {
+        using var fixture = new Fixture();
+        using var persistence = fixture.Open();
+        var controller = fixture.Controller;
+        controller.SetContext(true, true);
+        fixture.FailWrites = true;
+        controller.TrySetEndpoint(RulerEndpointRole.Start, new(10, 65, 20, 0), fixture.Accessor.Object);
+        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.PreviewEndpoint(new(99, 80, 99, 0), fixture.Accessor.Object);
+        var replacement = new RulerEndpoint(-40, 70, -50, 2);
+        controller.RestoreEndpoints(null, replacement);
+        controller.CancelEndpointEdit();
+        Assert.False(controller.IsEditing);
+        Assert.Equal(1, fixture.Writes.Count);
+        fixture.FailWrites = false;
+        Assert.True(persistence.TrySave());
+        var restored = new RulerController();
+        using var fresh = fixture.Open(restored);
+        Assert.Null(restored.State.Start);
+        Assert.Equal(replacement, restored.State.End);
+    }
+
+    [Fact]
+    public void DirtyCancel_DoesNotRetryAndRevertingToSavedPairDoesNotWriteRedundantly()
+    {
+        using var fixture = new Fixture();
+        using var persistence = fixture.Open();
+        var controller = fixture.Controller;
+        controller.SetContext(true, true);
+        var saved = new RulerEndpoint(10, 65, 20, 0);
+        controller.TrySetEndpoint(RulerEndpointRole.Start, saved, fixture.Accessor.Object);
+        fixture.FailWrites = true;
+        controller.TrySetEndpoint(RulerEndpointRole.Start, new(30, 70, 40, 0), fixture.Accessor.Object);
+        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.PreviewEndpoint(new(99, 80, 99, 0), fixture.Accessor.Object);
+        fixture.FailWrites = false;
+        controller.CancelEndpointEdit();
+        Assert.True(persistence.IsDirty);
+        Assert.Equal(2, fixture.Writes.Count);
+        Assert.Equal(30, controller.State.Start!.Value.X);
+        controller.TrySetEndpoint(RulerEndpointRole.Start, saved, fixture.Accessor.Object);
+        Assert.False(persistence.IsDirty);
+        Assert.Equal(2, fixture.Writes.Count);
+        Assert.Equal(saved.X, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
+    }
+
+    [Fact]
+    public void ChangedCompletionFailure_RetainsCommitAndNoOpCompletionRetriesOnlyWhileDirty()
+    {
+        using var fixture = new Fixture();
+        using var persistence = fixture.Open();
+        var controller = fixture.Controller;
+        controller.SetContext(true, true);
+        controller.TrySetEndpoint(RulerEndpointRole.Start, new(10, 65, 20, 0), fixture.Accessor.Object);
+        fixture.FailWrites = true;
+        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.PreviewEndpoint(new(30, 70, 40, 0), fixture.Accessor.Object);
+        controller.CompleteEndpointEdit();
+        Assert.True(persistence.IsDirty);
+        Assert.Equal(30, controller.State.Start!.Value.X);
+        Assert.Contains("vanillabuildingexpanded:ruler-persistence-save-failed", fixture.Errors);
+        fixture.FailWrites = false;
+        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.CompleteEndpointEdit();
+        Assert.False(persistence.IsDirty);
+        Assert.Equal(30, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
+        int writes = fixture.Writes.Count;
+        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.CompleteEndpointEdit();
+        Assert.Equal(writes, fixture.Writes.Count);
+    }
+
+    [Fact]
+    public void Dispose_CancelsPreviewBeforeDirtyRetryAndRestartRestoresOnlyTheCommittedPair()
+    {
+        using var fixture = new Fixture();
+        var persistence = fixture.Open();
+        var controller = fixture.Controller;
+        controller.SetContext(true, true);
+        fixture.FailWrites = true;
+        controller.TrySetEndpoint(RulerEndpointRole.End, new(14, 67, 23, 2), fixture.Accessor.Object);
+        Assert.True(persistence.IsDirty);
+        controller.BeginEndpointEdit(RulerEndpointRole.End);
+        controller.PreviewEndpoint(new(99, 80, 99, 2), fixture.Accessor.Object);
+        fixture.FailWrites = false;
+        persistence.Dispose();
+        Assert.False(controller.IsEditing);
+        Assert.Equal(new RulerEndpoint(14, 67, 23, 2), controller.State.End);
+        var restored = new RulerController();
+        using var fresh = fixture.Open(restored);
+        Assert.Null(restored.State.Start);
+        Assert.Equal(controller.State.End, restored.State.End);
+        Assert.False(fresh.IsDirty);
+        Assert.Equal(2, fixture.Writes.Count);
+    }
+
+    [Fact]
+    public void DirectEdits_SaveExtremeCellsNotRoleOffsetAnchorsAndPreserveSchema()
+    {
+        using var fixture = new Fixture();
+        using var persistence = fixture.Open();
+        fixture.Controller.SetContext(true, true);
+        var end = new RulerEndpoint(int.MaxValue, 32767, int.MinValue, 65535);
+        var anchor = RulerGizmoCoordinates.ToAnchor(end, RulerEndpointRole.End);
+        Assert.True(RulerGizmoCoordinates.TryDecode(anchor, RulerEndpointRole.End, fixture.Accessor.Object, out var decoded));
+        Assert.True(fixture.Controller.TrySetEndpoint(RulerEndpointRole.End, decoded, fixture.Accessor.Object));
+        var restored = new RulerController();
+        using var fresh = fixture.Open(restored);
+        Assert.Equal(end, restored.State.End);
+        Assert.Null(restored.State.Start);
+        Assert.Equal(1, fixture.Read()["schemaVersion"]!.Value<int>());
+        Assert.Equal(new[] { "start", "end" }, ((JObject)fixture.Read()["worlds"]!["world-a"]!).Properties().Select(p => p.Name));
+    }
+
     [Fact]
     public void MissingFile_IsNormalFirstUseAndDoesNotWriteUntilAnEndpointCommit()
     {
@@ -424,8 +613,12 @@ public sealed class RulerPersistenceTests
             Assert.Equal(reads, fixture.ReadCount);
             fixture.FailWrites = true;
             Commit(ruler, true, new BlockPos(10, 65, 20, 0));
+            Assert.True(ruler.BeginEndpointEdit(RulerEndpointRole.Start));
+            Assert.True(ruler.PreviewEndpoint(new(99, 80, 99, 0), fixture.Accessor.Object));
             fixture.FailWrites = false;
             Invoke(system, "Event_LeaveWorld");
+            Assert.False(ruler.IsEditing);
+            Assert.Equal(10, ruler.State.Start!.Value.X);
             Assert.Null(GetField(system, "ruler"));
             Assert.Null(GetField(system, "rulerPersistence"));
             Assert.Null(GetField(system, "rulerRendering"));

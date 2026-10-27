@@ -54,7 +54,7 @@ internal sealed class RulerPersistence : IDisposable
         try
         {
             var document = ReadDocument();
-            var state = controller.State;
+            var state = controller.CommittedEndpoints;
             ValidatePair(state.Start, state.End);
             var worlds = (JObject)document["worlds"]!;
             var entry = worlds[worldId] is JObject existing ? (JObject)existing.DeepClone() : new JObject();
@@ -82,14 +82,18 @@ internal sealed class RulerPersistence : IDisposable
     {
         if (disposed) return;
         controller.EndpointsCommitted -= OnEndpointsCommitted;
-        try { TrySave(); }
+        try
+        {
+            controller.CancelEndpointEdit();
+            TrySave();
+        }
         finally { disposed = true; }
     }
 
     private void OnEndpointsCommitted()
     {
-        var state = controller.State;
-        if (state.Start != savedStart || state.End != savedEnd) IsDirty = true;
+        var state = controller.CommittedEndpoints;
+        IsDirty = state.Start != savedStart || state.End != savedEnd;
         if (IsDirty) TrySave();
     }
 

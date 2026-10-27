@@ -18,7 +18,7 @@ BuildBrush resolves placement intent locally and applies native block rules on b
 | [Preview dimension](../VanillaBuildingExpanded/src/BuildBrush/BrushDimension.cs) | Owns preview contents and native chunk synchronization. |
 | [Preview entity](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushEntity.cs) and [renderer](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushEntityRenderer.cs) | Publish/render watched validity, ownership, bounds and dirty state with mini-dimension contents. Local entity association checks the owner UID; rendering uses the local camera's real player context. |
 | [HUD binding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) and [HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs) | Observe enabled mode independently of brush eligibility and lazily own the non-focusing information panel. The [Ruler partial](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.Ruler.cs) observes shared ruler state and issues commands without owning coordinates, config or GPU resources. |
-| [Ruler state](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs) and [controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs) | Own immutable copied endpoints with local Y/dimension, inclusive wide-integer bounds, visibility preference and deterministic one-shot pick commands. Coordinate validation is shared with the world-facing adapters. |
+| [Ruler state](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs) and [controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs) | Own immutable copied endpoints with local Y/dimension, inclusive wide-integer bounds, visibility preference, direct endpoint transactions and the existing one-shot pick commands until cutover. Coordinate validation is shared with the world-facing adapters. |
 | [Ruler persistence](../VanillaBuildingExpanded/src/BuildBrush/RulerPersistence.cs) | Uses native mod-config APIs for versioned per-savegame endpoints, validates without requiring loaded blocks, preserves unrelated entries and retries dirty edits. |
 | [Ruler input](../VanillaBuildingExpanded/src/BuildBrush/RulerInput.cs) | Owns complete physical mouse gestures while picking, copies the native selection, suppresses both world-action families before brush placement, and retires input ownership on focus loss or teardown. |
 | [Ruler render binding](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderBinding.cs) | Observes state and local dimension/session eligibility, balances opaque-stage registration, reports mismatch/render failure, and owns one renderer per session. |
@@ -91,8 +91,21 @@ fields are explicitly cleared. Right/Escape cancel and session teardown detaches
 The eventual owner must call Refresh on eligibility changes even without rendering and
 route HandleWorldAction before brush placement. Pending creation has an owner seam, not
 implemented ruler/terrain policy. Tests exercise actual adapter/manager routing with native
-carriers and modeled downstream gates; they are not live-game qualification. Ruler
-transactions, native activation and HUD cutover remain in later phases.
+carriers and modeled downstream gates; they are not live-game qualification.
+Native activation and HUD cutover remain in later phases.
+
+Direct ruler edits have explicit begin/preview/complete/cancel boundaries. The controller
+snapshots both endpoints, previews only the selected Start/End without swapping roles,
+and restores the pair on cancellation. Differing authoritative restoration cancels first;
+identical echoes leave the edit active. [Role conversion and constraints](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoCoordinates.cs)
+use double SIMD coordinates with offsets Start=(0,0,0), End=(1,1,1); axis deltas round
+AwayFromZero before being added to the initial anchor. Decode/validation applies to
+the cell with its explicit dimension, including End anchors at local Y32768.
+State remains the live presentation; CommittedEndpoints supplies the baseline during
+an active edit. Persistence reads only committed endpoints, even on an explicit dirty
+retry during a preview. Completion requests the durable save; a clean unchanged
+completion causes no write. Cancellation precedes both client departure teardown and
+standalone persistence disposal/dirty retries, so canceled previews cannot be saved.
 
 On local join, the client system creates a fresh ruler controller, restores endpoints through persistence, then creates the render binding. Visibility remains unchecked and mode disabled. The input adapter is created lazily once enabled and alive, independent of brush placement eligibility. The 50-ms client tick refreshes context before brush early-outs; mode transitions refresh it immediately.
 
