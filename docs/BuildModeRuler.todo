@@ -239,37 +239,49 @@ Completion criteria:
 
 ## Phase 6: Verify the supported runtime and document delivery
 
-Prerequisites: Phases 1-5 complete and access to a supported game/runtime.
-Outcome: Automated, build, and live evidence independently establish the proposed behavior.
+Prerequisites: Phases 1-5 complete and access to a supported game/runtime, or an explicit user waiver of the formal live checks.
+Outcome: Automated/build/output evidence and documentation establish delivery; live acceptance is established only for cases actually exercised, never by mocks or a waiver.
 
-    ☐ Run the smallest combined existing test selections covering changed ruler, input, HUD/table, indicator, persistence, and renderer surfaces.
-        ☐ Use the repository's existing xUnit test project/runner; expand regression scope only when failures or shared changes warrant it.
-        ☐ Run the normal repository build; record commands, supported game version, and outcomes separately from unit/integration results.
-        ☐ Do not install dependencies speculatively or introduce new build/test tooling.
-    ☐ Verify live input and persistence in the supported game.
+Scope adjustment: In response to the live-verification request, the user said "it looks fine" and "we dont need this". The remaining formal live input, restart/world-isolation and rendering checks are waived at the user's request. This revises the Phase 6 completion gate only: their case boxes remain unchecked/unverified, not successful tests, and does not claim the proposal's original full live acceptance.
+
+Traceability/reconciliation:
+- Phase 6 test/build/output tasks -> proposal Verification and acceptance -> existing xUnit selection covering Ruler, BuildModeHudControlsTests, TableInputTests and BuildModeIndicatorTests. Delegated command: dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj --filter "FullyQualifiedName~BuildModeHudControlsTests|FullyQualifiedName~TableInputTests|FullyQualifiedName~BuildModeIndicatorTests|FullyQualifiedName~Ruler" --no-restore --verbosity minimal. Passed 253/253, 0 failed/skipped (shell 407). Delegated .\build.ps1 --target=Build passed JSON validation and normal Release clean/publish with 0 errors (shell 408); existing nullable and package advisories remain. No package/release workflow or new tooling was introduced.
+- Supported files -> installed G:\Vintagestory runtime, SDK 10.0.401 -> VintagestoryLib product/file version 1.22.7 and API/Lib assembly versions 1.22.7.0 (API product/file version is 1.22.0), inspected without launching the game (shell 409).
+- Publish fidelity -> normal VanillaBuildingExpanded\bin\Release\Mods\mod\publish output -> published/build DLL SHA256 matched (6A4018FEA89FA5C06FF431F0268F8919BC97C79983DD288984A54FB4A7E9A9E2); read-only metadata found RulerController/Input/Persistence/RenderBinding/Renderer/RenderState. Published en.json matched source SHA256 F08078616C7987D07230A95B60E79A91AD694877A781FE5DB68F96B33C1B017F, with ruler labels, size format and failure/dimension messages (shells 413, 415, 418, 419).
+- Documentation -> proposal Purpose / Ruler section / Bounds / Picking / Persistence / Renderer -> README Ruler subsection describes exact rows, inclusive sizes/reach, pick/cancel controls, config isolation/failure and lifetimes; BuildBrushArchitecture HUD/client-only ruler sections map ownership, native input, persistence and render cleanup. Both distinguish implementation/automated evidence from unverified live behavior.
+- Acceptance cases 1-2 -> RulerState/Controller and RulerControllerTests -> copied endpoints, same/reversed/negative/extreme inclusive bounds, switching/cancel and cross-dimension partial reset. Cases 3-4 -> RulerInput, HUD/table routing and RulerInputTests / BuildModeHudControlsTests.Ruler -> modeled full-gesture suppression, exact three-row GUI, passive hit areas, capture/rebuild/scale/locale safety. Case 5 -> RulerPersistenceTests -> native-config adapter round trips, identity isolation, malformed/unsupported/invalid files and dirty retries; not a real restart/server-world test. Cases 6-7 -> client owner, RulerRenderBinding/Renderer/RenderState, persistence-owner and RulerRenderingTests -> lifecycle and exact draw/registration/cleanup inputs; not live GPU appearance. Case 8 and all real input/restart/visual qualifications below -> user waiver only, no case-level live results.
+- Integration points / implementation boundaries / out-of-scope -> existing owner/controller/input/HUD/table/config/render composition -> one client-only ruler, no server/network/placement-state changes or extra UI/actions. No new temporary capture files, instrumentation or compatibility scaffolding was introduced in Phase 6; normal build outputs are retained.
+
+Direct second review compared the user and architecture documentation with actual controller/input/config/HUD/render ownership, corrected suspended-input and save-merge wording, and reconciled every proposal section/acceptance case above. Documentation whitespace checks passed and all 32 local Markdown link targets resolved (shell 421). Fresh independent read-only audit applied audit-stage-completion, consulted the full plan/proposal and production/tests/docs directly, and independently confirmed published hashes. Verdict: Phase 6 fully satisfied under the user-revised scope, with no confirmed issues, partial requirements or blocking evidence gaps. Only non-waived completion markers are checked; original full runtime acceptance is not claimed.
+
+    ✔ Run the smallest combined existing test selections covering changed ruler, input, HUD/table, indicator, persistence, and renderer surfaces.
+        ✔ Use the repository's existing xUnit test project/runner; expand regression scope only when failures or shared changes warrant it.
+        ✔ Run the normal repository build; record commands, supported game version, and outcomes separately from unit/integration results.
+        ✔ Do not install dependencies speculatively or introduce new build/test tooling.
+    ☐ Verify live input and persistence in the supported game. (User-waived; cases below unverified.)
         ☐ Confirm button gestures cannot pick or act on blocks; valid/invalid left clicks and post-success holds cannot mine, attack, or use items.
         ☐ Confirm right-click cancels without placement/item use, normal Idle controls remain intact, and picking works with empty/unsupported hands.
         ☐ Confirm native reach, sky/entity rejection, dialog/free-cursor pause, focus transitions, collapse, scale/locale changes, and notifications.
         ☐ Confirm same-cell/reversed/negative-coordinate sizes and cross-dimension new-partial-ruler behavior.
         ☐ Restart the game and verify exact saved endpoints, visibility reset, separate worlds/server worlds, and replacement-save isolation.
         ☐ Confirm mode-off/death/dimension changes hide/cancel and restore according to the agreed lifetime rules.
-    ☐ Verify live rendering instead of substituting mocked evidence.
+    ☐ Verify live rendering instead of substituting mocked evidence. (User-waived; cases below unverified.)
         ☐ Check terrain occlusion, edge stability/bias, large/negative coordinates, camera-inside-box views, and a large box whose endpoints are distant.
         ☐ Check brush preview/native selection overlap and transparent terrain; record observed depth-pipeline limitations and any unresolved blocking discrepancy.
         ☐ Confirm repeated visibility toggles and world changes leave no duplicate/stale wireframes or render-state damage.
-    ☐ Update directly related documentation and record evidence.
-        ☐ Describe the three-row UI, inclusive sizes, normal targeting reach, pick/cancel controls, config scope/failure behavior, and lifetime rules in the existing appropriate user documentation.
-        ☐ Update relevant BuildBrushArchitecture sections for client-only ruler/HUD ownership without rewriting unrelated architecture.
-        ☐ Record automated/build/live results and any blocked checks or qualified transparency limitations in this plan or existing project evidence location.
-        ☐ Verify the normal build output includes the modified assembly and localization assets; no new packaging or release workflow is required by this proposal.
-        ☐ Remove only task-owned test artifacts or temporary instrumentation; retain no temporary capture paths, debug controls, or compatibility scaffolding.
-        ☐ Reconcile implementation against every proposal section and all acceptance cases without marking deferred runtime checks complete.
+    ✔ Update directly related documentation and record evidence.
+        ✔ Describe the three-row UI, inclusive sizes, normal targeting reach, pick/cancel controls, config scope/failure behavior, and lifetime rules in the existing appropriate user documentation.
+        ✔ Update relevant BuildBrushArchitecture sections for client-only ruler/HUD ownership without rewriting unrelated architecture.
+        ✔ Record automated/build/live results and any blocked checks or qualified transparency limitations in this plan or existing project evidence location.
+        ✔ Verify the normal build output includes the modified assembly and localization assets; no new packaging or release workflow is required by this proposal.
+        ✔ Remove only task-owned test artifacts or temporary instrumentation; retain no temporary capture paths, debug controls, or compatibility scaffolding.
+        ✔ Reconcile implementation against every proposal section and all acceptance cases without marking deferred runtime checks complete.
 
 Completion criteria:
 
-    ☐ Targeted automated tests and the normal build pass with recorded evidence.
-    ☐ Supported-game input, restart persistence, and rendering checks are recorded; any missing access/check remains blocked and unchecked.
-    ☐ Documentation matches actual behavior, the three-row UI is unchanged, and no unsupported scope was introduced.
+    ✔ Targeted automated tests and the normal build pass with recorded evidence.
+    ✔ Live results are recorded where performed; user-waived formal checks remain explicitly unchecked/unverified, not replaced by automated or informal visual evidence.
+    ✔ Documentation matches actual behavior, the three-row UI is unchanged, and no unsupported scope was introduced.
 
 ## Final acceptance
 
