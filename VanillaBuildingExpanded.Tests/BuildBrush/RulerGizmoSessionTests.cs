@@ -19,7 +19,7 @@ public sealed class RulerGizmoSessionTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void RepeatedBothEndpointDrags_PreviewCrossingAndNegativeCellsWithoutSwappingRoles(bool grabbed)
+    public void RepeatedBothEndpointDrags_PreviewCrossingAlwaysNormalizesBothCorners(bool grabbed)
     {
         using var f = new Fixture(grabbed);
         f.H.Enable();
@@ -39,14 +39,16 @@ public sealed class RulerGizmoSessionTests
             f.H.Frame();
             var instance = start ? f.H.Session.Start! : f.H.Session.End!;
             var baseline = instance.Value;
-            var untouched = start ? f.H.Ruler.State.End : f.H.Ruler.State.Start;
+            var opposite = (start ? f.H.Ruler.State.End : f.H.Ruler.State.Start)!.Value;
             f.H.Aim(instance.Value.Coordinates);
             Assert.True(f.H.Down().Handled);
             Assert.Same(instance, f.H.Session.Manager.CapturedGizmo);
             f.H.Target = new(start ? 80 + i : -80 - i, 65 + i % 3, -180 - i, 0);
             f.H.Frame();
-            Assert.Equal(f.H.Target, start ? f.H.Ruler.State.Start : f.H.Ruler.State.End);
-            Assert.Equal(untouched, start ? f.H.Ruler.State.End : f.H.Ruler.State.Start);
+            var expected = new RulerBounds(f.H.Target.Value, opposite);
+            Assert.Equal(expected.MinCell, f.H.Ruler.State.Start);
+            Assert.Equal(expected.MaxCell, f.H.Ruler.State.End);
+            Assert.Same(instance, f.H.Session.Manager.CapturedGizmo);
             f.H.AssertLiveBox();
             Assert.Equal(i + 1, f.H.Commits);
             Assert.NotEqual(baseline, instance.Value);
@@ -54,8 +56,12 @@ public sealed class RulerGizmoSessionTests
             Assert.False(f.H.Ruler.IsEditing);
             Assert.Equal(i + 2, f.H.Commits);
             f.H.AssertLiveBox();
-            Assert.Equal(RulerGizmoCoordinates.ToAnchor(f.H.Target!.Value,
+            Assert.Equal(RulerGizmoCoordinates.ToAnchor(start ? expected.MinCell : expected.MaxCell,
                 start ? RulerEndpointRole.Start : RulerEndpointRole.End), instance.Value);
+            Assert.Equal(RulerGizmoCoordinates.ToAnchor(expected.MinCell, RulerEndpointRole.Start),
+                f.H.Session.Start!.Value);
+            Assert.Equal(RulerGizmoCoordinates.ToAnchor(expected.MaxCell, RulerEndpointRole.End),
+                f.H.Session.End!.Value);
         }
         Assert.Empty(f.H.Network.Invocations);
     }
@@ -80,6 +86,46 @@ public sealed class RulerGizmoSessionTests
         Assert.NotEqual(h.Session.Start!.Value, h.Session.End!.Value);
         Assert.Equal(3, h.Meshes.Count);
         Assert.Equal(0, h.Commits);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void CrossingAndReturning_KeepsCaptureAndBothCanonicalAnchorsThenRollsBack(bool grabbed, bool start)
+    {
+        using var f = new Fixture(grabbed);
+        var h = f.H;
+        var first = new RulerEndpoint(-30, 65, -200, 0);
+        var last = new RulerEndpoint(30, 75, -180, 0);
+        h.Ruler.RestoreEndpoints(first, last);
+        h.Enable();
+        h.Frame();
+        var instance = start ? h.Session.Start! : h.Session.End!;
+        h.Aim(instance.Value.Coordinates);
+        h.Down();
+        foreach (var target in new[] { new RulerEndpoint(start ? 70 : -70, start ? 80 : 60, -220, 0),
+            start ? first : last, new(-10, 70, -190, 0) })
+        {
+            h.Target = target;
+            h.Frame();
+            h.Session.Refresh();
+            Assert.Same(instance, h.Session.Manager.CapturedGizmo);
+            var expected = new RulerBounds(target, start ? last : first);
+            Assert.Equal(expected.MinCell, h.Ruler.State.Start);
+            Assert.Equal(expected.MaxCell, h.Ruler.State.End);
+            Assert.Equal(RulerGizmoCoordinates.ToAnchor(expected.MinCell, RulerEndpointRole.Start), h.Session.Start!.Value);
+            Assert.Equal(RulerGizmoCoordinates.ToAnchor(expected.MaxCell, RulerEndpointRole.End), h.Session.End!.Value);
+            h.AssertLiveBox();
+            Assert.Equal(0, h.Commits);
+        }
+        h.Key();
+        h.Up();
+        Assert.Equal(first, h.Ruler.State.Start);
+        Assert.Equal(last, h.Ruler.State.End);
+        Assert.Equal(0, h.Commits);
+        h.AssertLiveBox();
     }
 
     [Fact]
@@ -122,8 +168,9 @@ public sealed class RulerGizmoSessionTests
         h.Target = new(25, 32767, -220, 65535);
         h.Frame();
         h.Up();
-        Assert.Equal(h.Target, h.Ruler.State.End);
-        Assert.Equal(first, h.Ruler.State.Start);
+        var expected = new RulerBounds(first, h.Target.Value);
+        Assert.Equal(expected.MaxCell, h.Ruler.State.End);
+        Assert.Equal(expected.MinCell, h.Ruler.State.Start);
         Assert.Equal(1, h.Commits);
         Assert.True(h.LastRay!.origin.Y > 2147400000);
     }
@@ -153,7 +200,7 @@ public sealed class RulerGizmoSessionTests
         Assert.Same(h.Session.Start, h.Session.Manager.CapturedGizmo);
         h.Frame();
         h.Up();
-        Assert.Equal(h.Target, h.Ruler.State.Start);
+        Assert.Equal(new RulerBounds(h.Target!.Value, new(30, 65, -200, 0)).MinCell, h.Ruler.State.Start);
         Assert.Equal(1, h.Commits);
     }
 
@@ -285,8 +332,9 @@ public sealed class RulerGizmoSessionTests
         h.Target = new(-10, 70, -300, 0);
         h.Down(20, 20);
         h.Up(20, 20);
-        Assert.Equal(existing, hasStart ? h.Ruler.State.Start : h.Ruler.State.End);
-        Assert.Equal(h.Target, hasStart ? h.Ruler.State.End : h.Ruler.State.Start);
+        var expected = new RulerBounds(existing, h.Target.Value);
+        Assert.Equal(expected.MinCell, h.Ruler.State.Start);
+        Assert.Equal(expected.MaxCell, h.Ruler.State.End);
         Assert.Equal(1, h.Commits);
         h.Player.Entity.Pos.Dimension = 2;
         h.Session.Refresh();
@@ -384,13 +432,13 @@ public sealed class RulerGizmoSessionTests
         start.OnValueChanged += _ => notifications++;
         h.Aim(start.Value.Coordinates);
         h.Down();
-        h.Target = new(-40, 70, -220, 0);
+        h.Target = new(-40, 60, -220, 0);
         h.Frame();
         h.Ruler.RestoreEndpoints(h.Ruler.State.Start, h.Ruler.State.End);
         Assert.Same(start, h.Session.Manager.CapturedGizmo);
         Assert.True(h.Ruler.IsEditing);
         Assert.Equal(1, notifications);
-        var replacement = new RulerEndpoint(50, 75, -300, 0);
+        var replacement = new RulerEndpoint(-50, 60, -300, 0);
         h.Ruler.RestoreEndpoints(replacement, h.Ruler.State.End);
         Assert.Null(h.Session.Manager.CapturedGizmo);
         Assert.False(h.Ruler.IsEditing);

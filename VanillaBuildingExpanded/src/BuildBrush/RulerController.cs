@@ -21,8 +21,9 @@ internal sealed class RulerController
     {
         if (start is { } first && end is { } second && first.Dimension != second.Dimension)
             throw new ArgumentException("Saved ruler endpoints must belong to the same dimension.", nameof(end));
-        if (State.Start != start || State.End != end) CancelEndpointEdit();
-        SetState(State with { Start = start, End = end });
+        var next = Normalize(State with { Start = start, End = end });
+        if (State.Start != next.Start || State.End != next.End) CancelEndpointEdit();
+        SetState(State with { Start = next.Start, End = next.End });
     }
 
     public bool BeginEndpointEdit(RulerEndpointRole role)
@@ -41,8 +42,11 @@ internal sealed class RulerController
         var original = baseline.Role == RulerEndpointRole.Start ? baseline.Start : baseline.End;
         if (endpoint.Dimension != original!.Value.Dimension || !endpoint.IsValid(accessor))
             return RejectEndpoint();
-        SetState(baseline.Role == RulerEndpointRole.Start
-            ? State with { Start = endpoint } : State with { End = endpoint });
+        var next = Normalize(baseline.Role == RulerEndpointRole.Start
+            ? State with { Start = endpoint, End = baseline.End }
+            : State with { Start = baseline.Start, End = endpoint });
+        if (!ValidEndpoints(next.Start, next.End, accessor)) return RejectEndpoint();
+        SetState(next);
         return true;
     }
 
@@ -74,12 +78,11 @@ internal sealed class RulerController
     {
         ArgumentNullException.ThrowIfNull(accessor);
         if (!State.CanPick) return false;
-        if ((start is { } first && !first.IsValid(accessor))
-            || (end is { } second && !second.IsValid(accessor))
-            || (start is { } a && end is { } b && a.Dimension != b.Dimension))
+        var next = Normalize(State with { Start = start, End = end });
+        if (!ValidEndpoints(start, end, accessor) || !ValidEndpoints(next.Start, next.End, accessor))
             return RejectEndpoint();
         CancelEndpointEdit();
-        SetState(State with { Start = start, End = end });
+        SetState(State with { Start = next.Start, End = next.End });
         EndpointsCommitted?.Invoke();
         return true;
     }
@@ -115,8 +118,17 @@ internal sealed class RulerController
 
     private void SetState(RulerState next)
     {
+        next = Normalize(next);
         if (State == next) return;
         State = next;
         Changed?.Invoke(next);
     }
+
+    private static RulerState Normalize(RulerState state) => state.Bounds is { } bounds
+        ? state with { Start = bounds.MinCell, End = bounds.MaxCell } : state;
+
+    private static bool ValidEndpoints(RulerEndpoint? start, RulerEndpoint? end, IBlockAccessor accessor) =>
+        (start is not { } first || first.IsValid(accessor))
+        && (end is not { } second || second.IsValid(accessor))
+        && (start is not { } a || end is not { } b || a.Dimension == b.Dimension);
 }

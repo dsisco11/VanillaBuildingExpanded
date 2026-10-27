@@ -15,7 +15,7 @@ public sealed class RulerTransactionTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void PreviewCrossing_PreservesRoleAndCommittedPairThenCancelsOrCompletesOnce(bool start)
+    public void PreviewCrossing_NormalizesCornersAndPreservesCommittedPairThenCancelsOrCompletesOnce(bool start)
     {
         var controller = Controller();
         var baseline = controller.State;
@@ -29,8 +29,9 @@ public sealed class RulerTransactionTests
         {
             var target = new RulerEndpoint(-i, 80, -i, 2);
             Assert.True(controller.PreviewEndpoint(target, Accessor().Object));
-            Assert.Equal(target, start ? controller.State.Start : controller.State.End);
-            Assert.Equal(start ? baseline.End : baseline.Start, start ? controller.State.End : controller.State.Start);
+            var expected = new RulerBounds(target, (start ? baseline.End : baseline.Start)!.Value);
+            Assert.Equal(expected.MinCell, controller.State.Start);
+            Assert.Equal(expected.MaxCell, controller.State.End);
             Assert.Equal((baseline.Start, baseline.End), controller.CommittedEndpoints);
             var bounds = controller.State.Bounds!.Value;
             Assert.Equal((long)Math.Abs((start ? baseline.End : baseline.Start)!.Value.X - target.X) + 1,
@@ -49,6 +50,35 @@ public sealed class RulerTransactionTests
         Assert.False(controller.IsEditing);
         Assert.Equal(1, commits);
         Assert.Equal((controller.State.Start, controller.State.End), controller.CommittedEndpoints);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CrossingAndReturning_UsesFixedOppositeCornerRatherThanPreviousNormalizedPreview(bool start)
+    {
+        var controller = Controller();
+        var baseline = controller.State;
+        var role = start ? RulerEndpointRole.Start : RulerEndpointRole.End;
+        Assert.True(controller.BeginEndpointEdit(role));
+        Assert.True(controller.PreviewEndpoint(new(-50, 90, 100, 2), Accessor().Object));
+        Assert.True(controller.PreviewEndpoint((start ? baseline.Start : baseline.End)!.Value, Accessor().Object));
+        Assert.Equal(baseline, controller.State);
+        Assert.True(controller.IsEditing);
+        Assert.True(controller.CompleteEndpointEdit());
+        Assert.Equal(baseline, controller.State);
+    }
+
+    [Fact]
+    public void Restore_NormalizesMixedAndReversedLegacyCornersWithoutCommitting()
+    {
+        var controller = new RulerController();
+        int commits = 0;
+        controller.EndpointsCommitted += () => commits++;
+        controller.RestoreEndpoints(new(30, 60, -10, 2), new(-20, 80, -40, 2));
+        Assert.Equal(new RulerEndpoint(-20, 60, -40, 2), controller.State.Start);
+        Assert.Equal(new RulerEndpoint(30, 80, -10, 2), controller.State.End);
+        Assert.Equal(0, commits);
     }
 
     [Theory]

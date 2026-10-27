@@ -29,7 +29,7 @@ The ruler remains client-only. Gizmos are controls, not blocks, inventory items 
 
 ## Current integration points
 
-- [Ruler state](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs) stores copied block coordinates with explicit local Y and dimension. Inclusive bounds and selected Start/End identity must remain intact.
+- [Ruler state](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs) stores copied block coordinates with explicit local Y and dimension. Start always represents the per-axis minimum cell and End the per-axis maximum cell of the inclusive bounds.
 - [Ruler controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs) currently exposes one-shot picking commands. It needs direct endpoint editing and preview/commit/cancel operations instead of forcing a drag through that state machine.
 - [Ruler session](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoSession.cs) replaces the former one-shot ruler input owner. Retain one path for the ruler; do not layer a second independently capturing mouse adapter over it.
 - [Ruler HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.Ruler.cs) currently owns Set Start/Set end buttons. Their removal is an explicitly approved UI change for this replacement.
@@ -95,7 +95,7 @@ Each instance has:
 - Hover/active feedback that does not depend on color alone.
 - Stable screen-sized visual and pick targets, within sensible world-size limits.
 
-The ruler uses distinguishable Start/End center icons, for example a circle and a diamond. Marker geometry and axis constraints are independent of whether Start is the normalized minimum or maximum corner.
+The ruler uses distinguishable Start/End center icons, for example a circle and a diamond. Start marks the normalized minimum corner and End the normalized maximum corner.
 
 ## Proposed input and dragging
 
@@ -146,7 +146,7 @@ The positioning gizmo's value is its anchor position. The ruler binding adds the
 
 These are marker offsets, not changes to stored endpoints or inclusive measurements. For the same selected cell, Start marks its minimum corner and End marks its exclusive maximum corner, so the two handles are separated without offsetting the measurement itself. Preserve explicit dimension identity even when an End anchor lies at a local-Y boundary; validate the decoded cell rather than interpreting the anchor as a dimension-encoded block position.
 
-Moving one endpoint must never exchange Start/End identity when it crosses the other. The offsets stay associated with the selected endpoint role, not the normalized box minimum/maximum.
+Updated decision (2026-10-26): Start and End always contain the per-axis minimum and maximum cell coordinates, respectively, including previews and restored legacy values. Crossing is allowed: normalize both endpoints, rather than clamping or retaining mixed min/max coordinates. Offsets and marker shapes remain associated with the minimum/maximum roles. This supersedes the earlier selected-endpoint identity preservation decision.
 
 Create one positioning-gizmo instance for each existing endpoint, even for an incomplete ruler. The box still requires both endpoints.
 
@@ -154,7 +154,7 @@ During a drag:
 
 - Capture the original endpoint pair at begin.
 - Publish valid snapped preview endpoints to the controller so size and wireframe update live.
-- Preserve the untouched endpoint, including when a drag crosses it.
+- Calculate each preview against the original opposite endpoint, then normalize both corners per axis. The fixed baseline permits crossing and returning without accumulating earlier preview extents; both displayed handles follow their normalized role anchors without losing capture.
 - On completion, keep the final preview and issue one endpoint commit when changed. An explicit no-op completion may retry an already dirty save without producing redundant writes.
 - On cancellation, restore the baseline, refresh presentation, and do not save the canceled preview.
 - Reject invalid coordinates and dimension changes before mutating preview state; retain the last valid position and surface meaningful feedback.

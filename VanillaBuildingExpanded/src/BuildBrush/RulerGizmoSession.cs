@@ -111,6 +111,8 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
                     if (!RulerGizmoCoordinates.TryDecode(value, role, world.BlockAccessor, out var selected))
                         throw new InvalidOperationException("The ruler gizmo published an invalid cell.");
                     ruler.PreviewEndpoint(selected, world.BlockAccessor);
+                    // A crossed candidate can normalize to unchanged cells without a Changed event.
+                    Refresh();
                 }
                 finally { publishing = false; }
             };

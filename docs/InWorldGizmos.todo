@@ -10,7 +10,7 @@ Replace ruler endpoint buttons and one-shot picking with reusable client-owned i
 
 Use an abstract Gizmo and typed Gizmo<TValue>. The Value property setter raises OnValueChanged for actual changes from either manipulation or owner assignment; do not introduce a separate SetValue method or silent assignment path.
 
-The ruler has two positioning-gizmo instances. Start uses its cell's (0, 0, 0) corner; End uses its cell's (1, 1, 1) corner. Preserve selected endpoint identity and inclusive cell measurements. Render handles as overlays and retain the depth-tested measurement box. The panel becomes:
+The ruler has two positioning-gizmo instances. Start uses its cell's (0, 0, 0) corner; End uses its cell's (1, 1, 1) corner. Start always contains the per-axis minimum cell and End the per-axis maximum cell, preserving inclusive measurements. Render handles as overlays and retain the depth-tested measurement box. The panel becomes:
 
 ```text
 [ ] Show ruler
@@ -20,6 +20,19 @@ Size: <x>, <y>, <z>
 Non-goals: rotation/scaling gizmos, multi-object editing, undo history, numeric editors, multiplayer sharing, unrelated brush compatibility tests, additional ruler selection/cycling controls, new relocation controls, or a required plane-drag mode.
 
 ## Assumptions and qualification gates
+
+Decision update after Phase 6 (2026-10-26): the user superseded the original
+selected-endpoint identity preservation rule. Start/End now always normalize to the
+per-axis minimum/maximum cells on restore, direct edits and every preview. Crossing
+is allowed (not clamped); each preview uses the original opposite endpoint so a drag
+can cross and return without accumulating extents. Both notifying gizmo values follow
+the normalized anchors while capture remains active. Completed phase records below
+describe their historical contracts where they still mention role preservation.
+Verification for this decision update: 403 focused Release tests passed (ruler,
+gizmos, HUD controls and table input), including mixed-axis crossing/return,
+canonical handle synchronization at release, rollback and legacy config round trips.
+Normal Build/ValidateJson and git diff --check passed. Live-game qualification
+remains separate in Phase 7.
 
 - The proposal is authoritative. Its linked current implementation files and BuildBrushArchitecture.md supply integration context, not permission to retain superseded endpoint buttons or picking behavior.
 - There is no existing reusable gizmo implementation in the inspected repository. Recheck before adding new logic; reuse native math/rendering facilities and existing input suppression infrastructure where they meet the new contract.

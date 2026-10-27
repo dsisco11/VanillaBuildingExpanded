@@ -22,6 +22,33 @@ public sealed class RulerConfigFileCollection;
 [Collection("Ruler config files")]
 public sealed class RulerPersistenceTests
 {
+    [Fact]
+    public void LegacyMixedCorners_LoadNormalizedAndNextEditPersistsCanonicalPairWithoutSchemaChange()
+    {
+        using var fixture = new Fixture();
+        fixture.Write(Config(("world-a", Pair(Endpoint(30, 60, -10), Endpoint(-20, 80, -40)))));
+        using var persistence = fixture.Open();
+        var controller = fixture.Controller;
+        Assert.Equal(new RulerEndpoint(-20, 60, -40, 0), controller.State.Start);
+        Assert.Equal(new RulerEndpoint(30, 80, -10, 0), controller.State.End);
+        Assert.Empty(fixture.Writes);
+        Assert.False(persistence.IsDirty);
+        controller.SetContext(true, true);
+        controller.BeginEndpointEdit(RulerEndpointRole.Start);
+        controller.PreviewEndpoint(new(50, 70, -100, 0), fixture.Accessor.Object);
+        Assert.Empty(fixture.Writes);
+        controller.CompleteEndpointEdit();
+        var saved = fixture.Read();
+        Assert.Single(fixture.Writes);
+        Assert.Equal(1, saved["schemaVersion"]!.Value<int>());
+        Assert.Equal(30, saved["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
+        Assert.Equal(50, saved["worlds"]!["world-a"]!["end"]!["x"]!.Value<int>());
+        var restored = new RulerController();
+        using var reopened = fixture.Open(restored);
+        Assert.Equal(controller.State.Start, restored.State.Start);
+        Assert.Equal(controller.State.End, restored.State.End);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -51,9 +78,12 @@ public sealed class RulerPersistenceTests
             Assert.True(h.Up().Handled);
             Assert.Equal(i + 1, fixture.Writes.Count);
             var record = fixture.Read()["worlds"]!["world-a"]![start ? "start" : "end"]!;
-            Assert.Equal(h.Target!.Value.X, record["x"]!.Value<int>());
-            Assert.Equal(h.Target.Value.Y, record["y"]!.Value<int>());
-            Assert.Equal(h.Target.Value.Z, record["z"]!.Value<int>());
+            var committedCell = (start ? h.Ruler.State.Start : h.Ruler.State.End)!.Value;
+            Assert.Equal(committedCell.X, record["x"]!.Value<int>());
+            Assert.Equal(committedCell.Y, record["y"]!.Value<int>());
+            Assert.Equal(committedCell.Z, record["z"]!.Value<int>());
+            Assert.Equal(h.Ruler.State.Bounds!.Value.MinCell, h.Ruler.State.Start);
+            Assert.Equal(h.Ruler.State.Bounds.Value.MaxCell, h.Ruler.State.End);
         }
         fixture.FailWrites = true;
         h.Frame();
@@ -119,8 +149,11 @@ public sealed class RulerPersistenceTests
         }
         gizmo.CompleteInteraction();
         Assert.Single(fixture.Writes);
-        Assert.Equal(target, start ? controller.State.Start : controller.State.End);
-        Assert.Equal(target.X, fixture.Read()["worlds"]!["world-a"]![start ? "start" : "end"]!["x"]!.Value<int>());
+        var expected = new RulerBounds(target, start ? new(14, 67, 23, 0) : new(10, 65, 20, 0));
+        Assert.Equal(expected.MinCell, controller.State.Start);
+        Assert.Equal(expected.MaxCell, controller.State.End);
+        Assert.Equal(start ? expected.MinCell.X : expected.MaxCell.X,
+            fixture.Read()["worlds"]!["world-a"]![start ? "start" : "end"]!["x"]!.Value<int>());
         var committed = controller.State;
         Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, pointer));
         target = target with { X = target.X + 50 };

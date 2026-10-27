@@ -53,8 +53,9 @@ public sealed class RulerControllerTests
     [InlineData(10, 65, 20, 14, 67, 23, 5, 3, 4)]
     [InlineData(14, 67, 23, 10, 65, 20, 5, 3, 4)]
     [InlineData(-14, 65, -23, -10, 67, -20, 5, 3, 4)]
+    [InlineData(14, 65, -23, -10, 67, -20, 25, 3, 4)]
     [InlineData(-4, 7, -9, -4, 7, -9, 1, 1, 1)]
-    public void Bounds_AreInclusiveWithoutSwappingRoles(
+    public void Endpoints_AlwaysMatchInclusiveMinimumAndMaximumCorners(
         int x, int y, int z, int ex, int ey, int ez, long sx, long sy, long sz)
     {
         var controller = new RulerController();
@@ -63,8 +64,8 @@ public sealed class RulerControllerTests
         var end = new RulerEndpoint(ex, ey, ez, 2);
         Assert.True(controller.TrySetEndpoints(start, end, Accessor()));
         var bounds = controller.State.Bounds!.Value;
-        Assert.Equal(start, controller.State.Start);
-        Assert.Equal(end, controller.State.End);
+        Assert.Equal(bounds.MinCell, controller.State.Start);
+        Assert.Equal(bounds.MaxCell, controller.State.End);
         Assert.Equal((sx, sy, sz), (bounds.SizeX, bounds.SizeY, bounds.SizeZ));
         Assert.Equal(Math.Max(x, ex) + 1d, bounds.RenderMaxExclusiveX);
         Assert.Equal(Math.Max(y, ey) + 1d, bounds.RenderMaxExclusiveY);

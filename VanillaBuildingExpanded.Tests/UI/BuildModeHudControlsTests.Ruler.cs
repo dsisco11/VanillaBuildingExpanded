@@ -52,7 +52,8 @@ public sealed partial class BuildModeHudControlsTests
         h.Target = new(-50, 70, -250, 0);
         h.Frame();
         h.Up();
-        Assert.Equal(h.Target, ruler.State.Start);
+        Assert.Equal(new RulerEndpoint(-50, 65, -250, 0), ruler.State.Start);
+        Assert.Equal(new RulerEndpoint(30, 70, -200, 0), ruler.State.End);
         Assert.Equal(1, h.Commits);
     }
 

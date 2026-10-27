@@ -95,7 +95,8 @@ manager and controller routing with native carriers and modeled downstream gates
 are not live-game qualification.
 
 Direct ruler edits have explicit begin/preview/complete/cancel boundaries. The controller
-snapshots both endpoints, previews only the selected Start/End without swapping roles,
+snapshots both endpoints, calculates previews against the original opposite endpoint,
+then normalizes Start/End to the per-axis minimum/maximum cells even during crossing,
 and restores the pair on cancellation. Differing authoritative restoration cancels first;
 identical echoes leave the edit active. [Role conversion and constraints](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoCoordinates.cs)
 use double SIMD coordinates with offsets Start=(0,0,0), End=(1,1,1); axis deltas round
@@ -111,7 +112,7 @@ On local join, the client system creates a fresh ruler controller, restores endp
 
 Both free cursor and mouse-look reticle support center and axis drags; reticle motion remains available for native aiming. The terrain resolver uses the captured visual near/far ray through the camera far plane without a player-reach cap. It retains native meta-block/interactable-entity filters and liquid policy, rejects foreground entities, sky, unloaded chunks and outside-clip hits, and copies the selected cell without brush offsets. It never refreshes native selection or loads terrain. Per-button ownership suppresses hold/repeat/release actions in both native action families, including after completion; Right/Escape cancel before placement. The installed 1.22.7 public event API lacks a focus callback, so the adapter uses the native client world's focus-listener list and explicitly detaches it.
 
-Endpoints retain Start/End identity and explicit local Y/dimension. Each existing endpoint, even in a partial ruler, has a positioning control: Start circle at cell+(0,0,0), End diamond at cell+(1,1,1), both with RGB arrows. The binding uses notifying Value assignments and controller transactions, distinguishes owner synchronization from previews, and cancels before authoritative replacement. Axis edits snap whole-block deltas from the initial anchor; center edits follow terrain. Derived sizes use `max - min + 1` in wide integers; rendering spans minimum cell through maximum cell plus one.
+Endpoints use Start for the per-axis minimum cell and End for the per-axis maximum cell, with explicit local Y/dimension. Crossing is allowed and renormalizes both corners on each preview; it does not clamp motion. Existing mixed/reversed saved pairs normalize on load without a schema migration. Each existing endpoint, even in a partial ruler, has a positioning control: Start circle at cell+(0,0,0), End diamond at cell+(1,1,1), both with RGB arrows. The binding uses notifying Value assignments and controller transactions, distinguishes owner synchronization from previews, and cancels before authoritative replacement. Axis edits snap whole-block deltas from the initial anchor; center edits follow terrain. Derived sizes use `max - min + 1` in wide integers; rendering spans minimum cell through maximum cell plus one.
 
 Checking Show ruler with no endpoints offers one explicit world click that creates both on that cell and consumes the entire gesture. A partial ruler retains its existing handle; only a handle miss can create the missing endpoint. Invalid targets notify and remain pending. Right/Escape cancel creation until off/on visibility or explicit mode re-enable; contextual losses can reoffer only with eligible camera context and released mouse buttons. Retained other-dimension endpoints hide without automatic overwrite or relocation. The box still needs two valid same-dimension endpoints.
 
