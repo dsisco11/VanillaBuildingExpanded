@@ -89,8 +89,13 @@ and retain local-Y dimension identity. [Shared geometry](../VanillaBuildingExpan
 drives both line meshes and hit shapes, with clipped parts omitted from both paths.
 [The render adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs)
 publishes camera context at Opaque 0.49 and draws overlays at AfterBlit 0.49, sharing
-arrow/circle/diamond meshes and the ruler's extracted native line-state restoration.
-It restores shader/depth/write/line state without changing blending, invalidates hits
+arrow/circle/diamond meshes. A session-owned unlit memory shader keeps handle colors
+independent of scene lighting: every center/axis handle uses 80% opacity normally,
+100% while hovered or captured, and thicker lines for hover/capture. It is compiled
+lazily, recreated after native shader reload and disposed with the session's GPU resources.
+The overlay state guard enables standard alpha blending only on color attachment zero,
+restores its indexed enable/factors/equations, and leaves other MRT attachments unchanged.
+It also restores shader/depth/write/line state using the ruler's extracted line-state guard, invalidates hits
 immediately on failure/retirement, and defers callback-requested renderer membership and
 GPU teardown outside native live-list iteration. The session activates it for checked,
 enabled/living contexts, including pending creation with zero instances.

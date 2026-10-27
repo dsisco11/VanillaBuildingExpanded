@@ -132,7 +132,7 @@ public sealed class GizmoRenderAdapterTests
     }
 
     [Fact]
-    public void DrawingReusesMeshesAndRestoresStateWithoutTouchingBlend()
+    public void DrawingReusesResourcesAndRestoresStateWithoutBroadcastingBlendChanges()
     {
         using var f = new Fixture();
         f.Add();
@@ -148,11 +148,12 @@ public sealed class GizmoRenderAdapterTests
         f.Render.Verify(r => r.GLDepthMask(false), Times.Exactly(4));
         f.Render.Verify(r => r.GlToggleBlend(It.IsAny<bool>(), It.IsAny<EnumBlendMode>()), Times.Never);
         f.Previous.Verify(p => p.Use(), Times.Exactly(4));
-        f.Shader.Verify(p => p.Uniform("colorIn", 1f, 0.2f, 0.2f, 1f), Times.Exactly(4));
+        f.Shader.Verify(p => p.Uniform("colorIn", 1f, 0.2f, 0.2f, 0.8f), Times.Exactly(4));
         f.Shader.Verify(p => p.UniformMatrix("modelViewMatrix", It.Is<float[]>(m => m.Length == 16)), Times.Exactly(16));
         f.Adapter.Dispose();
         f.Adapter.Dispose();
         Assert.All(f.Meshes, mesh => Assert.Equal(1, mesh.Disposals));
+        f.Shader.Verify(s => s.Dispose(), Times.Once);
         Assert.Empty(f.Active);
     }
 
@@ -170,6 +171,98 @@ public sealed class GizmoRenderAdapterTests
         Assert.True(f.Manager.TryBegin(pointer));
         f.Frame();
         f.Render.VerifySet(r => r.LineWidth = 2.8f, Times.Exactly(2));
+    }
+
+    [Theory]
+    [InlineData(GizmoShape.Circle, 0)]
+    [InlineData(GizmoShape.Circle, 1)]
+    [InlineData(GizmoShape.Circle, 2)]
+    [InlineData(GizmoShape.Circle, 3)]
+    [InlineData(GizmoShape.Diamond, 0)]
+    [InlineData(GizmoShape.Diamond, 1)]
+    [InlineData(GizmoShape.Diamond, 2)]
+    [InlineData(GizmoShape.Diamond, 3)]
+    public void EveryHandle_IsEightyPercentUntilHoveredOrCapturedAndReturnsAfterCancel(GizmoShape shape, int handle)
+    {
+        using var f = new Fixture();
+        var gizmo = f.Add(shape);
+        f.Adapter.SetActive(true);
+        f.Frame();
+        Assert.All(f.Colors, color => Assert.Equal(0.8f, color.Alpha));
+        var baseline = f.Colors.ToArray();
+        gizmo.HoveredHandle = new(handle);
+        f.Colors.Clear();
+        f.Frame();
+        AssertColors(handle);
+        gizmo.HoveredHandle = null;
+        var pointer = new GizmoPointer(f.Camera, new(V(10, 10, 0), V(-10, -10, -10)));
+        Assert.True(gizmo.BeginInteraction(new(handle), pointer));
+        f.Colors.Clear();
+        f.Frame();
+        AssertColors(handle);
+        gizmo.CancelInteraction();
+        f.Colors.Clear();
+        f.Frame();
+        AssertColors(null);
+
+        void AssertColors(int? highlighted)
+        {
+            Assert.Equal(4, f.Colors.Count);
+            for (int i = 0; i < 4; i++)
+            {
+                Assert.Equal(baseline[i].Red, f.Colors[i].Red);
+                Assert.Equal(baseline[i].Green, f.Colors[i].Green);
+                Assert.Equal(baseline[i].Blue, f.Colors[i].Blue);
+                Assert.Equal(i == highlighted ? 1f : 0.8f, f.Colors[i].Alpha);
+            }
+        }
+    }
+
+    [Fact]
+    public void UnlitShaderIsSharedAcrossHandlesAndRecreatedAfterNativeReload()
+    {
+        using var f = new Fixture();
+        f.Add();
+        f.Add(GizmoShape.Diamond);
+        f.Adapter.SetActive(true);
+        f.Frame();
+        f.Frame();
+        f.Shaders.Verify(s => s.NewShaderProgram(), Times.Once);
+        f.Shaders.Verify(s => s.RegisterMemoryShaderProgram("vbe-gizmo-overlay", f.Shader.Object), Times.Once);
+        f.Shader.Verify(s => s.Compile(), Times.Once);
+        f.Shaders.Verify(s => s.GetProgram((int)EnumShaderProgram.Wireframe), Times.Never);
+        Assert.Contains("projectionMatrix * modelViewMatrix", f.Vertex.Object.Code);
+        Assert.Contains("outColor = colorIn;", f.Fragment.Object.Code);
+        Assert.DoesNotContain("light", f.Vertex.Object.Code, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("fog", f.Fragment.Object.Code, StringComparison.OrdinalIgnoreCase);
+        var replacement = new Mock<IShaderProgram>();
+        replacement.Setup(s => s.Compile()).Returns(true);
+        f.Shader.SetupGet(s => s.Disposed).Returns(true);
+        f.Shaders.Setup(s => s.NewShaderProgram()).Returns(replacement.Object);
+        f.Frame();
+        f.Shaders.Verify(s => s.NewShaderProgram(), Times.Exactly(2));
+        replacement.Verify(s => s.Use(), Times.Exactly(2));
+        f.Adapter.Dispose();
+        replacement.Verify(s => s.Dispose(), Times.Once);
+        f.Shader.Verify(s => s.Dispose(), Times.Never);
+    }
+
+    [Fact]
+    public void ShaderCompileFailureIsReportedAndRetiresInteractiveHandles()
+    {
+        using var f = new Fixture();
+        f.Add();
+        f.Shader.Setup(s => s.Compile()).Returns(false);
+        f.Adapter.SetActive(true);
+        f.Frame();
+        Assert.Equal(1, f.Notices);
+        Assert.Null(f.Adapter.Context);
+        Assert.Equal(0, f.Draws);
+        f.Flush();
+        Assert.Empty(f.Active);
+        Assert.False(f.Manager.TryBegin(f.Camera.Camera!.CreatePointer(f.Camera, 400, 300)));
+        f.Adapter.Dispose();
+        f.Shader.Verify(s => s.Dispose(), Times.Once);
     }
 
     [Theory]
@@ -260,6 +353,9 @@ public sealed class GizmoRenderAdapterTests
         public readonly Mock<IShaderAPI> Shaders = new();
         public readonly Mock<IShaderProgram> Shader = new();
         public readonly Mock<IShaderProgram> Previous = new();
+        public readonly Mock<IShader> Vertex = new();
+        public readonly Mock<IShader> Fragment = new();
+        public readonly List<(float Red, float Green, float Blue, float Alpha)> Colors = [];
         public readonly Mock<IClientEventAPI> Events = new();
         public readonly GizmoManager Manager = new();
         public readonly FakeState State = new();
@@ -283,6 +379,15 @@ public sealed class GizmoRenderAdapterTests
             Api.SetupGet(a => a.Shader).Returns(Shaders.Object);
             Api.SetupGet(a => a.Event).Returns(Events.Object);
             Shaders.Setup(s => s.GetProgram((int)EnumShaderProgram.Wireframe)).Returns(Shader.Object);
+            Shaders.Setup(s => s.NewShaderProgram()).Returns(Shader.Object);
+            Vertex.SetupProperty(s => s.Code);
+            Fragment.SetupProperty(s => s.Code);
+            Shaders.Setup(s => s.NewShader(EnumShaderType.VertexShader)).Returns(Vertex.Object);
+            Shaders.Setup(s => s.NewShader(EnumShaderType.FragmentShader)).Returns(Fragment.Object);
+            Shader.Setup(s => s.Compile()).Returns(true);
+            Shader.Setup(s => s.Uniform("colorIn", It.IsAny<float>(), It.IsAny<float>(), It.IsAny<float>(), It.IsAny<float>()))
+                .Callback<string, float, float, float, float>((_, red, green, blue, alpha) =>
+                    Colors.Add((red, green, blue, alpha)));
             Render.SetupGet(r => r.CurrentActiveShader).Returns(Previous.Object);
             Render.Setup(r => r.UploadMesh(It.IsAny<MeshData>())).Returns(() =>
             {

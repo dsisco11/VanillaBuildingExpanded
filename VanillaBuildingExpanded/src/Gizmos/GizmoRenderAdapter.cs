@@ -16,6 +16,7 @@ internal sealed class GizmoRenderAdapter : IRenderer
     private readonly GizmoManager manager;
     private readonly Func<GizmoContext> capture;
     private readonly ILineRenderState state;
+    private IShaderProgram? shader;
     private readonly Dictionary<GizmoShape, MeshRef> meshes = [];
     private GizmoContext? context;
     private GizmoContext? drawnContext;
@@ -40,7 +41,7 @@ internal sealed class GizmoRenderAdapter : IRenderer
         this.api = api;
         this.manager = manager;
         this.capture = capture ?? (() => GizmoCamera.Capture(api));
-        this.state = state ?? new LineRenderState(api.Render);
+        this.state = state ?? new GizmoRenderState(api.Render);
     }
 
     public void SetActive(bool active)
@@ -106,7 +107,7 @@ internal sealed class GizmoRenderAdapter : IRenderer
                     overlayRegistered = false;
                 }
             }
-            finally { if (disposed) DisposeMeshes(); }
+            finally { if (disposed) DisposeResources(); }
         }
     }
 
@@ -150,9 +151,7 @@ internal sealed class GizmoRenderAdapter : IRenderer
         if (!drawing || disposed || failed || !ReferenceEquals(draw.Context, context))
             throw new InvalidOperationException("Gizmos draw only inside their session's overlay callback.");
         var render = api.Render;
-        var shader = api.Shader.GetProgram((int)EnumShaderProgram.Wireframe);
-        if (shader is null || shader.Disposed || shader.LoadError)
-            throw new InvalidOperationException("The engine wireframe shader is unavailable.");
+        var shader = GetShader();
         var previous = render.CurrentActiveShader;
         state.Capture();
         try
@@ -161,8 +160,6 @@ internal sealed class GizmoRenderAdapter : IRenderer
             render.GLDisableDepthTest();
             render.GLDepthMask(false);
             shader.Use();
-            shader.Uniform("origin", 0f, 0f, 0f);
-            shader.Uniform("extraGlow", 0f);
             shader.UniformMatrix("projectionMatrix", ToFloat(draw.Context.Camera!.Projection));
             foreach (var part in draw.Geometry.Parts)
             {
@@ -181,7 +178,7 @@ internal sealed class GizmoRenderAdapter : IRenderer
                     1 => (1f, 0.2f, 0.2f), 2 => (0.2f, 1f, 0.2f), 3 => (0.25f, 0.5f, 1f),
                     _ => (1f, 0.85f, 0.25f)
                 };
-                shader.Uniform("colorIn", color.Item1, color.Item2, color.Item3, 1f);
+                shader.Uniform("colorIn", color.Item1, color.Item2, color.Item3, emphasized ? 1f : 0.8f);
                 shader.UniformMatrix("modelViewMatrix", ModelView(draw.Context.Camera!, part));
                 render.RenderMesh(mesh);
             }
@@ -195,6 +192,42 @@ internal sealed class GizmoRenderAdapter : IRenderer
                 finally { previous?.Use(); }
             }
         }
+    }
+
+    private IShaderProgram GetShader()
+    {
+        if (shader is null || shader.Disposed)
+        {
+            shader = api.Shader.NewShaderProgram()
+                ?? throw new InvalidOperationException("Gizmo shader creation returned no program.");
+            var vertex = api.Shader.NewShader(EnumShaderType.VertexShader)
+                ?? throw new InvalidOperationException("Gizmo vertex shader creation failed.");
+            vertex.Code = """
+                #version 330 core
+                layout(location = 0) in vec3 vertexPositionIn;
+                uniform mat4 projectionMatrix;
+                uniform mat4 modelViewMatrix;
+                void main() {
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(vertexPositionIn, 1.0);
+                }
+                """;
+            shader.VertexShader = vertex;
+            var fragment = api.Shader.NewShader(EnumShaderType.FragmentShader)
+                ?? throw new InvalidOperationException("Gizmo fragment shader creation failed.");
+            fragment.Code = """
+                #version 330 core
+                uniform vec4 colorIn;
+                layout(location = 0) out vec4 outColor;
+                void main() {
+                    outColor = colorIn;
+                }
+                """;
+            shader.FragmentShader = fragment;
+            api.Shader.RegisterMemoryShaderProgram("vbe-gizmo-overlay", shader);
+            if (!shader.Compile()) throw new InvalidOperationException("The unlit gizmo shader failed to compile.");
+        }
+        if (shader.LoadError) throw new InvalidOperationException("The unlit gizmo shader is unavailable.");
+        return shader;
     }
 
     internal static float[] ModelView(GizmoCamera camera, PositionGizmoPart part)
@@ -261,7 +294,7 @@ internal sealed class GizmoRenderAdapter : IRenderer
         || error is InvalidOperationException or ArgumentException or NotSupportedException
             or ExternalException or OutOfMemoryException;
 
-    private void DisposeMeshes()
+    private void DisposeResources()
     {
         List<Exception> errors = [];
         foreach (var mesh in meshes.Values)
@@ -270,6 +303,9 @@ internal sealed class GizmoRenderAdapter : IRenderer
             catch (Exception error) { errors.Add(error); }
         }
         meshes.Clear();
+        try { if (shader is { Disposed: false }) shader.Dispose(); }
+        catch (Exception error) { errors.Add(error); }
+        shader = null;
         if (errors.Count != 0) throw new AggregateException("Gizmo GPU cleanup failed.", errors);
     }
 

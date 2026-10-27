@@ -830,6 +830,10 @@ public sealed class RulerGizmoSessionTests
             Render.Setup(r => r.FrameHeight).Returns(600);
             Render.Setup(r => r.CameraMatrixOriginf).Returns(new Matrixf().Values);
             Api.Setup(a => a.Shader.GetProgram((int)EnumShaderProgram.Wireframe)).Returns(Shader.Object);
+            Api.Setup(a => a.Shader.NewShaderProgram()).Returns(Shader.Object);
+            Api.Setup(a => a.Shader.NewShader(It.IsAny<EnumShaderType>())).Returns(() => Mock.Of<IShader>());
+            Api.Setup(a => a.Shader.RegisterMemoryShaderProgram("vbe-gizmo-overlay", Shader.Object)).Returns(49);
+            Shader.Setup(s => s.Compile()).Returns(true);
             Shader.Setup(s => s.UniformMatrix("modelViewMatrix", It.IsAny<float[]>()))
                 .Callback<string, float[]>((_, matrix) => LastModel = (float[])matrix.Clone());
             Render.Setup(r => r.UploadMesh(It.IsAny<MeshData>())).Returns(() =>
