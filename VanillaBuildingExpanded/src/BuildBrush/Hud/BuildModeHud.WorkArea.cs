@@ -161,7 +161,7 @@ internal sealed partial class BuildModeHud
                     string key = axis == 0 ? "x" : axis == 1 ? "y" : "z";
                     var input = new WorkAreaSizeInput(capi, axis, Math.Max(86, Width("4294967296") + 24),
                         WorkAreaDimensionText(axis), workArea?.State.CanPick == true && workArea.State.Bounds is not null,
-                        FocusWorkAreaSizeInput, InvalidWorkAreaSize);
+                        FocusWorkAreaSizeInput, ApplyWorkAreaSize, InvalidWorkAreaSize);
                     workAreaSizeInputs[axis] = input;
                     cells.Add(new(Label(WorkAreaText("size-" + key)), key + "-label"));
                     cells.Add(new(input, key, input: TableInput.Pointer, cancelInput: input.CancelPress));

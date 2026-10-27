@@ -1,5 +1,4 @@
 # Short-Term:
-    ☐ work-area size should change immediately when the size numeric inputs have their up/down arrows pressed.
     ☐ work areas need option to control how they are resized, defaulting to `expansion` (max point is moved) but also supporting `centered` (grows from center point).
     ☐ gizmos should support having 'labels' which show in-world next to the gizmo handles and which have a predicate based visibility state so the labels are only visible under certain conditions.
          - Default label visibility modes are: 

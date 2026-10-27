@@ -227,9 +227,11 @@ public sealed partial class BuildModeHudControlsTests
         Assert.Equal("4294967296", input.GetText());
         hud.OnKeyUp(new KeyEvent { KeyCode = (int)GlKeys.Down });
         Assert.Equal("4294967295", input.GetText());
+        Assert.Equal(4294967295L, area.State.Bounds!.Value.SizeX);
         f.Api.Object.Input.KeyboardKeyStateRaw[(int)GlKeys.ShiftLeft] = true;
         hud.OnKeyUp(new KeyEvent { KeyCode = (int)GlKeys.Down });
         Assert.Equal("4294967285", input.GetText());
+        Assert.Equal(4294967285L, area.State.Bounds!.Value.SizeX);
         f.Api.Object.Input.KeyboardKeyStateRaw[(int)GlKeys.ShiftLeft] = false;
         input.SetValue("4294967294");
         hud.OnKeyDown(new KeyEvent { KeyCode = (int)GlKeys.Enter });
@@ -238,7 +240,7 @@ public sealed partial class BuildModeHudControlsTests
     }
 
     [Fact]
-    public void SpinnerAndWheelEditTheDraftUntilItIsCommitted()
+    public void ArrowsApplyImmediatelyWhileWheelEditsRemainDrafts()
     {
         using var f = WorkAreaFixture();
         var area = EditableWorkArea(f);
@@ -251,19 +253,81 @@ public sealed partial class BuildModeHudControlsTests
         hud.OnMouseUp(new MouseEvent(x, y, EnumMouseButton.Left, 0));
         Assert.True(input.HasFocus);
         Assert.Equal("6", input.GetText());
-        Assert.Equal(5, area.State.Bounds!.Value.SizeX);
+        Assert.Equal(6, area.State.Bounds!.Value.SizeX);
         f.MouseX = x;
         f.MouseY = y;
         var wheel = new MouseWheelEventArgs { delta = -1, deltaPrecise = -1 };
         hud.OnMouseWheel(wheel);
         Assert.True(wheel.IsHandled);
         Assert.Equal("5", input.GetText());
+        Assert.Equal(6, area.State.Bounds!.Value.SizeX);
         f.Api.Object.Input.KeyboardKeyStateRaw[(int)GlKeys.ControlLeft] = true;
         hud.OnKeyUp(new KeyEvent { KeyCode = (int)GlKeys.Up });
         Assert.Equal("105", input.GetText());
-        Assert.Equal(5, area.State.Bounds!.Value.SizeX);
+        Assert.Equal(105, area.State.Bounds!.Value.SizeX);
         hud.OnKeyDown(new KeyEvent { KeyCode = (int)GlKeys.Enter });
         Assert.Equal(105, area.State.Bounds!.Value.SizeX);
+    }
+
+    [Theory]
+    [InlineData("x", 1, 1f)]
+    [InlineData("y", -1, 1.33f)]
+    [InlineData("z", 1, 2f)]
+    public void SpinnerPressesResizeImmediatelyAndRetainFocusWithoutDuplicateCommits(
+        string axis, int direction, float scale)
+    {
+        using var f = WorkAreaFixture(scale);
+        var area = EditableWorkArea(f);
+        using var hud = new BuildModeHud(f.Api.Object, () => default, area);
+        hud.SetVisible(true);
+        var input = DimensionInput(hud, axis);
+        long original = axis == "y" ? 7 : 5;
+        int commits = 0;
+        area.EndpointsCommitted += () => commits++;
+        int x = (int)(input.Bounds.renderX + input.Bounds.OuterWidth - 5 * scale);
+        int y = (int)(input.Bounds.renderY + input.Bounds.OuterHeight * (direction > 0 ? 0.25 : 0.75));
+        for (int step = 1; step <= 2; step++)
+        {
+            hud.OnMouseDown(new MouseEvent(x, y, EnumMouseButton.Left, 0));
+            Assert.Equal((original + direction * step).ToString(), input.GetText());
+            var bounds = area.State.Bounds!.Value;
+            Assert.Equal(original + direction * step,
+                axis == "x" ? bounds.SizeX : axis == "y" ? bounds.SizeY : bounds.SizeZ);
+            Assert.Equal(axis == "x" ? original + direction * step : 5, bounds.SizeX);
+            Assert.Equal(axis == "y" ? original + direction * step : 7, bounds.SizeY);
+            Assert.Equal(axis == "z" ? original + direction * step : 5, bounds.SizeZ);
+            Assert.Equal(step, commits);
+            hud.OnMouseUp(new MouseEvent(x, y, EnumMouseButton.Left, 0));
+            hud.OnRenderGUI(0);
+            Assert.Same(input, DimensionInput(hud, axis));
+            Assert.True(input.HasFocus);
+            Assert.True(hud.CaptureAllInputs());
+        }
+        hud.OnKeyDown(new KeyEvent { KeyCode = (int)GlKeys.Enter });
+        Assert.Equal(2, commits);
+        Assert.False(input.HasFocus);
+    }
+
+    [Fact]
+    public void RejectedImmediateResizeRestoresTheActualDimensionWithoutLosingFocus()
+    {
+        using var f = WorkAreaFixture();
+        var area = EditableWorkArea(f);
+        using var hud = new BuildModeHud(f.Api.Object, () => default, area);
+        hud.SetVisible(true);
+        var input = FocusDimension(hud, f, "x");
+        var original = area.State;
+        int commits = 0, errors = 0;
+        area.EndpointsCommitted += () => commits++;
+        area.NoticeRequested += _ => errors++;
+        f.Api.Setup(a => a.World.BlockAccessor.IsValidPos(It.IsAny<BlockPos>())).Returns(false);
+        hud.OnKeyUp(new KeyEvent { KeyCode = (int)GlKeys.Up });
+        Assert.Equal(original, area.State);
+        Assert.Equal("5", input.GetText());
+        Assert.Equal(0, commits);
+        Assert.Equal(1, errors);
+        Assert.True(input.HasFocus);
+        Assert.True(hud.CaptureAllInputs());
     }
 
     [Fact]

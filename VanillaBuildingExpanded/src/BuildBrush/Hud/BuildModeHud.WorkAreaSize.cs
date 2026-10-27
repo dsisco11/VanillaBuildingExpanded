@@ -61,13 +61,18 @@ internal sealed partial class BuildModeHud
         var input = focusedWorkAreaSize;
         if (input is null) return;
         focusedWorkAreaSize = null;
-        string text = input.GetText();
         input.CancelPress();
         input.OnFocusLost();
         base.UnFocus();
-        if (commit && workArea?.State.CanPick == true && workArea.State.Bounds is { } bounds)
+        if (commit) ApplyWorkAreaSize(input);
+        else input.SetValue(WorkAreaDimensionText(input.Axis));
+    }
+
+    private void ApplyWorkAreaSize(WorkAreaSizeInput input)
+    {
+        if (workArea?.State.CanPick == true && workArea.State.Bounds is { } bounds)
         {
-            if (!long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out long value))
+            if (!long.TryParse(input.GetText(), NumberStyles.None, CultureInfo.InvariantCulture, out long value))
                 InvalidWorkAreaSize();
             else
             {
@@ -135,18 +140,20 @@ internal sealed partial class BuildModeHud
     private sealed class WorkAreaSizeInput : GuiElementNumberInput
     {
         private readonly Action<WorkAreaSizeInput> focus;
+        private readonly Action<WorkAreaSizeInput> apply;
         private readonly Action invalid;
         private bool pressed;
         public int Axis { get; }
         private long Maximum => Axis == 1 ? BlockPos.DimensionBoundary : 1L << 32;
 
         public WorkAreaSizeInput(ICoreClientAPI api, int axis, double width, string text, bool editable,
-            Action<WorkAreaSizeInput> focus, Action invalid)
+            Action<WorkAreaSizeInput> focus, Action<WorkAreaSizeInput> apply, Action invalid)
             : base(api, ElementBounds.Fixed(0, 0, width, 28), null!,
                 CairoFont.TextInput().WithFontSize(UiPalette.TextFontSize))
         {
             Axis = axis;
             this.focus = focus;
+            this.apply = apply;
             this.invalid = invalid;
             enabled = editable;
             // Native IntMode rejects valid dimensions larger than Int32. Commit validation uses Int64.
@@ -192,7 +199,7 @@ internal sealed partial class BuildModeHud
         {
             if (!Enabled || !IsPositionInside(api.Input.MouseX, api.Input.MouseY)) return;
             focus(this);
-            if (e.deltaPrecise != 0) Step(e.deltaPrecise > 0 ? 1 : -1);
+            if (e.deltaPrecise != 0) Step(e.deltaPrecise > 0 ? 1 : -1, applyImmediately: false);
             e.SetHandled(true);
         }
 
@@ -206,7 +213,7 @@ internal sealed partial class BuildModeHud
             else base.OnKeyUp(api, e);
         }
 
-        private void Step(int direction)
+        private void Step(int direction, bool applyImmediately = true)
         {
             var keys = api.Input.KeyboardKeyStateRaw;
             int step = direction;
@@ -219,6 +226,7 @@ internal sealed partial class BuildModeHud
                 return;
             }
             SetValue((value + step).ToString(CultureInfo.InvariantCulture));
+            if (applyImmediately) apply(this);
         }
     }
 }

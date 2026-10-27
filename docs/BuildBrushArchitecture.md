@@ -48,7 +48,9 @@ The Work area section contains four rows: a compact area list, management button
 
 [Dimension editing](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.WorkAreaSize.cs)
 owns native text focus independently of the table's per-release pointer cleanup.
-Enter/blur commits one axis; Tab commits and traverses, and Escape cancels. An
+Enter/blur commits one axis; Tab commits and traverses, and Escape cancels the draft.
+On-screen spinner arrows and keyboard Up/Down apply each step immediately without
+releasing focus; mouse-wheel steps remain draft edits until Enter/blur. An
 outside blur click consumes its complete gesture rather than reaching world
 interaction. Context retirement discards drafts; clicking another HUD control
 first commits on blur. Successful size edits refresh the numeric values in place
