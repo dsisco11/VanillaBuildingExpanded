@@ -1,0 +1,265 @@
+# In-world gizmos implementation plan
+
+Source proposal: [InWorldGizmos.proposal.md](./InWorldGizmos.proposal.md)
+
+Planning only. Every new task is unchecked. Component names are provisional where the proposal says so; confirmed interaction behavior is not provisional. Checked entries must eventually distinguish source review, automated evidence, normal build/output evidence and live-game evidence.
+
+## Goal and scope
+
+Replace ruler endpoint buttons and one-shot picking with reusable client-owned in-world gizmos. Support both free-cursor and reticle interaction, three axis arrows, a block-following center handle, and whole-block ruler snapping throughout a drag.
+
+Use an abstract Gizmo and typed Gizmo<TValue>. The Value property setter raises OnValueChanged for actual changes from either manipulation or owner assignment; do not introduce a separate SetValue method or silent assignment path.
+
+The ruler has two positioning-gizmo instances. Start uses its cell's (0, 0, 0) corner; End uses its cell's (1, 1, 1) corner. Preserve selected endpoint identity and inclusive cell measurements. Render handles as overlays and retain the depth-tested measurement box. The panel becomes:
+
+```text
+[ ] Show ruler
+Size: <x>, <y>, <z>
+```
+
+Non-goals: rotation/scaling gizmos, multi-object editing, undo history, numeric editors, multiplayer sharing, unrelated brush compatibility tests, additional ruler selection/cycling controls, new relocation controls, or a required plane-drag mode.
+
+## Assumptions and qualification gates
+
+- The proposal is authoritative. Its linked current implementation files and BuildBrushArchitecture.md supply integration context, not permission to retain superseded endpoint buttons or picking behavior.
+- There is no existing reusable gizmo implementation in the inspected repository. Recheck before adding new logic; reuse native math/rendering facilities and existing input suppression infrastructure where they meet the new contract.
+- Resolve native cursor-ray/world-hit APIs, camera/input ordering and axis-drag degeneracy against the supported installed engine before implementing their consumers. Missing or unsuitable facilities are a blocker to resolve, not grounds for a center-screen fallback in free-cursor mode.
+- Exact artwork, pixel sizing, world-size limits, hit tolerances, equal-hit tie ordering and axis-degeneracy thresholds need documented/tested implementation choices. Do not treat example circle/diamond artwork as a mandatory asset design.
+- Document precedence between existing-handle interaction and pending missing-endpoint creation, plus how pending creation is offered/retired, before wiring that flow. Do not add a new panel action or overwrite an unrelated-dimension ruler to resolve it.
+- Generic positioning remains continuous and ruler-independent. The ruler binding supplies snapping, endpoint-role offsets and coordinate validity. An owner-supplied center target resolver is a recommended implementation seam, not a requirement to build a policy framework.
+- New components remain inactive in normal gameplay until the verified cutover. Keep the existing interaction working during foundational phases; never register old and new competing global ruler mouse adapters together.
+- The previous repeat-selection bug is unresolved. Replacement success requires repeated edits through the actual new manager/input/controller path, not a claim that the old bug was diagnosed.
+- The earlier ruler live-check waiver does not waive this implementation's live qualification. Missing live access/results remain explicitly blocked and unchecked unless separately directed by the user.
+- Record concise task -> proposal section -> implementation/evidence mappings in this plan as work proceeds. Do not turn intermediate mocked or source-only evidence into a live compatibility guarantee.
+
+## Phase 1: Qualify native interaction boundaries and define contracts
+
+Prerequisites: None.
+Outcome: Implementation can use identified native facilities and explicit numerical/input contracts without guessing.
+
+    ☐ Consult the complete source proposal and directly relevant linked current implementation.
+        ☐ Trace existing client ownership, ruler/HUD input routing, world/dimension/focus lifecycle and native-config commit behavior.
+        ☐ Identify reusable native math, mesh/shader and pointer-ray/world-target facilities; record supported game/API version and source locations.
+    ☐ Qualify free-cursor and reticle targeting independently.
+        ☐ Establish cursor-to-world projection across viewport/GUI scale and native world-hit semantics at normal player targeting reach.
+        ☐ Establish when reticle selection/camera data updates relative to input callbacks and drag updates.
+        ☐ Define entity/sky/missing-target rejection without using snapped brush destinations or face-adjacent placement offsets.
+        ☐ Establish handled-input, GUI/dialog priority, action suppression, focus-loss and Escape/right-cancel ordering against the actual engine.
+    ☐ Define shared gizmo and positioning contracts before their consumers.
+        ☐ Specify handle identity, hit arbitration, exclusive capture, begin/update/complete/cancel and idempotent disposal.
+        ☐ Specify changed-value setter events, equality/owner echoes, cancellation restoration and external replacement ordering.
+        ☐ Specify immutable double-precision position/dimension representation, role-offset conversion, grid rounding and invalid-coordinate handling.
+        ☐ Select axis math and measurable degeneracy thresholds; define grab-offset preservation and invalid-update behavior.
+        ☐ Document pending-creation versus handle-hit priority and lifecycle without adding unsupported controls.
+        ☐ Define rendering/hit visibility agreement and record provisional artwork/size/tolerance choices for later qualification.
+
+Completion criteria:
+
+    ☐ Both pointer modes and native input/render integration have concrete source-backed implementation paths.
+    ☐ Numerical, event, capture and creation contracts are specific enough for deterministic tests; unresolved required facilities are explicitly blocking.
+
+## Phase 2: Implement reusable gizmo value and lifecycle foundations
+
+Prerequisites: Phase 1 contracts.
+Outcome: A test gizmo can publish values and participate in manager arbitration without ruler or global gameplay dependencies.
+
+    ☐ Add abstract Gizmo : IDisposable with the proposal's shared instance responsibilities.
+        ☐ Encapsulate identity, visible/enabled state, hovered/captured handle and lifecycle notifications.
+        ☐ Expose rendering/hit-testing and interaction hooks through shared camera/world context; add an interface only for a demonstrated consumer need.
+        ☐ Keep ruler cells, grid policy, brush placement and config side effects out of the base.
+    ☐ Add Gizmo<TValue> with initial value, public Value getter/setter and OnValueChanged.
+        ☐ Compare before storing/notifying; changed owner and manipulation assignments use the same event path.
+        ☐ Suppress equal assignments, snapped duplicates and identical callback echoes; do not add SetValue or a silent synchronization escape hatch.
+        ☐ Restore the initial drag value on cancellation with a change notification only when needed; never signal a successful commit for cancellation.
+        ☐ Support owner-coordinated cancel-before-external-replacement without applying rollback after the replacement.
+        ☐ Document immutable-value expectations rather than claiming to detect mutation inside arbitrary reference values.
+    ☐ Add a small client-owned manager for instance membership and arbitration.
+        ☐ Select one deterministic hit, prioritize a center over its own arrow roots, and grant at most one capture.
+        ☐ Retain the captured gizmo/handle until completion or cancellation, including pointer movement outside the silhouette.
+        ☐ Hidden/disabled/removed/disposed instances lose eligibility and active capture safely; repeated removal/disposal is harmless.
+        ☐ Keep global input/render event registration in adapters/session composition, not per-instance or per-frame registration.
+    ☐ Add focused base/typed/manager tests using a minimal test gizmo.
+        ☐ Assert event values/count/order for owner edits, manipulation, equal echoes, cancellation and external replacement.
+        ☐ Assert deterministic hit/capture ownership and disposal without ruler/config/world mutations.
+
+Completion criteria:
+
+    ☐ Typed property events and lifecycle/manager behavior pass focused tests without ruler-specific dependencies.
+    ☐ No new global gameplay adapter is active yet; the existing ruler is not partially replaced.
+
+## Phase 3: Implement reusable positioning geometry, drawing and drag math
+
+Prerequisites: Phases 1-2.
+Outcome: PositionGizmo can render and mathematically manipulate a position under controlled camera/target inputs.
+
+    ☐ Implement PositionGizmo : Gizmo<GizmoPosition> with immutable double coordinates and explicit dimension.
+        ☐ Support a center icon and X/Y/Z shafts/heads; show hover/active state without relying on color alone.
+        ☐ Keep generic values continuous; supply ruler-specific grid/validation and block target behavior through the qualified integration seam.
+    ☐ Implement camera/ray projection and handle hit shapes using Phase 1 contracts.
+        ☐ Match visible center/arrow targets with pixel-aware hit tolerances and bounded screen/world sizing.
+        ☐ Cover free-cursor positions, reticle rays, viewport/aspect/GUI-scale changes and deterministic overlapping/projected hits.
+    ☐ Implement axis-constrained dragging.
+        ☐ Capture the initial axis/grab relationship and preserve its offset without jumping to the arrow tip.
+        ☐ Change only the selected component; hold the other two at drag-start values.
+        ☐ Reject unusable starts or retain the last valid update at documented degeneracy thresholds, with meaningful feedback.
+        ☐ Prevent NaN/infinity/extreme jumps and apply supplied snapping/validation before publishing user changes.
+    ☐ Implement center dragging with a supplied valid target.
+        ☐ Support block-following integration without a required empty-space/plane mode.
+        ☐ Retain the last valid value on rejected/missing targets; never silently substitute a camera-facing plane.
+    ☐ Implement a shared render adapter and reusable arrow/icon resources.
+        ☐ Draw eligible handles as overlays; keep explicit visibility in sync with manager hit eligibility.
+        ☐ Use double camera-relative subtraction and dimension conversion only at the drawing boundary.
+        ☐ Restore shader/depth/blend/line state including failure paths; avoid per-frame uploads, GPU-readback picking, block tessellation and spawned entities.
+        ☐ Log/notify setup/render failure and make affected handles noninteractive; dispose shared resources exactly once.
+    ☐ Add focused numerical, geometry, projection and render-adapter tests.
+        ☐ Assert exact X/Y/Z changes, unchanged components, grab offsets, negative/large coordinates and degeneracy thresholds.
+        ☐ Assert rendering inputs, mesh reuse, hit/render visibility agreement and cleanup, not just draw callback counts.
+
+Completion criteria:
+
+    ☐ Positioning math and drawing contracts are verified under synthetic camera/world-target inputs.
+    ☐ The type is reusable without ruler state; native visual appearance remains a later live check.
+
+## Phase 4: Implement native input capture for both pointer modes
+
+Prerequisites: Phases 1-3.
+Outcome: The manager can receive native-adapter gestures safely in a test composition, ready for a single-owner gameplay cutover.
+
+    ☐ Implement one native input adapter for manager interactions.
+        ☐ Respect earlier handled input, open/capturing dialogs and actual HUD hits before new gizmo capture.
+        ☐ Use free-cursor rays without camera look and reticle rays while retaining camera look needed for aiming.
+        ☐ Begin only on a fresh left press over an eligible handle; do not change targets during capture.
+        ☐ Leave presses outside handles on the normal path except explicitly pending creation.
+    ☐ Implement full-gesture suppression and repeatability.
+        ☐ Suppress captured hold/repeat/release and late native world/control action callbacks before brush placement.
+        ☐ Release completes once; right-click and Escape cancel/restore without placement, item use or unintended dialog activation.
+        ☐ Own the right-cancel gesture and safely retire latches without blocking the next fresh edit.
+        ☐ Handle hidden releases and focus changes using the qualified native ordering, not assumed callback delivery.
+    ☐ Cancel interaction on dialog opening, focus loss, pointer-mode change, build-mode exit, death, dimension change and departure.
+        ☐ Cancel before losing the context needed to restore preview state.
+        ☐ Do not treat unrelated HUD recomposition as a world-gizmo cancellation.
+    ☐ Test the actual adapter/manager route with native carriers and service doubles where appropriate.
+        ☐ Cover both pointer modes, GUI/handled priority, drag outside handles, cancellation and hidden/late releases.
+        ☐ Assert no modeled mining/attack/use/placement callbacks or packets for owned gestures and intact ordinary input otherwise.
+        ☐ Repeat completed and canceled captures many times; verify no stale latches, duplicate callbacks or registrations.
+        ☐ Keep native engine ordering evidence separate from modeled downstream suppression evidence.
+
+Completion criteria:
+
+    ☐ Both pointer modes and complete gesture retirement pass focused adapter/manager tests.
+    ☐ Adapter activation in normal gameplay remains gated on Phase 6 cutover; old/new ruler adapters never compete.
+
+## Phase 5: Add ruler endpoint transactions and persistence boundaries
+
+Prerequisites: Phase 1 endpoint/transaction contracts and Phase 2 value/lifecycle contracts.
+Outcome: Ruler endpoints can preview, commit and roll back direct edits without saving previews or losing previous dirty edits.
+
+    ☐ Extend the ruler controller with direct endpoint editing and explicit begin/preview/complete/cancel operations.
+        ☐ Snapshot the endpoint pair at begin; update only the selected endpoint during valid previews.
+        ☐ Preserve selected Start/End identity and inclusive sizes when crossing/reversing endpoints.
+        ☐ Cancel restores the baseline and presentation without a successful commit; reject invalid cells/dimensions before mutation.
+        ☐ Handle external authoritative replacement by canceling first, then applying the replacement without stale rollback.
+    ☐ Implement and test ruler cell/anchor conversion.
+        ☐ Map Start to cell + (0, 0, 0) and End to cell + (1, 1, 1); decode by subtracting the role offset.
+        ☐ Map center-drag block targets directly to endpoint cells; snap axis movement in whole-block deltas from the initial anchor.
+        ☐ Validate decoded cells, not anchors interpreted as encoded BlockPos; cover negative coordinates, extreme values and End anchors at local-Y boundaries.
+    ☐ Preserve native-config persistence while separating preview and durable state.
+        ☐ Do not save from OnValueChanged, preview updates or render ticks.
+        ☐ Complete a changed drag with one endpoint commit; permit an explicit no-op completion to retry an already dirty save without redundant writes.
+        ☐ Retain committed in-memory edits and existing failure notifications/retries when final saving fails.
+        ☐ Cancel active previews before orderly-exit dirty retries; persist previously committed dirty edits, never canceled preview coordinates.
+        ☐ Preserve existing schema/world keys, partial endpoints and save fidelity; introduce no speculative format migration.
+    ☐ Add controller/conversion/native-config-adapter tests.
+        ☐ Verify many preview updates produce zero writes and one completion produces the expected final write.
+        ☐ Verify cancel/no-op/external replacement, failure retry, and departure with both a dirty committed edit and an active preview.
+        ☐ Keep old one-shot controller consumers functional until the Phase 6 cutover, without adding a permanent compatibility shim.
+
+Completion criteria:
+
+    ☐ Direct endpoint transactions, exact anchor round trips and persistence boundaries pass focused tests.
+    ☐ Existing durable endpoint/config behavior remains compatible; canceled previews cannot survive restart through an exit retry.
+
+## Phase 6: Replace ruler picking and panel buttons with session-owned gizmos
+
+Prerequisites: Phases 2-5, with Phase 1 qualification gates satisfied.
+Outcome: The complete replacement is wired locally through one input/renderer/session ownership path.
+
+    ☐ Bind the client ruler session to one positioning gizmo per existing endpoint, including partial rulers.
+        ☐ Synchronize via Value and OnValueChanged with equality/echo handling; distinguish owner sync from transaction previews without silent setters.
+        ☐ Connect begin/preview/complete/cancel to the verified controller transactions, not the old picking state machine.
+        ☐ Display both endpoint markers/arrows with distinguishable icons and role offsets; add no selection/cycle UI.
+        ☐ Keep the box dependent on two valid endpoints, while a partial ruler still has its existing handle.
+    ☐ Implement first-use and missing-endpoint creation.
+        ☐ Checking Show ruler with no endpoints requests one explicit world click, valid through either pointer mode at normal reach.
+        ☐ Create both endpoints on that cell, showing Start at offset zero and End at offset one; consume the whole gesture without also beginning a drag.
+        ☐ Invalid targets retain pending creation with feedback; restored partial rulers preserve the existing endpoint and create only the missing one.
+        ☐ Apply the qualified creation/handle precedence and retire pending creation safely when its context disappears.
+        ☐ In another dimension, preserve/hide saved endpoints without automatic overwrite from travel or checkbox toggles; add no relocation workflow.
+    ☐ Switch production input ownership atomically from the old ruler adapter to the manager adapter.
+        ☐ Preserve routing ahead of brush placement; detach the old adapter before registering the new one.
+        ☐ Remove obsolete one-shot modes, commands, button adapters and now-unused notices/references after migrating consumers/tests.
+        ☐ Retain only genuinely shared gesture/native-focus infrastructure; leave no second capture path or temporary compatibility shim.
+    ☐ Update the Ruler HUD to exactly Show ruler and Size.
+        ☐ Remove Set Start/Set end without adding a replacement edit button or status/action row.
+        ☐ Preserve localized size, incomplete dashes, free-cursor checkbox behavior, passive text and Room/Controls behavior.
+        ☐ Show ruler controls both eligible box and handles; hiding cancels active manipulation/creation without saving a preview.
+        ☐ HUD collapse/recomposition/scale/locale changes do not reset world handles or issue duplicate endpoint commands.
+    ☐ Complete session/context/resource integration.
+        ☐ Preserve mode/alive/world/dimension eligibility, session visibility preference and join defaults; loaded endpoints do not enable mode/visibility.
+        ☐ Cancel/roll back before mode/death/focus/dialog/dimension/departure cleanup or dirty-exit persistence.
+        ☐ Balance original-stage render registration, detach observers and dispose instances/shared resources idempotently; queued callbacks cannot touch retired worlds.
+        ☐ Surface input/render failure, cancel edits safely and prevent invisible handles from remaining interactive; sizes and persistence remain usable.
+        ☐ Make no server/network/brush placement-state, world-block/entity or inventory changes.
+    ☐ Add actual composition-path integration/regression tests.
+        ☐ Repeatedly move Start and End through adapter/manager/binding/controller, verifying resulting cells, live size/box updates and committed config values.
+        ☐ Cover cancel/retry, crossing/negative/same-cell/corner-boundary cases, partial/restored creation and both pointer modes.
+        ☐ Cover deterministic intersecting/projected hits without claiming all overlaps are eliminated by offsets.
+        ☐ Cover HUD priority/rebuilds, hidden/failed gizmos, lifecycle transitions, leave/rejoin and repeated disposal without stale captures/resources or prior-world leakage.
+
+Completion criteria:
+
+    ☐ Production uses one new interaction route, the two-row panel, and repeatable endpoint manipulation with exact value/save results.
+    ☐ Old ruler picking/button infrastructure is removed; existing endpoint files and unrelated brush/UI behavior remain compatible.
+
+## Phase 7: Qualify delivery and update documentation
+
+Prerequisites: Phase 6 complete; supported game access for live checks.
+Outcome: Automated/build/output evidence, documentation and separately recorded live results establish the replacement's actual behavior.
+
+    ☐ Run the smallest combined existing test selections covering changed gizmo, ruler, input, HUD/table, persistence and renderer surfaces.
+        ☐ Use the existing xUnit runner and normal build.ps1 --target=Build; do not invoke Default/Package or clean Releases for this feature.
+        ☐ Record commands, game/API/SDK version, counts and outcomes; do not install dependencies speculatively or introduce new validation tooling.
+        ☐ Verify normal published assembly/localization assets include the replacement, without inventing a packaging/release workflow.
+    ☐ Verify live input and endpoint manipulation in the supported game.
+        ☐ Exercise both free cursor and reticle, preserving camera aiming only where appropriate.
+        ☐ Verify center target following/reach/rejection, independent axis motion, grab offsets and degeneracy behavior.
+        ☐ Repeatedly edit both endpoints after success, drag outside handles, cancel/retry, and verify no mining/attack/use/placement leaks.
+        ☐ Verify HUD/dialog priority, Escape/right cancel, focus/pointer-mode changes, mode/death/dimension changes and checkbox hiding.
+        ☐ Verify initial/partial creation, same-cell corner separation, crossing/negative coordinates and deterministic projected/intersecting hits.
+    ☐ Verify live rendering, lifecycle and persistence separately.
+        ☐ Check overlay handle readability/hits through terrain, depth-tested box occlusion, transparent terrain and native selection/brush-preview overlap.
+        ☐ Check GUI scales/aspect ratios, large coordinates, camera proximity and matching visual/pick sizes without render-state damage.
+        ☐ Verify repeated toggles, HUD rebuilds and world changes leave no duplicate/stale handles, boxes or callbacks.
+        ☐ Restart and confirm committed endpoints/world isolation; canceled previews do not persist and join visibility remains reset.
+        ☐ Record exact observed limits/failures; leave missing live evidence blocked/unchecked rather than relying on the earlier waiver or mocks.
+    ☐ Update existing user/architecture documentation and reconcile scope.
+        ☐ Describe two-row UI, both pointer modes, axis/block-following drags, corner anchors, creation, cancel/commit behavior and persistence/lifetime rules.
+        ☐ Update BuildBrushArchitecture ownership/input/render sections to match actual reusable components and removed picking flow.
+        ☐ Record concise source-to-task/evidence mappings and any unresolved limitations in this plan.
+        ☐ Remove only task-owned temporary instrumentation/artifacts; retain no debug controls, capture paths or compatibility scaffolding.
+        ☐ Reconcile every source-proposal section and verification case without marking deferred runtime work complete.
+
+Completion criteria:
+
+    ☐ Focused tests, normal build and published output checks pass with recorded evidence.
+    ☐ Supported-game interaction/render/restart evidence is recorded separately; required missing or failing checks remain blocking.
+    ☐ Documentation matches the delivered replacement and no unsupported scope or temporary compatibility path remains.
+
+## Final acceptance
+
+    ☐ Every proposal requirement has implementation/evidence or an explicit deferral with rationale; a deferral is not a completion claim.
+    ☐ The reusable typed property-setter event contract, both pointer modes, axis/block-following motion, corner anchors and exact two-row UI are verified.
+    ☐ Repeated Start/End edits and complete-gesture safety are verified through the new production composition, not test-authored controller-only orchestration.
+    ☐ Preview/commit/cancel, per-world native-config fidelity and full session/resource cleanup are verified.
+    ☐ Source/unit/integration/build-output/live evidence are distinguished and required delivery documentation/cleanup is complete.
+    ☐ Existing placement/networking, passive UI and Room/Controls behavior remain intact; no unresolved blocker is represented as success.
