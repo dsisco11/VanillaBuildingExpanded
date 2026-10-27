@@ -17,6 +17,32 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 [Collection("Table composition")]
 public sealed class WorkAreaGizmoSessionTests
 {
+    [Fact]
+    public void WorkAreaLabelsUseHoverVisibilityAndMidpointTracksTheAreaName()
+    {
+        using var f = new Fixture();
+        var h = f.H;
+        h.WorkArea.RestoreEndpoints(new(-30, 65, -200, 0), new(30, 70, -200, 0));
+        h.Enable();
+        h.Frame();
+        foreach (var gizmo in new[] { h.Session.Start!, h.Session.End!, h.Session.Center! })
+        {
+            Assert.Equal(4, gizmo.Labels.Count);
+            Assert.Equal("X", gizmo.Labels[PositionGizmo.X].Text);
+            Assert.Equal("Y", gizmo.Labels[PositionGizmo.Y].Text);
+            Assert.Equal("Z", gizmo.Labels[PositionGizmo.Z].Text);
+            Assert.All(gizmo.Labels.Values, label => Assert.Equal(GizmoLabelVisibility.Hover, label.Visibility));
+        }
+        var midpoint = h.Session.Center!;
+        h.WorkArea.RenameArea(h.WorkArea.SelectedId!.Value, "Workshop <1>");
+        Assert.Same(midpoint, h.Session.Center);
+        Assert.Equal("Workshop <1>", midpoint.Labels[PositionGizmo.Center].Text);
+        var other = h.WorkArea.CreateArea("Garden");
+        h.WorkArea.RestoreEndpoints(new(0, 65, -200, 0), new(30, 70, -200, 0));
+        Assert.Equal(other, h.WorkArea.SelectedId);
+        Assert.Equal("Garden", h.Session.Center!.Labels[PositionGizmo.Center].Text);
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
@@ -301,7 +327,7 @@ public sealed class WorkAreaGizmoSessionTests
             h.Up();
         }
         Assert.NotEqual(h.Session.Start!.Value, h.Session.End!.Value);
-        Assert.Equal(3, h.Meshes.Count);
+        Assert.Equal(4, h.Meshes.Count);
         Assert.Equal(0, h.Commits);
     }
 
@@ -1037,6 +1063,10 @@ public sealed class WorkAreaGizmoSessionTests
             Api.Setup(a => a.IsGamePaused).Returns(false);
             Api.Setup(a => a.Settings.Bool["renderMetaBlocks"]).Returns(false);
             Api.Setup(a => a.Gui.OpenedGuis).Returns(Dialogs);
+            int labelTextureId = 100;
+            Api.Setup(a => a.Gui.LoadCairoTexture(It.IsAny<Cairo.ImageSurface>(), It.IsAny<bool>()))
+                .Returns(() => ++labelTextureId);
+            Api.Setup(a => a.Gui.DeleteTexture(It.IsAny<int>()));
             Input.Setup(i => i.MouseGrabbed).Returns(() => Grabbed);
             Input.Setup(i => i.MouseButton).Returns(Raw);
             Input.Setup(i => i.InWorldMouseButton).Returns(WorldButtons);
@@ -1045,9 +1075,14 @@ public sealed class WorkAreaGizmoSessionTests
             Render.Setup(r => r.FrameHeight).Returns(600);
             Render.Setup(r => r.CameraMatrixOriginf).Returns(new Matrixf().Values);
             Api.Setup(a => a.Shader.GetProgram((int)EnumShaderProgram.Wireframe)).Returns(Shader.Object);
-            Api.Setup(a => a.Shader.NewShaderProgram()).Returns(Shader.Object);
+            var labelShader = new Mock<IShaderProgram>();
+            labelShader.Setup(s => s.Compile()).Returns(true);
+            int programCount = 0;
+            Api.Setup(a => a.Shader.NewShaderProgram())
+                .Returns(() => programCount++ == 0 ? Shader.Object : labelShader.Object);
             Api.Setup(a => a.Shader.NewShader(It.IsAny<EnumShaderType>())).Returns(() => Mock.Of<IShader>());
             Api.Setup(a => a.Shader.RegisterMemoryShaderProgram("vbe-gizmo-overlay", Shader.Object)).Returns(49);
+            Api.Setup(a => a.Shader.RegisterMemoryShaderProgram("vbe-gizmo-labels", labelShader.Object)).Returns(50);
             Shader.Setup(s => s.Compile()).Returns(true);
             Shader.Setup(s => s.UniformMatrix("modelViewMatrix", It.IsAny<float[]>()))
                 .Callback<string, float[]>((_, matrix) => LastModel = (float[])matrix.Clone());

@@ -1,10 +1,4 @@
 # Short-Term:
-    ☐ gizmos should support having 'labels' which show in-world next to the gizmo handles and which have a predicate based visibility state so the labels are only visible under certain conditions.
-         - Default label visibility modes are: 
-             - `always`: labels are always visible.
-             - `hover`: labels are visible when the gizmo handle is hovered.
-             - `selected`: labels are visible when the gizmo handle is selected.
-             - `predicate`: labels are visible based on a custom predicate function that determines their visibility.
     ☐ work area wireframe box should be partially visible behind terrain, rendering fully opaque when not occluded, but fading when occluded.
     ☐ BUG: work area wireframes dont render correctly when interacting with clouds (clouds seem to occlude them).
     ☐ BUG: Sometimes horizontal/vertical snapping restriction placement does not work as expected (for slabs?).

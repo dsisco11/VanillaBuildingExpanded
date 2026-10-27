@@ -187,6 +187,32 @@ immediately on failure/retirement, and defers callback-requested renderer member
 GPU teardown outside native live-list iteration. The session activates it for checked,
 enabled/living contexts, including pending creation with zero instances.
 
+[Per-handle labels](../VanillaBuildingExpanded/src/Gizmos/GizmoLabel.cs) attach through
+`Gizmo.SetLabel(handle, label)` and detach through `RemoveLabel`. A label contains
+literal single-line text and an `(OffsetX, OffsetY)` in framebuffer pixels, positive
+right/down, locating its top-left corner relative to the projected arrow tip or
+center marker. Offsets do not scale with GUI scale or world distance; text size
+follows GUI scale. `Always` draws with the eligible handle, `Hover` requires that
+exact handle to be hovered, `Selected` requires that exact handle to be captured,
+and `Predicate` evaluates a caller-supplied function each drawn frame with the
+gizmo, handle, camera context and hover/selection state. Hover and selection are
+distinct: capturing clears hover. Predicates should be side-effect-free, and do
+not override hidden, disabled, disposed, cross-dimension or clipped handles.
+
+The [label overlay](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.Labels.cs)
+uses the same double-precision projection snapshot and AfterBlit state guard as
+the handle lines. A lazily created textured quad shader maps pixels directly to
+clip space without relying on ambient GUI matrices. Label text is rasterized
+only on first visibility or text/GUI-scale changes; changing visibility, moving,
+or replacing offsets reuses textures. Removing/replacing a label or removing its
+gizmo retires stale textures on the next active overlay frame. Session disposal
+releases all remaining textures, the shared quad and shader. Labels do not
+participate in hit testing or input capture.
+
+Work-area handles use hover labels for X/Y/Z and endpoint Center markers.
+The whole-area midpoint's center label uses the selected work area's name,
+including renames; all names are rendered as literal text rather than markup.
+
 The [native input adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoInputAdapter.cs)
 uses the renderer's perspective updates for drag previews and last drawn context for
 button hits/final release. Its session eligibility callback covers owner mode/visibility;

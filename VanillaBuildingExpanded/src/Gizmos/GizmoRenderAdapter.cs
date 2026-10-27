@@ -10,7 +10,7 @@ using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.Gizmos;
 
-internal sealed class GizmoRenderAdapter : IRenderer
+internal sealed partial class GizmoRenderAdapter : IRenderer
 {
     private readonly ICoreClientAPI api;
     private readonly GizmoManager manager;
@@ -137,6 +137,7 @@ internal sealed class GizmoRenderAdapter : IRenderer
                 try
                 {
                     manager.Render(current);
+                    PruneLabelTextures();
                     if (!disposed && !failed && desired) drawnContext = current;
                 }
                 finally { drawing = false; }
@@ -182,6 +183,7 @@ internal sealed class GizmoRenderAdapter : IRenderer
                 shader.UniformMatrix("modelViewMatrix", ModelView(draw.Context.Camera!, part));
                 render.RenderMesh(mesh);
             }
+            DrawLabels(draw);
         }
         finally
         {
@@ -303,6 +305,18 @@ internal sealed class GizmoRenderAdapter : IRenderer
             catch (Exception error) { errors.Add(error); }
         }
         meshes.Clear();
+        foreach (var cached in labelTextures.Values)
+        {
+            try { cached.Texture.Dispose(); }
+            catch (Exception error) { errors.Add(error); }
+        }
+        labelTextures.Clear();
+        try { labelQuad?.Dispose(); }
+        catch (Exception error) { errors.Add(error); }
+        labelQuad = null;
+        try { if (labelShader is { Disposed: false }) labelShader.Dispose(); }
+        catch (Exception error) { errors.Add(error); }
+        labelShader = null;
         try { if (shader is { Disposed: false }) shader.Dispose(); }
         catch (Exception error) { errors.Add(error); }
         shader = null;

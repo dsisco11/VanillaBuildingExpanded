@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using VanillaBuildingExpanded.Gizmos;
 using VanillaBuildingExpanded.Rendering;
@@ -119,6 +120,9 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
                     ? WorkAreaGizmoCoordinates.Constrain(edit, endpointRole, world.BlockAccessor)
                     : ConstrainTranslation(edit),
                 role == WorkAreaEndpointRole.End ? GizmoShape.Diamond : GizmoShape.Circle);
+            instance.SetLabel(PositionGizmo.X, new("X", visibility: GizmoLabelVisibility.Hover));
+            instance.SetLabel(PositionGizmo.Y, new("Y", visibility: GizmoLabelVisibility.Hover));
+            instance.SetLabel(PositionGizmo.Z, new("Z", visibility: GizmoLabelVisibility.Hover));
             instance.OnInteractionStarted += _ =>
             {
                 if (!(role is { } endpointRole ? workArea.BeginEndpointEdit(endpointRole) : workArea.BeginTranslation()))
@@ -161,6 +165,11 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
             manager.Add(instance);
         }
         else if (gizmo.Value != anchor) gizmo.Value = anchor;
+        string centerLabel = role is null
+            ? workArea.Areas.Single(area => area.Id == workArea.SelectedId).Name
+            : Lang.Get("vanillabuildingexpanded:gizmo-label-center");
+        if (!gizmo.Labels.TryGetValue(PositionGizmo.Center, out var label) || label.Text != centerLabel)
+            gizmo.SetLabel(PositionGizmo.Center, new(centerLabel, 10, 10, GizmoLabelVisibility.Hover));
         gizmo.Visible = Eligible() && MatchesDimension();
     }
 

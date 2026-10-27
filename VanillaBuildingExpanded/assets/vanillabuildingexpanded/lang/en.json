@@ -44,6 +44,7 @@
   "build-info-workarea-delete-confirm": "Delete work area \"{0}\"? This cannot be undone.",
   "build-info-workarea-show": "Show work area",
   "build-info-workarea-size": "Size:",
+  "gizmo-label-center": "Center",
   "build-info-workarea-resize-mode": "Resize: {0}",
   "build-info-workarea-resize-expansion": "Expansion",
   "build-info-workarea-resize-centered": "Centered",

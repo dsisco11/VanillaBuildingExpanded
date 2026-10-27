@@ -12,7 +12,7 @@ using static VanillaBuildingExpanded.Tests.Gizmos.PositionGizmoTests;
 namespace VanillaBuildingExpanded.Tests.Gizmos;
 
 [Collection("Table composition")]
-public sealed class GizmoRenderAdapterTests
+public sealed partial class GizmoRenderAdapterTests
 {
     [Theory]
     [InlineData(GizmoShape.Arrow, 6, 10)]
@@ -352,6 +352,7 @@ public sealed class GizmoRenderAdapterTests
         public readonly Mock<IRenderAPI> Render = new();
         public readonly Mock<IShaderAPI> Shaders = new();
         public readonly Mock<IShaderProgram> Shader = new();
+        public readonly Mock<IShaderProgram> LabelShader = new();
         public readonly Mock<IShaderProgram> Previous = new();
         public readonly Mock<IShader> Vertex = new();
         public readonly Mock<IShader> Fragment = new();
@@ -359,12 +360,15 @@ public sealed class GizmoRenderAdapterTests
         public readonly Mock<IClientEventAPI> Events = new();
         public readonly GizmoManager Manager = new();
         public readonly FakeState State = new();
-        public readonly GizmoContext Camera = PositionGizmoTests.Camera();
+        public GizmoContext Camera = PositionGizmoTests.Camera();
         public readonly List<(IRenderer, EnumRenderStage)> Active = [];
         public readonly List<Action> Pending = [];
         public readonly List<TestMesh> Meshes = [];
         public readonly GizmoRenderAdapter Adapter;
         public int Draws, Notices;
+        public int LabelUploads;
+        public readonly List<int> DeletedTextures = [];
+        public readonly List<(float X, float Y, float Width, float Height)> LabelRects = [];
 
         public Fixture()
         {
@@ -379,7 +383,18 @@ public sealed class GizmoRenderAdapterTests
             Api.SetupGet(a => a.Shader).Returns(Shaders.Object);
             Api.SetupGet(a => a.Event).Returns(Events.Object);
             Shaders.Setup(s => s.GetProgram((int)EnumShaderProgram.Wireframe)).Returns(Shader.Object);
-            Shaders.Setup(s => s.NewShaderProgram()).Returns(Shader.Object);
+            int programCount = 0;
+            Shaders.Setup(s => s.NewShaderProgram()).Returns(() => programCount++ == 0 ? Shader.Object : LabelShader.Object);
+            LabelShader.Setup(s => s.Compile()).Returns(true);
+            var gui = new Mock<IGuiAPI>();
+            Api.Setup(a => a.Gui).Returns(gui.Object);
+            gui.Setup(g => g.LoadCairoTexture(It.IsAny<Cairo.ImageSurface>(), It.IsAny<bool>()))
+                .Returns(() => 100 + ++LabelUploads);
+            gui.Setup(g => g.DeleteTexture(It.IsAny<int>())).Callback<int>(id => DeletedTextures.Add(id));
+            LabelShader.Setup(s => s.Uniform("screenRect", It.IsAny<float>(), It.IsAny<float>(),
+                It.IsAny<float>(), It.IsAny<float>()))
+                .Callback<string, float, float, float, float>((_, x, y, width, height) =>
+                    LabelRects.Add((x, y, width, height)));
             Vertex.SetupProperty(s => s.Code);
             Fragment.SetupProperty(s => s.Code);
             Shaders.Setup(s => s.NewShader(EnumShaderType.VertexShader)).Returns(Vertex.Object);

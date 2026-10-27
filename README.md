@@ -108,6 +108,11 @@ A third gizmo at the midpoint of a complete selection moves the entire box. Drag
 
 All center handles and axis arrows use bright, unlit colors at 80% opacity. Hovering or dragging a handle raises it to full opacity and thickens its lines; scene lighting does not dim the controls.
 
+Hovering an axis handle shows its X/Y/Z label beside the arrow tip. Endpoint center
+handles show **Center**; the whole-area midpoint shows the work area's name and
+updates when renamed. Labels follow the handles with fixed screen-pixel offsets
+and do not intercept clicks. Hover labels disappear while a handle is being dragged.
+
 Turning build mode off or dying hides the work area and cancels interaction, but retains endpoints and the session's checkbox preference. Focus loss, dialogs, pointer-mode changes and dimension/world changes also cancel active edits safely. Re-enabling mode restores eligible visibility. Another dimension hides retained endpoints without clearing their size or automatically replacing them; returning restores visibility.
 
 Names, stable area IDs, and committed endpoints persist using the base game's mod-config APIs in `ModConfig/vanillabuildingexpanded-workareas.json` (schema 2); drag previews do not write config. Creating, renaming or deleting an area saves the collection, using the original committed endpoints if a drag is in progress. Entries are keyed by the world's `SavegameIdentifier`, keeping single-player saves, server worlds, and replacement saves at the same server address separate. They are local to this client, not shared with other players. Each join selects the first saved area, starts with build mode off, and resets all visibility checkboxes to unchecked. Selection and visibility are session-only. Missing world identity makes the session memory-only with a notice. Invalid entries are reported; unreadable or unsupported config files are not overwritten with defaults. A failed save retains the in-memory edit, warns that it may be lost after restart, and retries on the next explicit endpoint/collection edit or orderly exit.
