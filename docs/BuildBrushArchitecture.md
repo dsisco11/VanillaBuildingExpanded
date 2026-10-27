@@ -257,6 +257,22 @@ rejects malformed or foreign identities, filters eligibility, deduplicates hits 
 orders them by priority, distance and ID. Hover feedback uses the existing owner
 reference; capture feedback acknowledges lifecycle state without acquiring capture.
 
+[Measurement targets](../VanillaBuildingExpanded/src/Gizmos/GizmoDragTargets.cs)
+freeze logical frames and anchor-relative grab offsets into capture-local axis or
+plane sessions. Sessions initialize typed parameter bookkeeping before the edit
+scope, retain the last accepted unsnapped measurement, end parameters before
+committing, and cancel on forced termination or cleanup failure. Parameter factories
+receive the exact frozen frame, so planar interpretation cannot reread a moved camera.
+[Position parameter sources](../VanillaBuildingExpanded/src/Gizmos/GizmoPositionParameterSources.cs)
+map scalar or planar deltas through existing constraint delegates and notifying value
+sources; ending parameter modification does not commit or restore a transaction.
+[Edit-state targets](../VanillaBuildingExpanded/src/Gizmos/GizmoEditStateTarget.cs)
+bind existing owner begin/complete/cancel callbacks to the gizmo's single baseline.
+Owner lifecycle and composed sessions share idempotent restoration through the normal
+setter, before owner cancellation and public canceled notifications. Transaction
+callbacks are not also bound to lifecycle events. These adapters do not replace the
+current production positioning/routing path.
+
 ### Native input and work-area transactions
 
 The [native input adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoInputAdapter.cs)

@@ -2,7 +2,7 @@
 
 Source proposal: [GizmoHandles.proposal.md](./GizmoHandles.proposal.md)
 
-Status: Execution in progress. Phases 1 through 3 were implemented and independently audited on 2026-10-27; later phases remain unchecked. The foundation is inactive in gameplay. Leave tasks unchecked until their stated verification gates pass.
+Status: Execution in progress. Phases 1 through 4 were implemented and independently audited on 2026-10-27; later phases remain unchecked. The foundation is inactive in gameplay. Leave tasks unchecked until their stated verification gates pass.
 
 ## Goal and scope
 
@@ -147,31 +147,39 @@ Verification and traceability (2026-10-27):
 Prerequisites: Phases 1 and 3.
 Outcome: Existing analytic movement works through the new contracts without knowing shapes, IDs or application persistence.
 
-    ☐ Extract axis and camera-facing-plane solvers into IGizmoDragTarget implementations with capture-local sessions.
-        ☐ Preserve drag-start frame, initial grab offset, initial/last accepted measurements and existing numerical thresholds.
-        ☐ Retain degeneracy, excessive-jump, nonfinite/out-of-range coordinate and dimension rejection.
-        ☐ Freeze the center plane at begin; camera movement must not rebase capture.
-        ☐ Reject invalid measurements explicitly using current notice/error paths; do not introduce terrain fallback.
-    ☐ Implement typed position parameter sources and IGizmoValueSource<TValue> adapter.
-        ☐ Provide read/begin/set/end-modification lifecycle for scalar and planar parameters.
-        ☐ Record the initial parameter/value relationship and map deltas to candidates through existing constraints/snapping delegates.
-        ☐ Advance last-accepted measurements only as intended after constraint acceptance.
-        ☐ Delegate reads/writes to Gizmo<TValue>.Value with existing equality/no-op notification behavior.
-        ☐ Preserve immutable typed values, no silent assignments, no secondary authoritative storage and no assumption that all values are transforms.
-    ☐ Implement IGizmoEditStateTarget over existing baseline and owner transaction paths.
-        ☐ Coordinate accepted begin, preview, completion and cancellation without adding undo/persistence infrastructure.
-        ☐ End parameter modification without independently committing; unwind all initialized scopes on failed begin.
-        ☐ Restore once through the notifying setter and invoke existing owner cancellation once before the canceled notification.
-    ☐ Test measurement independently from application values and parameter adapters independently from pointer input.
-    ☐ Test notifying value access, constraint rejection, no-op owner echoes and transaction coordination.
-    ☐ Demonstrate the same scalar measurement with two different typed parameter adapters using test-only consumers.
-        ☐ Demonstrate replaceable frame/hit sources without changing solver code or adding role dispatch.
-        ☐ Do not turn the test demonstration into new production scaling/rotation tools.
+    ✔ Extract axis and camera-facing-plane solvers into IGizmoDragTarget implementations with capture-local sessions.
+        ✔ Preserve drag-start frame, initial grab offset, initial/last accepted measurements and existing numerical thresholds.
+        ✔ Retain degeneracy, excessive-jump, nonfinite/out-of-range coordinate and dimension rejection.
+        ✔ Freeze the center plane at begin; camera movement must not rebase capture.
+        ✔ Reject invalid measurements explicitly using current notice/error paths; do not introduce terrain fallback.
+    ✔ Implement typed position parameter sources and IGizmoValueSource<TValue> adapter.
+        ✔ Provide read/begin/set/end-modification lifecycle for scalar and planar parameters.
+        ✔ Record the initial parameter/value relationship and map deltas to candidates through existing constraints/snapping delegates.
+        ✔ Advance last-accepted measurements only as intended after constraint acceptance.
+        ✔ Delegate reads/writes to Gizmo<TValue>.Value with existing equality/no-op notification behavior.
+        ✔ Preserve immutable typed values, no silent assignments, no secondary authoritative storage and no assumption that all values are transforms.
+    ✔ Implement IGizmoEditStateTarget over existing baseline and owner transaction paths.
+        ✔ Coordinate accepted begin, preview, completion and cancellation without adding undo/persistence infrastructure.
+        ✔ End parameter modification without independently committing; unwind all initialized scopes on failed begin.
+        ✔ Restore once through the notifying setter and invoke existing owner cancellation once before the canceled notification.
+    ✔ Test measurement independently from application values and parameter adapters independently from pointer input.
+    ✔ Test notifying value access, constraint rejection, no-op owner echoes and transaction coordination.
+    ✔ Demonstrate the same scalar measurement with two different typed parameter adapters using test-only consumers.
+        ✔ Demonstrate replaceable frame/hit sources without changing solver code or adding role dispatch.
+        ✔ Do not turn the test demonstration into new production scaling/rotation tools.
 
 Completion criteria:
 
-    ☐ Analytic and composition tests pass with current precision, constraint and notification behavior.
-    ☐ Lifecycle tests prove partial-begin unwind, end-modification without commit, forced-termination cancellation and no duplicate restoration/owner notifications.
+    ✔ Analytic and composition tests pass with current precision, constraint and notification behavior.
+    ✔ Lifecycle tests prove partial-begin unwind, end-modification without commit, forced-termination cancellation and no duplicate restoration/owner notifications.
+
+Phase 4 evidence (2026-10-27):
+
+- Measurement -> proposal [spatial-frame sources and measurement targets](GizmoHandles.proposal.md#spatial-frame-sources-and-measurement-targets) and [positioning compatibility baseline](GizmoHandles.proposal.md#positioning-compatibility-baseline) -> [GizmoDragTargets.cs](../VanillaBuildingExpanded/src/Gizmos/GizmoDragTargets.cs): capture-local frozen axis/plane sessions, preserved numerical guards and grab offsets, explicit notice reasons, and acceptance-only unsnapped measurement advancement. Inherited precision/cancellation requirements were consulted at `04172078d76652ec9fc5610351b926c66daf0399`.
+- Parameters/value -> proposal [parameter sources and typed value sources](GizmoHandles.proposal.md#parameter-sources-and-typed-value-sources) -> [GizmoPositionParameterSources.cs](../VanillaBuildingExpanded/src/Gizmos/GizmoPositionParameterSources.cs) and the existing [GizmoValueSource](../VanillaBuildingExpanded/src/Gizmos/GizmoInteractionContracts.cs): scalar/planar position interpretation, constraint/snapping reuse, notifying equality/no-op access and bookkeeping-only end. Tilted-axis acceptance accounts for distant-coordinate rounding while retaining exact unchanged-axis components and constraint rejection.
+- Transactions -> proposal [edit-state targets](GizmoHandles.proposal.md#edit-state-targets) and [capture, cancellation and mutation](GizmoHandles.proposal.md#capture-cancellation-and-mutation) -> [GizmoEditStateTarget.cs](../VanillaBuildingExpanded/src/Gizmos/GizmoEditStateTarget.cs), [Gizmo.EditState.cs](../VanillaBuildingExpanded/src/Gizmos/Gizmo.EditState.cs) and [Gizmo.cs](../VanillaBuildingExpanded/src/Gizmos/Gizmo.cs): shared existing baseline, parameter-before-edit initialization, partial unwind, reentrant termination guards, exactly-once restoration/owner cancellation, and surfaced cleanup/commit failures without successful completion.
+- Independent measurement/adapter, typed composition and real-owner lifecycle evidence -> [GizmoDragTargetTests.cs](../VanillaBuildingExpanded.Tests/Gizmos/GizmoDragTargetTests.cs), plus retained contract, analytic positioning and work-area session tests. Test-only integer and position consumers use the same scalar solver with replaceable frame/hit sources; no production tools or routing cutover were added.
+- Final verification: 378 focused gizmo/work-area session tests passed, zero failed/skipped; normal Build and ValidateJson passed; whitespace check passed; no changed-file warnings. Second implementation review and independent completion audit, including precision-fix recheck, passed with no unresolved required findings. Existing unrelated nullable diagnostics/package advisories remain; no live-rendering qualification is claimed.
 
 ## Phase 5: Compose handles with manager-owned gesture routing
 

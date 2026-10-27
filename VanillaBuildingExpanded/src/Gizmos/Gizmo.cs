@@ -10,6 +10,7 @@ public abstract partial class Gizmo : IDisposable
     private bool visible = true;
     private bool enabled = true;
     private bool ending;
+    private bool beginning;
     private bool disposing;
     private bool resourcesDisposed;
 
@@ -137,20 +138,42 @@ public abstract partial class Gizmo : IDisposable
 
     internal bool BeginInteraction(GizmoHandleId handle, GizmoPointer pointer)
     {
-        if (IsInteracting || ending || !IsEligible(pointer.Context.Dimension)) return false;
+        if (IsInteracting || beginning || ending || editStateTarget is not null || !IsEligible(pointer.Context.Dimension)) return false;
         handles.TryGetValue(handle, out var expectedHandle);
         if (hasHandleComposition && (expectedHandle is null || !expectedHandle.IsEligible(pointer.Context.Dimension)))
             return false;
-        SaveInteractionValue();
-        if (!BeginInteractionCore(handle, pointer)) return false;
-        if (!IsEligible(pointer.Context.Dimension)) return false;
-        if (expectedHandle is not null
-            ? !OwnsHandle(expectedHandle) || !expectedHandle.IsEligible(pointer.Context.Dimension)
-            : hasHandleComposition) return false;
-        CapturedHandle = handle;
-        if (!IsInteracting || !IsEligible(pointer.Context.Dimension)) return false;
-        OnInteractionStarted?.Invoke(handle);
-        return IsInteracting;
+        bool accepted = false;
+        beginning = true;
+        try
+        {
+            SaveEditBaseline();
+            if (!BeginInteractionCore(handle, pointer)) return false;
+            if (!IsEligible(pointer.Context.Dimension)) return false;
+            if (expectedHandle is not null
+                ? !OwnsHandle(expectedHandle) || !expectedHandle.IsEligible(pointer.Context.Dimension)
+                : hasHandleComposition) return false;
+            CapturedHandle = handle;
+            if (!IsInteracting || !IsEligible(pointer.Context.Dimension)) return false;
+            accepted = true;
+            OnInteractionStarted?.Invoke(handle);
+            return IsInteracting;
+        }
+        finally
+        {
+            try
+            {
+                if (!accepted)
+                {
+                    try
+                    {
+                        if (IsInteracting) CancelInteraction();
+                        else editStateTarget?.Cancel();
+                    }
+                    finally { baselineSaved = false; }
+                }
+            }
+            finally { beginning = false; }
+        }
     }
 
     internal void UpdateInteraction(GizmoPointer pointer)
@@ -170,7 +193,11 @@ public abstract partial class Gizmo : IDisposable
     /// <param name="complete">Whether to commit instead of restoring the saved value.</param>
     private void EndInteraction(bool complete)
     {
-        if (CapturedHandle is not { } handle) return;
+        if (CapturedHandle is not { } handle)
+        {
+            if (!complete) editStateTarget?.Cancel();
+            return;
+        }
         var notification = complete ? OnInteractionCompleted : OnInteractionCanceled;
         ending = true;
         try
@@ -185,16 +212,24 @@ public abstract partial class Gizmo : IDisposable
                 try { InteractionEnded?.Invoke(this); }
                 finally
                 {
-                    if (complete) CompleteInteractionCore();
+                    if (complete)
+                    {
+                        CompleteInteractionCore();
+                        editStateTarget?.Complete();
+                        baselineSaved = false;
+                    }
                     else
                     {
-                        try
+                        if (editStateTarget is { } edit)
                         {
-                            IsRestoringInteractionValue = true;
-                            try { RestoreInteractionValue(); }
-                            finally { IsRestoringInteractionValue = false; }
+                            try { CancelInteractionCore(); }
+                            finally { edit.Cancel(); }
                         }
-                        finally { CancelInteractionCore(); }
+                        else
+                        {
+                            try { RestoreEditBaseline(); }
+                            finally { CancelInteractionCore(); }
+                        }
                     }
                     notification?.Invoke(handle);
                 }
