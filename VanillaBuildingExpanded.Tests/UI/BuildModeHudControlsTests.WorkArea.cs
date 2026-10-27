@@ -566,14 +566,19 @@ public sealed partial class BuildModeHudControlsTests
     }
 
     [Fact]
-    public void WorkAreaControls_ActivateOnReleaseSwitchCancelAndNotifyOutsideCollapsedContent()
+    public void NativeWorkAreaSwitchTogglesOnPressAndRetainsVisibilityAcrossCollapse()
     {
         using var f = WorkAreaFixture();
         var workArea = ActiveWorkArea();
         using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
-        ClickWorkArea(hud, f, "show");
+        var checkbox = Assert.IsType<GuiElementSwitch>(WorkAreaElement(hud, "show"));
+        var press = WorkAreaMouse(f, checkbox);
+        hud.OnMouseDown(press);
+        Assert.True(press.Handled);
         Assert.True(workArea.State.ShowWorkArea);
+        hud.OnMouseUp(new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0));
+        hud.OnRenderGUI(0);
         Assert.True(Assert.IsAssignableFrom<GuiElementSwitch>(WorkAreaElement(hud, "show")).On);
         var state = workArea.State;
         ClickToggle(hud, f, "workArea");
@@ -585,15 +590,14 @@ public sealed partial class BuildModeHudControlsTests
         Assert.Null(workArea.State.End);
     }
 
-    [Theory]
-    [InlineData("show")]
-    public void WorkAreaControls_DragOutsideCancelsAndPassiveAreasNeverTakeInput(string key)
+    [Fact]
+    public void NativeWorkAreaSwitchDragOutsideDoesNotUndoToggleAndPassiveAreasNeverTakeInput()
     {
         using var f = WorkAreaFixture();
         var workArea = ActiveWorkArea();
         using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
-        var control = WorkAreaElement(hud, key);
+        var control = WorkAreaElement(hud, "show");
         var press = WorkAreaMouse(f, control);
         hud.OnMouseDown(press);
         Assert.True(press.Handled);
@@ -604,9 +608,9 @@ public sealed partial class BuildModeHudControlsTests
         hud.OnMouseMove(new MouseEvent(-100, -100));
         var release = new MouseEvent(-100, -100, EnumMouseButton.Left, 0);
         hud.OnMouseUp(release);
-        Assert.True(release.Handled);
+        Assert.False(release.Handled);
         Assert.False(WorkAreaTable(hud).HasPointerCapture);
-        Assert.False(workArea.State.ShowWorkArea);
+        Assert.True(workArea.State.ShowWorkArea);
         foreach (GuiElement passive in new[]
         {
             WorkAreaSizeTable(hud).GetElement("label"),
@@ -622,8 +626,8 @@ public sealed partial class BuildModeHudControlsTests
             hud.OnMouseUp(new MouseEvent(e.X, e.Y, EnumMouseButton.Left, 0));
             Assert.False(e.Handled);
         }
-        ClickWorkArea(hud, f, key);
-        Assert.Equal(key == "show", workArea.State.ShowWorkArea);
+        ClickWorkArea(hud, f, "show");
+        Assert.False(workArea.State.ShowWorkArea);
     }
 
     [Theory]
@@ -660,15 +664,15 @@ public sealed partial class BuildModeHudControlsTests
         }
         Assert.False(table.HasPointerCapture);
         hud.OnMouseUp(new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0));
-        Assert.Equal(0, changes);
-        Assert.False(workArea.State.ShowWorkArea);
+        Assert.Equal(1, changes);
+        Assert.True(workArea.State.ShowWorkArea);
         if (change != "dispose")
         {
             f.MouseGrabbed = false;
             hud.SetVisible(true);
             if (change == "collapse") ClickToggle(hud, f, "workArea");
             ClickWorkArea(hud, f, "show");
-            Assert.Equal(1, changes);
+            Assert.Equal(2, changes);
         }
         hud.Dispose();
         workArea.SetVisibility(true);
@@ -760,7 +764,7 @@ public sealed partial class BuildModeHudControlsTests
         Assert.True(e.Handled);
         var release = new MouseEvent(e.X, e.Y, EnumMouseButton.Left, 0);
         hud.OnMouseUp(release);
-        Assert.True(release.Handled);
+        Assert.False(release.Handled);
         hud.OnRenderGUI(0);
     }
 

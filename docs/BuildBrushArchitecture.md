@@ -46,7 +46,8 @@ Shift + mouse wheel provides an additional orientation control using either Shif
 
 The Work area section contains five rows: a compact area list, management buttons,
 visibility, a shared resize-mode toggle, and localized inclusive X/Y/Z numeric inputs
-(disabled dashes while incomplete). Native checkbox artwork is retained with activation deferred to valid captured release. The shared table input layer owns nested hit routing and cancellation; it does not route the entire panel through native dialog defaults. State changes queue HUD rebuilding until outside control dispatch. Collapse, hide, scale/locale changes, structural Room changes and disposal cancel HUD captures before composer retirement without changing world handles, endpoints or visibility preference. Unchecking Show work area cancels world manipulation and hides both handles and box.
+(disabled dashes while incomplete). Visibility uses a native `GuiElementSwitch`, toggling immediately on mouse-down;
+it has no pending press state to cancel. The shared table input layer owns nested hit routing and cancellation; it does not route the entire panel through native dialog defaults. State changes queue HUD rebuilding until outside control dispatch. Collapse, hide, scale/locale changes, structural Room changes and disposal cancel HUD captures before composer retirement without changing world handles, endpoints or visibility preference. Unchecking Show work area cancels world manipulation and hides both handles and box.
 
 Work-area command and resize-mode buttons use native `GuiElementTextButton`
 instances with pointer-only table registration. Table cancellation sends an

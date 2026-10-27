@@ -145,11 +145,12 @@ internal sealed partial class BuildModeHud
                 new TableOptions(columnGap: 8, verticalAlignment: EnumVerticalAlign.Middle));
             AddNestedRow(table, visibility, "visibility", () =>
             {
-                var checkbox = new WorkAreaSwitch(capi, ElementBounds.Fixed(0, 0, 22, 22),
-                    value => workArea?.SetVisibility(value)) { On = workArea?.State.ShowWorkArea == true,
+                var checkbox = new GuiElementSwitch(capi, value => workArea?.SetVisibility(value),
+                    ElementBounds.Fixed(0, 0, 22, 22), 22, 3) { On = workArea?.State.ShowWorkArea == true,
                         Enabled = selected >= 0 };
+                // Native switches toggle on press and retain no pending interaction to cancel.
                 visibility.AddRowCells([new TableCell(checkbox, "show", input: TableInput.Pointer,
-                    cancelInput: checkbox.CancelPress),
+                    cancelInput: () => { }),
                     new TableCell(new GuiElementStaticText(capi, WorkAreaText("show"),
                     EnumTextOrientation.Left, ElementBounds.Fixed(0, 0, Width(WorkAreaText("show")), height),
                     CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor])), "label")]);
@@ -226,38 +227,6 @@ internal sealed partial class BuildModeHud
             if (e.KeyCode == (int)GlKeys.Escape) TryClose();
             else base.OnKeyDown(e);
             e.Handled = true;
-        }
-    }
-
-    // Native controls activate on mouse-down and have no non-activating cancellation API.
-    // Defer their activation to a captured, in-bounds release without changing native artwork.
-    private sealed class WorkAreaSwitch : GuiElementSwitch
-    {
-        private bool pressed;
-        public override bool Focusable => false;
-
-        public WorkAreaSwitch(ICoreClientAPI api, ElementBounds bounds, Action<bool> toggle)
-            : base(api, toggle, bounds, 22, 3) { }
-
-        public void CancelPress() => pressed = false;
-
-        public override void OnMouseDown(ICoreClientAPI api, MouseEvent e)
-        {
-            if (e.Handled || api.Input.MouseGrabbed || e.Button != EnumMouseButton.Left
-                || !IsPositionInside(e.X, e.Y)) return;
-            if (!Enabled) { e.Handled = true; return; }
-            pressed = true;
-            e.Handled = true;
-        }
-
-        public override void OnMouseUp(ICoreClientAPI api, MouseEvent e)
-        {
-            if (e.Button != EnumMouseButton.Left) return;
-            bool activate = pressed && !e.Handled && !api.Input.MouseGrabbed && IsPositionInside(e.X, e.Y);
-            bool owned = pressed;
-            CancelPress();
-            if (activate) base.OnMouseDownOnElement(api, e);
-            if (owned) e.Handled = true;
         }
     }
 
