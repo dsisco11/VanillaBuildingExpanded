@@ -121,29 +121,40 @@ Completion criteria:
 Prerequisites: Phase 1 engine/input contracts and Phase 2 mutation persistence.
 Outcome: A disposable input adapter safely converts armed world clicks into saved ruler changes.
 
-    ☐ Add a client input adapter, using handled physical mouse events and InWorldAction suppression where required by verified ordering.
-        ☐ Act only in grabbed-mouse gameplay with enabled mode, a living player, and an armed picker; respect already-handled input and GUI priority.
-        ☐ Copy the current original world BlockSelection on a fresh left press; never use the brush destination, face offset, or snapping result.
-        ☐ Use ordinary selection reach; entities, sky, and absent block targets do not become endpoints.
-        ☐ Consume invalid picking clicks, retain prior endpoints/pick mode, and notify Aim at a block.
-        ☐ On valid selection, commit the controller change, return to Idle, and trigger persistence/presentation updates.
-        ☐ Cancel on gameplay right-click before TryPlaceBlock/item use; do not change endpoints on cancellation.
-    ☐ Own the complete physical gesture independently of the pick state.
-        ☐ Suppress held/repeated actions and release after a successful press returns to Idle; apply equivalent ownership to cancellation gestures.
-        ☐ Ensure the GUI button's activation gesture cannot set an endpoint or trigger a world action.
-        ☐ Pause world picking for open dialogs/free cursor; keep dialog input and normal cursor management intact.
-        ☐ Cancel pending picking on mode-off, death, dimension change, departure, or disposal; safely release ownership on focus loss/teardown without leaking later held actions.
-        ☐ Preserve Idle left/right click behavior, ordinary brush controls, and empty/unsupported-hand operation; never send placement packets for ruler commands.
-        ☐ Detach every subscription on disposal and make repeated cleanup harmless.
-    ☐ Add adapter/integration tests covering event order and interactions with the existing placement path.
-        ☐ Exercise valid/invalid targets, button-to-world transition, held/repeated/released clicks after success, and right-click cancellation with an eligible brush.
-        ☐ Assert mining/attack/item-use/placement callbacks and placement packets are absent for owned gestures, not just that handled flags are set.
-        ☐ Cover handled events, dialog/free-cursor pause, focus loss, mode/death/dimension changes, repeated disposal, and ordinary Idle input.
+Phase 3 contract findings and traceability:
+
+- Input capture/ownership -> proposal Endpoint-picking interaction and Verification items 2, 3, 6 -> RulerInput plus the existing client InWorldAction router; tests exercise original-position copies, invalid targets, GUI-to-world transitions, native-action suppression through hold/release, and unchanged fresh Idle gestures. Persistence remains the Phase 2 EndpointsCommitted subscriber; no brush placement destination or packet is used by ruler commands.
+- Installed 1.22.7 VintagestoryLib inspection: ClientMain.OnMouseDownRaw/OnMouseUpRaw route through SystemHotkeys.OnPrimaryMouseButton/OnSecondaryMouseButton into UpdateMouseButtonState. That method calls ClientEventAPI mouse events BEFORE GUI/client-system dispatch and before setting InWorldMouseState. RulerInput therefore explicitly pauses for opened Dialogs/capturing GUIs as well as a free cursor, pause, or loss of focus; MouseGrabbed alone is insufficient GUI-priority proof.
+- SystemMouseInWorldInteractions.HandleMouseInteractionsBlockSelected/NoBlockSelected gates mining/attack/use/build through InWorldAction, while SystemPlayerControl.OnGameTick separately assigns LeftMouseDown/RightMouseDown via EntityControls.AttemptToggleAction. Suppress both action families, including release callbacks, independently of picker Idle. Retired gesture latches survive release/focus loss until a fresh unhandled physical press so delayed native callbacks cannot resurrect a held action; fresh unowned/free-cursor gestures do not inherit old suppression.
+- Lifecycle -> proposal Endpoint-picking interaction / Client state and persistence -> mode-change/tick context binding, local death/departure, dimension subscription, idempotent disposal. Public IClientEventAPI has no focus hook in this build: the session adapter receives the native ClientEventManager.OnGameWindowFocus listener list. ClientMain.OnFocusChanged invokes it before clearing raw/world mouse state. Focus loss retires owned gestures and clears their world buttons; teardown clears them before detaching callbacks. Focus observation uses this deliberate installed-client dependency, not a polling approximation. Existing context ticks also reconcile raw released buttons when a raw-capturing dialog or earlier handler hides API MouseUp; suppression remains latched until the next fresh press.
+- Notifications -> proposal exact three-row section and picking feedback -> localized native notifications via session controller notice binding, detached on departure. HUD composition and rendering remain Phases 4/5. Automated native-dispatch models are not live-game evidence; supported-game input smoke checks remain the explicit Phase 6 acceptance gate.
+- Second implementation review: checked the adapter, owner lifecycle/router changes, localized notices, new dispatch-model cases, and the narrowly adjusted persistence fixture against the inherited proposal. Corrected fresh free-cursor gesture retirement, late physical release after focus regain, and raw-release reconciliation when API MouseUp is hidden. Native ClientCoreAPI.World was confirmed to return ClientMain. Reviewed the final corrections and all extracted Phase 3 requirements; verification and independent audit gates still apply before checking entries.
+- Verification: separate verification agent ran the combined RulerControllerTests, RulerPersistenceTests, RulerInputTests, BuildBrushWheelTests, BuildBrushInputTests, and BrushInputContractTests selection: 140/140 passed, none failed/skipped (shell 369). Normal .\build.ps1 --target=Build passed JSON validation and clean/publish (shell 370). Existing compiler/analyzer warnings and System.Security.Cryptography.Pkcs 10.0.12 advisories remain outside this phase. New input coverage comprises 34 cases; previous ruler tests remain passing. No live-game input result is claimed.
+- Independent completion audit: a fresh read-only reviewer applied audit-stage-completion, independently inspected the full proposal, inherited plan contracts, linked sources, current diff/tests, installed 1.22.7 input/focus dispatch, and verification outputs (shells 369/370). Verdict: Phase 3 fully satisfied at its implementation-stage boundary, with no confirmed issues, partial requirements, or blocking evidence gaps. Entries below were checked only after that verdict. Live gameplay acceptance remains unchecked in Phase 6; HUD controls/rendering remain Phases 4/5.
+
+    ✔ Add a client input adapter, using handled physical mouse events and InWorldAction suppression where required by verified ordering.
+        ✔ Act only in grabbed-mouse gameplay with enabled mode, a living player, and an armed picker; respect already-handled input and GUI priority.
+        ✔ Copy the current original world BlockSelection on a fresh left press; never use the brush destination, face offset, or snapping result.
+        ✔ Use ordinary selection reach; entities, sky, and absent block targets do not become endpoints.
+        ✔ Consume invalid picking clicks, retain prior endpoints/pick mode, and notify Aim at a block.
+        ✔ On valid selection, commit the controller change, return to Idle, and trigger persistence/presentation updates.
+        ✔ Cancel on gameplay right-click before TryPlaceBlock/item use; do not change endpoints on cancellation.
+    ✔ Own the complete physical gesture independently of the pick state.
+        ✔ Suppress held/repeated actions and release after a successful press returns to Idle; apply equivalent ownership to cancellation gestures.
+        ✔ Ensure the GUI button's activation gesture cannot set an endpoint or trigger a world action.
+        ✔ Pause world picking for open dialogs/free cursor; keep dialog input and normal cursor management intact.
+        ✔ Cancel pending picking on mode-off, death, dimension change, departure, or disposal; safely release ownership on focus loss/teardown without leaking later held actions.
+        ✔ Preserve Idle left/right click behavior, ordinary brush controls, and empty/unsupported-hand operation; never send placement packets for ruler commands.
+        ✔ Detach every subscription on disposal and make repeated cleanup harmless.
+    ✔ Add adapter/integration tests covering event order and interactions with the existing placement path.
+        ✔ Exercise valid/invalid targets, button-to-world transition, held/repeated/released clicks after success, and right-click cancellation with an eligible brush.
+        ✔ Assert mining/attack/item-use/placement callbacks and placement packets are absent for owned gestures, not just that handled flags are set.
+        ✔ Cover handled events, dialog/free-cursor pause, focus loss, mode/death/dimension changes, repeated disposal, and ordinary Idle input.
 
 Completion criteria:
 
-    ☐ Focused automated tests establish full-gesture suppression and normal-input compatibility.
-    ☐ Native gameplay suppression remains explicitly subject to the live gate in Phase 6; mocks alone are not completion evidence.
+    ✔ Focused automated tests establish full-gesture suppression and normal-input compatibility.
+    ✔ Native gameplay suppression remains explicitly subject to the live gate in Phase 6; mocks alone are not completion evidence.
 
 ## Phase 4: Add exactly the requested three-row section
 

@@ -500,7 +500,8 @@ public sealed class RulerPersistenceTests
                 .Callback<object, string, string>((_, code, text) =>
                 {
                     Assert.Equal($"translated {code}", text);
-                    Assert.NotEmpty(LogErrors);
+                    if (code.Contains(":ruler-persistence-", StringComparison.Ordinal))
+                        Assert.NotEmpty(LogErrors);
                     Errors.Add(code);
                 });
             World.Setup(w => w.SavegameIdentifier).Returns(() => WorldId!);

@@ -12,6 +12,7 @@ using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 using Vintagestory.API.Util;
 using Vintagestory.Client;
+using Vintagestory.Client.NoObf;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
@@ -27,6 +28,7 @@ public class BuildBrushSystem_Client : ModSystem
     private BuildBrushWheelInput? wheelInput;
     private RulerController? ruler;
     private RulerPersistence? rulerPersistence;
+    private RulerInput? rulerInput;
     private IInventory? subscribedHotbar;
     private long fastTickId;
     private long slowTickId;
@@ -59,6 +61,7 @@ public class BuildBrushSystem_Client : ModSystem
 
         controller = new BuildBrushControllerClient(api, CreateBrush);
         controller.ModeChanged += SendToServer;
+        controller.ModeChanged += RefreshRulerContext;
         modeIndicator = new BuildModeIndicatorBinding(controller, () => new BuildModeHud(api));
 
         config = VbeConfig.Get(api);
@@ -90,6 +93,7 @@ public class BuildBrushSystem_Client : ModSystem
         if (api is null) return;
         Event_LeaveWorld();
         controller!.ModeChanged -= SendToServer;
+        controller.ModeChanged -= RefreshRulerContext;
         api.Event.UnregisterGameTickListener(fastTickId);
         api.Event.UnregisterGameTickListener(slowTickId);
         api.Event.PlayerJoin -= Event_PlayerJoin;
@@ -169,6 +173,7 @@ public class BuildBrushSystem_Client : ModSystem
         {
             ruler = new RulerController();
             rulerPersistence = new RulerPersistence(api!, ruler);
+            ruler.NoticeRequested += OnRulerNotice;
         }
         if (subscribedHotbar is not null)
             subscribedHotbar.SlotModified -= Event_HotbarSlotModified;
@@ -180,6 +185,7 @@ public class BuildBrushSystem_Client : ModSystem
 
         // New sessions start with mode disabled, regardless of equipment.
         controller!.SetBuildMode(false, null);
+        RefreshRulerContext();
         modeIndicator ??= new BuildModeIndicatorBinding(controller, () => new BuildModeHud(api!));
         Logger.Audit("[BuildBrush][OnPlayerJoin]: Initializing build brush for player.");
     }
@@ -194,6 +200,13 @@ public class BuildBrushSystem_Client : ModSystem
     /// <summary>Retires session artwork before clearing mode, without sending to a departing server.</summary>
     private void Event_LeaveWorld()
     {
+        rulerInput?.Dispose();
+        rulerInput = null;
+        if (ruler is not null)
+        {
+            ruler.CancelPicking();
+            ruler.NoticeRequested -= OnRulerNotice;
+        }
         rulerPersistence?.Dispose();
         rulerPersistence = null;
         ruler = null;
@@ -232,6 +245,7 @@ public class BuildBrushSystem_Client : ModSystem
     /// <summary>Updates local placement from the live selection and sends changed positions.</summary>
     private void Thunk_Client(float dt)
     {
+        RefreshRulerContext();
         if (Player is null)
             return;
 
@@ -506,12 +520,44 @@ public class BuildBrushSystem_Client : ModSystem
     /// <summary>Routes right-click input through brush placement while preserving default handling otherwise.</summary>
     private void InWorldAction(EnumEntityAction action, bool on, ref EnumHandling handling)
     {
+        rulerInput?.HandleWorldAction(action, on, ref handling);
         if (handling != EnumHandling.PassThrough)
             return;
         if (action == EnumEntityAction.InWorldRightMouseDown && on)
         {
             TryPlaceBlock(ref handling);
         }
+    }
+
+    private void RefreshRulerContext()
+    {
+        if (ruler is null || controller is null) return;
+        rulerInput?.ReconcileButtons();
+        bool enabled = controller.State.IsActive;
+        bool alive = enabled && Player?.Entity?.Alive == true;
+        ruler.SetContext(enabled, alive);
+        if (enabled && alive && rulerInput is null)
+        {
+            // The public event API has no window-focus hook in 1.22.7.
+            if (World is not ClientMain game)
+                throw new NotSupportedException("Ruler input requires the supported native client world's focus events.");
+            rulerInput = new RulerInput(api!, ruler, game.eventManager.OnGameWindowFocus);
+        }
+    }
+
+    private void OnRulerNotice(RulerNotice notice)
+    {
+        string key = notice switch
+        {
+            RulerNotice.SelectStart => "ruler-select-start",
+            RulerNotice.SelectEnd => "ruler-select-end",
+            RulerNotice.AimAtBlock => "ruler-aim-at-block",
+            RulerNotice.SetOtherEndpoint => "ruler-set-other-endpoint",
+            RulerNotice.SetBothEndpoints => "ruler-set-both-endpoints",
+            _ => throw new ArgumentOutOfRangeException(nameof(notice), notice, null)
+        };
+        string code = $"vanillabuildingexpanded:{key}";
+        api!.TriggerIngameError(this, code, Lang.Get(code));
     }
     #endregion
 
