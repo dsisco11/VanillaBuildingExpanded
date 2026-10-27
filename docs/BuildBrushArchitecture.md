@@ -67,7 +67,10 @@ session-only; restoration selects the first saved area and hides every area.
 The HUD exposes a native named-area dropdown, New/Rename/Delete controls, the
 selected area's visibility checkbox and its size. Popup input is routed beyond
 the table footprint, with outside presses dismissing it and complete per-button
-gestures retained through recomposition. Names are escaped before native rich-text
+gestures retained through recomposition. Hiding/closing the HUD or grabbing the
+mouse cancels popup gesture
+reservations, so a mouse-up lost while the HUD is inactive cannot block later
+gizmo input after reopening. Names are escaped before native rich-text
 display. [Naming dialogs](../VanillaBuildingExpanded/src/BuildBrush/Hud/WorkAreaNameDialog.cs)
 take native focus and capture keyboard input; validation errors keep the dialog
 open. Escape/Cancel do not mutate the collection. Deletion requires confirmation.

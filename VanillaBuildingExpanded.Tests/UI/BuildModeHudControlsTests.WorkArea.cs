@@ -11,6 +11,98 @@ namespace VanillaBuildingExpanded.Tests.UI;
 
 public sealed partial class BuildModeHudControlsTests
 {
+    [Theory]
+    [InlineData("hide")]
+    [InlineData("close")]
+    [InlineData("grab")]
+    public void PopupCaptureDoesNotReserveWorldInputAfterHudContextRetirement(string transition)
+    {
+        using var f = WorkAreaFixture();
+        using var hud = new BuildModeHud(f.Api.Object, () => default, ActiveWorkArea());
+        hud.SetVisible(true);
+        var selector = Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select"));
+        var press = WorkAreaMouse(f, selector);
+        hud.OnMouseDown(press);
+        hud.OnMouseUp(new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0));
+        Assert.True(selector.listMenu.IsOpened);
+        hud.OnMouseDown(new MouseEvent(-100, -100, EnumMouseButton.Left, 0));
+        Assert.True(hud.ReservesPointer(-100, -100));
+        switch (transition)
+        {
+            case "hide": hud.SetVisible(false); break;
+            case "close": hud.TryClose(); break;
+            case "grab":
+                f.MouseGrabbed = true;
+                hud.OnRenderGUI(0);
+                f.MouseGrabbed = false;
+                break;
+        }
+        hud.SetVisible(true);
+        Assert.False(hud.ReservesPointer(-100, -100));
+        selector = Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select"));
+        press = WorkAreaMouse(f, selector);
+        hud.OnMouseDown(press);
+        var release = new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0);
+        hud.OnMouseUp(release);
+        Assert.True(release.Handled);
+        Assert.True(selector.listMenu.IsOpened);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void ReopenedBuildMenuRestoresGizmoInteractionAfterHiddenPointerRelease(bool grabbed, bool popup)
+    {
+        using var f = WorkAreaFixture();
+        var world = Mock.Get(f.Api.Object.World);
+        var accessor = Mock.Get(f.Api.Object.World.BlockAccessor);
+        var workArea = ActiveWorkArea();
+        workArea.RestoreEndpoints(new(-30, 65, -200, 0), new(30, 75, -200, 0));
+        using var h = new BuildBrush.WorkAreaGizmoSessionTests.Harness(f.Api, world, accessor, workArea);
+        h.Render.Setup(r => r.BitmapCreateFromPng(It.IsAny<byte[]>())).Returns(() => new BitmapExternal(1, 1));
+        h.Input.Setup(i => i.MouseX).Returns(() => f.MouseX);
+        h.Input.Setup(i => i.MouseY).Returns(() => f.MouseY);
+        h.Input.Setup(i => i.GetHotKeyByCode(It.IsAny<string>())).Returns((string code) => f.Hotkeys[code]);
+        using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
+        h.Dialogs.Add(hud);
+        hud.SetVisible(true);
+        h.Enable();
+        for (int repeat = 0; repeat < 3; repeat++)
+        {
+            if (popup)
+            {
+                h.Grabbed = false;
+                var selector = Assert.IsAssignableFrom<GuiElementDropDown>(WorkAreaTable(hud).GetElement("select"));
+                var press = WorkAreaMouse(f, selector);
+                hud.OnMouseDown(press);
+                hud.OnMouseUp(new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0));
+                Assert.True(selector.listMenu.IsOpened);
+                hud.OnMouseDown(new MouseEvent(-100, -100, EnumMouseButton.Left, 0));
+                h.Raw.Left = true;
+            }
+            workArea.SetContext(false, false);
+            hud.SetVisible(false);
+            h.Grabbed = true;
+            h.Raw.Left = false;
+            h.Session.Refresh();
+            h.Frame();
+            workArea.SetContext(true, true);
+            hud.SetVisible(true);
+            h.Grabbed = grabbed;
+            hud.OnRenderGUI(0);
+            for (int frame = 0; frame < 3; frame++) { h.Session.Refresh(); h.Frame(); }
+            var start = h.Session.Start!;
+            h.Aim(start.Value.Coordinates);
+            Assert.False(hud.ReservesPointer(-100, -100));
+            Assert.True(h.Down().Handled);
+            Assert.Same(start, h.Session.Manager.CapturedGizmo);
+            Assert.True(h.Up().Handled);
+        }
+        Assert.Equal(3, h.Commits);
+    }
+
     [Fact]
     public void DeleteConfirmationCapturesInputUnregistersOnCloseAndEscapeDoesNotDelete()
     {

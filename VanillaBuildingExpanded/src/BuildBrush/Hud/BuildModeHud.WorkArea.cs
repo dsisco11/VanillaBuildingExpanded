@@ -31,10 +31,11 @@ internal sealed partial class BuildModeHud
 
     private void OnWorkAreaChanged(WorkAreaState _) => workAreaDirty = true;
 
-    private void CancelWorkAreaInput()
+    private void CancelWorkAreaInput(bool preserveMenuGestures = false)
     {
         ActiveWorkAreaTable?.CancelInput();
         workAreaSelector?.OnFocusLost();
+        if (!preserveMenuGestures) workAreaMenuGestures.Clear();
     }
 
     private void CloseWorkAreaDialog()
@@ -91,7 +92,7 @@ internal sealed partial class BuildModeHud
 
     private void ResetHudComposition()
     {
-        CancelWorkAreaInput();
+        CancelWorkAreaInput(preserveMenuGestures: true);
         foreach (var section in sections) section.CancelInput();
         ClearComposers();
     }
