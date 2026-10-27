@@ -50,6 +50,8 @@ Death and join reset mode and hide the panel. World departure and system disposa
 
 ## Client-only ruler
 
+Planned movement replacement: [Phase 7](InWorldGizmos.todo#phase-7-replace-terrain-following-movement-with-analytic-translation) replaces terrain-following center dragging with analytic translation across a camera-facing plane captured at drag start, retaining existing analytic arrows and whole-block ruler snapping. Terrain targeting will remain only for explicit first-use/missing-endpoint creation. This is not implemented yet; the implementation description below records the current behavior until that phase is complete.
+
 Reusable [gizmo instances and typed values](../VanillaBuildingExpanded/src/Gizmos/Gizmo.cs),
 [shared context/ray/hit carriers](../VanillaBuildingExpanded/src/Gizmos/GizmoContext.cs)
 and a [session manager](../VanillaBuildingExpanded/src/Gizmos/GizmoManager.cs) are available
@@ -126,7 +128,7 @@ The installed engine's OpenTK binding supplies depth-test/depth-mask/line-width 
 
 World departure/system disposal cancel previews/creation, detach input and render observers, unregister/dispose renderers and shared meshes, retry dirty config before clearing controller ownership, and dispose the HUD binding. Late queued retirement checks disposal before touching the retired session. Repeated hide/show and teardown are idempotent.
 
-Automated registration/matrix/cleanup tests and normal publish checks are distinct from supported-game qualification. The earlier ruler-only live-check waiver does not waive the replacement's required [Phase 7](InWorldGizmos.todo) qualification. Native input, restart/world isolation, terrain/transparent-material depth behavior, bias stability and preview/native-selection overlap remain unverified, not passed. The inspected runtime is 1.22.7; mocked services do not establish those live results.
+Automated registration/matrix/cleanup tests and normal publish checks are distinct from supported-game qualification. The earlier ruler-only live-check waiver does not waive the replacement's required [Phase 8](InWorldGizmos.todo#phase-8-qualify-delivery-and-update-documentation) qualification. Native input, restart/world isolation, terrain/transparent-material depth behavior, bias stability and preview/native-selection overlap remain unverified, not passed. The inspected runtime is 1.22.7; mocked services do not establish those live results.
 
 ## Selection and inventory refresh
 

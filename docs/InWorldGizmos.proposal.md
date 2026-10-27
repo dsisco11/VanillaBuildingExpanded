@@ -19,13 +19,15 @@ The ruler remains client-only. Gizmos are controls, not blocks, inventory items 
 ### Confirmed interaction decisions
 
 - Support both the free mouse cursor and mouse-look reticle.
-- Dragging the center follows the world block under the active pointer/reticle.
-- Center dragging and first-use/missing-endpoint creation can target rendered terrain up to the camera far plane, without a player-reach cap.
+- Dragging the center translates in a camera-facing mathematical plane captured at drag start, preserving the initial grab offset. It does not target terrain.
+- Only first-use/missing-endpoint creation targets rendered terrain up to the camera far plane, without a player-reach cap.
 - Ruler endpoints snap to whole blocks throughout dragging.
 - One initial world click creates both endpoints on the selected block.
 - Gizmo handles are overlay controls; the ruler box remains depth-tested.
 - Remove Set Start/Set end from the panel, leaving Show ruler and Size.
 - Anchor Start at offset `(0, 0, 0)` within its block and End at offset `(1, 1, 1)` within its block. Do not introduce the previously suggested endpoint-selection/cycling controls.
+
+Decision update (2026-10-27): analytic center translation replaces terrain-following movement entirely. Remove the old center-target resolver contract, production wiring, obsolete tests and drag-only feedback; retain no alternate mode, fallback or compatibility switch. Existing analytic axis dragging remains. Terrain targeting is retained exclusively for explicit first-use/missing-endpoint creation. [Phase 7](InWorldGizmos.todo#phase-7-replace-terrain-following-movement-with-analytic-translation) implements this superseding decision; completed earlier phase records describe historical behavior.
 
 ## Current integration points
 
@@ -113,7 +115,7 @@ Support both the existing free cursor and mouse-look reticle while build mode is
 
 Own the entire captured gesture through release, including late native action callbacks, so dragging cannot mine, attack, place or use an item. Right-click cancellation must also own its gesture. Repeated drags must begin from fresh physical presses; no stale capture/suppression latch may prevent the next edit.
 
-Free-cursor dragging does not engage camera look. Reticle dragging retains camera look so the player can aim at a different block or move the aiming ray along an axis; suppress captured gameplay actions, not the mouse motion needed for aiming. A dialog opening, focus loss, cursor-mode change, build-mode exit, death, dimension change or world departure cancels the interaction. GUI recomposition must not otherwise reset a world gizmo.
+Free-cursor dragging does not engage camera look. Reticle dragging retains camera look so the player can move the aiming ray across the captured plane or along an axis; suppress captured gameplay actions, not the mouse motion needed for aiming. A dialog opening, focus loss, cursor-mode change, build-mode exit, death, dimension change or world departure cancels the interaction. GUI recomposition must not otherwise reset a world gizmo.
 
 ### Axis handles
 
@@ -125,11 +127,15 @@ Free-cursor dragging does not engage camera look. Reticle dragging retains camer
 
 ### Center handle
 
-For the ruler, the center handle follows the targeted world block under the active cursor or reticle, up to the camera far plane without a player-reach cap. Apply the same range to first-use and missing-endpoint creation. Target existing loaded scene terrain; do not load or generate terrain for picking. Copy the actual targeted block cell, not a face-adjacent brush placement destination. Update the endpoint and its role-specific corner anchor together.
+At press, capture the initial anchor, a plane through that anchor perpendicular to the camera's view direction, and the active pointer ray's initial intersection with that plane. Hold the plane origin/orientation and unsnapped interaction baseline fixed throughout the drag, including camera motion and owner synchronization of normalized corners.
 
-This can change X/Y/Z together without an axis lock. It is not arbitrary positioning in empty space: sky/entity targets and missing valid terrain retain the last valid value until a block is targeted again. Do not silently switch to a camera-facing plane on a miss.
+For each update, intersect the current free-cursor or reticle ray with the captured plane and calculate initial anchor plus current intersection minus initial intersection. Preserve the grab offset rather than assigning the raw hit point. This is continuous two-dimensional movement across the initial view plane, not terrain projection or unrestricted movement along the view-depth axis; arrows provide independent depth/axis adjustment. Sky, entities and absent terrain do not prevent moving an existing handle.
 
-Keep the reusable positioning type independent of the ruler's block coordinates. Its center-drag calculation may accept an owner-supplied target resolver; a general-purpose plane resolver is a possible future use, not a required extra mode for this implementation.
+Reject unusable starts with feedback; invalid, behind-ray, near-parallel or nonfinite updates retain the last valid value without repeated per-frame notices. Define/test numerical guards against extreme jumps. Do not query world selection, block/entity intersections or a custom destination resolver while dragging. Mathematical pointer rays remain necessary; a world raycast does not.
+
+Keep the reusable positioning type continuous, double-precision and independent of block coordinates. The ruler constraint snaps each world-coordinate delta from the original anchor to whole blocks before decoding the role-specific cell. Grid quantization may move the published point slightly off the continuous plane. Do not snap plane-basis parameters instead of world-grid coordinates, or accumulate rounded previews as a new baseline. No terrain movement option, additional planar handles or new input modes are introduced.
+
+Explicit first-use and missing-endpoint creation remain separate single-click terrain operations through the camera far plane without a player-reach cap. Use loaded terrain only, preserve target filters and clip/dimension checks, copy the targeted cell without brush offsets, and never load or generate terrain for picking.
 
 ## Ruler integration and edit transactions
 
@@ -142,7 +148,7 @@ Start anchor = startCell + (0, 0, 0)
 End anchor   = endCell   + (1, 1, 1)
 ```
 
-The positioning gizmo's value is its anchor position. The ruler binding adds the corresponding offset when synchronizing from an endpoint and subtracts it when converting an edited anchor back to the endpoint cell. For center dragging, a target cell maps directly to that endpoint, then its role-specific anchor is recomputed. Axis dragging moves the anchor in whole-block steps from the drag-start value, preserving integer alignment and correct negative-coordinate behavior.
+The positioning gizmo's value is its anchor position. The ruler binding adds the corresponding offset when synchronizing from an endpoint and subtracts it when converting an edited anchor back to the endpoint cell. Center dragging snaps all world-coordinate deltas from the original anchor; axis dragging snaps only the selected component while keeping the other two fixed. Both preserve integer alignment and correct negative-coordinate behavior.
 
 These are marker offsets, not changes to stored endpoints or inclusive measurements. For the same selected cell, Start marks its minimum corner and End marks its exclusive maximum corner, so the two handles are separated without offsetting the measurement itself. Preserve explicit dimension identity even when an End anchor lies at a local-Y boundary; validate the decoded cell rather than interpreting the anchor as a dimension-encoded block position.
 
@@ -186,7 +192,7 @@ The overlay policy keeps handles accessible even when their corner is obscured b
 
 Share reusable arrow/icon meshes and rendering services where practical. Use camera-relative double subtraction before float matrices, explicit dimension conversion only at the rendering boundary, and balanced shader/depth/blend/line state cleanup. Avoid per-frame geometry uploads, GPU readbacks for picking, world-entity spawning or block tessellation.
 
-For the confirmed block-following center drag, qualify the supported engine's cursor-ray/world-hit facilities before implementation. The existing center-screen `BlockSelection` alone is not sufficient for free-cursor hit testing. Reticle targeting may reuse the native selection where it represents the required ray and target semantics.
+Qualify actual cursor/reticle rays and camera-view orientation for analytic dragging. Only explicit creation needs world-hit facilities; the existing center-screen `BlockSelection` alone is not sufficient for free-cursor creation. Existing-handle manipulation must not call native selection/world-hit APIs, regardless of terrain visibility.
 
 The session owner disposes the manager, instances, input subscriptions and GPU resources on departure/system disposal. Renderer/input failures must be logged and surfaced, cancel active edits safely, and leave ruler size/persistence usable. A render failure must not leave invisible interactive handles.
 
@@ -207,7 +213,7 @@ Use existing test infrastructure and add focused cases for:
 
 1. Property-setter value events for both owner assignments and manipulation, duplicate suppression, external replacement, and identical callback echoes without reentrant edits.
 2. Deterministic hit priority, center/arrow tolerance, both endpoints' corner offsets, overlapping/projected handles, one capture, drag outside hit bounds and correct free-cursor/reticle rays at multiple GUI scales/aspect ratios.
-3. Independent X/Y/Z motion, block-following center behavior and invalid targets, center/creation targets beyond player reach through the camera far plane, preserved axis grab offsets, camera-parallel degeneracy, negative coordinates, double precision, block snapping and offset-to-cell round trips at dimension boundaries.
+3. Independent X/Y/Z motion; camera-plane center displacement and grab offsets; fixed baselines during camera motion, normalization and snapping; empty-space/entity/sky drags; numerical degeneracy; negative/large coordinates; double precision; three-component world-grid snapping; and offset-to-cell round trips at dimension boundaries. Assert zero terrain/selection/entity-raycast calls throughout stationary and moving center/axis capture. Separately test explicit creation targets beyond player reach through the camera far plane and rejection of invalid/out-of-range terrain hits.
 4. Preview updates, one durable commit, cancel rollback, dirty retries and no per-frame config writes.
 5. Repeated Start and End edits after successful completion, including many consecutive drags and cancel/retry cycles, with actual manager/input/controller routing.
 6. No mining/attack/use/placement during captured/creation/cancellation gestures; ordinary input outside handles and already-handled GUI input remain intact.
@@ -220,15 +226,15 @@ Separately qualify live-game pointer routing, camera control, handle readability
 | Decision | Confirmed behavior |
 | --- | --- |
 | Interaction mode | Both existing free cursor and mouse-look reticle. |
-| Center movement | Follow the targeted world block; no plane fallback on a miss. |
-| Block-target range | Rendered terrain up to the camera far plane, without a player-reach cap; applies to center dragging and first-use/missing-endpoint creation. |
+| Center movement | Translate across a camera-facing plane fixed at drag start, preserving the initial grab offset; no terrain targeting or alternate legacy path. |
+| Block-target range | Rendered terrain up to the camera far plane, without a player-reach cap; applies only to first-use/missing-endpoint creation. |
 | Ruler snapping | Whole block-cell steps throughout dragging; reusable positioning is not inherently block-only. |
 | Initial creation | One world click creates a one-cell ruler; restored partial rulers complete only the missing endpoint. |
 | Gizmo occlusion | Overlay handles, depth-tested measurement box. |
 | Panel | Remove Set Start/Set end; keep Show ruler and Size. |
 | Marker anchors | Start block offset `(0, 0, 0)`; End block offset `(1, 1, 1)`; both gizmos expose arrows without a cycle/select control. |
 
-Before implementation, qualify the native free-cursor world raycast, reticle camera/input ordering, and stable axis-drag math against the supported engine. Final handle artwork, screen-space sizing and hit tolerances are implementation recommendations to test, not additional confirmed feature requirements. No further user decision is currently required to retain this proposal.
+Before implementing the replacement, qualify camera-plane orientation, pointer/camera ordering, numerical guards and world-grid snapping against the existing camera/input contracts. Preserve qualified creation targeting and analytic axis behavior. Final handle artwork, screen-space sizing and hit tolerances are implementation recommendations to test, not additional confirmed feature requirements. No further user decision is currently required to retain this proposal.
 
 ## Scope boundaries
 

@@ -6,7 +6,7 @@ Execution checklist derived from the proposal. Tasks remain unchecked until thei
 
 ## Goal and scope
 
-Replace ruler endpoint buttons and one-shot picking with reusable client-owned in-world gizmos. Support both free-cursor and reticle interaction, three axis arrows, a block-following center handle, and whole-block ruler snapping throughout a drag.
+Replace ruler endpoint buttons and one-shot picking with reusable client-owned in-world gizmos. Support both free-cursor and reticle interaction, three analytic axis arrows, a camera-plane center handle, and whole-block ruler snapping throughout a drag. Terrain targeting is reserved for explicit first-use/missing-endpoint creation.
 
 Use an abstract Gizmo and typed Gizmo<TValue>. The Value property setter raises OnValueChanged for actual changes from either manipulation or owner assignment; do not introduce a separate SetValue method or silent assignment path.
 
@@ -17,7 +17,7 @@ The ruler has two positioning-gizmo instances. Start uses its cell's (0, 0, 0) c
 Size: <x>, <y>, <z>
 ```
 
-Non-goals: rotation/scaling gizmos, multi-object editing, undo history, numeric editors, multiplayer sharing, unrelated brush compatibility tests, additional ruler selection/cycling controls, new relocation controls, or a required plane-drag mode.
+Non-goals: rotation/scaling gizmos, multi-object editing, undo history, numeric editors, multiplayer sharing, unrelated brush compatibility tests, additional ruler selection/cycling controls, new relocation controls, additional planar handles, or an optional legacy terrain-drag mode.
 
 ## Assumptions and qualification gates
 
@@ -32,14 +32,23 @@ Verification for this decision update: 403 focused Release tests passed (ruler,
 gizmos, HUD controls and table input), including mixed-axis crossing/return,
 canonical handle synchronization at release, rollback and legacy config round trips.
 Normal Build/ValidateJson and git diff --check passed. Live-game qualification
-remains separate in Phase 7.
+remains separate in Phase 8.
+
+Decision update (2026-10-27): Phase 7 replaces terrain-following center movement
+entirely with analytic translation in a camera-facing plane fixed at drag start.
+There is no retained resolver, fallback, alternate mode or compatibility switch for
+terrain-based movement. Existing analytic arrows remain; terrain targeting serves
+only explicit creation clicks. This supersedes conflicting center-movement,
+resolver-seam and drag-target-range requirements in the completed Phases 1-6 records
+below, without changing their historical completion evidence. The former delivery
+qualification phase is now Phase 8 and must verify the replacement after Phase 7.
 
 - The proposal is authoritative. Its linked current implementation files and BuildBrushArchitecture.md supply integration context, not permission to retain superseded endpoint buttons or picking behavior.
 - There is no existing reusable gizmo implementation in the inspected repository. Recheck before adding new logic; reuse native math/rendering facilities and existing input suppression infrastructure where they meet the new contract.
 - Resolve native cursor-ray/world-hit APIs, camera/input ordering and axis-drag degeneracy against the supported installed engine before implementing their consumers. Missing or unsuitable facilities are a blocker to resolve, not grounds for a center-screen fallback in free-cursor mode.
 - Exact artwork, pixel sizing, world-size limits, hit tolerances, equal-hit tie ordering and axis-degeneracy thresholds need documented/tested implementation choices. Do not treat example circle/diamond artwork as a mandatory asset design.
 - Document precedence between existing-handle interaction and pending missing-endpoint creation, plus how pending creation is offered/retired, before wiring that flow. Do not add a new panel action or overwrite an unrelated-dimension ruler to resolve it.
-- Generic positioning remains continuous and ruler-independent. The ruler binding supplies snapping, endpoint-role offsets and coordinate validity. An owner-supplied center target resolver is a recommended implementation seam, not a requirement to build a policy framework.
+- Generic positioning remains continuous and ruler-independent. The ruler binding supplies snapping, endpoint-role offsets and coordinate validity. Phase 7 removes the owner-supplied center target resolver; creation-only targeting must not remain reachable from handle movement.
 - New components remain inactive in normal gameplay until the verified cutover. Keep the existing interaction working during foundational phases; never register old and new competing global ruler mouse adapters together.
 - The previous repeat-selection bug is unresolved. Replacement success requires repeated edits through the actual new manager/input/controller path, not a claim that the old bug was diagnosed.
 - The earlier ruler live-check waiver does not waive this implementation's live qualification. Missing live access/results remain explicitly blocked and unchecked unless separately directed by the user.
@@ -152,7 +161,7 @@ Later verification must assert projection/unprojection agreement at edges/center
 - Initial visual targets in window pixels: arrow length 64, center radius 7, arrow-head length 12, pick padding 4; scale these once by GUI scale. Determine world scale from the captured projection's pixels-per-world-unit and clamp axis length to [0.125,8] blocks. Hit geometry uses the resulting actually rendered dimensions plus the pixel padding, not the unclamped requested size. Reject anchors with clip W <= 1e-12 or outside the near/far clip interval; overlay means terrain-independent, not behind-camera picking.
 - The manager uses the last successfully drawn eligible context for new hits; hidden/failed/unrendered instances have no invisible hit targets. Render failure cancels active edits and logs/notifies. Queue every renderer membership change requested inside a render callback, not just failure retirement, outside native live-list iteration (including extended-debug profiling); eligibility/hit rejection takes effect immediately. One session teardown cancels before detaching subscriptions and disposing shared GPU resources; late tasks must not touch the next world.
 
-Phase 1 evidence boundary: the source-backed native paths and deterministic contracts above satisfy qualification/definition work only. Phases 2-6 must implement and test them; Phase 7 must qualify both pointer modes, camera behavior, readability/GUI scales, overlaps, terrain/transparent materials, native action suppression and restart persistence in the supported game. No live result or old selection-bug diagnosis is claimed here.
+Phase 1 evidence boundary: the source-backed native paths and deterministic contracts above satisfy qualification/definition work only. Phases 2-6 implement their original contracts; Phase 7 supersedes terrain-following movement; Phase 8 must qualify both pointer modes, camera behavior, readability/GUI scales, overlaps, terrain/transparent materials, native action suppression and restart persistence in the supported game. No live result or old selection-bug diagnosis is claimed here.
 
 ## Phase 2: Implement reusable gizmo value and lifecycle foundations
 
@@ -705,11 +714,63 @@ endpoint cells. Fresh verification rebuilt the tests and again passed all 394 wi
 zero failed/skipped; diff check remained clean. Independent affected-requirement recheck
 directly inspected the strengthened tests and production dependencies and resolved the
 sole evidence gap, retaining the full audit's other satisfied findings. Final verdict:
-Phase 6 fully satisfied, no unresolved required findings. No Phase 7 live evidence is claimed.
+Phase 6 fully satisfied, no unresolved required findings. No Phase 8 live evidence is claimed.
 
-## Phase 7: Qualify delivery and update documentation
+## Phase 7: Replace terrain-following movement with analytic translation
 
-Prerequisites: Phase 6 complete; supported game access for live checks.
+Prerequisites: Phases 1-6 complete, including the normalized minimum/maximum endpoint decision.
+Controlling sources: [proposal confirmed decisions](InWorldGizmos.proposal.md#confirmed-interaction-decisions), [input and dragging](InWorldGizmos.proposal.md#proposed-input-and-dragging), [transactions](InWorldGizmos.proposal.md#ruler-integration-and-edit-transactions), [creation](InWorldGizmos.proposal.md#first-use-incomplete-rulers-and-relocation), and [verification](InWorldGizmos.proposal.md#verification). [BuildBrushArchitecture](BuildBrushArchitecture.md#client-only-ruler) describes the pre-replacement integration, not permission to retain the old movement path.
+Outcome: Existing endpoint handles move using analytic axis/camera-plane math in both pointer modes, with no terrain-based movement route; explicit creation retains its qualified single-click targeting.
+
+    ☐ Define the replacement interaction contract before changing consumers.
+        ☐ Record comparable pre-cutover stationary-hold and moving center/axis frame timings when supported-game access is available; otherwise record the missing baseline as a Phase 8 evidence gap, not an assumed before/after result.
+        ☐ Center capture stores the original anchor, a plane through it perpendicular to the camera view direction, and the initial pointer-ray intersection. Use camera view direction, not an off-center cursor ray, to orient the plane.
+        ☐ Hold the plane and unsnapped drag baseline fixed until release/cancel, including camera motion, notifying owner echoes and normalized-corner synchronization.
+        ☐ Compute original anchor plus current intersection minus initial intersection, preserving the grab offset. Center movement spans the initial view plane; it does not independently move along its depth normal.
+        ☐ Retain existing analytic axis dragging and its selected-component/unchanged-component guarantees. Do not add a different axis algorithm, extra planar handles, modifiers, settings or input modes without a demonstrated need.
+        ☐ Define/test near-parallel, behind-ray, nonfinite and extreme-jump guards for center updates. Reject unusable starts; retain the last valid update and deduplicate repeated feedback during a continuing invalid condition.
+    ☐ Implement continuous camera-plane movement in PositionGizmo and remove the old generic contract.
+        ☐ Replace the centerTarget constructor/delegate dependency and target lookup with captured plane/intersection state using existing Vector256<double>, camera and ray helpers.
+        ☐ Keep generic positions continuous, dimension-explicit and independent of ruler/block/accessor types. Use the existing owner constraint and notifying Value setter, including unchanged-value suppression.
+        ☐ Perform only analytic movement calculations during center/axis updates: no world selection, block/entity raycasts, cached terrain targets, custom destination callbacks or terrain fallback.
+        ☐ Preserve capture outside handle silhouettes, visual/hit geometry, overlay drawing, double precision, cancellation and renderer/input failure behavior. Do not reintroduce the rejected float-transform candidate.
+    ☐ Migrate ruler binding and snapping after the generic calculation is available.
+        ☐ Remove the center terrain-target lambda from RulerGizmoSession. Keep any target injection needed by creation strictly on that creation path; rename or narrow targeting helpers/interfaces if their contract still implies handle movement.
+        ☐ Extend RulerGizmoCoordinates.Constrain to round all three world-coordinate center deltas from the original anchor using the existing AwayFromZero policy, then decode/validate the role-specific cell. Retain one-component axis snapping.
+        ☐ Do not round camera-plane basis parameters or use snapped/normalized previews as a new movement baseline. Accept the small departure from the continuous plane caused by world-grid quantization.
+        ☐ Preserve Start offset zero, End offset one, explicit local Y/dimension, negative/large coordinates and End anchors at valid cell boundaries.
+        ☐ Preserve crossing/return against the original opposite endpoint, per-axis min/max normalization, canonical notifying handle synchronization without capture loss, live size/box updates and exact begin/preview/commit/cancel persistence semantics.
+        ☐ Preserve both pointer modes: free cursor does not enable camera look; reticle motion remains available for aiming against the fixed plane. Existing focus/dialog/mode/death/dimension/pointer-mode cancellation and complete-gesture action suppression remain intact.
+    ☐ Remove the superseded movement approach completely after migrating its consumers.
+        ☐ Remove obsolete constructor arguments, target fixtures, terrain-following movement tests, drag-only missing-terrain notices/localization and documentation references. Retain feedback still required by explicit creation.
+        ☐ Leave no compatibility overload, old center resolver, optional terrain movement mode, miss fallback or second input/capture route. Migrate every production and test caller to the single analytic movement contract.
+        ☐ Retain explicit empty/partial ruler creation, handle-before-creation arbitration, pending/rearm/cancel behavior and whole-gesture ownership. Only the explicit creation attempt may invoke terrain targeting.
+        ☐ Preserve creation's finite actual pointer/reticle near-to-far ray, no player-reach cap, loaded-terrain/meta/entity/clip/dimension checks and target-cell semantics without brush offsets. Do not load/generate terrain or make creation run continuously during a hold.
+    ☐ Add focused numerical and real-composition regression evidence before claiming cutover complete.
+        ☐ Test center press/hold/move/release in both pointer modes, off-center grab offsets, perspective camera orientations, GUI scales/aspect ratios, negative/large coordinates and independent X/Y/Z arrows.
+        ☐ Verify fixed-plane behavior during camera movement and controller echoes, zero displacement for an unchanged ray, stable whole-block thresholds and no accumulation when crossing and returning.
+        ☐ Cover invalid starts, near-parallel/behind-ray/nonfinite/extreme updates, recovery to valid motion and bounded notices without fabricated success values.
+        ☐ Assert zero calls to native selection and block/entity targeting services during at least 120 stationary captured frames and a repeated moving center/axis sequence. Existing handles remain movable over sky, foreground entities and absent/unloaded terrain, subject to coordinate/dimension validity.
+        ☐ Assert creation still calls its terrain resolver only for explicit fresh creation attempts, never handle presses or captured updates; cover empty/partial/other-dimension and invalid/retry cases.
+        ☐ Exercise actual session/renderer/input/manager/controller routing: repeated Start/End moves, normalized crossing/return and final canonical anchors, cancellation, live box matrices/sizes, action suppression and contextual teardown.
+        ☐ Verify zero preview config writes, exactly the existing completion/dirty-retry behavior, baseline rollback and persisted cell fidelity after restart-style reload.
+        ☐ Run the smallest combined existing test selections covering changed gizmo/ruler/input/persistence/HUD surfaces and normal build.ps1 --target=Build/ValidateJson. Record exact commands/counts/outcomes and diff-check evidence; do not invoke Default/Package, clean Releases or add validation dependencies.
+    ☐ Reconcile replacement documentation and evidence without claiming future live qualification.
+        ☐ Update BuildBrushArchitecture component/input/constraint/targeting sections to describe analytic movement and creation-only terrain targeting once implemented; keep the two-row UI and ownership/render/persistence boundaries unchanged.
+        ☐ Reconcile the proposal and obsolete active tests/comments/localization with the new contract. Keep completed phase evidence historical and explicitly superseded, rather than rewriting old results as proof of the new movement.
+        ☐ Record concise task-to-source/implementation/evidence mappings here. Leave Phase 8 live behavior, timing and restart checks unchecked until separately observed.
+        ☐ Keep the independently identified full-HUD recomposition cost outside this movement replacement; record any remaining cost during qualification rather than claiming removal of terrain targeting proves all lag resolved.
+
+Completion criteria:
+
+    ☐ Generic center translation uses one captured camera-facing plane and preserves grab offsets; existing analytic arrows and both pointer modes remain correct.
+    ☐ All production/test callers use the new contract. There is no retained terrain-following movement path, fallback or compatibility shim, and automated captured-frame/drag assertions prove zero terrain-selection calls.
+    ☐ Center/axis snapping, normalized bounds, live box/size, creation-only targeting, gesture ownership, commit/cancel and persistence regressions pass with recorded focused-test/normal-build evidence.
+    ☐ Architecture/proposal and active tests describe the replacement consistently. Live input/performance/render/restart evidence remains a separate Phase 8 gate.
+
+## Phase 8: Qualify delivery and update documentation
+
+Prerequisites: Phase 7 complete; supported game access for live checks.
 Outcome: Automated/build/output evidence, documentation and separately recorded live results establish the replacement's actual behavior.
 
     ☐ Run the smallest combined existing test selections covering changed gizmo, ruler, input, HUD/table, persistence and renderer surfaces.
@@ -718,7 +779,9 @@ Outcome: Automated/build/output evidence, documentation and separately recorded 
         ☐ Verify normal published assembly/localization assets include the replacement, without inventing a packaging/release workflow.
     ☐ Verify live input and endpoint manipulation in the supported game.
         ☐ Exercise both free cursor and reticle, preserving camera aiming only where appropriate.
-        ☐ Verify center/creation target following beyond player reach through the camera far plane, rejection beyond that boundary, independent axis motion, grab offsets and degeneracy behavior.
+        ☐ Verify center translation across the captured camera plane, empty-space/sky movement, preserved grab offsets, fixed-plane behavior during reticle aiming/camera motion, independent axis movement and degeneracy/recovery behavior.
+        ☐ Separately verify explicit creation targets beyond player reach through the camera far plane and rejects targets outside that segment; existing-handle dragging must not depend on terrain hits.
+        ☐ Record stationary-hold and moving center/axis frame timings before/after the replacement under comparable scene/camera settings in both pointer modes. Distinguish removal of selection-query stalls from remaining HUD/drawing costs; do not claim a general performance fix from mocked call counts.
         ☐ Repeatedly edit both endpoints after success, drag outside handles, cancel/retry, and verify no mining/attack/use/placement leaks.
         ☐ Verify HUD/dialog priority, Escape/right cancel, focus/pointer-mode changes, mode/death/dimension changes and checkbox hiding.
         ☐ Verify initial/partial creation, same-cell corner separation, crossing/negative coordinates and deterministic projected/intersecting hits.
@@ -729,7 +792,7 @@ Outcome: Automated/build/output evidence, documentation and separately recorded 
         ☐ Restart and confirm committed endpoints/world isolation; canceled previews do not persist and join visibility remains reset.
         ☐ Record exact observed limits/failures; leave missing live evidence blocked/unchecked rather than relying on the earlier waiver or mocks.
     ☐ Update existing user/architecture documentation and reconcile scope.
-        ☐ Describe two-row UI, both pointer modes, axis/block-following drags, corner anchors, creation, cancel/commit behavior and persistence/lifetime rules.
+        ☐ Describe two-row UI, both pointer modes, analytic axis/camera-plane drags, corner anchors, creation-only terrain targeting, cancel/commit behavior and persistence/lifetime rules.
         ☐ Update BuildBrushArchitecture ownership/input/render sections to match actual reusable components and removed picking flow.
         ☐ Record concise source-to-task/evidence mappings and any unresolved limitations in this plan.
         ☐ Remove only task-owned temporary instrumentation/artifacts; retain no debug controls, capture paths or compatibility scaffolding.
@@ -744,7 +807,7 @@ Completion criteria:
 ## Final acceptance
 
     ☐ Every proposal requirement has implementation/evidence or an explicit deferral with rationale; a deferral is not a completion claim.
-    ☐ The reusable typed property-setter event contract, both pointer modes, axis/block-following motion, corner anchors and exact two-row UI are verified.
+    ☐ The reusable typed property-setter event contract, both pointer modes, analytic axis/camera-plane motion without terrain queries, creation-only terrain targeting, corner anchors and exact two-row UI are verified.
     ☐ Repeated Start/End edits and complete-gesture safety are verified through the new production composition, not test-authored controller-only orchestration.
     ☐ Preview/commit/cancel, per-world native-config fidelity and full session/resource cleanup are verified.
     ☐ Source/unit/integration/build-output/live evidence are distinguished and required delivery documentation/cleanup is complete.
