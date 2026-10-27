@@ -80,7 +80,17 @@ Deleting the last area leaves no active selection and disables world creation
 until an area is created through New. Selection and independent visibility remain
 session-only; restoration selects the first saved area and hides every area.
 
+The reusable [GuiElementListBox<T>](../VanillaBuildingExpanded/src/UI/GuiElementListBox.cs)
+owns list rendering, clipping, selection gestures, native scrollbar integration,
+scroll position and texture lifetime. It snapshots typed items and accepts a label
+projection, item-selection callback, caller-provided bounds, visible-row limit,
+row height and empty-state text. It has no work-area, coordinate, persistence or
+feature-localization dependencies. Selection is an index into that snapshot.
+
 The HUD exposes a [compact named-area listbox](../VanillaBuildingExpanded/src/BuildBrush/Hud/WorkAreaListBox.cs),
+which derives from that component and only maps area names, stable GUID selection,
+the localized empty-state message and the existing 280-unit width.
+The HUD also exposes
 New/Rename/Delete controls, the selected area's visibility checkbox and editable
 size fields. The list shows at most three 22-unit rows, highlights the selection,
 and uses wheel scrolling or a native compact scrollbar for additional entries.

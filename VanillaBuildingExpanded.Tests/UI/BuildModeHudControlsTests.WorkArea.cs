@@ -764,7 +764,7 @@ public sealed partial class BuildModeHudControlsTests
     private static MouseEvent WorkAreaListMouse(Fixture f, WorkAreaListBox list, int row)
     {
         f.MouseX = (int)list.Bounds.renderX + 10;
-        f.MouseY = (int)(list.Bounds.renderY + (row + 0.5) * WorkAreaListBox.RowHeight * RuntimeEnv.GUIScale);
+        f.MouseY = (int)(list.Bounds.renderY + (row + 0.5) * list.RowHeight * RuntimeEnv.GUIScale);
         return new MouseEvent(f.MouseX, f.MouseY, EnumMouseButton.Left, 0);
     }
 }
