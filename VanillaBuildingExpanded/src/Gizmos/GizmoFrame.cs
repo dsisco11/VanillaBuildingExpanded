@@ -60,6 +60,14 @@ public readonly record struct GizmoFrame
             throw new InvalidOperationException("A spatial source must supply a valid frame in the current dimension.");
     }
 
+    /// <summary>Computes a double-precision three-dimensional cross product with a zero fourth lane.</summary>
+    /// <param name="a">The first direction.</param>
+    /// <param name="b">The second direction.</param>
+    /// <returns>The perpendicular vector, without normalization.</returns>
+    internal static Vector256<double> Cross(Vector256<double> a, Vector256<double> b) =>
+        Vector256.Create(a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0], 0d);
+
     /// <summary>Normalizes a finite, nondegenerate SIMD direction.</summary>
     /// <param name="value">The direction to normalize.</param>
     /// <param name="parameter">The argument name for validation failures.</param>

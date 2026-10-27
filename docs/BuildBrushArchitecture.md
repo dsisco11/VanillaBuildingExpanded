@@ -242,6 +242,21 @@ Invalidation distinguishes spatial geometry, visual changes and label raster/pla
 The positioning implementation uses its existing ID-based parts independently of
 these optional handle collections.
 
+[Frame sources](../VanillaBuildingExpanded/src/Gizmos/GizmoFrameSources.cs) adapt
+live position/axis readers, camera-facing planes or immutable captured frames.
+They validate dimension and basis without deriving movement axes from meshes.
+[Handle geometry](../VanillaBuildingExpanded/src/Gizmos/GizmoHandleGeometry.cs)
+publishes immutable draw snapshots containing complete appearance and shared
+double-precision spatial data. Its single-handle cache keys owner, context, logical
+frame, shape and size; color/style-only updates reuse spatial data. Clipped shapes
+publish no draw/pick snapshot. Disabled but visible handles retain drawing geometry.
+[Hit targets](../VanillaBuildingExpanded/src/Gizmos/GizmoHitTargets.cs) provide
+geometry-backed picking from the last published drawing context, explicit custom
+padding or delegate picking, and immutable owner-local aggregates. Shared validation
+rejects malformed or foreign identities, filters eligibility, deduplicates hits and
+orders them by priority, distance and ID. Hover feedback uses the existing owner
+reference; capture feedback acknowledges lifecycle state without acquiring capture.
+
 ### Native input and work-area transactions
 
 The [native input adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoInputAdapter.cs)
