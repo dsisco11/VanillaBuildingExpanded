@@ -23,6 +23,87 @@ public sealed class WorkAreaConfigFileCollection;
 public sealed class WorkAreaPersistenceTests
 {
     [Fact]
+    public void SharedResizeModeRoundTripsWithoutChangingAreaBoundsAndSkipsUnchangedSaves()
+    {
+        using var fixture = new Fixture();
+        using var persistence = fixture.Open();
+        var before = fixture.Controller.Areas.ToArray();
+        Assert.Equal(WorkAreaResizeMode.Expansion, fixture.Controller.ResizeMode);
+        fixture.Controller.SetResizeMode(WorkAreaResizeMode.Centered);
+        Assert.Single(fixture.Writes);
+        Assert.Equal(before, fixture.Controller.Areas);
+        Assert.Equal("centered", fixture.Read()["resizeMode"]!.Value<string>());
+        fixture.Controller.SetResizeMode(WorkAreaResizeMode.Centered);
+        Assert.Single(fixture.Writes);
+        var restored = new WorkAreaController();
+        using var reopened = fixture.Open(restored);
+        Assert.Equal(WorkAreaResizeMode.Centered, restored.ResizeMode);
+        restored.CreateArea("Another");
+        Assert.Equal(WorkAreaResizeMode.Centered, restored.ResizeMode);
+        restored.SetResizeMode(WorkAreaResizeMode.Expansion);
+        Assert.Equal("expansion", fixture.Read()["resizeMode"]!.Value<string>());
+    }
+
+    [Fact]
+    public void ExistingCollectionWithoutResizeModeDefaultsToExpansionWithoutRewriting()
+    {
+        using var fixture = new Fixture();
+        string original = fixture.Write(Config(("world-a", Pair(Endpoint(10, 65, 20), Endpoint(14, 67, 23)))));
+        fixture.Controller.SetResizeMode(WorkAreaResizeMode.Centered);
+        using var persistence = fixture.Open();
+        Assert.Equal(WorkAreaResizeMode.Expansion, fixture.Controller.ResizeMode);
+        Assert.Equal(new WorkAreaEndpoint(10, 65, 20, 0), fixture.Controller.State.Start);
+        Assert.Equal(original, File.ReadAllText(fixture.ConfigPath));
+        Assert.Empty(fixture.Writes);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("")]
+    public void InvalidSavedResizeModeIsReportedWithoutRewriting(string mode)
+    {
+        using var fixture = new Fixture();
+        var document = Config(("world-a", Pair(Endpoint(10, 65, 20), null)));
+        document["resizeMode"] = mode;
+        string original = fixture.Write(document);
+        using var persistence = fixture.Open();
+        Assert.Equal(WorkAreaResizeMode.Expansion, fixture.Controller.ResizeMode);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-load-failed", fixture.Errors);
+        Assert.Empty(fixture.Writes);
+        Assert.Equal(original, File.ReadAllText(fixture.ConfigPath));
+    }
+
+    [Fact]
+    public void FailedResizeModeSaveStaysDirtyAndRetriesExplicitly()
+    {
+        using var fixture = new Fixture();
+        using var persistence = fixture.Open();
+        fixture.FailWrites = true;
+        fixture.Controller.SetResizeMode(WorkAreaResizeMode.Centered);
+        Assert.True(persistence.IsDirty);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-save-failed", fixture.Errors);
+        fixture.FailWrites = false;
+        Assert.True(persistence.TrySave());
+        Assert.False(persistence.IsDirty);
+        Assert.Equal("centered", fixture.Read()["resizeMode"]!.Value<string>());
+    }
+
+    [Fact]
+    public void SharedResizeModeLoadsInAnotherWorldEvenWithoutASavedWorldEntry()
+    {
+        using var fixture = new Fixture();
+        using (var persistence = fixture.Open())
+            fixture.Controller.SetResizeMode(WorkAreaResizeMode.Centered);
+        fixture.WorldId = "world-b";
+        var restored = new WorkAreaController();
+        using var reopened = fixture.Open(restored);
+        Assert.Equal(WorkAreaResizeMode.Centered, restored.ResizeMode);
+        Assert.Null(restored.State.Start);
+        Assert.Single(restored.Areas);
+        Assert.Single(fixture.Writes);
+    }
+
+    [Fact]
     public void NamedAreas_RoundTripNamesIdsAndBoundsButNotSelectionOrVisibility()
     {
         using var fixture = new Fixture();
@@ -670,7 +751,8 @@ public sealed class WorkAreaPersistenceTests
         Assert.Single(fixture.Writes);
         Commit(fixture.Controller, true, new BlockPos(10, 65, 20, 0));
         Assert.Single(fixture.Writes);
-        Assert.Equal(new[] { "schemaVersion", "worlds" }, fixture.Read().Properties().Select(p => p.Name));
+        Assert.Equal(new[] { "schemaVersion", "worlds", "resizeMode" }, fixture.Read().Properties().Select(p => p.Name));
+        Assert.Equal("expansion", fixture.Read()["resizeMode"]!.Value<string>());
         Assert.False(persistence.IsDirty);
     }
 

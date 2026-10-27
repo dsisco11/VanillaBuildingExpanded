@@ -472,7 +472,7 @@ public sealed partial class BuildModeHudControlsTests
         Assert.Equal(1, unregistrations);
         hud.OnRenderGUI(0);
         Assert.Equal("Size: 5, 3, 4", WorkAreaSize(hud));
-        Assert.Equal(4, WorkAreaTable(hud).Bounds.ChildBounds.Count);
+        Assert.Equal(5, WorkAreaTable(hud).Bounds.ChildBounds.Count);
         workArea.RestoreEndpoints(new(10, 65, 20, 0), new(20, 68, 24, 0));
         hud.OnRenderGUI(0);
         Assert.Equal("Size: 11, 4, 5", WorkAreaSize(hud));
@@ -535,7 +535,7 @@ public sealed partial class BuildModeHudControlsTests
         using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
         var table = WorkAreaTable(hud);
-        Assert.Equal(4, table.Bounds.ChildBounds.Count);
+        Assert.Equal(5, table.Bounds.ChildBounds.Count);
         var selector = Assert.IsType<WorkAreaListBox>(table.GetElement("select"));
         Assert.Equal(workArea.SelectedId, selector.SelectedId);
         Assert.Equal(new[] { "Work area 1" }, selector.Areas.Select(area => area.Name));
@@ -721,6 +721,9 @@ public sealed partial class BuildModeHudControlsTests
             "vanillabuildingexpanded:build-info-workarea-unset" => "-",
             "vanillabuildingexpanded:build-info-workarea-empty" => "No work areas",
             "vanillabuildingexpanded:build-info-workarea-size" => "Size:",
+            "vanillabuildingexpanded:build-info-workarea-resize-mode" => string.Format("Resize: {0}", args),
+            "vanillabuildingexpanded:build-info-workarea-resize-expansion" => "Expansion",
+            "vanillabuildingexpanded:build-info-workarea-resize-centered" => "Centered",
             "vanillabuildingexpanded:build-info-workarea-size-x" => "X",
             "vanillabuildingexpanded:build-info-workarea-size-y" => "Y",
             "vanillabuildingexpanded:build-info-workarea-size-z" => "Z",

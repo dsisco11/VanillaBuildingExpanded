@@ -22,6 +22,7 @@ internal sealed class WorkAreaPersistence : IDisposable
     private readonly WorkAreaController controller;
     private readonly string? worldId;
     private JArray savedAreas = [];
+    private WorkAreaResizeMode savedResizeMode;
     private bool disposed;
 
     public bool IsDirty { get; private set; }
@@ -33,6 +34,7 @@ internal sealed class WorkAreaPersistence : IDisposable
         world = api.World;
         worldId = world.SavegameIdentifier;
         controller.ResetAreas();
+        controller.SetResizeMode(WorkAreaResizeMode.Expansion);
         if (string.IsNullOrWhiteSpace(worldId))
         {
             Report("workarea-persistence-no-world", "SavegameIdentifier is unavailable; this work area is memory-only.");
@@ -42,8 +44,10 @@ internal sealed class WorkAreaPersistence : IDisposable
             Load();
         }
         savedAreas = WriteAreas();
+        savedResizeMode = controller.ResizeMode;
         controller.EndpointsCommitted += OnAreasCommitted;
         controller.AreasCommitted += OnAreasCommitted;
+        controller.ResizeModeChanged += OnAreasCommitted;
     }
 
     public bool TrySave()
@@ -60,8 +64,10 @@ internal sealed class WorkAreaPersistence : IDisposable
             var entry = worlds[worldId] is JObject existing ? (JObject)existing.DeepClone() : new JObject();
             entry["areas"] = current;
             worlds[worldId] = entry;
+            document["resizeMode"] = controller.ResizeMode == WorkAreaResizeMode.Centered ? "centered" : "expansion";
             WriteDocument(document);
             savedAreas = current;
+            savedResizeMode = controller.ResizeMode;
             IsDirty = false;
             return true;
         }
@@ -81,6 +87,7 @@ internal sealed class WorkAreaPersistence : IDisposable
         if (disposed) return;
         controller.EndpointsCommitted -= OnAreasCommitted;
         controller.AreasCommitted -= OnAreasCommitted;
+        controller.ResizeModeChanged -= OnAreasCommitted;
         try
         {
             controller.CancelEndpointEdit();
@@ -91,7 +98,7 @@ internal sealed class WorkAreaPersistence : IDisposable
 
     private void OnAreasCommitted()
     {
-        IsDirty = !JToken.DeepEquals(WriteAreas(), savedAreas);
+        IsDirty = controller.ResizeMode != savedResizeMode || !JToken.DeepEquals(WriteAreas(), savedAreas);
         if (IsDirty) TrySave();
     }
 
@@ -100,6 +107,7 @@ internal sealed class WorkAreaPersistence : IDisposable
         try
         {
             var document = ReadDocument();
+            controller.SetResizeMode(ReadResizeMode(document));
             var worlds = (JObject)document["worlds"]!;
             if (!worlds.TryGetValue(worldId!, StringComparison.Ordinal, out var entry)) return;
             try
@@ -156,6 +164,21 @@ internal sealed class WorkAreaPersistence : IDisposable
         if (version == 1)
             return new JObject { ["schemaVersion"] = SchemaVersion, ["worlds"] = new JObject() };
         return (JObject)document.DeepClone();
+    }
+
+    /// <summary>Reads the shared policy, defaulting older collection documents to expansion.</summary>
+    /// <param name="document">The work-area configuration document.</param>
+    /// <returns>The supported shared numeric resize policy.</returns>
+    /// <exception cref="InvalidDataException">An explicit policy value is not supported.</exception>
+    private static WorkAreaResizeMode ReadResizeMode(JObject document)
+    {
+        if (!document.TryGetValue("resizeMode", out var value)) return WorkAreaResizeMode.Expansion;
+        if (value.Type == JTokenType.String)
+        {
+            if (value.Value<string>() == "expansion") return WorkAreaResizeMode.Expansion;
+            if (value.Value<string>() == "centered") return WorkAreaResizeMode.Centered;
+        }
+        throw new InvalidDataException("The shared resizeMode must be 'expansion' or 'centered'.");
     }
 
     private JArray WriteAreas()

@@ -18,6 +18,8 @@ internal sealed class WorkAreaController
     public Guid? SelectedId { get; private set; }
     public WorkAreaState State { get; private set; }
     public bool IsEditing => edit is not null;
+    /// <summary>Gets the numeric resize policy shared by all work areas.</summary>
+    public WorkAreaResizeMode ResizeMode { get; private set; } = WorkAreaResizeMode.Expansion;
     public (WorkAreaEndpoint? Start, WorkAreaEndpoint? End) CommittedEndpoints =>
         edit is { } baseline ? (baseline.Start, baseline.End) : (State.Start, State.End);
 
@@ -25,6 +27,21 @@ internal sealed class WorkAreaController
     public event Action<WorkAreaNotice>? NoticeRequested;
     public event Action? EndpointsCommitted;
     public event Action? AreasCommitted;
+    /// <summary>Notifies persistence when the shared numeric resize policy changes.</summary>
+    public event Action? ResizeModeChanged;
+
+    /// <summary>Changes the shared numeric resize policy without moving any endpoints.</summary>
+    /// <param name="mode">The policy applied to subsequent numeric dimension edits.</param>
+    /// <exception cref="ArgumentOutOfRangeException">The mode is not supported.</exception>
+    public void SetResizeMode(WorkAreaResizeMode mode)
+    {
+        if (mode is not (WorkAreaResizeMode.Expansion or WorkAreaResizeMode.Centered))
+            throw new ArgumentOutOfRangeException(nameof(mode));
+        if (ResizeMode == mode) return;
+        ResizeMode = mode;
+        Changed?.Invoke(State);
+        ResizeModeChanged?.Invoke();
+    }
 
     public WorkAreaController(string defaultName = "Work area 1")
     {
@@ -248,7 +265,10 @@ internal sealed class WorkAreaController
             // Round half-block ties toward the positive axis, including negative coordinates.
             return difference / 2 + (difference > 0 && difference % 2 != 0 ? 1 : 0);
         }
-        long x = Offset(bounds.SizeX, sizeX), y = Offset(bounds.SizeY, sizeY), z = Offset(bounds.SizeZ, sizeZ);
+        bool centered = ResizeMode == WorkAreaResizeMode.Centered;
+        long x = centered ? Offset(bounds.SizeX, sizeX) : 0;
+        long y = centered ? Offset(bounds.SizeY, sizeY) : 0;
+        long z = centered ? Offset(bounds.SizeZ, sizeZ) : 0;
         if (!bounds.MinCell.TryTranslate(x, y, z, accessor, out var min)
             || !bounds.MaxCell.TryTranslate(x + sizeX - bounds.SizeX, y + sizeY - bounds.SizeY,
                 z + sizeZ - bounds.SizeZ, accessor, out var max))

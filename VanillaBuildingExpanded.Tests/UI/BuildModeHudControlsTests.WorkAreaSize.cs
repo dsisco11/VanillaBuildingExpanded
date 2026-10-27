@@ -9,6 +9,47 @@ namespace VanillaBuildingExpanded.Tests.UI;
 
 public sealed partial class BuildModeHudControlsTests
 {
+    [Fact]
+    public void SharedResizeModeControlChangesPolicyWithoutResizingAndSurvivesReopening()
+    {
+        using var f = WorkAreaFixture();
+        var area = EditableWorkArea(f);
+        area.SetResizeMode(WorkAreaResizeMode.Expansion);
+        using var hud = new BuildModeHud(f.Api.Object, () => default, area);
+        hud.SetVisible(true);
+        int commits = 0;
+        area.EndpointsCommitted += () => commits++;
+        var min = area.State.Start;
+        FocusDimension(hud, f, "x").SetValue("7");
+        hud.OnKeyDown(new KeyEvent { KeyCode = (int)GlKeys.Enter });
+        Assert.Equal(min, area.State.Start);
+        Assert.Equal(-6, area.State.End!.Value.X);
+        Assert.Equal(1, commits);
+        var before = area.State;
+        var toggle = WorkAreaTable(hud).GetElement("resize-mode");
+        var e = WorkAreaMouse(f, toggle);
+        hud.OnMouseDown(e);
+        Assert.Equal(WorkAreaResizeMode.Expansion, area.ResizeMode);
+        hud.OnMouseUp(new MouseEvent(e.X, e.Y, EnumMouseButton.Left, 0));
+        Assert.Equal(WorkAreaResizeMode.Centered, area.ResizeMode);
+        Assert.Equal(before, area.State);
+        Assert.Equal(1, commits);
+        hud.OnRenderGUI(0);
+        FocusDimension(hud, f, "x").SetValue("9");
+        hud.OnKeyDown(new KeyEvent { KeyCode = (int)GlKeys.Enter });
+        Assert.Equal(-13, area.State.Start!.Value.X);
+        Assert.Equal(-5, area.State.End!.Value.X);
+        Assert.Equal(2, commits);
+        hud.SetVisible(false);
+        hud.SetVisible(true);
+        Assert.Equal(WorkAreaResizeMode.Centered, area.ResizeMode);
+        toggle = WorkAreaTable(hud).GetElement("resize-mode");
+        e = WorkAreaMouse(f, toggle);
+        hud.OnMouseDown(e);
+        hud.OnMouseUp(new MouseEvent(e.X, e.Y, EnumMouseButton.Left, 0));
+        Assert.Equal(WorkAreaResizeMode.Expansion, area.ResizeMode);
+    }
+
     [Theory]
     [InlineData("x", -14, 61, -32, -6, 67, -28)]
     [InlineData("y", -12, 60, -32, -8, 68, -28)]
@@ -373,6 +414,7 @@ public sealed partial class BuildModeHudControlsTests
         f.Api.Setup(a => a.World.BlockAccessor.IsValidPos(It.IsAny<BlockPos>())).Returns(true);
         f.Gui.Setup(g => g.RequestFocus(It.IsAny<GuiDialog>())).Callback<GuiDialog>(dialog => dialog.Focus());
         var area = ActiveWorkArea();
+        area.SetResizeMode(WorkAreaResizeMode.Centered);
         area.RestoreEndpoints(new(-12, 61, -32, 0), new(-8, 67, -28, 0));
         return area;
     }

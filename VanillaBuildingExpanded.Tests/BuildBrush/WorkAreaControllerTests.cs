@@ -17,6 +17,7 @@ public sealed class WorkAreaControllerTests
         int minX, int minY, int minZ, int maxX, int maxY, int maxZ)
     {
         var controller = new WorkAreaController();
+        controller.SetResizeMode(WorkAreaResizeMode.Centered);
         controller.SetContext(true, true);
         controller.RestoreEndpoints(new(-12, 62, -32, 2), new(-8, 66, -28, 2));
         int commits = 0;
@@ -53,10 +54,13 @@ public sealed class WorkAreaControllerTests
         Assert.Equal(0, commits);
     }
 
-    [Fact]
-    public void ResizeUsesCommittedBoundsNotPreviewAndTouchesOnlySelectedArea()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ResizeUsesCommittedBoundsNotPreviewAndTouchesOnlySelectedArea(bool centered)
     {
         var controller = new WorkAreaController();
+        controller.SetResizeMode(centered ? WorkAreaResizeMode.Centered : WorkAreaResizeMode.Expansion);
         controller.SetContext(true, true);
         controller.RestoreEndpoints(new(10, 60, 10, 0), new(14, 64, 14, 0));
         var first = controller.Areas[0];
@@ -66,22 +70,28 @@ public sealed class WorkAreaControllerTests
         Assert.True(controller.PreviewTranslation(100, 100, 100, Accessor()));
         Assert.True(controller.TryResize(7, 5, 5, Accessor()));
         Assert.False(controller.IsEditing);
-        Assert.Equal(new WorkAreaEndpoint(19, 70, 20, 2), controller.State.Start);
-        Assert.Equal(new WorkAreaEndpoint(25, 74, 24, 2), controller.State.End);
+        Assert.Equal(new WorkAreaEndpoint(centered ? 19 : 20, 70, 20, 2), controller.State.Start);
+        Assert.Equal(new WorkAreaEndpoint(centered ? 25 : 26, 74, 24, 2), controller.State.End);
         Assert.Equal(first, controller.Areas[0]);
     }
 
-    [Fact]
-    public void ResizeRejectsCoordinateOverflowAndWorldInvalidityWithoutClamping()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ResizeRejectsCoordinateOverflowAndWorldInvalidityWithoutClamping(bool centered)
     {
         var controller = new WorkAreaController();
+        var mode = centered ? WorkAreaResizeMode.Centered : WorkAreaResizeMode.Expansion;
+        controller.SetResizeMode(mode);
         controller.SetContext(true, true);
         foreach (var endpoint in new[] { new WorkAreaEndpoint(int.MaxValue, 0, 0, 0),
             new WorkAreaEndpoint(int.MinValue, 0, 0, 0), new WorkAreaEndpoint(0, 32767, 0, 0) })
         {
             controller.RestoreEndpoints(endpoint, endpoint);
             var before = controller.State;
-            Assert.False(controller.TryResize(3, 3, 3, Accessor()));
+            bool succeeds = mode == WorkAreaResizeMode.Expansion && endpoint.X == int.MinValue;
+            Assert.Equal(succeeds, controller.TryResize(3, 3, 3, Accessor()));
+            if (succeeds) continue;
             Assert.Equal(before, controller.State);
         }
         controller.RestoreEndpoints(new(10, 60, 10, 0), new(12, 62, 12, 0));
@@ -92,10 +102,13 @@ public sealed class WorkAreaControllerTests
         Assert.Equal(saved, controller.State);
     }
 
-    [Fact]
-    public void ResizeSupportsFullCoordinateSpansAndRequiresCompleteActiveBounds()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ResizeSupportsFullCoordinateSpansAndRequiresCompleteActiveBounds(bool centered)
     {
         var controller = new WorkAreaController();
+        controller.SetResizeMode(centered ? WorkAreaResizeMode.Centered : WorkAreaResizeMode.Expansion);
         controller.SetContext(true, true);
         Assert.False(controller.TryResize(1, 1, 1, Accessor()));
         controller.RestoreEndpoints(new(int.MinValue, 0, int.MinValue, 0),
@@ -106,6 +119,52 @@ public sealed class WorkAreaControllerTests
         Assert.Equal((4294967296L, 32768L, 4294967296L), (bounds.SizeX, bounds.SizeY, bounds.SizeZ));
         controller.SetContext(false, true);
         Assert.False(controller.TryResize(1, 1, 1, Accessor()));
+    }
+
+    [Theory]
+    [InlineData(7, 8, 9)]
+    [InlineData(2, 1, 3)]
+    public void DefaultExpansionAnchorsMinimumAndMovesMaximumWithOneCommit(long x, long y, long z)
+    {
+        var controller = new WorkAreaController();
+        Assert.Equal(WorkAreaResizeMode.Expansion, controller.ResizeMode);
+        controller.SetContext(true, true);
+        controller.RestoreEndpoints(new(-12, 62, -32, 2), new(-8, 66, -28, 2));
+        int commits = 0;
+        controller.EndpointsCommitted += () => commits++;
+        Assert.True(controller.TryResize(x, y, z, Accessor()));
+        Assert.Equal(new WorkAreaEndpoint(-12, 62, -32, 2), controller.State.Start);
+        Assert.Equal(new WorkAreaEndpoint((int)(-12 + x - 1), (int)(62 + y - 1),
+            (int)(-32 + z - 1), 2), controller.State.End);
+        Assert.Equal(1, commits);
+        Assert.True(controller.TryResize(x, y, z, Accessor()));
+        Assert.Equal(1, commits);
+    }
+
+    [Fact]
+    public void ResizeModeIsSharedAcrossAreasAndDoesNotMutateEndpointsOrSaveThem()
+    {
+        var controller = new WorkAreaController();
+        controller.SetContext(true, true);
+        controller.RestoreEndpoints(new(10, 60, 10, 0), new(14, 64, 14, 0));
+        var first = controller.Areas[0];
+        var second = controller.CreateArea("Other");
+        int settings = 0, endpoints = 0;
+        controller.ResizeModeChanged += () => settings++;
+        controller.EndpointsCommitted += () => endpoints++;
+        var before = controller.State;
+        controller.SetResizeMode(WorkAreaResizeMode.Centered);
+        controller.SetResizeMode(WorkAreaResizeMode.Centered);
+        Assert.Equal(before, controller.State);
+        Assert.Equal(first, controller.Areas[0]);
+        Assert.Equal(1, settings);
+        Assert.Equal(0, endpoints);
+        controller.SelectArea(first.Id);
+        Assert.Equal(WorkAreaResizeMode.Centered, controller.ResizeMode);
+        controller.SelectArea(second);
+        Assert.Equal(WorkAreaResizeMode.Centered, controller.ResizeMode);
+        Assert.Throws<ArgumentOutOfRangeException>(() => controller.SetResizeMode((WorkAreaResizeMode)42));
+        Assert.Equal(1, settings);
     }
 
     [Fact]

@@ -147,6 +147,16 @@ internal sealed partial class BuildModeHud
                     CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor])), "label")]);
             });
 
+            string resizeModeText = WorkAreaText("resize-mode",
+                WorkAreaText(workArea?.ResizeMode == WorkAreaResizeMode.Centered ? "resize-centered" : "resize-expansion"));
+            var resizeMode = new WorkAreaButton(capi, resizeModeText, () =>
+                workArea?.SetResizeMode(workArea.ResizeMode == WorkAreaResizeMode.Expansion
+                    ? WorkAreaResizeMode.Centered : WorkAreaResizeMode.Expansion))
+                { Enabled = workArea is not null };
+            resizeMode.Bounds.fixedWidth = Math.Max(140, Width(resizeModeText) + 24);
+            table.AddRowCells([new TableCell(resizeMode, "resize-mode", input: TableInput.Pointer,
+                cancelInput: resizeMode.CancelPress)]);
+
             var size = new GuiElementTable(capi, ElementBounds.Fixed(0, 0, 0, 0),
                 new TableOptions(columnGap: 6, verticalAlignment: EnumVerticalAlign.Middle));
             AddNestedRow(table, size, "size", () =>

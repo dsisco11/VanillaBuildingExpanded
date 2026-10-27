@@ -44,7 +44,9 @@ Shift + mouse wheel provides an additional orientation control using either Shif
 
 [BuildModeIndicatorBinding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) observes local controller mode transitions independently of preview eligibility. It lazily owns a [BuildModeHud](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs), the top-left information panel with the mod icon, snapping/rotation state and collapsible Room, Work area and Controls sections. The HUD takes native focus and captures keyboard/gameplay input only while a work area size field is being edited; otherwise it remains non-focusing. Only section toggles, actual work area control hits, outstanding captures and hover exit receive pointer routing while the cursor is free; passive text and panel space pass through unless a field edit is ending.
 
-The Work area section contains four rows: a compact area list, management buttons, visibility, and localized inclusive X/Y/Z numeric inputs (disabled dashes while incomplete). Native checkbox artwork is retained with activation deferred to valid captured release. The shared table input layer owns nested hit routing and cancellation; it does not route the entire panel through native dialog defaults. State changes queue HUD rebuilding until outside control dispatch. Collapse, hide, scale/locale changes, structural Room changes and disposal cancel HUD captures before composer retirement without changing world handles, endpoints or visibility preference. Unchecking Show work area cancels world manipulation and hides both handles and box.
+The Work area section contains five rows: a compact area list, management buttons,
+visibility, a shared resize-mode toggle, and localized inclusive X/Y/Z numeric inputs
+(disabled dashes while incomplete). Native checkbox artwork is retained with activation deferred to valid captured release. The shared table input layer owns nested hit routing and cancellation; it does not route the entire panel through native dialog defaults. State changes queue HUD rebuilding until outside control dispatch. Collapse, hide, scale/locale changes, structural Room changes and disposal cancel HUD captures before composer retirement without changing world handles, endpoints or visibility preference. Unchecking Show work area cancels world manipulation and hides both handles and box.
 
 [Dimension editing](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.WorkAreaSize.cs)
 owns native text focus independently of the table's per-release pointer cleanup.
@@ -57,9 +59,14 @@ first commits on blur. Successful size edits refresh the numeric values in place
 so clicking or tabbing between fields does not lose the incoming focus to a HUD
 rebuild. External state changes cancel the draft before rebuilding.
 
-The controller resizes committed bounds atomically around their center using
-inclusive Int64 sizes. Half-block parity ties round toward the positive axis,
-including at negative coordinates. Both candidate corners must pass coordinate,
+The controller resizes committed bounds atomically using inclusive Int64 sizes.
+The shared policy defaults to Expansion, anchoring the minimum corner and moving
+the maximum corner. Centered preserves the center, with half-block parity ties
+rounding toward the positive axis, including at negative coordinates. The HUD
+toggle changes policy without moving endpoints; it applies to numeric edits only,
+not gizmo dragging. Persistence stores the shared `resizeMode` at the collection
+document root, across worlds and named areas. Older schema-2 documents without
+the setting default to Expansion without being rewritten on load. Both candidate corners must pass coordinate,
 dimension and world validation before any state mutation or the single endpoint
 commit notification. No-op edits do not save; invalid sizes produce localized
 feedback. Metadata, other areas, selection and visibility are unchanged.

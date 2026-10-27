@@ -89,12 +89,16 @@ Drag either corner's center handle or RGB axis arrows with the free cursor or re
 
 Edit the **X**, **Y**, or **Z** size with positive whole-block numbers. Enter or
 leaving the field applies and saves that axis; Tab/Shift+Tab applies and moves
-between fields. Escape discards the draft. The area resizes around its center,
-leaving the other axes unchanged. Changing between odd and even sizes shifts the
-center half a block toward the positive axis; otherwise the center stays exact.
+between fields. Escape discards the draft. Click **Resize: Expansion / Centered**
+to switch the shared resize policy for all work areas. **Expansion** (default)
+keeps the minimum corner fixed and moves the maximum corner. **Centered** resizes
+around the center; changing between odd and even sizes shifts the center half a
+block toward the positive axis. The other axes remain unchanged. The setting is
+saved across sessions and worlds and does not change gizmo dragging.
 Invalid sizes or changes that would leave valid world coordinates are rejected
-with feedback, without changing either corner. Arrow buttons, Up/Down, and the
-mouse wheel adjust the draft in whole blocks (Shift: 10, Ctrl: 100). Typing captures
+with feedback, without changing either corner. Arrow buttons and Up/Down apply
+each step immediately while retaining focus; the mouse wheel adjusts the draft.
+All steps use whole blocks (Shift: 10, Ctrl: 100). Typing captures
 gameplay input only until the edit ends. Hiding/closing the HUD, losing its editing
 context, or rebuilding it for scale/locale changes discards an unfinished draft.
 
