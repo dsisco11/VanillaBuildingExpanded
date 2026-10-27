@@ -23,6 +23,66 @@ public sealed class RulerConfigFileCollection;
 public sealed class RulerPersistenceTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ProductionSession_RepeatedAdapterDragsWriteFinalCellsOnlyAndRetryDirtyBaseline(bool grabbed)
+    {
+        using var fixture = new Fixture();
+        fixture.Write(Config(("world-a", Pair(Endpoint(-30, 65, -200), Endpoint(30, 65, -200)))));
+        using var persistence = fixture.Open();
+        using var h = new RulerGizmoSessionTests.Harness(fixture.Api, fixture.World,
+            fixture.Accessor, fixture.Controller, grabbed);
+        h.Enable();
+        for (int i = 0; i < 8; i++)
+        {
+            h.Frame();
+            bool start = i % 2 == 0;
+            var instance = start ? h.Session.Start! : h.Session.End!;
+            h.Aim(instance.Value.Coordinates);
+            Assert.True(h.Down().Handled);
+            Assert.Same(instance, h.Session.Manager.CapturedGizmo);
+            var cell = new RulerEndpoint(start ? -60 - i : 60 + i, 65 + i, -200 - i, 0);
+            for (int preview = 0; preview < 5; preview++)
+            {
+                h.Target = cell with { Z = cell.Z - preview };
+                h.Frame();
+                Assert.Equal(i, fixture.Writes.Count);
+            }
+            Assert.True(h.Up().Handled);
+            Assert.Equal(i + 1, fixture.Writes.Count);
+            var record = fixture.Read()["worlds"]!["world-a"]![start ? "start" : "end"]!;
+            Assert.Equal(h.Target!.Value.X, record["x"]!.Value<int>());
+            Assert.Equal(h.Target.Value.Y, record["y"]!.Value<int>());
+            Assert.Equal(h.Target.Value.Z, record["z"]!.Value<int>());
+        }
+        fixture.FailWrites = true;
+        h.Frame();
+        h.Aim(h.Session.Start!.Value.Coordinates);
+        h.Down();
+        h.Target = new(-90, 75, -300, 0);
+        h.Frame();
+        h.Up();
+        Assert.True(persistence.IsDirty);
+        var committed = h.Ruler.State.Start;
+        fixture.FailWrites = false;
+        h.Frame();
+        h.Aim(h.Session.Start.Value.Coordinates);
+        h.Down();
+        h.Target = new(100, 80, -400, 0);
+        h.Frame();
+        h.Events.Raise(e => e.LeaveWorld += null!);
+        Assert.Equal(committed, h.Ruler.State.Start);
+        persistence.Dispose();
+        Assert.False(persistence.IsDirty);
+        Assert.Equal(committed!.Value.X, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
+        var restored = new RulerController();
+        using var reopened = fixture.Open(restored);
+        Assert.Equal(committed, restored.State.Start);
+        Assert.False(restored.State.ShowRuler);
+        Assert.False(restored.State.CanPick);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void GizmoValuePreviews_WriteNothingUntilOneCompletionAndNeverSaveCancellation(bool start)
@@ -256,7 +316,7 @@ public sealed class RulerPersistenceTests
         Assert.False(fresh.State.ShowRuler);
         Assert.False(fresh.State.IsBuildModeEnabled);
         Assert.False(fresh.State.IsPlayerAlive);
-        Assert.Equal(RulerPickMode.Idle, fresh.State.PickMode);
+        Assert.False(fresh.IsEditing);
         Assert.False(reopened.IsDirty);
         Assert.Empty(fixture.Errors);
         var record = Assert.IsType<JObject>(fixture.Read()["worlds"]!["world-a"]);
@@ -272,8 +332,7 @@ public sealed class RulerPersistenceTests
         using var persistence = fixture.Open();
         fixture.Controller.SetContext(true, true);
         fixture.Controller.SetVisibility(true);
-        fixture.Controller.TogglePicking(RulerPickMode.PickingStart);
-        fixture.Controller.CancelPicking();
+        fixture.Controller.CancelEndpointEdit();
         fixture.Controller.SetContext(false, false);
         Assert.Empty(fixture.Writes);
 
@@ -641,8 +700,12 @@ public sealed class RulerPersistenceTests
     private static void Commit(RulerController controller, bool start, BlockPos position)
     {
         controller.SetContext(true, true);
-        Assert.True(controller.TogglePicking(start ? RulerPickMode.PickingStart : RulerPickMode.PickingEnd));
-        Assert.True(controller.TrySelect(position, true));
+        var accessor = new Mock<IBlockAccessor>();
+        accessor.Setup(a => a.IsValidPos(It.IsAny<BlockPos>())).Returns(true);
+        var cell = new RulerEndpoint(position.X, position.Y, position.Z, position.dimension);
+        var opposite = start ? controller.State.End : controller.State.Start;
+        if (opposite?.Dimension != cell.Dimension) opposite = null;
+        Assert.True(controller.TrySetEndpoints(start ? cell : opposite, start ? opposite : cell, accessor.Object));
     }
 
     private static JObject Endpoint(int x, int y, int z, int dimension = 0) =>

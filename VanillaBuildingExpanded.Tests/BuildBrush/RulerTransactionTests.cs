@@ -121,8 +121,7 @@ public sealed class RulerTransactionTests
     [InlineData("mode")]
     [InlineData("death")]
     [InlineData("hidden")]
-    [InlineData("legacy")]
-    public void ContextOrLegacyPicker_CancelsWithoutCommittingPreview(string reason)
+    public void ContextLoss_CancelsWithoutCommittingPreview(string reason)
     {
         var controller = Controller();
         var baseline = controller.State;
@@ -133,7 +132,6 @@ public sealed class RulerTransactionTests
         if (reason == "mode") controller.SetContext(false, true);
         if (reason == "death") controller.SetContext(true, false);
         if (reason == "hidden") controller.SetVisibility(false);
-        if (reason == "legacy") controller.TogglePicking(RulerPickMode.PickingEnd);
         Assert.False(controller.IsEditing);
         Assert.Equal((baseline.Start, baseline.End), (controller.State.Start, controller.State.End));
         Assert.Equal(0, commits);

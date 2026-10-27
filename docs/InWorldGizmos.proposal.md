@@ -31,7 +31,7 @@ The ruler remains client-only. Gizmos are controls, not blocks, inventory items 
 
 - [Ruler state](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs) stores copied block coordinates with explicit local Y and dimension. Inclusive bounds and selected Start/End identity must remain intact.
 - [Ruler controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs) currently exposes one-shot picking commands. It needs direct endpoint editing and preview/commit/cancel operations instead of forcing a drag through that state machine.
-- [Ruler input](../VanillaBuildingExpanded/src/BuildBrush/RulerInput.cs) currently owns pick gestures. Replace that path for the ruler; do not layer a second independently capturing mouse adapter over it.
+- [Ruler session](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoSession.cs) replaces the former one-shot ruler input owner. Retain one path for the ruler; do not layer a second independently capturing mouse adapter over it.
 - [Ruler HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.Ruler.cs) currently owns Set Start/Set end buttons. Their removal is an explicitly approved UI change for this replacement.
 - [Client system](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushSystem_Client.cs) owns the world session and routes ruler input before brush placement. Retain one explicit composition/ownership path.
 - [Ruler rendering](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderBinding.cs) already separates wireframe eligibility from HUD composition. Keep the measurement box independent of gizmo handle rendering.

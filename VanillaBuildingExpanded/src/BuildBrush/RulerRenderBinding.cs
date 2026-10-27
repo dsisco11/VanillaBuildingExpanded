@@ -13,17 +13,21 @@ internal sealed class RulerRenderBinding : IDisposable
     private readonly IClientWorldAccessor world;
     private readonly RulerController ruler;
     private readonly RulerRenderer renderer;
+    private readonly System.Func<bool>? deferMembership;
     private RulerBounds? bounds;
     private bool registered;
     private bool mismatched;
     private bool failed;
     private bool disposed;
+    private bool queued;
 
-    public RulerRenderBinding(ICoreClientAPI api, RulerController ruler, IRulerRenderState? renderState = null)
+    public RulerRenderBinding(ICoreClientAPI api, RulerController ruler, IRulerRenderState? renderState = null,
+        System.Func<bool>? deferMembership = null)
     {
         this.api = api;
         world = api.World;
         this.ruler = ruler;
+        this.deferMembership = deferMembership;
         renderer = new RulerRenderer(api, GetEligibleBounds, OnFailure, renderState);
         ruler.Changed += OnChanged;
         api.Event.PlayerDimensionChanged += OnDimensionChanged;
@@ -57,6 +61,7 @@ internal sealed class RulerRenderBinding : IDisposable
         mismatched = mismatch;
         bool eligible = GetEligibleBounds() is not null;
         if (eligible == registered) return;
+        if (InRenderCallback) { QueueMembership(); return; }
         try
         {
             if (eligible)
@@ -72,10 +77,24 @@ internal sealed class RulerRenderBinding : IDisposable
         }
     }
 
+    private bool InRenderCallback => renderer.IsInCallback || deferMembership?.Invoke() == true;
+
+    private void QueueMembership()
+    {
+        if (queued) return;
+        queued = true;
+        api.Event.EnqueueMainThreadTask(() =>
+        {
+            queued = false;
+            if (disposed) Release();
+            else Refresh();
+        }, "vbe-ruler-render-membership");
+    }
+
     private void OnDimensionChanged(IPlayer player)
     {
         if (disposed || player != world.Player) return;
-        ruler.CancelPicking();
+        ruler.CancelEndpointEdit();
         Refresh();
     }
 
@@ -112,6 +131,12 @@ internal sealed class RulerRenderBinding : IDisposable
         ruler.Changed -= OnChanged;
         api.Event.PlayerDimensionChanged -= OnDimensionChanged;
         bounds = null;
+        if (InRenderCallback) QueueMembership();
+        else Release();
+    }
+
+    private void Release()
+    {
         try { Unregister(); }
         finally { renderer.Dispose(); }
     }

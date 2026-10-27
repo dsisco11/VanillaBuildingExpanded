@@ -426,6 +426,7 @@ public sealed class GizmoInputAdapterTests
         public int Attempts, Cancels;
         public GizmoPointer? LastPointer;
         public bool IsPending => Pending;
+        public void Offer() { }
         public void Create(GizmoPointer pointer) { Attempts++; LastPointer = pointer; }
         public void Cancel(bool explicitlyCanceled) { Pending = false; ExplicitlyCanceled = explicitlyCanceled; Cancels++; }
     }

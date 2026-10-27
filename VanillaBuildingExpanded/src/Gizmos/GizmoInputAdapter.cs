@@ -15,6 +15,7 @@ internal interface IGizmoCreationInput
     bool IsPending { get; }
     void Create(GizmoPointer pointer);
     void Cancel(bool explicitlyCanceled);
+    void Offer();
 }
 
 /// <summary>Session input ownership; the owner routes world actions here before placement.</summary>
@@ -68,7 +69,7 @@ internal sealed class GizmoInputAdapter : IDisposable
     private bool DialogOwnsInput => api.Gui.OpenedGuis.Any(gui =>
         gui.DialogType == EnumDialogType.Dialog || gui.CaptureAllInputs() || gui.CaptureRawMouse());
 
-    private bool Eligible => !failed && focused && !manager.IsDisposed && enabled()
+    private bool Eligible => !failed && focused && !manager.IsDisposed && renderer.IsAvailable && enabled()
         && ReferenceEquals(api.World, world) && world.Player?.Entity?.Alive == true
         && !api.IsGamePaused && !DialogOwnsInput;
 
@@ -132,6 +133,8 @@ internal sealed class GizmoInputAdapter : IDisposable
             if (!manager.IsDisposed) manager.InvalidateFrame();
             return false;
         }
+        if (eligible && !modeChanged && !api.Input.MouseButton.Left && !api.Input.MouseButton.Right)
+            creation?.Offer();
         return eligible && !modeChanged;
     }
 

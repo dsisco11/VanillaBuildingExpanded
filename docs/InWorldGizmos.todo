@@ -72,7 +72,7 @@ All groups inherit the complete [proposal](./InWorldGizmos.proposal.md), especia
 | --- | --- | --- |
 | Existing ownership and lifecycle | [Client system](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushSystem_Client.cs), Event_PlayerJoin/Event_LeaveWorld/RefreshRulerContext/InWorldAction; [architecture](./BuildBrushArchitecture.md), Build-mode HUD and Client-only ruler | Join restores endpoints before rendering/HUD use; context refresh runs on mode changes and a 50-ms tick before brush early-outs. One world-session composition owns input/render/config; new input must remain ahead of TryPlaceBlock. Cancel a preview before any dirty-exit retry or world identity loss. No brush/server ownership changes. |
 | State and durable edits | [RulerState](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs), [controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs), [persistence](../VanillaBuildingExpanded/src/BuildBrush/RulerPersistence.cs) | Copied local-Y cells and explicit dimension, wide inclusive bounds, native LoadModConfig/StoreModConfig schema 1 keyed by exact SavegameIdentifier. EndpointsCommitted is the durable boundary. Existing TrySelect clears an opposite-dimension endpoint: do not reuse that behavior for direct drag/creation. Dispose currently saves controller state, so preview rollback must precede it. |
-| Existing input and HUD priority | [RulerInput](../VanillaBuildingExpanded/src/BuildBrush/RulerInput.cs), [HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs), [Ruler HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.Ruler.cs), [table input](../VanillaBuildingExpanded/src/UI/GuiElementTable.Input.cs) | Reuse the complete-gesture/late-action suppression concept, not its mouse-grabbed-only eligibility or one-shot state. HUD is nonfocusing, controls activate on captured release and text is passive. WantsPointerEvents also includes hover-exit delivery: it is not an exact new-press hit predicate. Removing buttons is Phase 6 work. |
+| Existing input and HUD priority | Former RulerInput (removed at Phase 6 cutover; successor [session](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoSession.cs)), [HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs), [Ruler HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.Ruler.cs), [table input](../VanillaBuildingExpanded/src/UI/GuiElementTable.Input.cs) | Reuse the complete-gesture/late-action suppression concept, not its mouse-grabbed-only eligibility or one-shot state. HUD is nonfocusing, controls activate on captured release and text is passive. WantsPointerEvents also includes hover-exit delivery: it is not an exact new-press hit predicate. Removing buttons is Phase 6 work. |
 | Rendering and reuse | [render binding](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderBinding.cs), [renderer](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderer.cs), [render state](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderState.cs), production project references | Box remains independently depth-tested at Opaque order 0.51. Existing camera-relative matrix, native wireframe shader, reusable line meshes, native OpenTK state snapshots and deferred failure retirement are precedents. No existing Gizmo, picking-ray or Mat4d.Invert implementation was found in production C# by the qualification search. |
 | Native projection, targeting, input and render qualification | Installed assemblies and API sources catalogued below | Concrete facilities and ordering were inspected directly. Numerical and lifecycle decisions below turn these into testable consumer contracts without claiming future native integration has run. |
 
@@ -586,42 +586,113 @@ fully satisfied with no unresolved required findings. Later phases and live gate
 Prerequisites: Phases 2-5, with Phase 1 qualification gates satisfied.
 Outcome: The complete replacement is wired locally through one input/renderer/session ownership path.
 
-    ☐ Bind the client ruler session to one positioning gizmo per existing endpoint, including partial rulers.
-        ☐ Synchronize via Value and OnValueChanged with equality/echo handling; distinguish owner sync from transaction previews without silent setters.
-        ☐ Connect begin/preview/complete/cancel to the verified controller transactions, not the old picking state machine.
-        ☐ Display both endpoint markers/arrows with distinguishable icons and role offsets; add no selection/cycle UI.
-        ☐ Keep the box dependent on two valid endpoints, while a partial ruler still has its existing handle.
-    ☐ Implement first-use and missing-endpoint creation.
-        ☐ Checking Show ruler with no endpoints requests one explicit world click, valid through either pointer mode to rendered terrain up to the camera far plane without a player-reach cap; use the same range for missing-endpoint creation.
-        ☐ Create both endpoints on that cell, showing Start at offset zero and End at offset one; consume the whole gesture without also beginning a drag.
-        ☐ Invalid targets retain pending creation with feedback; restored partial rulers preserve the existing endpoint and create only the missing one.
-        ☐ Apply the qualified creation/handle precedence and retire pending creation safely when its context disappears.
-        ☐ In another dimension, preserve/hide saved endpoints without automatic overwrite from travel or checkbox toggles; add no relocation workflow.
-    ☐ Switch production input ownership atomically from the old ruler adapter to the manager adapter.
-        ☐ Preserve routing ahead of brush placement; detach the old adapter before registering the new one.
-        ☐ Remove obsolete one-shot modes, commands, button adapters and now-unused notices/references after migrating consumers/tests.
-        ☐ Retain only genuinely shared gesture/native-focus infrastructure; leave no second capture path or temporary compatibility shim.
-    ☐ Update the Ruler HUD to exactly Show ruler and Size.
-        ☐ Remove Set Start/Set end without adding a replacement edit button or status/action row.
-        ☐ Preserve localized size, incomplete dashes, free-cursor checkbox behavior, passive text and Room/Controls behavior.
-        ☐ Show ruler controls both eligible box and handles; hiding cancels active manipulation/creation without saving a preview.
-        ☐ HUD collapse/recomposition/scale/locale changes do not reset world handles or issue duplicate endpoint commands.
-    ☐ Complete session/context/resource integration.
-        ☐ Preserve mode/alive/world/dimension eligibility, session visibility preference and join defaults; loaded endpoints do not enable mode/visibility.
-        ☐ Cancel/roll back before mode/death/focus/dialog/dimension/departure cleanup or dirty-exit persistence.
-        ☐ Balance original-stage render registration, detach observers and dispose instances/shared resources idempotently; queued callbacks cannot touch retired worlds.
-        ☐ Surface input/render failure, cancel edits safely and prevent invisible handles from remaining interactive; sizes and persistence remain usable.
-        ☐ Make no server/network/brush placement-state, world-block/entity or inventory changes.
-    ☐ Add actual composition-path integration/regression tests.
-        ☐ Repeatedly move Start and End through adapter/manager/binding/controller, verifying resulting cells, live size/box updates and committed config values.
-        ☐ Cover cancel/retry, crossing/negative/same-cell/corner-boundary cases, partial/restored creation and both pointer modes.
-        ☐ Cover deterministic intersecting/projected hits without claiming all overlaps are eliminated by offsets.
-        ☐ Cover HUD priority/rebuilds, hidden/failed gizmos, lifecycle transitions, leave/rejoin and repeated disposal without stale captures/resources or prior-world leakage.
+    ☑ Bind the client ruler session to one positioning gizmo per existing endpoint, including partial rulers.
+        ☑ Synchronize via Value and OnValueChanged with equality/echo handling; distinguish owner sync from transaction previews without silent setters.
+        ☑ Connect begin/preview/complete/cancel to the verified controller transactions, not the old picking state machine.
+        ☑ Display both endpoint markers/arrows with distinguishable icons and role offsets; add no selection/cycle UI.
+        ☑ Keep the box dependent on two valid endpoints, while a partial ruler still has its existing handle.
+    ☑ Implement first-use and missing-endpoint creation.
+        ☑ Checking Show ruler with no endpoints requests one explicit world click, valid through either pointer mode to rendered terrain up to the camera far plane without a player-reach cap; use the same range for missing-endpoint creation.
+        ☑ Create both endpoints on that cell, showing Start at offset zero and End at offset one; consume the whole gesture without also beginning a drag.
+        ☑ Invalid targets retain pending creation with feedback; restored partial rulers preserve the existing endpoint and create only the missing one.
+        ☑ Apply the qualified creation/handle precedence and retire pending creation safely when its context disappears.
+        ☑ In another dimension, preserve/hide saved endpoints without automatic overwrite from travel or checkbox toggles; add no relocation workflow.
+    ☑ Switch production input ownership atomically from the old ruler adapter to the manager adapter.
+        ☑ Preserve routing ahead of brush placement; detach the old adapter before registering the new one.
+        ☑ Remove obsolete one-shot modes, commands, button adapters and now-unused notices/references after migrating consumers/tests.
+        ☑ Retain only genuinely shared gesture/native-focus infrastructure; leave no second capture path or temporary compatibility shim.
+    ☑ Update the Ruler HUD to exactly Show ruler and Size.
+        ☑ Remove Set Start/Set end without adding a replacement edit button or status/action row.
+        ☑ Preserve localized size, incomplete dashes, free-cursor checkbox behavior, passive text and Room/Controls behavior.
+        ☑ Show ruler controls both eligible box and handles; hiding cancels active manipulation/creation without saving a preview.
+        ☑ HUD collapse/recomposition/scale/locale changes do not reset world handles or issue duplicate endpoint commands.
+    ☑ Complete session/context/resource integration.
+        ☑ Preserve mode/alive/world/dimension eligibility, session visibility preference and join defaults; loaded endpoints do not enable mode/visibility.
+        ☑ Cancel/roll back before mode/death/focus/dialog/dimension/departure cleanup or dirty-exit persistence.
+        ☑ Balance original-stage render registration, detach observers and dispose instances/shared resources idempotently; queued callbacks cannot touch retired worlds.
+        ☑ Surface input/render failure, cancel edits safely and prevent invisible handles from remaining interactive; sizes and persistence remain usable.
+        ☑ Make no server/network/brush placement-state, world-block/entity or inventory changes.
+    ☑ Add actual composition-path integration/regression tests.
+        ☑ Repeatedly move Start and End through adapter/manager/binding/controller, verifying resulting cells, live size/box updates and committed config values.
+        ☑ Cover cancel/retry, crossing/negative/same-cell/corner-boundary cases, partial/restored creation and both pointer modes.
+        ☑ Cover deterministic intersecting/projected hits without claiming all overlaps are eliminated by offsets.
+        ☑ Cover HUD priority/rebuilds, hidden/failed gizmos, lifecycle transitions, leave/rejoin and repeated disposal without stale captures/resources or prior-world leakage.
 
 Completion criteria:
 
-    ☐ Production uses one new interaction route, the two-row panel, and repeatable endpoint manipulation with exact value/save results.
-    ☐ Old ruler picking/button infrastructure is removed; existing endpoint files and unrelated brush/UI behavior remain compatible.
+    ☑ Production uses one new interaction route, the two-row panel, and repeatable endpoint manipulation with exact value/save results.
+    ☑ Old ruler picking/button infrastructure is removed; existing endpoint files and unrelated brush/UI behavior remain compatible.
+
+### Phase 6 implementation and evidence
+
+Controlling sources: complete proposal (input/dragging, ruler integration/transactions,
+creation, visibility/lifecycle, panel and verification), inherited Phase 1 native
+qualification/numerical/creation contracts, and Phases 2-5 lifecycle/input/transaction
+contracts. Current controller, state, persistence, HUD/table, box rendering and client
+system links supply integration context. Historical RulerInput was removed at cutover;
+its original inspection record does not authorize retaining a compatibility route.
+
+Traceability:
+- Endpoint binding -> proposal typed-value/transaction/corner contracts ->
+  RulerGizmoSession owns one manager and input/render adapters, one PositionGizmo per
+  valid existing endpoint, circle/diamond markers and shared RGB arrows. Value owner
+  sync and preview notifications use the same notifying setter with equality/echo
+  guards. External replacement/context loss cancels before synchronization; completion
+  alone calls the durable boundary. RulerGizmoCoordinates supplies role offsets/grid
+  validation; the independent box binding observes live size/bounds, including crossing.
+- Terrain/creation -> proposal first use/partial ruler and Phase 1 finite-ray/filter
+  qualification -> RulerTerrainTarget supplies both center and creation with fresh native
+  near/far RayTraceForSelection outputs, meta/interactable/nonself filters, unchanged
+  liquid policy, explicit native-Y conversion, loaded-chunk and projected clip checks.
+  The public renderMetaBlocks setting reads the same native setting qualified in Phase 1.
+  No cached native selection, reach limit, face offset, loading or world mutation.
+  Input Offer runs only with eligible camera context and released physical buttons.
+  One click commits empty pairs or only the missing endpoint; existing handle hits win.
+  Invalid attempts notify and remain pending; explicit cancellation latches until
+  off/on visibility or mode re-enable; other-dimension endpoints never auto-relocate.
+- Atomic route/panel -> proposal approved cutover -> BuildBrushSystem_Client replaces
+  RulerInput with RulerGizmoSession ahead of TryPlaceBlock. Old modes/commands/button
+  class/notices and old adapter/tests are removed, with consumers migrated to direct
+  transactions. HUD has exactly Show ruler and localized Size (incomplete dashes).
+  Existing checkbox release capture, passive text, Room/Controls and rebuild behavior
+  remain shared table/HUD responsibilities.
+- Lifecycle/failure -> proposal session ownership and Phase 1 callback contract ->
+  session eligibility, input per-event/frame guards, renderer availability gating,
+  cancellation-before-departure/persistence, native focus-list detachment and idempotent
+  disposal. Box membership/GPU retirement also defer during either its own draw or
+  gizmo callbacks, so render-time preview rollback cannot mutate the native live list.
+  Recognized failures log/notify and remove hit eligibility without disabling sizes/config.
+  Architecture describes the active replacement; proposal links follow the new owner.
+- Composition evidence -> proposal verification -> RulerGizmoSessionTests runs native
+  service carriers through actual session/renderer/input/manager/binding/controller:
+  repeated Start/End drags in both pointer modes, exact previews/commit counts,
+  inclusive live sizes and actual box shader extents/camera-relative translations
+  during each preview/completion and after cancellation,
+  cancel/retry and contextual retirement, negative/crossing/same-cell/End-Y-boundary
+  anchors, deterministic projected overlaps, axis grab-offset snapping, terrain filters,
+  unloaded/entity/clip rejection, actual client pre-brush action routing, failures and
+  callback-safe retirement. RulerPersistenceTests routes repeated full-session drags
+  into native config staging/promotion, proves zero preview writes and final-cell
+  fidelity, dirty rollback/exit retry and restart defaults. HUD tests exercise actual
+  session priority/rebuild capture preservation plus exact two-row localization/layout.
+
+Second review checked these mappings against production ownership, synchronous callback
+ordering, persistence boundaries and cleanup. It found and corrected the tightly coupled
+box live-render-list mutation risk during Opaque gizmo rollback; regression cases cover
+both contextual cancellation and disposal during callbacks.
+Verification subagent rebuilt and ran 394 focused Release tests, all passed with zero
+failed/skipped (filter Ruler|Gizmos|BuildModeHudControlsTests|TableInputTests), explicitly
+including the new callback-retirement and cancel/retry regressions. Normal
+.\build.ps1 --target=Build passed including ValidateJson; git diff --check passed.
+Existing nullable/analyzer warnings and CakeBuild Pkcs 10.0.12 advisories remain
+unrelated. Independent audit found one composition-evidence gap (explicit live
+size/box assertions); the repeated-drag and cancel/retry tests now draw the actual
+registered box and check each size, extent and translation independently from the
+endpoint cells. Fresh verification rebuilt the tests and again passed all 394 with
+zero failed/skipped; diff check remained clean. Independent affected-requirement recheck
+directly inspected the strengthened tests and production dependencies and resolved the
+sole evidence gap, retaining the full audit's other satisfied findings. Final verdict:
+Phase 6 fully satisfied, no unresolved required findings. No Phase 7 live evidence is claimed.
 
 ## Phase 7: Qualify delivery and update documentation
 

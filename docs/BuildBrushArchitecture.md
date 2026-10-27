@@ -18,9 +18,9 @@ BuildBrush resolves placement intent locally and applies native block rules on b
 | [Preview dimension](../VanillaBuildingExpanded/src/BuildBrush/BrushDimension.cs) | Owns preview contents and native chunk synchronization. |
 | [Preview entity](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushEntity.cs) and [renderer](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushEntityRenderer.cs) | Publish/render watched validity, ownership, bounds and dirty state with mini-dimension contents. Local entity association checks the owner UID; rendering uses the local camera's real player context. |
 | [HUD binding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) and [HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs) | Observe enabled mode independently of brush eligibility and lazily own the non-focusing information panel. The [Ruler partial](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.Ruler.cs) observes shared ruler state and issues commands without owning coordinates, config or GPU resources. |
-| [Ruler state](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs) and [controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs) | Own immutable copied endpoints with local Y/dimension, inclusive wide-integer bounds, visibility preference, direct endpoint transactions and the existing one-shot pick commands until cutover. Coordinate validation is shared with the world-facing adapters. |
+| [Ruler state](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs) and [controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs) | Own immutable copied endpoints with local Y/dimension, inclusive wide-integer bounds, visibility preference and direct endpoint transactions. Coordinate validation is shared with the world-facing adapters. |
 | [Ruler persistence](../VanillaBuildingExpanded/src/BuildBrush/RulerPersistence.cs) | Uses native mod-config APIs for versioned per-savegame endpoints, validates without requiring loaded blocks, preserves unrelated entries and retries dirty edits. |
-| [Ruler input](../VanillaBuildingExpanded/src/BuildBrush/RulerInput.cs) | Owns complete physical mouse gestures while picking, copies the native selection, suppresses both world-action families before brush placement, and retires input ownership on focus loss or teardown. |
+| [Ruler gizmo session](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoSession.cs) | Owns one manager/render/input composition, per-endpoint positioning controls, controller transaction binding and explicit missing-endpoint creation. [Terrain targeting](../VanillaBuildingExpanded/src/BuildBrush/RulerTerrainTarget.cs) raycasts the finite visual near/far segment without changing native selection or loading terrain. |
 | [Ruler render binding](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderBinding.cs) | Observes state and local dimension/session eligibility, balances opaque-stage registration, reports mismatch/render failure, and owns one renderer per session. |
 | [Ruler renderer](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderer.cs) and [render state](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderState.cs) | Reuse one 12-edge mesh with the native wireframe shader, compute double-precision camera-relative drawing and restore the active shader and captured depth/line state without mutating blend state. |
 
@@ -30,7 +30,7 @@ Brush/controller decisions require no player proxy. Real `IPlayer`, `IClientPlay
 
 The local mode toggle uses the rebindable backtick key. Mode transitions refresh or clear local placement before immediately publishing the sequenced brush packet, including when there is no target. Sessions start disabled; death and respawn clear mode. The server refreshes the held source before applying incoming orientation.
 
-Brush controls require enabled mode and an eligible held block. Rotation additionally requires orientation support; snapping and held face offset can be adjusted without a target. Suspended or disabled brushes leave ordinary input handling intact; armed ruler picking is an independent exception while mode is enabled. Exit and suspension clear held face offset while preserving snapping preferences. Supported brush placement owns its native validation failures so a failed brush attempt cannot fall through to an unrelated vanilla placement.
+Brush controls require enabled mode and an eligible held block. Rotation additionally requires orientation support; snapping and held face offset can be adjusted without a target. Suspended or disabled brushes leave ordinary input handling intact; ruler manipulation/creation is an independent exception while mode is enabled. Exit and suspension clear held face offset while preserving snapping preferences. Supported brush placement owns its native validation failures so a failed brush attempt cannot fall through to an unrelated vanilla placement.
 
 Each successful local rotation, by hotkey or mouse wheel, plays the native GUI button hover sound (`menubutton`) non-positionally through the client world audio API. Rejected rotations and preview refreshes do not play it.
 
@@ -44,17 +44,17 @@ Shift + mouse wheel provides an additional orientation control using either Shif
 
 [BuildModeIndicatorBinding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) observes local controller mode transitions independently of preview eligibility. It lazily owns a [BuildModeHud](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs), the top-left information panel with the mod icon, snapping/rotation state and collapsible Room, Ruler and Controls sections. The HUD never takes keyboard focus or grabs the cursor. Only section toggles, actual ruler control hits, outstanding captures and hover exit receive pointer routing while the cursor is free; passive text and panel space pass through.
 
-The Ruler section contains exactly three rows: checkbox, paired endpoint buttons, and localized inclusive X/Y/Z size text (dashes while incomplete). Native checkbox/toggle artwork is retained with activation deferred to valid captured release. The shared table input layer owns nested hit routing and cancellation; it does not route the entire panel through native dialog defaults. State changes queue HUD rebuilding until outside control dispatch. Collapse, hide, scale/locale changes, structural Room changes and disposal cancel captures before composer retirement without changing endpoints or wireframe preference.
+The Ruler section contains exactly two rows: Show ruler and localized inclusive X/Y/Z size text (dashes while incomplete). Native checkbox artwork is retained with activation deferred to valid captured release. The shared table input layer owns nested hit routing and cancellation; it does not route the entire panel through native dialog defaults. State changes queue HUD rebuilding until outside control dispatch. Collapse, hide, scale/locale changes, structural Room changes and disposal cancel HUD captures before composer retirement without changing world handles, endpoints or visibility preference. Unchecking Show ruler cancels world manipulation and hides both handles and box.
 
-Death and join reset mode and hide the panel. World departure and system disposal detach the binding and release its dialog, scale watcher and composer textures. A new session starts hidden. An empty slot, unsupported item or absent target does not hide an enabled-mode panel or prevent ruler picking.
+Death and join reset mode and hide the panel. World departure and system disposal detach the binding and release its dialog, scale watcher and composer textures. A new session starts hidden. An empty slot, unsupported item or absent target does not hide an enabled-mode panel or prevent ruler interaction.
 
 ## Client-only ruler
 
 Reusable [gizmo instances and typed values](../VanillaBuildingExpanded/src/Gizmos/Gizmo.cs),
 [shared context/ray/hit carriers](../VanillaBuildingExpanded/src/Gizmos/GizmoContext.cs)
 and a [session manager](../VanillaBuildingExpanded/src/Gizmos/GizmoManager.cs) are available
-as inactive foundations for the [in-world gizmo plan](InWorldGizmos.todo).
-They do not register native input/render callbacks or replace any ruler path yet.
+implement the [in-world gizmo plan](InWorldGizmos.todo).
+The ruler session owns their native input/render adapters independently of HUD composition.
 The manager owns its remaining instances on disposal; removing an instance cancels and
 detaches it without disposing it. Changed `Value` assignments notify synchronously using
 default equality; immutable values are expected. Owners cancel an active edit before
@@ -72,14 +72,15 @@ value and requests a reasoned notice. [Camera snapshots](../VanillaBuildingExpan
 copy perspective matrices, project/unproject the actual cursor or integer reticle center,
 and retain local-Y dimension identity. [Shared geometry](../VanillaBuildingExpanded/src/Gizmos/PositionGizmoGeometry.cs)
 drives both line meshes and hit shapes, with clipped parts omitted from both paths.
-[The inactive render adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs)
+[The render adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs)
 publishes camera context at Opaque 0.49 and draws overlays at AfterBlit 0.49, sharing
 arrow/circle/diamond meshes and the ruler's extracted native line-state restoration.
 It restores shader/depth/write/line state without changing blending, invalidates hits
 immediately on failure/retirement, and defers callback-requested renderer membership and
-GPU teardown outside native live-list iteration. No client composition activates it yet.
+GPU teardown outside native live-list iteration. The session activates it for checked,
+enabled/living contexts, including pending creation with zero instances.
 
-The [inactive native input adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoInputAdapter.cs)
+The [native input adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoInputAdapter.cs)
 uses the renderer's perspective updates for drag previews and last drawn context for
 button hits/final release. Its session eligibility callback covers owner mode/visibility;
 native checks additionally guard focus, dialogs, player life, world/dimension, camera/pointer
@@ -88,11 +89,10 @@ unhandled for native aiming. Exact BuildModeHud/table control reservation exclud
 passive text and stale hover-exit requests. Per-button ownership suppresses both native
 action families, including late callbacks; hidden releases cancel and owned world-button
 fields are explicitly cleared. Right/Escape cancel and session teardown detaches observers.
-The eventual owner must call Refresh on eligibility changes even without rendering and
-route HandleWorldAction before brush placement. Pending creation has an owner seam, not
-implemented ruler/terrain policy. Tests exercise actual adapter/manager routing with native
-carriers and modeled downstream gates; they are not live-game qualification.
-Native activation and HUD cutover remain in later phases.
+The session calls Refresh on eligibility changes even without rendering and the client
+routes HandleWorldAction before brush placement. Tests exercise actual session, adapter,
+manager and controller routing with native carriers and modeled downstream gates; they
+are not live-game qualification.
 
 Direct ruler edits have explicit begin/preview/complete/cancel boundaries. The controller
 snapshots both endpoints, previews only the selected Start/End without swapping roles,
@@ -107,23 +107,25 @@ retry during a preview. Completion requests the durable save; a clean unchanged
 completion causes no write. Cancellation precedes both client departure teardown and
 standalone persistence disposal/dirty retries, so canceled previews cannot be saved.
 
-On local join, the client system creates a fresh ruler controller, restores endpoints through persistence, then creates the render binding. Visibility remains unchecked and mode disabled. The input adapter is created lazily once enabled and alive, independent of brush placement eligibility. The 50-ms client tick refreshes context before brush early-outs; mode transitions refresh it immediately.
+On local join, the client system creates a fresh ruler controller, restores endpoints through persistence, then creates the box render binding. Visibility remains unchecked and mode disabled. The gizmo session is created lazily once enabled and alive, independent of brush placement eligibility. The 50-ms client tick refreshes context before brush early-outs; mode transitions refresh it immediately.
 
-Picking observes the original player's `BlockSelection`, not the resolved brush target or its snap/face offset, and uses normal selection reach. It rejects sky/entity targets and pauses capture for dialogs/free cursor. Per-button ownership survives successful selection returning the picker to Idle, suppressing hold/repeat/release actions in both native action families; right-click cancellation precedes `TryPlaceBlock`. The installed 1.22.7 public event API lacks a focus callback, so the adapter uses the native client world's focus-listener list and explicitly detaches it. Collapsing the section has no state effect. Dimension events cancel picking even with no visible HUD.
+Both free cursor and mouse-look reticle support center and axis drags; reticle motion remains available for native aiming. The terrain resolver uses the captured visual near/far ray through the camera far plane without a player-reach cap. It retains native meta-block/interactable-entity filters and liquid policy, rejects foreground entities, sky, unloaded chunks and outside-clip hits, and copies the selected cell without brush offsets. It never refreshes native selection or loads terrain. Per-button ownership suppresses hold/repeat/release actions in both native action families, including after completion; Right/Escape cancel before placement. The installed 1.22.7 public event API lacks a focus callback, so the adapter uses the native client world's focus-listener list and explicitly detaches it.
 
-Endpoints retain start/end identity and explicit local Y/dimension. Derived sizes use `max - min + 1` in wide integers; rendering spans minimum cell through maximum cell plus one. Opposite-dimension endpoint selection atomically clears the incompatible endpoint, commits the resulting partial ruler, and requests a notice. It does not construct cross-dimension bounds.
+Endpoints retain Start/End identity and explicit local Y/dimension. Each existing endpoint, even in a partial ruler, has a positioning control: Start circle at cell+(0,0,0), End diamond at cell+(1,1,1), both with RGB arrows. The binding uses notifying Value assignments and controller transactions, distinguishes owner synchronization from previews, and cancels before authoritative replacement. Axis edits snap whole-block deltas from the initial anchor; center edits follow terrain. Derived sizes use `max - min + 1` in wide integers; rendering spans minimum cell through maximum cell plus one.
 
-Persistence uses `LoadModConfig`/`StoreModConfig` in `vanillabuildingexpanded-rulers.json`, schema version 1, keyed by the exact `World.SavegameIdentifier`. It saves only endpoint commits, not visibility/picking/context changes. Saves reread and merge the document, preserving unrelated worlds/metadata. Reads reject unsupported or unreadable documents without replacing them with defaults, and isolate invalid current-world records. A successful explicit edit can replace that invalid entry. The native writer truncates its destination, so a native-config staging write is promoted only after success, with targeted staging-file cleanup. Failed writes leave the edit dirty and notify; the next explicit edit or orderly disposal retries while the captured world identity is available. Missing identity is memory-only with feedback. Only endpoints persist; no ruler state is synchronized to the server.
+Checking Show ruler with no endpoints offers one explicit world click that creates both on that cell and consumes the entire gesture. A partial ruler retains its existing handle; only a handle miss can create the missing endpoint. Invalid targets notify and remain pending. Right/Escape cancel creation until off/on visibility or explicit mode re-enable; contextual losses can reoffer only with eligible camera context and released mouse buttons. Retained other-dimension endpoints hide without automatic overwrite or relocation. The box still needs two valid same-dimension endpoints.
 
-The render binding requires enabled/alive context, checked visibility, two valid same-dimension endpoints, a matching live player dimension, and the same available client world. It registers at most one renderer in `Opaque` and unregisters at that same stage when eligibility is lost. Endpoint edits and GUI rebuilds do not recreate or duplicate the renderer. Mode off/death hide and cancel while retaining endpoints and preference. Leaving a dimension hides the old ruler, retains size and notifies once per mismatch transition; returning restores eligible visibility unless a new endpoint relocated the ruler.
+Persistence uses `LoadModConfig`/`StoreModConfig` in `vanillabuildingexpanded-rulers.json`, schema version 1, keyed by the exact `World.SavegameIdentifier`. It saves only endpoint commits, not visibility/context changes. Saves reread and merge the document, preserving unrelated worlds/metadata. Reads reject unsupported or unreadable documents without replacing them with defaults, and isolate invalid current-world records. A successful explicit edit can replace that invalid entry. The native writer truncates its destination, so a native-config staging write is promoted only after success, with targeted staging-file cleanup. Failed writes leave the edit dirty and notify; the next explicit edit or orderly disposal retries while the captured world identity is available. Missing identity is memory-only with feedback. Only endpoints persist; no ruler state is synchronized to the server.
+
+The box render binding requires enabled/alive context, checked visibility, two valid same-dimension endpoints, a matching live player dimension, and the same available client world. It registers at most one renderer in `Opaque` and unregisters at that same stage when eligibility is lost. Endpoint edits and GUI rebuilds do not recreate or duplicate the renderer. Mode off/death hide and cancel while retaining endpoints and preference. Leaving a dimension hides the old ruler, retains size and notifies once per mismatch transition; returning restores eligible visibility.
 
 The renderer uploads one unit cube lazily, using two `LineMeshUtil` loops plus four connectors for exactly 12 unique edges. Frames do not rebuild geometry, sample blocks or cull by endpoint distance/`RenderRange`. Stored bounds stay local-Y; the drawing adapter encodes the dimension only to match native `CameraPos`, subtracting camera coordinates in double precision before float matrix conversion. Drawing uses order 0.51 after opaque terrain, depth testing with depth writes disabled, and a 0.002-block outward expansion. Zero vertex flags avoid wind and extra Z-offset beyond the native shader's built-in 0.0014 clip-W bias. None of these adjustments change measured bounds.
 
 The installed engine's OpenTK binding supplies depth-test/depth-mask/line-width snapshots because the public render API exposes setters only. Nested cleanup restores those values and the prior active shader even if drawing fails. Blend state, including indexed MRT settings, is untouched. Recognized native GL/setup failures are logged and surfaced once as an unavailable wireframe for the session, while sizes and controls remain usable. Unregistration is deferred out of the callback because native render-stage iteration indexes its live renderer list, including post-callback profiling.
 
-World departure/system disposal detach input and render observers, unregister/dispose the renderer and mesh, cancel pending picking, retry dirty config before clearing controller ownership, and dispose the HUD binding. Late queued failure retirement checks disposal before touching the retired session. Repeated hide/show and teardown are idempotent.
+World departure/system disposal cancel previews/creation, detach input and render observers, unregister/dispose renderers and shared meshes, retry dirty config before clearing controller ownership, and dispose the HUD binding. Late queued retirement checks disposal before touching the retired session. Repeated hide/show and teardown are idempotent.
 
-Automated registration/matrix/cleanup tests and normal publish checks are distinct from supported-game qualification. The user waived the remaining formal live checks after an informal visual review; native input, restart/world isolation, terrain/transparent-material depth behavior, bias stability and preview/native-selection overlap remain unverified, not passed, in [Phase 6](BuildModeRuler.todo). The inspected runtime is 1.22.7; mocked services do not establish those live results.
+Automated registration/matrix/cleanup tests and normal publish checks are distinct from supported-game qualification. The earlier ruler-only live-check waiver does not waive the replacement's required [Phase 7](InWorldGizmos.todo) qualification. Native input, restart/world isolation, terrain/transparent-material depth behavior, bias stability and preview/native-selection overlap remain unverified, not passed. The inspected runtime is 1.22.7; mocked services do not establish those live results.
 
 ## Selection and inventory refresh
 

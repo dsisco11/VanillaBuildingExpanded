@@ -65,24 +65,6 @@ internal sealed partial class BuildModeHud
                     CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize).WithColor([.. UiPalette.LabelColor])), "label")]);
             });
 
-            var buttons = new GuiElementTable(capi, ElementBounds.Fixed(0, 0, 0, 0),
-                new TableOptions(columnGap: 8, verticalAlignment: EnumVerticalAlign.Middle));
-            AddNestedRow(table, buttons, "endpoints", () =>
-            {
-                RulerButton Button(string key, RulerPickMode mode) => new(capi, RulerText(key),
-                    ElementBounds.Fixed(0, 0, Width(RulerText(key)) + 24, height + 12),
-                    () => ruler?.TogglePicking(mode), () => ruler?.State.PickMode == mode)
-                {
-                    On = ruler?.State.PickMode == mode
-                };
-                var start = Button("start", RulerPickMode.PickingStart);
-                var end = Button("end", RulerPickMode.PickingEnd);
-                buttons.AddRowCells([
-                    new TableCell(start, "start", input: TableInput.Pointer, cancelInput: start.CancelPress),
-                    new TableCell(end, "end", input: TableInput.Pointer, cancelInput: end.CancelPress)
-                ]);
-            });
-
             string size = RulerSize();
             table.AddRowCells([new TableCell(new GuiElementStaticText(capi, size, EnumTextOrientation.Left,
                 ElementBounds.Fixed(0, 0, Width(size), height),
@@ -149,41 +131,4 @@ internal sealed partial class BuildModeHud
         }
     }
 
-    private sealed class RulerButton : GuiElementToggleButton
-    {
-        private bool pressed;
-        private readonly System.Func<bool> isArmed;
-        public override bool Focusable => false;
-
-        public RulerButton(ICoreClientAPI api, string text, ElementBounds bounds, Action click, System.Func<bool> isArmed)
-            : base(api, null, text, CairoFont.WhiteSmallText().WithFontSize(UiPalette.TextFontSize)
-                .WithColor([.. UiPalette.ValueColor]), _ => click(), bounds, true)
-        {
-            this.isArmed = isArmed;
-        }
-
-        public void CancelPress() => pressed = false;
-
-        public override void OnMouseDown(ICoreClientAPI api, MouseEvent e)
-        {
-            if (e.Handled || api.Input.MouseGrabbed || e.Button != EnumMouseButton.Left
-                || !IsPositionInside(e.X, e.Y)) return;
-            pressed = true;
-            e.Handled = true;
-        }
-
-        public override void OnMouseUp(ICoreClientAPI api, MouseEvent e)
-        {
-            if (e.Button != EnumMouseButton.Left) return;
-            bool activate = pressed && !e.Handled && !api.Input.MouseGrabbed && IsPositionInside(e.X, e.Y);
-            bool owned = pressed;
-            CancelPress();
-            if (activate)
-            {
-                base.OnMouseDownOnElement(api, e);
-                On = isArmed();
-            }
-            if (owned) e.Handled = true;
-        }
-    }
 }

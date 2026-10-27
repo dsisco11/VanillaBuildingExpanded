@@ -5,22 +5,10 @@ using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-internal enum RulerPickMode
-{
-    Idle,
-    PickingStart,
-    PickingEnd
-}
-
 internal enum RulerEndpointRole { Start, End }
 
 internal enum RulerNotice
 {
-    SelectStart,
-    SelectEnd,
-    AimAtBlock,
-    SetOtherEndpoint,
-    SetBothEndpoints,
     InvalidEndpoint
 }
 
@@ -61,7 +49,6 @@ internal readonly record struct RulerBounds
 internal readonly record struct RulerState(
     RulerEndpoint? Start,
     RulerEndpoint? End,
-    RulerPickMode PickMode,
     bool ShowRuler,
     bool IsBuildModeEnabled,
     bool IsPlayerAlive)

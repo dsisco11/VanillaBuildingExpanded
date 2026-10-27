@@ -28,7 +28,7 @@ public class BuildBrushSystem_Client : ModSystem
     private BuildBrushWheelInput? wheelInput;
     private RulerController? ruler;
     private RulerPersistence? rulerPersistence;
-    private RulerInput? rulerInput;
+    private RulerGizmoSession? rulerGizmos;
     private RulerRenderBinding? rulerRendering;
     private IInventory? subscribedHotbar;
     private long fastTickId;
@@ -175,7 +175,8 @@ public class BuildBrushSystem_Client : ModSystem
             ruler = new RulerController();
             rulerPersistence = new RulerPersistence(api!, ruler);
             ruler.NoticeRequested += OnRulerNotice;
-            rulerRendering = new RulerRenderBinding(api!, ruler);
+            rulerRendering = new RulerRenderBinding(api!, ruler,
+                deferMembership: () => rulerGizmos?.Renderer.IsInCallback == true);
         }
         if (subscribedHotbar is not null)
             subscribedHotbar.SlotModified -= Event_HotbarSlotModified;
@@ -203,13 +204,12 @@ public class BuildBrushSystem_Client : ModSystem
     private void Event_LeaveWorld()
     {
         ruler?.CancelEndpointEdit();
-        rulerInput?.Dispose();
-        rulerInput = null;
+        rulerGizmos?.Dispose();
         rulerRendering?.Dispose();
+        rulerGizmos = null;
         rulerRendering = null;
         if (ruler is not null)
         {
-            ruler.CancelPicking();
             ruler.NoticeRequested -= OnRulerNotice;
         }
         rulerPersistence?.Dispose();
@@ -525,7 +525,7 @@ public class BuildBrushSystem_Client : ModSystem
     /// <summary>Routes right-click input through brush placement while preserving default handling otherwise.</summary>
     private void InWorldAction(EnumEntityAction action, bool on, ref EnumHandling handling)
     {
-        rulerInput?.HandleWorldAction(action, on, ref handling);
+        rulerGizmos?.HandleWorldAction(action, on, ref handling);
         if (handling != EnumHandling.PassThrough)
             return;
         if (action == EnumEntityAction.InWorldRightMouseDown && on)
@@ -537,29 +537,24 @@ public class BuildBrushSystem_Client : ModSystem
     private void RefreshRulerContext()
     {
         if (ruler is null || controller is null) return;
-        rulerInput?.ReconcileButtons();
         bool enabled = controller.State.IsActive;
         bool alive = enabled && Player?.Entity?.Alive == true;
         ruler.SetContext(enabled, alive);
         rulerRendering?.Refresh();
-        if (enabled && alive && rulerInput is null)
+        if (enabled && alive && rulerGizmos is null)
         {
             // The public event API has no window-focus hook in 1.22.7.
             if (World is not ClientMain game)
                 throw new NotSupportedException("Ruler input requires the supported native client world's focus events.");
-            rulerInput = new RulerInput(api!, ruler, game.eventManager.OnGameWindowFocus);
+            rulerGizmos = new RulerGizmoSession(api!, ruler, game.eventManager.OnGameWindowFocus);
         }
+        rulerGizmos?.Refresh();
     }
 
     private void OnRulerNotice(RulerNotice notice)
     {
         string key = notice switch
         {
-            RulerNotice.SelectStart => "ruler-select-start",
-            RulerNotice.SelectEnd => "ruler-select-end",
-            RulerNotice.AimAtBlock => "ruler-aim-at-block",
-            RulerNotice.SetOtherEndpoint => "ruler-set-other-endpoint",
-            RulerNotice.SetBothEndpoints => "ruler-set-both-endpoints",
             RulerNotice.InvalidEndpoint => "ruler-invalid-endpoint",
             _ => throw new ArgumentOutOfRangeException(nameof(notice), notice, null)
         };

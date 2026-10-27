@@ -28,6 +28,8 @@ internal sealed class GizmoRenderAdapter : IRenderer
     private int callbackDepth;
     private bool drawing;
     public GizmoContext? Context => drawnContext;
+    public bool IsAvailable => !failed && !disposed;
+    internal bool IsInCallback => callbackDepth != 0;
     public double RenderOrder => 0.49;
     public int RenderRange => int.MaxValue;
     public event Action<GizmoContext>? ContextReady;

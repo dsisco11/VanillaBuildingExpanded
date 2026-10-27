@@ -17,6 +17,7 @@ internal sealed class RulerRenderer : IRenderer
     private MeshRef? mesh;
     private bool failed;
     private bool disposed;
+    internal bool IsInCallback { get; private set; }
 
     public double RenderOrder => 0.51;
     public int RenderRange => int.MaxValue;
@@ -33,6 +34,7 @@ internal sealed class RulerRenderer : IRenderer
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
     {
         if (disposed || failed || stage != EnumRenderStage.Opaque || getBounds() is not { } bounds) return;
+        IsInCallback = true;
         try
         {
             var shader = api.Shader.GetProgram((int)EnumShaderProgram.Wireframe);
@@ -51,6 +53,7 @@ internal sealed class RulerRenderer : IRenderer
             failed = true;
             onFailure(error);
         }
+        finally { IsInCallback = false; }
     }
 
     private void Draw(IShaderProgram shader)

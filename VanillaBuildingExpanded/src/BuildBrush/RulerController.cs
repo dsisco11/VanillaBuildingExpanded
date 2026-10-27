@@ -1,7 +1,6 @@
 using System;
 
 using Vintagestory.API.Common;
-using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
@@ -23,7 +22,7 @@ internal sealed class RulerController
         if (start is { } first && end is { } second && first.Dimension != second.Dimension)
             throw new ArgumentException("Saved ruler endpoints must belong to the same dimension.", nameof(end));
         if (State.Start != start || State.End != end) CancelEndpointEdit();
-        SetState(State with { Start = start, End = end, PickMode = RulerPickMode.Idle });
+        SetState(State with { Start = start, End = end });
     }
 
     public bool BeginEndpointEdit(RulerEndpointRole role)
@@ -32,7 +31,6 @@ internal sealed class RulerController
         if (edit is not null || !State.CanPick
             || (role == RulerEndpointRole.Start ? State.Start : State.End) is null) return false;
         edit = new(role, State.Start, State.End);
-        SetState(State with { PickMode = RulerPickMode.Idle });
         return IsEditing;
     }
 
@@ -81,7 +79,7 @@ internal sealed class RulerController
             || (start is { } a && end is { } b && a.Dimension != b.Dimension))
             return RejectEndpoint();
         CancelEndpointEdit();
-        SetState(State with { Start = start, End = end, PickMode = RulerPickMode.Idle });
+        SetState(State with { Start = start, End = end });
         EndpointsCommitted?.Invoke();
         return true;
     }
@@ -104,8 +102,7 @@ internal sealed class RulerController
         SetState(State with
         {
             IsBuildModeEnabled = buildModeEnabled,
-            IsPlayerAlive = playerAlive,
-            PickMode = buildModeEnabled && playerAlive ? State.PickMode : RulerPickMode.Idle
+            IsPlayerAlive = playerAlive
         });
     }
 
@@ -114,58 +111,6 @@ internal sealed class RulerController
         if (!visible) CancelEndpointEdit();
         if (State.ShowRuler == visible) return;
         SetState(State with { ShowRuler = visible });
-        if (visible && State.Bounds is null)
-            NoticeRequested?.Invoke(RulerNotice.SetBothEndpoints);
-    }
-
-    public bool TogglePicking(RulerPickMode mode)
-    {
-        if (mode is not (RulerPickMode.PickingStart or RulerPickMode.PickingEnd))
-            throw new ArgumentOutOfRangeException(nameof(mode), mode, "Choose a start or end endpoint.");
-        if (!State.CanPick) return false;
-        CancelEndpointEdit();
-        var next = State.PickMode == mode ? RulerPickMode.Idle : mode;
-        SetState(State with { PickMode = next });
-        if (next != RulerPickMode.Idle)
-            NoticeRequested?.Invoke(next == RulerPickMode.PickingStart
-                ? RulerNotice.SelectStart : RulerNotice.SelectEnd);
-        return true;
-    }
-
-    public void CancelPicking() => SetState(State with { PickMode = RulerPickMode.Idle });
-
-    /// <summary>The world-facing caller validates coordinates without requiring loaded blocks or chunks.</summary>
-    public bool TrySelect(BlockPos? position, bool isValidPosition)
-    {
-        if (!State.CanPick || State.PickMode == RulerPickMode.Idle) return false;
-        if (position is null || !isValidPosition)
-        {
-            NoticeRequested?.Invoke(RulerNotice.AimAtBlock);
-            return false;
-        }
-
-        var endpoint = new RulerEndpoint(position.X, position.Y, position.Z, position.dimension);
-        var start = State.Start;
-        var end = State.End;
-        bool resetOpposite;
-        if (State.PickMode == RulerPickMode.PickingStart)
-        {
-            start = endpoint;
-            resetOpposite = end is { } other && other.Dimension != endpoint.Dimension;
-            if (resetOpposite) end = null;
-        }
-        else
-        {
-            end = endpoint;
-            resetOpposite = start is { } other && other.Dimension != endpoint.Dimension;
-            if (resetOpposite) start = null;
-        }
-
-        SetState(State with { Start = start, End = end, PickMode = RulerPickMode.Idle });
-        EndpointsCommitted?.Invoke();
-        if (resetOpposite)
-            NoticeRequested?.Invoke(RulerNotice.SetOtherEndpoint);
-        return true;
     }
 
     private void SetState(RulerState next)
