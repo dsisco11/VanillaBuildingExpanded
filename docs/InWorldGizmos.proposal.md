@@ -32,9 +32,9 @@ Decision update (2026-10-27): analytic center translation replaces terrain-follo
 ## Current integration points
 
 - [Ruler state](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs) stores copied block coordinates with explicit local Y and dimension. Start always represents the per-axis minimum cell and End the per-axis maximum cell of the inclusive bounds.
-- [Ruler controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs) currently exposes one-shot picking commands. It needs direct endpoint editing and preview/commit/cancel operations instead of forcing a drag through that state machine.
+- [Ruler controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs) exposes direct endpoint editing and preview/commit/cancel transactions.
 - [Ruler session](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoSession.cs) replaces the former one-shot ruler input owner. Retain one path for the ruler; do not layer a second independently capturing mouse adapter over it.
-- [Ruler HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.Ruler.cs) currently owns Set Start/Set end buttons. Their removal is an explicitly approved UI change for this replacement.
+- [Ruler HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.Ruler.cs) shows only Show ruler and Size, following the approved removal of endpoint buttons.
 - [Client system](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushSystem_Client.cs) owns the world session and routes ruler input before brush placement. Retain one explicit composition/ownership path.
 - [Ruler rendering](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderBinding.cs) already separates wireframe eligibility from HUD composition. Keep the measurement box independent of gizmo handle rendering.
 - [Persistence](../VanillaBuildingExpanded/src/BuildBrush/RulerPersistence.cs) saves endpoint commits through native mod-config APIs. Drag previews must not produce config writes every frame.

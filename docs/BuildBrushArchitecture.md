@@ -20,7 +20,7 @@ BuildBrush resolves placement intent locally and applies native block rules on b
 | [HUD binding](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeIndicatorBinding.cs) and [HUD](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.cs) | Observe enabled mode independently of brush eligibility and lazily own the non-focusing information panel. The [Ruler partial](../VanillaBuildingExpanded/src/BuildBrush/Hud/BuildModeHud.Ruler.cs) observes shared ruler state and issues commands without owning coordinates, config or GPU resources. |
 | [Ruler state](../VanillaBuildingExpanded/src/BuildBrush/RulerState.cs) and [controller](../VanillaBuildingExpanded/src/BuildBrush/RulerController.cs) | Own immutable copied endpoints with local Y/dimension, inclusive wide-integer bounds, visibility preference and direct endpoint transactions. Coordinate validation is shared with the world-facing adapters. |
 | [Ruler persistence](../VanillaBuildingExpanded/src/BuildBrush/RulerPersistence.cs) | Uses native mod-config APIs for versioned per-savegame endpoints, validates without requiring loaded blocks, preserves unrelated entries and retries dirty edits. |
-| [Ruler gizmo session](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoSession.cs) | Owns one manager/render/input composition, per-endpoint positioning controls, controller transaction binding and explicit missing-endpoint creation. [Terrain targeting](../VanillaBuildingExpanded/src/BuildBrush/RulerTerrainTarget.cs) raycasts the finite visual near/far segment without changing native selection or loading terrain. |
+| [Ruler gizmo session](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoSession.cs) | Owns one manager/render/input composition, per-endpoint positioning controls, controller transaction binding and explicit missing-endpoint creation. Creation-only [terrain targeting](../VanillaBuildingExpanded/src/BuildBrush/RulerTerrainTarget.cs) raycasts the finite visual near/far segment without changing native selection or loading terrain; handle movement never invokes it. |
 | [Ruler render binding](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderBinding.cs) | Observes state and local dimension/session eligibility, balances opaque-stage registration, reports mismatch/render failure, and owns one renderer per session. |
 | [Ruler renderer](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderer.cs) and [render state](../VanillaBuildingExpanded/src/BuildBrush/RulerRenderState.cs) | Reuse one 12-edge mesh with the native wireframe shader, compute double-precision camera-relative drawing and restore the active shader and captured depth/line state without mutating blend state. |
 
@@ -50,7 +50,7 @@ Death and join reset mode and hide the panel. World departure and system disposa
 
 ## Client-only ruler
 
-Planned movement replacement: [Phase 7](InWorldGizmos.todo#phase-7-replace-terrain-following-movement-with-analytic-translation) replaces terrain-following center dragging with analytic translation across a camera-facing plane captured at drag start, retaining existing analytic arrows and whole-block ruler snapping. Terrain targeting will remain only for explicit first-use/missing-endpoint creation. This is not implemented yet; the implementation description below records the current behavior until that phase is complete.
+The [analytic movement replacement](InWorldGizmos.todo#phase-7-replace-terrain-following-movement-with-analytic-translation) uses a camera-facing plane captured at drag start, retaining analytic arrows and whole-block ruler snapping. Terrain targeting serves only explicit first-use/missing-endpoint creation. Automated/build evidence and outstanding live qualification are recorded separately in the plan.
 
 Reusable [gizmo instances and typed values](../VanillaBuildingExpanded/src/Gizmos/Gizmo.cs),
 [shared context/ray/hit carriers](../VanillaBuildingExpanded/src/Gizmos/GizmoContext.cs)
@@ -68,10 +68,23 @@ ray using built-in `Vector256<double>` SIMD coordinates in `(X, Y, Z, 0)` lanes,
 preserving double precision without a custom vector type.
 
 [PositionGizmo](../VanillaBuildingExpanded/src/Gizmos/PositionGizmo.cs) supplies continuous
-SIMD double positions, fixed-plane axis dragging, center-target resolution and a nullable
+SIMD double positions, fixed-plane axis and camera-plane center dragging, and a nullable
 owner constraint hook before publishing values. Rejected motion retains the last valid
-value and requests a reasoned notice. [Camera snapshots](../VanillaBuildingExpanded/src/Gizmos/GizmoCamera.cs)
+value and requests one reasoned notice per uninterrupted invalid interval until recovery.
+Center capture fixes the original anchor, camera view normal and initial ray/plane
+intersection. Updates add the difference between current and initial intersections to
+that anchor, preserving off-center grab offsets even during camera motion and owner
+echoes. This moves within the initial view plane; arrows provide independent depth
+adjustment. No movement path queries terrain, entities, native selection or destination
+callbacks. Starts without a usable camera/forward intersection are rejected; parallel
+or behind-ray updates retain the last valid value. Both plane calculations reject
+absolute ray/normal dot products <=0.01, intersection distances beyond
+10000*max(1,initial eye-anchor distance), and nonfinite results. Accepted center
+steps are limited to max(64,8*initial distance), measured from the last accepted
+unsnapped intersection; axes retain the same scalar step limit.
+[Camera snapshots](../VanillaBuildingExpanded/src/Gizmos/GizmoCamera.cs)
 copy perspective matrices, project/unproject the actual cursor or integer reticle center,
+derive the camera view direction from the inverse view (not an off-center cursor ray),
 and retain local-Y dimension identity. [Shared geometry](../VanillaBuildingExpanded/src/Gizmos/PositionGizmoGeometry.cs)
 drives both line meshes and hit shapes, with clipped parts omitted from both paths.
 [The render adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs)
@@ -101,8 +114,11 @@ snapshots both endpoints, calculates previews against the original opposite endp
 then normalizes Start/End to the per-axis minimum/maximum cells even during crossing,
 and restores the pair on cancellation. Differing authoritative restoration cancels first;
 identical echoes leave the edit active. [Role conversion and constraints](../VanillaBuildingExpanded/src/BuildBrush/RulerGizmoCoordinates.cs)
-use double SIMD coordinates with offsets Start=(0,0,0), End=(1,1,1); axis deltas round
-AwayFromZero before being added to the initial anchor. Decode/validation applies to
+use double SIMD coordinates with offsets Start=(0,0,0), End=(1,1,1). Center deltas
+round all three world components AwayFromZero from the initial anchor; axes round
+only the selected component and preserve the other two. Neither snapped previews nor
+normalized role anchors replace the unsnapped interaction baseline. World-grid rounding
+can put the published center slightly off the continuous plane. Decode/validation applies to
 the cell with its explicit dimension, including End anchors at local Y32768.
 State remains the live presentation; CommittedEndpoints supplies the baseline during
 an active edit. Persistence reads only committed endpoints, even on an explicit dirty
@@ -112,9 +128,9 @@ standalone persistence disposal/dirty retries, so canceled previews cannot be sa
 
 On local join, the client system creates a fresh ruler controller, restores endpoints through persistence, then creates the box render binding. Visibility remains unchecked and mode disabled. The gizmo session is created lazily once enabled and alive, independent of brush placement eligibility. The 50-ms client tick refreshes context before brush early-outs; mode transitions refresh it immediately.
 
-Both free cursor and mouse-look reticle support center and axis drags; reticle motion remains available for native aiming. The terrain resolver uses the captured visual near/far ray through the camera far plane without a player-reach cap. It retains native meta-block/interactable-entity filters and liquid policy, rejects foreground entities, sky, unloaded chunks and outside-clip hits, and copies the selected cell without brush offsets. It never refreshes native selection or loads terrain. Per-button ownership suppresses hold/repeat/release actions in both native action families, including after completion; Right/Escape cancel before placement. The installed 1.22.7 public event API lacks a focus callback, so the adapter uses the native client world's focus-listener list and explicitly detaches it.
+Both free cursor and mouse-look reticle support center and axis drags; reticle motion remains available for native aiming. Existing handles move over sky, foreground entities and absent terrain subject to coordinate/dimension validity. Only an explicit fresh empty/partial creation click calls the terrain resolver, using the captured visual near/far ray through the camera far plane without a player-reach cap. Creation retains native meta-block/interactable-entity filters and liquid policy, rejects foreground entities, sky, unloaded chunks and outside-clip hits, and copies the selected cell without brush offsets. It never refreshes native selection or loads terrain. Per-button ownership suppresses hold/repeat/release actions in both native action families, including after completion; Right/Escape cancel before placement. The installed 1.22.7 public event API lacks a focus callback, so the adapter uses the native client world's focus-listener list and explicitly detaches it.
 
-Endpoints use Start for the per-axis minimum cell and End for the per-axis maximum cell, with explicit local Y/dimension. Crossing is allowed and renormalizes both corners on each preview; it does not clamp motion. Existing mixed/reversed saved pairs normalize on load without a schema migration. Each existing endpoint, even in a partial ruler, has a positioning control: Start circle at cell+(0,0,0), End diamond at cell+(1,1,1), both with RGB arrows. The binding uses notifying Value assignments and controller transactions, distinguishes owner synchronization from previews, and cancels before authoritative replacement. Axis edits snap whole-block deltas from the initial anchor; center edits follow terrain. Derived sizes use `max - min + 1` in wide integers; rendering spans minimum cell through maximum cell plus one.
+Endpoints use Start for the per-axis minimum cell and End for the per-axis maximum cell, with explicit local Y/dimension. Crossing is allowed and renormalizes both corners on each preview; it does not clamp motion. Existing mixed/reversed saved pairs normalize on load without a schema migration. Each existing endpoint, even in a partial ruler, has a positioning control: Start circle at cell+(0,0,0), End diamond at cell+(1,1,1), both with RGB arrows. The binding uses notifying Value assignments and controller transactions, distinguishes owner synchronization from previews, and cancels before authoritative replacement. Axis edits snap selected-component deltas; camera-plane center edits snap all world-coordinate deltas from the original anchor. Derived sizes use `max - min + 1` in wide integers; rendering spans minimum cell through maximum cell plus one.
 
 Checking Show ruler with no endpoints offers one explicit world click that creates both on that cell and consumes the entire gesture. A partial ruler retains its existing handle; only a handle miss can create the missing endpoint. Invalid targets notify and remain pending. Right/Escape cancel creation until off/on visibility or explicit mode re-enable; contextual losses can reoffer only with eligible camera context and released mouse buttons. Retained other-dimension endpoints hide without automatic overwrite or relocation. The box still needs two valid same-dimension endpoints.
 

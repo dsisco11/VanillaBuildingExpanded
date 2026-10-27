@@ -34,18 +34,25 @@ internal static class RulerGizmoCoordinates
         if (edit.Start.Dimension != edit.Candidate.Dimension || !TryDecode(edit.Start, role, accessor, out _))
             return null;
         var candidate = edit.Candidate;
-        if (edit.Handle != PositionGizmo.Center)
+        bool center = edit.Handle == PositionGizmo.Center;
+        int component = edit.Handle.Value - 1;
+        if (!center)
         {
-            int component = edit.Handle.Value - 1;
             if (component is < 0 or > 2) throw new ArgumentOutOfRangeException(nameof(edit));
             for (int i = 0; i < 3; i++)
                 if (i != component && edit.Start.Coordinates[i] != candidate.Coordinates[i]) return null;
-            double coordinate = edit.Start.Coordinates[component]
-                + Math.Round(candidate.Coordinates[component] - edit.Start.Coordinates[component],
+        }
+        var coordinates = edit.Start.Coordinates;
+        for (int i = 0; i < 3; i++)
+        {
+            if (!center && i != component) continue;
+            double coordinate = edit.Start.Coordinates[i]
+                + Math.Round(candidate.Coordinates[i] - edit.Start.Coordinates[i],
                     MidpointRounding.AwayFromZero);
             if (!double.IsFinite(coordinate)) return null;
-            candidate = new(edit.Start.Coordinates.WithElement(component, coordinate), edit.Start.Dimension);
+            coordinates = coordinates.WithElement(i, coordinate);
         }
+        candidate = new(coordinates, edit.Start.Dimension);
         return TryDecode(candidate, role, accessor, out _) ? candidate : null;
     }
 

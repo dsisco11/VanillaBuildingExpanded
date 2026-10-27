@@ -95,7 +95,7 @@ public sealed class GizmoCameraTests
         var context = Camera(scale: scale);
         PositionGizmoDraw? drawn = null;
         using var manager = new GizmoManager();
-        var gizmo = new PositionGizmo(new(V(0, 0, z), 0), data => drawn = data, _ => null);
+        var gizmo = new PositionGizmo(new(V(0, 0, z), 0), data => drawn = data);
         manager.Add(gizmo);
         manager.Render(context);
         var geometry = drawn!.Value.Geometry;
@@ -118,8 +118,8 @@ public sealed class GizmoCameraTests
     {
         var context = Camera();
         using var manager = new GizmoManager();
-        var first = new PositionGizmo(new(V(0, 0, -10), 0), _ => { }, _ => null);
-        var second = new PositionGizmo(new(V(0, 0, -10), 0), _ => { }, _ => null, marker: GizmoShape.Diamond);
+        var first = new PositionGizmo(new(V(0, 0, -10), 0), _ => { });
+        var second = new PositionGizmo(new(V(0, 0, -10), 0), _ => { }, marker: GizmoShape.Diamond);
         manager.Add(first);
         manager.Add(second);
         manager.Render(context);

@@ -32,7 +32,7 @@ public sealed class GizmoInputAdapterTests
         f.Frame();
         Assert.NotEqual(f.Baseline, f.Gizmo.Value);
         var drawn = f.Renderer.Context!;
-        Assert.Same(drawn, f.LastTarget!.Value.Context);
+        AssertCoordinates(f.Gizmo.Value.Coordinates, f.LastEdit!.Value.Candidate.Coordinates);
         if (grabbed)
         {
             drawn.Camera!.TryProject(f.Gizmo.Value.Coordinates, out var screen);
@@ -43,7 +43,7 @@ public sealed class GizmoInputAdapterTests
         Assert.True(up.Handled);
         Assert.Equal(1, f.Completes);
         Assert.Null(f.Manager.CapturedGizmo);
-        Assert.Same(drawn, f.LastTarget!.Value.Context);
+        AssertCoordinates(f.Gizmo.Value.Coordinates, f.LastEdit!.Value.Candidate.Coordinates);
         if (!grabbed)
         {
             drawn.Camera!.TryProject(f.Gizmo.Value.Coordinates, out var screen);
@@ -385,7 +385,7 @@ public sealed class GizmoInputAdapterTests
     {
         using var f = new Fixture();
         f.Down();
-        f.ThrowTarget = true;
+        f.ThrowConstraint = true;
         f.Frame();
         Assert.Equal(1, f.Cancels);
         Assert.Equal(f.Baseline, f.Gizmo.Value);
@@ -393,7 +393,7 @@ public sealed class GizmoInputAdapterTests
             "vanillabuildingexpanded:gizmo-input-unavailable", It.IsAny<string>()), Times.Once);
         f.Api.Verify(a => a.Logger.Error(It.IsAny<string>(), It.IsAny<object[]>()), Times.Once);
         f.Up();
-        f.ThrowTarget = false;
+        f.ThrowConstraint = false;
         f.Frame();
         Assert.False(f.Down().Handled);
     }
@@ -452,9 +452,9 @@ public sealed class GizmoInputAdapterTests
         public readonly PositionGizmo Gizmo;
         public readonly GizmoPosition Baseline;
         public readonly Creation Creation = new();
-        public GizmoPointer? LastTarget;
+        public PositionGizmoEdit? LastEdit;
         public GizmoContext Context = null!;
-        public bool Grabbed, Paused, Enabled = true, WorldAvailable = true, ThrowTarget;
+        public bool Grabbed, Paused, Enabled = true, WorldAvailable = true, ThrowConstraint;
         public int Starts, Completes, Cancels, Mining, Attack, ItemUse, Placement, Packets;
         public int Width = 801, Height = 601;
         public double ViewX;
@@ -486,13 +486,14 @@ public sealed class GizmoInputAdapterTests
             Render.Setup(r => r.FrameWidth).Returns(() => Width);
             Render.Setup(r => r.FrameHeight).Returns(() => Height);
             Context = Capture();
-            Baseline = new(Context.Camera!.EyePosition + V(0, 0, -200), 0);
+            var initialPointer = Context.Camera!.CreatePointer(Context, 400, 300);
+            Baseline = new(initialPointer.Ray.Origin + initialPointer.Ray.Direction * 200, 0);
             Renderer = new(Api.Object, Manager, () => Context, new RulerRenderingTests.FakeState());
-            Gizmo = new(Baseline, _ => { }, pointer =>
+            Gizmo = new(Baseline, _ => { }, edit =>
             {
-                if (ThrowTarget) throw new InvalidOperationException("target failure");
-                LastTarget = pointer;
-                return new GizmoPosition(pointer.Ray.Origin + pointer.Ray.Direction * 15, pointer.Context.Dimension);
+                if (ThrowConstraint) throw new InvalidOperationException("constraint failure");
+                LastEdit = edit;
+                return edit.Candidate;
             });
             Gizmo.OnInteractionStarted += _ => Starts++;
             Gizmo.OnInteractionCompleted += _ => Completes++;

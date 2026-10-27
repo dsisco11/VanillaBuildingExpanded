@@ -14,7 +14,7 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
     private readonly ICoreClientAPI api;
     private readonly IClientWorldAccessor world;
     private readonly RulerController ruler;
-    private readonly System.Func<GizmoPointer, RulerEndpoint?> target;
+    private readonly System.Func<GizmoPointer, RulerEndpoint?> creationTarget;
     private readonly GizmoManager manager = new();
     private readonly GizmoRenderAdapter renderer;
     private readonly GizmoInputAdapter input;
@@ -34,7 +34,7 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
         this.api = api;
         world = api.World;
         this.ruler = ruler;
-        target = new RulerTerrainTarget(api).Resolve;
+        creationTarget = new RulerTerrainTarget(api).Resolve;
         renderer = new(api, manager, capture, renderState);
         input = new(api, manager, renderer, Eligible, focusListeners, this);
         ruler.Changed += OnChanged;
@@ -95,7 +95,6 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
         if (gizmo is null)
         {
             var instance = new PositionGizmo(anchor, renderer.Draw,
-                pointer => target(pointer) is { } selected ? RulerGizmoCoordinates.ToAnchor(selected, role) : null,
                 edit => RulerGizmoCoordinates.Constrain(edit, role, world.BlockAccessor),
                 role == RulerEndpointRole.Start ? GizmoShape.Circle : GizmoShape.Diamond);
             instance.OnInteractionStarted += _ =>
@@ -120,9 +119,8 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
             instance.OnInteractionCanceled += _ => ruler.CancelEndpointEdit();
             instance.NoticeRequested += notice => Notify(notice switch
             {
-                PositionGizmoNotice.MissingTarget => "ruler-aim-at-block",
                 PositionGizmoNotice.InvalidValue => "ruler-invalid-endpoint",
-                _ => "ruler-axis-unavailable"
+                _ => "ruler-drag-unavailable"
             });
             gizmo = instance;
             manager.Add(instance);
@@ -143,7 +141,7 @@ internal sealed class RulerGizmoSession : IDisposable, IGizmoCreationInput
     public void Create(GizmoPointer pointer)
     {
         if (!pending || !Eligible() || !MatchesDimension()) return;
-        if (target(pointer) is not { } cell)
+        if (creationTarget(pointer) is not { } cell)
         {
             Notify("ruler-aim-at-block");
             return;

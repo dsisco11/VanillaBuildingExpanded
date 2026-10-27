@@ -11,7 +11,7 @@
   "ruler-persistence-cleanup-failed": "A temporary ruler config file could not be removed. Check the game log.",
   "ruler-create": "Ruler: left-click terrain to create the missing endpoint(s). Right-click or Escape cancels.",
   "ruler-aim-at-block": "Ruler: target loaded terrain within the camera view.",
-  "ruler-axis-unavailable": "This ruler axis cannot follow the current viewing angle safely. Adjust your view and try again.",
+  "ruler-drag-unavailable": "This ruler handle cannot follow the current viewing angle safely. Adjust your view and try again.",
   "ruler-invalid-endpoint": "That ruler position is outside valid coordinates or belongs to another dimension.",
   "ruler-dimension-mismatch": "The ruler belongs to another dimension. Return there to see and edit it.",
   "ruler-render-unavailable": "The ruler wireframe is unavailable for this world session. Sizes still work; check the game log.",

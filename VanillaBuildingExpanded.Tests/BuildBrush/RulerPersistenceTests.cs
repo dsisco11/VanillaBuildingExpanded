@@ -68,10 +68,10 @@ public sealed class RulerPersistenceTests
             h.Aim(instance.Value.Coordinates);
             Assert.True(h.Down().Handled);
             Assert.Same(instance, h.Session.Manager.CapturedGizmo);
-            var cell = new RulerEndpoint(start ? -60 - i : 60 + i, 65 + i, -200 - i, 0);
+            var cell = new RulerEndpoint(start ? -60 - i : 60 + i, 65 + i, -200, 0);
             for (int preview = 0; preview < 5; preview++)
             {
-                h.Target = cell with { Z = cell.Z - preview };
+                h.MoveCenterTo(cell with { X = cell.X + preview });
                 h.Frame();
                 Assert.Equal(i, fixture.Writes.Count);
             }
@@ -84,32 +84,97 @@ public sealed class RulerPersistenceTests
             Assert.Equal(committedCell.Z, record["z"]!.Value<int>());
             Assert.Equal(h.Ruler.State.Bounds!.Value.MinCell, h.Ruler.State.Start);
             Assert.Equal(h.Ruler.State.Bounds.Value.MaxCell, h.Ruler.State.End);
+            h.Frame();
+            h.Aim(instance.Value.Coordinates);
+            Assert.True(h.Down().Handled);
+            for (int frame = 0; frame < 120; frame++) h.Frame();
+            Assert.Equal(i + 1, fixture.Writes.Count);
+            Assert.True(h.Up().Handled);
+            Assert.Equal(i + 1, fixture.Writes.Count);
         }
         fixture.FailWrites = true;
         h.Frame();
         h.Aim(h.Session.Start!.Value.Coordinates);
         h.Down();
-        h.Target = new(-90, 75, -300, 0);
+        h.MoveCenterTo(new(-90, 75, -200, 0));
         h.Frame();
         h.Up();
         Assert.True(persistence.IsDirty);
         var committed = h.Ruler.State.Start;
+        var committedEnd = h.Ruler.State.End;
+        Assert.Equal(9, fixture.Writes.Count);
         fixture.FailWrites = false;
         h.Frame();
         h.Aim(h.Session.Start.Value.Coordinates);
         h.Down();
-        h.Target = new(100, 80, -400, 0);
+        h.MoveCenterTo(new(100, 80, -200, 0));
         h.Frame();
+        Assert.Equal(9, fixture.Writes.Count);
         h.Events.Raise(e => e.LeaveWorld += null!);
         Assert.Equal(committed, h.Ruler.State.Start);
         persistence.Dispose();
         Assert.False(persistence.IsDirty);
+        Assert.Equal(10, fixture.Writes.Count);
         Assert.Equal(committed!.Value.X, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
         var restored = new RulerController();
         using var reopened = fixture.Open(restored);
         Assert.Equal(committed, restored.State.Start);
+        Assert.Equal(committedEnd, restored.State.End);
+        foreach (var (name, cell) in new[] { ("start", committed!.Value), ("end", committedEnd!.Value) })
+        {
+            var saved = fixture.Read()["worlds"]!["world-a"]![name]!;
+            Assert.Equal(cell.X, saved["x"]!.Value<int>());
+            Assert.Equal(cell.Y, saved["y"]!.Value<int>());
+            Assert.Equal(cell.Z, saved["z"]!.Value<int>());
+            Assert.Equal(cell.Dimension, saved["dimension"]!.Value<int>());
+        }
+        h.AssertNoTargeting();
         Assert.False(restored.State.ShowRuler);
         Assert.False(restored.State.CanPick);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ProductionSession_LargeCoordinatesAndBoundaryEndAnchorsPersistExactCellsAfterReload(bool grabbed)
+    {
+        using var fixture = new Fixture();
+        fixture.Write(Config(("world-a", Pair(
+            Endpoint(-2000000000, 32767, 2000000000, 65535),
+            Endpoint(-1999999980, 32767, 2000000020, 65535)))));
+        using var persistence = fixture.Open();
+        using var h = new RulerGizmoSessionTests.Harness(fixture.Api, fixture.World,
+            fixture.Accessor, fixture.Controller, grabbed);
+        h.Player.Entity.Pos.Dimension = 65535;
+        h.Reference = Gizmos.PositionGizmoTests.V(-2000000000, 32767, 2000000200);
+        h.Enable();
+        for (int drag = 0; drag < 2; drag++)
+        {
+            bool start = drag == 0;
+            h.Frame();
+            var instance = start ? h.Session.Start! : h.Session.End!;
+            var original = (start ? h.Ruler.State.Start : h.Ruler.State.End)!.Value;
+            h.Aim(instance.Value.Coordinates);
+            Assert.True(h.Down().Handled);
+            Assert.Same(instance, h.Session.Manager.CapturedGizmo);
+            h.MoveCenterTo(original with { X = original.X + 2 + drag });
+            h.Frame();
+            h.AssertLiveBox();
+            Assert.Equal(drag, fixture.Writes.Count);
+            Assert.Equal(32768d, h.Session.End!.Value.Coordinates[1]);
+            Assert.Equal(65535, instance.Value.Dimension);
+            h.Up();
+            Assert.Equal(drag + 1, fixture.Writes.Count);
+        }
+        var committed = h.Ruler.CommittedEndpoints;
+        h.AssertNoTargeting();
+        var restored = new RulerController();
+        using var reopened = fixture.Open(restored);
+        Assert.Equal(committed, restored.CommittedEndpoints);
+        Assert.Equal(new RulerEndpoint(-1999999998, 32767, 2000000000, 65535), restored.State.Start);
+        Assert.Equal(new RulerEndpoint(-1999999977, 32767, 2000000020, 65535), restored.State.End);
+        Assert.False(restored.State.ShowRuler);
+        Assert.False(restored.IsEditing);
     }
 
     [Theory]
@@ -125,8 +190,8 @@ public sealed class RulerPersistenceTests
         var role = start ? RulerEndpointRole.Start : RulerEndpointRole.End;
         var initial = (start ? controller.State.Start : controller.State.End)!.Value;
         var target = initial;
-        using var gizmo = new PositionGizmo(RulerGizmoCoordinates.ToAnchor(initial, role), _ => { },
-            _ => RulerGizmoCoordinates.ToAnchor(target, role),
+        var initialAnchor = RulerGizmoCoordinates.ToAnchor(initial, role);
+        using var gizmo = new PositionGizmo(initialAnchor, _ => { },
             edit => RulerGizmoCoordinates.Constrain(edit, role, fixture.Accessor.Object));
         gizmo.OnInteractionStarted += _ => Assert.True(controller.BeginEndpointEdit(role));
         gizmo.OnValueChanged += anchor =>
@@ -136,13 +201,15 @@ public sealed class RulerPersistenceTests
         };
         gizmo.OnInteractionCompleted += _ => Assert.True(controller.CompleteEndpointEdit());
         gizmo.OnInteractionCanceled += _ => controller.CancelEndpointEdit();
-        var pointer = new GizmoPointer(new(0), new(
-            Gizmos.PositionGizmoTests.V(0, 0, 10), Gizmos.PositionGizmoTests.V(0, 0, -1)));
+        var origin = initialAnchor.Coordinates + Gizmos.PositionGizmoTests.V(0.25, -0.25, 10);
+        var context = Gizmos.PositionGizmoTests.Camera(reference: origin);
+        var pointer = new GizmoPointer(context, new(origin, Gizmos.PositionGizmoTests.V(0, 0, -1)));
         Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, pointer));
         for (int i = 1; i <= 100; i++)
         {
             target = new(initial.X + i, initial.Y, initial.Z, initial.Dimension);
-            gizmo.UpdateInteraction(pointer);
+            gizmo.UpdateInteraction(new(context, new(origin + Gizmos.PositionGizmoTests.V(i, 0, 0),
+                Gizmos.PositionGizmoTests.V(0, 0, -1))));
             Assert.Empty(fixture.Writes);
             Assert.False(persistence.IsDirty);
             Assert.True(persistence.TrySave());
@@ -155,9 +222,12 @@ public sealed class RulerPersistenceTests
         Assert.Equal(start ? expected.MinCell.X : expected.MaxCell.X,
             fixture.Read()["worlds"]!["world-a"]![start ? "start" : "end"]!["x"]!.Value<int>());
         var committed = controller.State;
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, pointer));
+        var committedPointer = new GizmoPointer(context, new(origin + Gizmos.PositionGizmoTests.V(100, 0, 0),
+            Gizmos.PositionGizmoTests.V(0, 0, -1)));
+        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, committedPointer));
         target = target with { X = target.X + 50 };
-        gizmo.UpdateInteraction(pointer);
+        gizmo.UpdateInteraction(new(context, new(origin + Gizmos.PositionGizmoTests.V(150, 0, 0),
+            Gizmos.PositionGizmoTests.V(0, 0, -1))));
         gizmo.CancelInteraction();
         Assert.Equal(committed, controller.State);
         Assert.Single(fixture.Writes);

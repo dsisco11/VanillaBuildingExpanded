@@ -722,51 +722,73 @@ Prerequisites: Phases 1-6 complete, including the normalized minimum/maximum end
 Controlling sources: [proposal confirmed decisions](InWorldGizmos.proposal.md#confirmed-interaction-decisions), [input and dragging](InWorldGizmos.proposal.md#proposed-input-and-dragging), [transactions](InWorldGizmos.proposal.md#ruler-integration-and-edit-transactions), [creation](InWorldGizmos.proposal.md#first-use-incomplete-rulers-and-relocation), and [verification](InWorldGizmos.proposal.md#verification). [BuildBrushArchitecture](BuildBrushArchitecture.md#client-only-ruler) describes the pre-replacement integration, not permission to retain the old movement path.
 Outcome: Existing endpoint handles move using analytic axis/camera-plane math in both pointer modes, with no terrain-based movement route; explicit creation retains its qualified single-click targeting.
 
-    ☐ Define the replacement interaction contract before changing consumers.
-        ☐ Record comparable pre-cutover stationary-hold and moving center/axis frame timings when supported-game access is available; otherwise record the missing baseline as a Phase 8 evidence gap, not an assumed before/after result.
-        ☐ Center capture stores the original anchor, a plane through it perpendicular to the camera view direction, and the initial pointer-ray intersection. Use camera view direction, not an off-center cursor ray, to orient the plane.
-        ☐ Hold the plane and unsnapped drag baseline fixed until release/cancel, including camera motion, notifying owner echoes and normalized-corner synchronization.
-        ☐ Compute original anchor plus current intersection minus initial intersection, preserving the grab offset. Center movement spans the initial view plane; it does not independently move along its depth normal.
-        ☐ Retain existing analytic axis dragging and its selected-component/unchanged-component guarantees. Do not add a different axis algorithm, extra planar handles, modifiers, settings or input modes without a demonstrated need.
-        ☐ Define/test near-parallel, behind-ray, nonfinite and extreme-jump guards for center updates. Reject unusable starts; retain the last valid update and deduplicate repeated feedback during a continuing invalid condition.
-    ☐ Implement continuous camera-plane movement in PositionGizmo and remove the old generic contract.
-        ☐ Replace the centerTarget constructor/delegate dependency and target lookup with captured plane/intersection state using existing Vector256<double>, camera and ray helpers.
-        ☐ Keep generic positions continuous, dimension-explicit and independent of ruler/block/accessor types. Use the existing owner constraint and notifying Value setter, including unchanged-value suppression.
-        ☐ Perform only analytic movement calculations during center/axis updates: no world selection, block/entity raycasts, cached terrain targets, custom destination callbacks or terrain fallback.
-        ☐ Preserve capture outside handle silhouettes, visual/hit geometry, overlay drawing, double precision, cancellation and renderer/input failure behavior. Do not reintroduce the rejected float-transform candidate.
-    ☐ Migrate ruler binding and snapping after the generic calculation is available.
-        ☐ Remove the center terrain-target lambda from RulerGizmoSession. Keep any target injection needed by creation strictly on that creation path; rename or narrow targeting helpers/interfaces if their contract still implies handle movement.
-        ☐ Extend RulerGizmoCoordinates.Constrain to round all three world-coordinate center deltas from the original anchor using the existing AwayFromZero policy, then decode/validate the role-specific cell. Retain one-component axis snapping.
-        ☐ Do not round camera-plane basis parameters or use snapped/normalized previews as a new movement baseline. Accept the small departure from the continuous plane caused by world-grid quantization.
-        ☐ Preserve Start offset zero, End offset one, explicit local Y/dimension, negative/large coordinates and End anchors at valid cell boundaries.
-        ☐ Preserve crossing/return against the original opposite endpoint, per-axis min/max normalization, canonical notifying handle synchronization without capture loss, live size/box updates and exact begin/preview/commit/cancel persistence semantics.
-        ☐ Preserve both pointer modes: free cursor does not enable camera look; reticle motion remains available for aiming against the fixed plane. Existing focus/dialog/mode/death/dimension/pointer-mode cancellation and complete-gesture action suppression remain intact.
-    ☐ Remove the superseded movement approach completely after migrating its consumers.
-        ☐ Remove obsolete constructor arguments, target fixtures, terrain-following movement tests, drag-only missing-terrain notices/localization and documentation references. Retain feedback still required by explicit creation.
-        ☐ Leave no compatibility overload, old center resolver, optional terrain movement mode, miss fallback or second input/capture route. Migrate every production and test caller to the single analytic movement contract.
-        ☐ Retain explicit empty/partial ruler creation, handle-before-creation arbitration, pending/rearm/cancel behavior and whole-gesture ownership. Only the explicit creation attempt may invoke terrain targeting.
-        ☐ Preserve creation's finite actual pointer/reticle near-to-far ray, no player-reach cap, loaded-terrain/meta/entity/clip/dimension checks and target-cell semantics without brush offsets. Do not load/generate terrain or make creation run continuously during a hold.
-    ☐ Add focused numerical and real-composition regression evidence before claiming cutover complete.
-        ☐ Test center press/hold/move/release in both pointer modes, off-center grab offsets, perspective camera orientations, GUI scales/aspect ratios, negative/large coordinates and independent X/Y/Z arrows.
-        ☐ Verify fixed-plane behavior during camera movement and controller echoes, zero displacement for an unchanged ray, stable whole-block thresholds and no accumulation when crossing and returning.
-        ☐ Cover invalid starts, near-parallel/behind-ray/nonfinite/extreme updates, recovery to valid motion and bounded notices without fabricated success values.
-        ☐ Assert zero calls to native selection and block/entity targeting services during at least 120 stationary captured frames and a repeated moving center/axis sequence. Existing handles remain movable over sky, foreground entities and absent/unloaded terrain, subject to coordinate/dimension validity.
-        ☐ Assert creation still calls its terrain resolver only for explicit fresh creation attempts, never handle presses or captured updates; cover empty/partial/other-dimension and invalid/retry cases.
-        ☐ Exercise actual session/renderer/input/manager/controller routing: repeated Start/End moves, normalized crossing/return and final canonical anchors, cancellation, live box matrices/sizes, action suppression and contextual teardown.
-        ☐ Verify zero preview config writes, exactly the existing completion/dirty-retry behavior, baseline rollback and persisted cell fidelity after restart-style reload.
-        ☐ Run the smallest combined existing test selections covering changed gizmo/ruler/input/persistence/HUD surfaces and normal build.ps1 --target=Build/ValidateJson. Record exact commands/counts/outcomes and diff-check evidence; do not invoke Default/Package, clean Releases or add validation dependencies.
-    ☐ Reconcile replacement documentation and evidence without claiming future live qualification.
-        ☐ Update BuildBrushArchitecture component/input/constraint/targeting sections to describe analytic movement and creation-only terrain targeting once implemented; keep the two-row UI and ownership/render/persistence boundaries unchanged.
-        ☐ Reconcile the proposal and obsolete active tests/comments/localization with the new contract. Keep completed phase evidence historical and explicitly superseded, rather than rewriting old results as proof of the new movement.
-        ☐ Record concise task-to-source/implementation/evidence mappings here. Leave Phase 8 live behavior, timing and restart checks unchecked until separately observed.
-        ☐ Keep the independently identified full-HUD recomposition cost outside this movement replacement; record any remaining cost during qualification rather than claiming removal of terrain targeting proves all lag resolved.
+    ✔ Define the replacement interaction contract before changing consumers.
+        ✔ Record comparable pre-cutover stationary-hold and moving center/axis frame timings when supported-game access is available; otherwise record the missing baseline as a Phase 8 evidence gap, not an assumed before/after result.
+        ✔ Center capture stores the original anchor, a plane through it perpendicular to the camera view direction, and the initial pointer-ray intersection. Use camera view direction, not an off-center cursor ray, to orient the plane.
+        ✔ Hold the plane and unsnapped drag baseline fixed until release/cancel, including camera motion, notifying owner echoes and normalized-corner synchronization.
+        ✔ Compute original anchor plus current intersection minus initial intersection, preserving the grab offset. Center movement spans the initial view plane; it does not independently move along its depth normal.
+        ✔ Retain existing analytic axis dragging and its selected-component/unchanged-component guarantees. Do not add a different axis algorithm, extra planar handles, modifiers, settings or input modes without a demonstrated need.
+        ✔ Define/test near-parallel, behind-ray, nonfinite and extreme-jump guards for center updates. Reject unusable starts; retain the last valid update and deduplicate repeated feedback during a continuing invalid condition.
+    ✔ Implement continuous camera-plane movement in PositionGizmo and remove the old generic contract.
+        ✔ Replace the centerTarget constructor/delegate dependency and target lookup with captured plane/intersection state using existing Vector256<double>, camera and ray helpers.
+        ✔ Keep generic positions continuous, dimension-explicit and independent of ruler/block/accessor types. Use the existing owner constraint and notifying Value setter, including unchanged-value suppression.
+        ✔ Perform only analytic movement calculations during center/axis updates: no world selection, block/entity raycasts, cached terrain targets, custom destination callbacks or terrain fallback.
+        ✔ Preserve capture outside handle silhouettes, visual/hit geometry, overlay drawing, double precision, cancellation and renderer/input failure behavior. Do not reintroduce the rejected float-transform candidate.
+    ✔ Migrate ruler binding and snapping after the generic calculation is available.
+        ✔ Remove the center terrain-target lambda from RulerGizmoSession. Keep any target injection needed by creation strictly on that creation path; rename or narrow targeting helpers/interfaces if their contract still implies handle movement.
+        ✔ Extend RulerGizmoCoordinates.Constrain to round all three world-coordinate center deltas from the original anchor using the existing AwayFromZero policy, then decode/validate the role-specific cell. Retain one-component axis snapping.
+        ✔ Do not round camera-plane basis parameters or use snapped/normalized previews as a new movement baseline. Accept the small departure from the continuous plane caused by world-grid quantization.
+        ✔ Preserve Start offset zero, End offset one, explicit local Y/dimension, negative/large coordinates and End anchors at valid cell boundaries.
+        ✔ Preserve crossing/return against the original opposite endpoint, per-axis min/max normalization, canonical notifying handle synchronization without capture loss, live size/box updates and exact begin/preview/commit/cancel persistence semantics.
+        ✔ Preserve both pointer modes: free cursor does not enable camera look; reticle motion remains available for aiming against the fixed plane. Existing focus/dialog/mode/death/dimension/pointer-mode cancellation and complete-gesture action suppression remain intact.
+    ✔ Remove the superseded movement approach completely after migrating its consumers.
+        ✔ Remove obsolete constructor arguments, target fixtures, terrain-following movement tests, drag-only missing-terrain notices/localization and documentation references. Retain feedback still required by explicit creation.
+        ✔ Leave no compatibility overload, old center resolver, optional terrain movement mode, miss fallback or second input/capture route. Migrate every production and test caller to the single analytic movement contract.
+        ✔ Retain explicit empty/partial ruler creation, handle-before-creation arbitration, pending/rearm/cancel behavior and whole-gesture ownership. Only the explicit creation attempt may invoke terrain targeting.
+        ✔ Preserve creation's finite actual pointer/reticle near-to-far ray, no player-reach cap, loaded-terrain/meta/entity/clip/dimension checks and target-cell semantics without brush offsets. Do not load/generate terrain or make creation run continuously during a hold.
+    ✔ Add focused numerical and real-composition regression evidence before claiming cutover complete.
+        ✔ Test center press/hold/move/release in both pointer modes, off-center grab offsets, perspective camera orientations, GUI scales/aspect ratios, negative/large coordinates and independent X/Y/Z arrows.
+        ✔ Verify fixed-plane behavior during camera movement and controller echoes, zero displacement for an unchanged ray, stable whole-block thresholds and no accumulation when crossing and returning.
+        ✔ Cover invalid starts, near-parallel/behind-ray/nonfinite/extreme updates, recovery to valid motion and bounded notices without fabricated success values.
+        ✔ Assert zero calls to native selection and block/entity targeting services during at least 120 stationary captured frames and a repeated moving center/axis sequence. Existing handles remain movable over sky, foreground entities and absent/unloaded terrain, subject to coordinate/dimension validity.
+        ✔ Assert creation still calls its terrain resolver only for explicit fresh creation attempts, never handle presses or captured updates; cover empty/partial/other-dimension and invalid/retry cases.
+        ✔ Exercise actual session/renderer/input/manager/controller routing: repeated Start/End moves, normalized crossing/return and final canonical anchors, cancellation, live box matrices/sizes, action suppression and contextual teardown.
+        ✔ Verify zero preview config writes, exactly the existing completion/dirty-retry behavior, baseline rollback and persisted cell fidelity after restart-style reload.
+        ✔ Run the smallest combined existing test selections covering changed gizmo/ruler/input/persistence/HUD surfaces and normal build.ps1 --target=Build/ValidateJson. Record exact commands/counts/outcomes and diff-check evidence; do not invoke Default/Package, clean Releases or add validation dependencies.
+    ✔ Reconcile replacement documentation and evidence without claiming future live qualification.
+        ✔ Update BuildBrushArchitecture component/input/constraint/targeting sections to describe analytic movement and creation-only terrain targeting once implemented; keep the two-row UI and ownership/render/persistence boundaries unchanged.
+        ✔ Reconcile the proposal and obsolete active tests/comments/localization with the new contract. Keep completed phase evidence historical and explicitly superseded, rather than rewriting old results as proof of the new movement.
+        ✔ Record concise task-to-source/implementation/evidence mappings here. Leave Phase 8 live behavior, timing and restart checks unchecked until separately observed.
+        ✔ Keep the independently identified full-HUD recomposition cost outside this movement replacement; record any remaining cost during qualification rather than claiming removal of terrain targeting proves all lag resolved.
 
 Completion criteria:
 
-    ☐ Generic center translation uses one captured camera-facing plane and preserves grab offsets; existing analytic arrows and both pointer modes remain correct.
-    ☐ All production/test callers use the new contract. There is no retained terrain-following movement path, fallback or compatibility shim, and automated captured-frame/drag assertions prove zero terrain-selection calls.
-    ☐ Center/axis snapping, normalized bounds, live box/size, creation-only targeting, gesture ownership, commit/cancel and persistence regressions pass with recorded focused-test/normal-build evidence.
-    ☐ Architecture/proposal and active tests describe the replacement consistently. Live input/performance/render/restart evidence remains a separate Phase 8 gate.
+    ✔ Generic center translation uses one captured camera-facing plane and preserves grab offsets; existing analytic arrows and both pointer modes remain correct.
+    ✔ All production/test callers use the new contract. There is no retained terrain-following movement path, fallback or compatibility shim, and automated captured-frame/drag assertions prove zero terrain-selection calls.
+    ✔ Center/axis snapping, normalized bounds, live box/size, creation-only targeting, gesture ownership, commit/cancel and persistence regressions pass with recorded focused-test/normal-build evidence.
+    ✔ Architecture/proposal and active tests describe the replacement consistently. Live input/performance/render/restart evidence remains a separate Phase 8 gate.
+
+### Phase 7 implementation/evidence record
+
+Traceability (all Phase 7 tasks inherit the proposal and architecture sources above):
+
+- Interaction contract, continuous math and removal -> proposal Confirmed interaction decisions / Axis handles / Center handle -> PositionGizmo and GizmoCamera: captured inverse-view normal, original anchor and relative initial intersection; unchanged axis plane; denominator <=0.01, finite forward distance <=10000*max(1,initial distance), step <=max(64,8*initial distance), one reasoned notice per uninterrupted invalid interval until recovery. Generic positions remain SIMD doubles; no destination callback or movement selection path.
+- Ruler constraints and transactions -> proposal Ruler integration and edit transactions -> RulerGizmoCoordinates rounds original world-component deltas AwayFromZero (all components for center, one for axes); RulerGizmoSession retains normalized owner synchronization and existing controller/persistence boundaries. Creation target is used only by Create.
+- Creation/input/render -> proposal Activation and capture / First use / Visibility, rendering and lifecycle -> existing creation-only terrain adapter, manager/input/render composition and lifecycle remain; test evidence must establish fresh-click-only selection, whole-gesture ownership and actual box presentation.
+- Documentation/cleanup -> proposal Verification and scope boundaries / architecture Client-only ruler -> architecture, proposal integration references and README reconciled; completed Phases 1-6 remain historical. Full-HUD recomposition is deliberately unchanged.
+
+Pre-cutover live timing: a running game process was detected, but this session has no available live game-control/frame-timing interface or comparable recorded baseline. No live frame timings were captured. Comparable stationary/moving center/axis timings in both pointer modes remain an explicit Phase 8 evidence gap; automated zero-selection counts are not a measured frame-time improvement.
+
+Automated verification (2026-10-27, SDK 10.0.401, installed game/API 1.22.7):
+
+- With VINTAGE_STORY=G:\Vintagestory, delegated `dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj -c Release --filter "FullyQualifiedName~Ruler|FullyQualifiedName~Gizmos|FullyQualifiedName~BuildModeHudControlsTests|FullyQualifiedName~TableInputTests" --verbosity minimal`: 443 passed, 0 failed, 0 skipped. The initial attempt exposed a misplaced test-helper brace; corrected before the successful rebuilt run.
+- Delegated `.\build.ps1 --target=Build`: ValidateJson and normal publish passed. Existing nullable warnings and CakeBuild Pkcs NU1902/NU1903 advisories remain unrelated. No Default/Package target or Releases cleanup.
+- `git --no-pager diff HEAD --check`: passed, including staged and unstaged changes.
+- Numerical tests cover view-normal versus off-center ray orientation, grab offsets, perspectives/scales/aspects, camera movement, owner echoes, distant coordinates, finite/parallel/behind/distance/step boundaries, alternating invalid intervals and recovery. Ruler constraint tests cover all-component AwayFromZero rounding and oblique-plane world-grid thresholds.
+- Session composition tests drive actual renderer/input/manager/controller paths in both pointer modes: at least 120 stationary captured frames plus repeated center and every-axis motion, zero selection/entity/block targeting (coordinate validity checks allowed), sky/entity/unloaded scenes, canonical normalized anchors, box matrices/sizes, creation-only fresh attempts and gesture/cancellation/lifecycle behavior.
+- Session persistence tests cover zero preview writes, no-op completion, dirty retry/departure rollback, exact committed cells after reload and large-coordinate/local-Y boundary anchors. Actual live gameplay/restart/frame timing remains unverified.
+
+Second review: directly reviewed production changes, numerical/input/geometry caller migrations, world-grid constraints, session zero-targeting/creation/crossing/live-box regressions and persistence changes against the inherited proposal sections and architecture. No unresolved implementation discrepancy found after the test-helper correction. A fresh read-only independent audit directly consulted the plan, inherited proposal and architecture, production and test sources, and staged/unstaged changes. Verdict: Phase 7 fully satisfied, no confirmed issues or unresolved required findings. Markers updated only after this verdict. Phase 8 live checks remain unchecked.
 
 ## Phase 8: Qualify delivery and update documentation
 

@@ -94,7 +94,7 @@ public sealed class GizmoRenderAdapterTests
             Assert.Equal(1d, far[2], 5);
             PositionGizmoDraw? drawing = null;
             using var manager = new GizmoManager();
-            var gizmo = new PositionGizmo(new(anchor, dimension), data => drawing = data, _ => null);
+            var gizmo = new PositionGizmo(new(anchor, dimension), data => drawing = data);
             manager.Add(gizmo);
             manager.Render(context);
             Assert.True(manager.TryBegin(pointer));
@@ -304,7 +304,7 @@ public sealed class GizmoRenderAdapterTests
 
         public PositionGizmo Add(GizmoShape shape = GizmoShape.Circle)
         {
-            var gizmo = new PositionGizmo(new(V(0, 0, -10), 0), Adapter.Draw, _ => null, marker: shape);
+            var gizmo = new PositionGizmo(new(V(0, 0, -10), 0), Adapter.Draw, marker: shape);
             Manager.Add(gizmo);
             return gizmo;
         }

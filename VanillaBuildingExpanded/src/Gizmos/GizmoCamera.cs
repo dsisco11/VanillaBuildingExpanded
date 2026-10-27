@@ -16,6 +16,7 @@ public sealed class GizmoCamera
     private readonly double[] inverse;
     public Vector256<double> ReferencePosition { get; }
     public Vector256<double> EyePosition { get; }
+    public Vector256<double> ViewDirection { get; }
     public int Width { get; }
     public int Height { get; }
     public int WindowWidth { get; }
@@ -51,6 +52,11 @@ public sealed class GizmoCamera
         EyePosition = (eye / eye[3]).WithElement(3, 0d) + ReferencePosition;
         if (!GizmoRay.IsCoordinate(EyePosition))
             throw new ArgumentException("Camera eye must be finite.", nameof(relativeView));
+        var forward = Transform(inverseView, Vector256.Create(0d, 0d, -1d, 0d)).WithElement(3, 0d);
+        double forwardLength = Math.Sqrt(Vector256.Dot(forward, forward));
+        if (!GizmoRay.IsCoordinate(forward) || !double.IsFinite(forwardLength) || forwardLength <= 1e-12)
+            throw new ArgumentException("Camera direction must be finite and nonzero.", nameof(relativeView));
+        ViewDirection = forward / forwardLength;
         Width = width;
         Height = height;
         WindowWidth = windowWidth ?? width;

@@ -49,10 +49,10 @@ public sealed partial class BuildModeHudControlsTests
         h.Session.Refresh();
         Assert.Same(gizmo, h.Session.Manager.CapturedGizmo);
         Assert.Equal(2, h.Session.Manager.Count);
-        h.Target = new(-50, 70, -250, 0);
+        h.MoveCenterTo(new(-50, 70, -200, 0));
         h.Frame();
         h.Up();
-        Assert.Equal(new RulerEndpoint(-50, 65, -250, 0), ruler.State.Start);
+        Assert.Equal(new RulerEndpoint(-50, 65, -200, 0), ruler.State.Start);
         Assert.Equal(new RulerEndpoint(30, 70, -200, 0), ruler.State.End);
         Assert.Equal(1, h.Commits);
     }
@@ -90,7 +90,7 @@ public sealed partial class BuildModeHudControlsTests
         using var manager = new GizmoManager();
         using var renderer = new GizmoRenderAdapter(f.Api.Object, manager, () => context,
             new BuildBrush.RulerRenderingTests.FakeState());
-        var gizmo = new PositionGizmo(new(pointer.Ray.Origin + pointer.Ray.Direction * 20, 0), _ => { }, _ => null);
+        var gizmo = new PositionGizmo(new(pointer.Ray.Origin + pointer.Ray.Direction * 20, 0), _ => { });
         manager.Add(gizmo);
         using var input = new GizmoInputAdapter(f.Api.Object, manager, renderer, () => true, []);
         renderer.SetActive(true);

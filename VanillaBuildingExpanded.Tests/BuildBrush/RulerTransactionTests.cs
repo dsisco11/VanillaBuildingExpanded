@@ -236,7 +236,6 @@ public sealed class RulerTransactionTests
         Assert.Equal(anchor, RulerGizmoCoordinates.Constrain(new(initial, anchor, PositionGizmo.Center), role, Accessor().Object));
         foreach (var invalid in new[]
         {
-            new GizmoPosition(V(-39.5, 32768, -49), 2),
             new GizmoPosition(V(2147483649d, 66, 0), 2),
             new GizmoPosition(V(0, 32769, 0), 2),
             new GizmoPosition(V(0, 66, 0), 3),
@@ -245,6 +244,58 @@ public sealed class RulerTransactionTests
             Assert.Null(RulerGizmoCoordinates.Constrain(new(initial, invalid, PositionGizmo.Center), role, Accessor().Object));
         Assert.False(RulerGizmoCoordinates.TryDecode(anchor, role, Accessor(false).Object, out _));
         Assert.Null(RulerGizmoCoordinates.Constrain(new(initial, anchor, PositionGizmo.X), role, Accessor().Object));
+    }
+
+    [Theory]
+    [InlineData(true, 0.49, -0.49, 0.49, 0, 0, 0)]
+    [InlineData(false, 0.5, -0.5, 1.5, 1, -1, 2)]
+    [InlineData(true, -0.5, 0.5, -1.5, -1, 1, -2)]
+    [InlineData(false, -1.49, 1.49, -0.49, -1, 1, 0)]
+    public void CenterPolicy_RoundsEveryWorldDeltaAwayFromZeroBeforeDecoding(
+        bool start, double dx, double dy, double dz, int x, int y, int z)
+    {
+        var role = start ? RulerEndpointRole.Start : RulerEndpointRole.End;
+        var initial = RulerGizmoCoordinates.ToAnchor(new(-2000000000, 65, 2000000000, 65535), role);
+        var candidate = new GizmoPosition(initial.Coordinates + V(dx, dy, dz), 65535);
+        var accessor = Accessor();
+        var accepted = RulerGizmoCoordinates.Constrain(new(initial, candidate, PositionGizmo.Center), role, accessor.Object);
+        Assert.NotNull(accepted);
+        Assert.Equal(initial.Coordinates + V(x, y, z), accepted.Value.Coordinates);
+        Assert.True(RulerGizmoCoordinates.TryDecode(accepted.Value, role, accessor.Object, out var cell));
+        Assert.Equal(new RulerEndpoint(-2000000000 + x, 65 + y, 2000000000 + z, 65535), cell);
+        Assert.False(RulerGizmoCoordinates.TryDecode(candidate, role, accessor.Object, out _));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CenterPolicy_ObliquePlaneSnapsWorldCoordinatesWithoutRebasingOnEcho(bool start)
+    {
+        var role = start ? RulerEndpointRole.Start : RulerEndpointRole.End;
+        var initial = RulerGizmoCoordinates.ToAnchor(new(-10, 65, -20, 2), role);
+        double yaw = Math.PI / 4;
+        var context = new GizmoContext(2, Camera(reference: initial.Coordinates + V(-10, 0, 10),
+            view: Yaw(yaw)).Camera);
+        using var gizmo = new PositionGizmo(initial, _ => { },
+            edit => RulerGizmoCoordinates.Constrain(edit, role, Accessor().Object));
+        var origin = initial.Coordinates - context.Camera!.ViewDirection * 20;
+        var right = V(Math.Cos(yaw), 0, Math.Sin(yaw));
+        var pointer = new GizmoPointer(context, new(origin, context.Camera.ViewDirection));
+        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, pointer));
+        int changes = 0;
+        gizmo.OnValueChanged += value => { changes++; gizmo.Value = value; };
+        foreach (double amount in new[] { 0.49, 0.51, 0.52, 1.49, 1.51, 0.49, -0.51, 0 })
+        {
+            var delta = right * (amount / right[0]) + V(0, -amount, 0);
+            gizmo.UpdateInteraction(new(context, new(origin + delta, context.Camera.ViewDirection)));
+            var expected = V(Math.Round(amount, MidpointRounding.AwayFromZero),
+                Math.Round(-amount, MidpointRounding.AwayFromZero),
+                Math.Round(delta[2], MidpointRounding.AwayFromZero));
+            AssertCoordinates(initial.Coordinates + expected, gizmo.Value.Coordinates);
+            Assert.True(gizmo.IsInteracting);
+        }
+        Assert.Equal(initial, gizmo.Value);
+        Assert.InRange(changes, 4, 8);
     }
 
     private static RulerController Controller()
