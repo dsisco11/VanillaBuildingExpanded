@@ -20,6 +20,7 @@ The ruler remains client-only. Gizmos are controls, not blocks, inventory items 
 
 - Support both the free mouse cursor and mouse-look reticle.
 - Dragging the center follows the world block under the active pointer/reticle.
+- Center dragging and first-use/missing-endpoint creation can target rendered terrain up to the camera far plane, without a player-reach cap.
 - Ruler endpoints snap to whole blocks throughout dragging.
 - One initial world click creates both endpoints on the selected block.
 - Gizmo handles are overlay controls; the ruler box remains depth-tested.
@@ -124,7 +125,7 @@ Free-cursor dragging does not engage camera look. Reticle dragging retains camer
 
 ### Center handle
 
-For the ruler, the center handle follows the targeted world block under the active cursor or reticle, using normal player targeting reach. Copy the actual targeted block cell, not a face-adjacent brush placement destination. Update the endpoint and its role-specific corner anchor together.
+For the ruler, the center handle follows the targeted world block under the active cursor or reticle, up to the camera far plane without a player-reach cap. Apply the same range to first-use and missing-endpoint creation. Target existing loaded scene terrain; do not load or generate terrain for picking. Copy the actual targeted block cell, not a face-adjacent brush placement destination. Update the endpoint and its role-specific corner anchor together.
 
 This can change X/Y/Z together without an axis lock. It is not arbitrary positioning in empty space: sky/entity targets and missing valid terrain retain the last valid value until a block is targeted again. Do not silently switch to a camera-facing plane on a miss.
 
@@ -206,7 +207,7 @@ Use existing test infrastructure and add focused cases for:
 
 1. Property-setter value events for both owner assignments and manipulation, duplicate suppression, external replacement, and identical callback echoes without reentrant edits.
 2. Deterministic hit priority, center/arrow tolerance, both endpoints' corner offsets, overlapping/projected handles, one capture, drag outside hit bounds and correct free-cursor/reticle rays at multiple GUI scales/aspect ratios.
-3. Independent X/Y/Z motion, block-following center behavior and invalid targets, preserved axis grab offsets, camera-parallel degeneracy, negative coordinates, double precision, block snapping and offset-to-cell round trips at dimension boundaries.
+3. Independent X/Y/Z motion, block-following center behavior and invalid targets, center/creation targets beyond player reach through the camera far plane, preserved axis grab offsets, camera-parallel degeneracy, negative coordinates, double precision, block snapping and offset-to-cell round trips at dimension boundaries.
 4. Preview updates, one durable commit, cancel rollback, dirty retries and no per-frame config writes.
 5. Repeated Start and End edits after successful completion, including many consecutive drags and cancel/retry cycles, with actual manager/input/controller routing.
 6. No mining/attack/use/placement during captured/creation/cancellation gestures; ordinary input outside handles and already-handled GUI input remain intact.
@@ -220,6 +221,7 @@ Separately qualify live-game pointer routing, camera control, handle readability
 | --- | --- |
 | Interaction mode | Both existing free cursor and mouse-look reticle. |
 | Center movement | Follow the targeted world block; no plane fallback on a miss. |
+| Block-target range | Rendered terrain up to the camera far plane, without a player-reach cap; applies to center dragging and first-use/missing-endpoint creation. |
 | Ruler snapping | Whole block-cell steps throughout dragging; reusable positioning is not inherently block-only. |
 | Initial creation | One world click creates a one-cell ruler; restored partial rulers complete only the missing endpoint. |
 | Gizmo occlusion | Overlay handles, depth-tested measurement box. |
