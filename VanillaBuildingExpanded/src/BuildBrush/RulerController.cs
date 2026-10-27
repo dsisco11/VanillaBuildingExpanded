@@ -10,6 +10,14 @@ internal sealed class RulerController
 
     public event Action<RulerState>? Changed;
     public event Action<RulerNotice>? NoticeRequested;
+    public event Action? EndpointsCommitted;
+
+    public void RestoreEndpoints(RulerEndpoint? start, RulerEndpoint? end)
+    {
+        if (start is { } first && end is { } second && first.Dimension != second.Dimension)
+            throw new ArgumentException("Saved ruler endpoints must belong to the same dimension.", nameof(end));
+        SetState(State with { Start = start, End = end, PickMode = RulerPickMode.Idle });
+    }
 
     public void SetContext(bool buildModeEnabled, bool playerAlive)
     {
@@ -72,6 +80,7 @@ internal sealed class RulerController
         }
 
         SetState(State with { Start = start, End = end, PickMode = RulerPickMode.Idle });
+        EndpointsCommitted?.Invoke();
         if (resetOpposite)
             NoticeRequested?.Invoke(RulerNotice.SetOtherEndpoint);
         return true;

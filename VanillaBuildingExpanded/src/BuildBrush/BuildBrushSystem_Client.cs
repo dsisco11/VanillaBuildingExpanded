@@ -25,6 +25,8 @@ public class BuildBrushSystem_Client : ModSystem
     private BuildBrushControllerClient? controller;
     private BuildModeIndicatorBinding? modeIndicator;
     private BuildBrushWheelInput? wheelInput;
+    private RulerController? ruler;
+    private RulerPersistence? rulerPersistence;
     private IInventory? subscribedHotbar;
     private long fastTickId;
     private long slowTickId;
@@ -163,6 +165,11 @@ public class BuildBrushSystem_Client : ModSystem
         if (byPlayer != Player)
             return;
 
+        if (ruler is null)
+        {
+            ruler = new RulerController();
+            rulerPersistence = new RulerPersistence(api!, ruler);
+        }
         if (subscribedHotbar is not null)
             subscribedHotbar.SlotModified -= Event_HotbarSlotModified;
         subscribedHotbar = byPlayer.InventoryManager?.GetHotbarInventory();
@@ -187,6 +194,9 @@ public class BuildBrushSystem_Client : ModSystem
     /// <summary>Retires session artwork before clearing mode, without sending to a departing server.</summary>
     private void Event_LeaveWorld()
     {
+        rulerPersistence?.Dispose();
+        rulerPersistence = null;
+        ruler = null;
         modeIndicator?.Dispose();
         modeIndicator = null;
         if (subscribedHotbar is not null)

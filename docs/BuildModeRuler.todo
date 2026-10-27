@@ -79,29 +79,42 @@ Completion criteria:
 Prerequisites: Phase 1 state and world-identity/validation contracts.
 Outcome: Complete and partial endpoint records can be restored for the correct world without silently losing existing data.
 
-    ☐ Add client-only persistence through LoadModConfig/StoreModConfig in vanillabuildingexpanded-rulers.json.
-        ☐ Use a schema version and dictionary keyed by World.SavegameIdentifier; store nullable start/end X/local-Y/Z/dimension records.
-        ☐ Keep config coordination with the client ruler owner; do not extend VbeConfig's shared settings or brush packets with endpoint data.
-        ☐ Load only once the current identity is available; isolate single-player worlds, multiplayer worlds, and replacement saves at the same address.
-        ☐ Missing identity reports a persistence problem and leaves this session memory-only; do not use name, seed, address, or a global key as a substitute.
-        ☐ Save successful endpoint mutations, including cross-dimension clearing, in one update; preserve every unrelated world entry.
-        ☐ Do not save entering pick mode, per-frame refreshes, visibility, pending gestures, GUI state, or GPU state.
-    ☐ Validate and report failures explicitly.
-        ☐ Treat a missing file as normal first use; distinguish malformed data, unsupported schema, invalid coordinates/dimensions, and stored cross-dimension pairs.
-        ☐ Log errors and issue localized in-game feedback; never overwrite an unreadable/unsupported file with empty defaults.
-        ☐ Validate against world coordinate/dimension rules without block or chunk availability checks; retain valid coordinates if blocks later change.
-        ☐ On write failure retain the edit in memory, mark it dirty/unsaved, and notify that persistence failed.
-        ☐ Retry dirty data on the next explicit edit or orderly exit; clear dirty status only after success and never announce failed writes as successful.
-    ☐ Add persistence tests with isolated temporary test files or existing config mocks.
-        ☐ Round-trip empty, partial, complete, negative-coordinate, and dimension-bearing records exactly.
-        ☐ Prove isolation across two local worlds, two multiplayer worlds, and a replacement save at the same address.
-        ☐ Cover missing identity/file, corrupt/unsupported/invalid data, unwritable storage, retries, and preservation of other entries and original unreadable content.
-        ☐ Prove transient state is absent from serialized data and clean up only test-owned files.
+Phase 2 contract findings and traceability:
+
+- Inherited proposal: Client state and persistence controls schema/world isolation, validation, failure reporting, dirty retries, and transient-state exclusion; Bounds contract controls copied local-Y/dimension records and atomic cross-dimension clearing. Phase 1 sources RulerController/RulerState supply coherent immutable snapshots. VbeConfig is prior art for API usage only; its silent fallback behavior must not be copied.
+- Installed engine evidence (G:\Vintagestory\VintagestoryLib.dll, 1.22.7): SaveGame.CreateNew assigns a GUID and serializes SavegameIdentifier; ServerMain.CreatePacketIdentification transmits that save field; ClientSystemStartup.HandleServerIdent copies it into ServerInfo before startup callbacks/map initialization; ClientMain.SavegameIdentifier reads that field. Use the existing local-player join boundary, after identification/map readiness, and still guard missing identity. Replacement saves receive a new GUID even at the same address; actual restart/server smoke tests remain Phase 6.
+- Common\API\ICoreAPI.cs documents missing-file null and side-local config storage. Installed APIBase.LoadModConfig parses a JSON object; StoreModConfig writes directly with File.WriteAllText. Necessary safety implication: use StoreModConfig for a uniquely named staging file in GamePaths.ModConfig, then same-directory replacement; clean only that staging path. Load/merge again on each save to preserve other entries and reject newly unreadable/unsupported content.
+- Common\API\IBlockAccessor.cs, installed BlockAccessorBase.IsValidPos/WorldMap.IsValidPos, Math\BlockPos.cs, and Config\Dimensions.cs control validation. Validate integer record shape and representable nonnegative dimension/local-Y encoding before calling dimension-aware IsValidPos(BlockPos); do not infer validity from loaded blocks/chunks or whitelist only currently loaded dimensions. The native boundary predicate is permissive and is not a dimension registry. World-coordinate authority remains the API, not the mathematical bounds tests.
+- Invalid active-world records will be reported and left untouched on disk, with no endpoints restored; only a subsequent explicit valid endpoint commit may replace that world's entry. Other worlds' records/unknown metadata are preserved verbatim as JSON values. Whole-file parse/schema failures block writes until repaired, never reset the file.
+- Mapping: config schema/identity -> proposal Client state and persistence -> raw JSON round-trip/isolation tests and client-owner join/exit hooks; validation/data preservation -> same section and Bounds contract -> strict shape/representation/API checks and malformed/unsupported/other-entry preservation tests; mutations/retries -> endpoint commit event and disposable persistence coordinator -> cross-dimension, identical-coordinate retry, write-failure/exit tests.
+- The preliminary Phase 1 identity-readiness question is resolved at installed-implementation level by the GUID generation, packet assignment, and client startup sequence above; no live restart/server behavior is claimed yet. Those end-to-end checks remain explicitly required in Phase 6. The existing engine Newtonsoft.Json assembly is referenced without copying/bundling it or adding a package, allowing lossless preservation of unrelated JSON entries.
+- Verification (2026-10-26): separate verification agent ran dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj --filter "FullyQualifiedName~RulerControllerTests|FullyQualifiedName~RulerPersistenceTests" --no-restore --verbosity minimal: 77/77 passed, exit 0 (shell 349). .\build.ps1 --target=Build passed JSON validation and clean/publish, exit 0 (shell 350). Existing compiler/analyzer and System.Security.Cryptography.Pkcs advisory warnings remain outside this phase. Test-owned directories and staging files were cleaned; translation/global-path fixtures are serialized and restore their prior values.
+- Second implementation review (2026-10-26): reread new persistence source/tests and reviewed controller, client owner, localization, and project-reference diffs against every Phase 2 task and inherited proposal requirement. Checked no write on hydration/transient changes, strict records/encoding, active-entry quarantine, re-read/merge behavior, staging/promotion failure safety, same-coordinate and exit retries, local-join ownership, and detach/disposal. No remaining Phase 2 code issue identified.
+- Independent completion audit (2026-10-26): a fresh read-only reviewer applied audit-stage-completion, independently inspected the full proposal/selected contract, inherited repository/API sources, installed engine 1.22.7 implementation, changed source/tests, and verification outputs. Verdict: Phase 2 fully satisfied; no confirmed issues, partially satisfied requirements, or blocking evidence gaps. Phase 2 entries were checked only after that verdict. Live restart/server qualification remains Phase 6.
+
+    ✔ Add client-only persistence through LoadModConfig/StoreModConfig in vanillabuildingexpanded-rulers.json.
+        ✔ Use a schema version and dictionary keyed by World.SavegameIdentifier; store nullable start/end X/local-Y/Z/dimension records.
+        ✔ Keep config coordination with the client ruler owner; do not extend VbeConfig's shared settings or brush packets with endpoint data.
+        ✔ Load only once the current identity is available; isolate single-player worlds, multiplayer worlds, and replacement saves at the same address.
+        ✔ Missing identity reports a persistence problem and leaves this session memory-only; do not use name, seed, address, or a global key as a substitute.
+        ✔ Save successful endpoint mutations, including cross-dimension clearing, in one update; preserve every unrelated world entry.
+        ✔ Do not save entering pick mode, per-frame refreshes, visibility, pending gestures, GUI state, or GPU state.
+    ✔ Validate and report failures explicitly.
+        ✔ Treat a missing file as normal first use; distinguish malformed data, unsupported schema, invalid coordinates/dimensions, and stored cross-dimension pairs.
+        ✔ Log errors and issue localized in-game feedback; never overwrite an unreadable/unsupported file with empty defaults.
+        ✔ Validate against world coordinate/dimension rules without block or chunk availability checks; retain valid coordinates if blocks later change.
+        ✔ On write failure retain the edit in memory, mark it dirty/unsaved, and notify that persistence failed.
+        ✔ Retry dirty data on the next explicit edit or orderly exit; clear dirty status only after success and never announce failed writes as successful.
+    ✔ Add persistence tests with isolated temporary test files or existing config mocks.
+        ✔ Round-trip empty, partial, complete, negative-coordinate, and dimension-bearing records exactly.
+        ✔ Prove isolation across two local worlds, two multiplayer worlds, and a replacement save at the same address.
+        ✔ Cover missing identity/file, corrupt/unsupported/invalid data, unwritable storage, retries, and preservation of other entries and original unreadable content.
+        ✔ Prove transient state is absent from serialized data and clean up only test-owned files.
 
 Completion criteria:
 
-    ☐ Focused persistence tests prove endpoint fidelity, world isolation, and non-destructive failure handling.
-    ☐ The controller publishes one saveable mutation for cross-dimension relocation and never persists a mismatched endpoint pair.
+    ✔ Focused persistence tests prove endpoint fidelity, world isolation, and non-destructive failure handling.
+    ✔ The controller publishes one saveable mutation for cross-dimension relocation and never persists a mismatched endpoint pair.
 
 ## Phase 3: Capture endpoint gestures without gameplay fallthrough
 
