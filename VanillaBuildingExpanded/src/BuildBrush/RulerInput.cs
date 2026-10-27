@@ -108,10 +108,9 @@ internal sealed class RulerInput : IDisposable
         var player = api.World.Player;
         BlockPos? position = player.CurrentEntitySelection is null
             ? player.CurrentBlockSelection?.Position?.Copy() : null;
-        bool valid = position is not null && position.dimension >= 0
-            && position.Y >= 0 && position.Y < BlockPos.DimensionBoundary
-            && (long)position.dimension * BlockPos.DimensionBoundary + position.Y <= int.MaxValue
-            && api.World.BlockAccessor.IsValidPos(position);
+        bool valid = position is not null
+            && new RulerEndpoint(position.X, position.Y, position.Z, position.dimension)
+                .IsValid(api.World.BlockAccessor);
         ruler.TrySelect(position, valid);
     }
 

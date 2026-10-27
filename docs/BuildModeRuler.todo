@@ -204,34 +204,38 @@ Completion criteria:
 Prerequisites: Phase 1 bounds/render contracts; Phases 2-4 session/input/HUD integration.
 Outcome: Visibility controls exactly one depth-tested renderer, with no resources or callbacks surviving the world session.
 
-    ☐ Implement client-owned RulerRenderer : IRenderer with a reusable unit-cube line mesh and engine wireframe shader.
-        ☐ Render 12 edges scaled by inclusive sizes and positioned at renderMin; use double-precision camera-relative subtraction before float matrices.
-        ☐ Reuse qualified WireframeCube/LineMeshUtil facilities; do not introduce a custom shader or tessellate block meshes.
-        ☐ Do not allocate meshes, sample blocks, or rebuild geometry per frame.
-        ☐ Draw after opaque terrain with depth test enabled/depth writes disabled; qualify order against brush preview/selection/transparency in Phase 6.
-        ☐ Apply only a small validated visual expansion/depth bias without changing measured bounds.
-        ☐ Restore shader/line/depth/blend state to the render-stage contract, including failures; do not trust helper cleanup to restore arbitrary prior state.
-        ☐ Do not depend on RenderRange or endpoint-distance culling; omit explicit culling unless based on the whole box.
-        ☐ Log/notify GPU/setup failure explicitly while keeping the size readout usable.
-    ☐ Coordinate registration and session lifecycle from the existing client owner/binding.
-        ☐ Register exactly one renderer only for enabled build mode, checked visibility, two valid same-dimension endpoints, matching player dimension, and an available session.
-        ☐ Unregister on loss of any condition at the original stage; endpoint edits update bounds without duplicate registration.
-        ☐ Reuse at most one mesh per session; dispose it on departure/system disposal with idempotent hide/show and teardown.
-        ☐ Start joins with mode disabled and visibility unchecked; load endpoints without enabling either.
-        ☐ Mode-off/death cancels picking and hides while retaining endpoints and the session checkbox preference; mode-on restores eligible visibility.
-        ☐ Dimension change cancels picking and hides without deleting saved endpoints; retain size text and notify mismatch outside the section.
-        ☐ Returning dimensions restores eligible rendering unless a new endpoint replaced the old-dimension ruler.
-        ☐ Retry dirty config while world identity remains available on orderly exit, then detach input/binding/state callbacks and clear session ownership.
-    ☐ Add renderer-registration and lifecycle integration tests.
-        ☐ Assert exact renderMin/exclusive max and scale, not just that a draw callback ran.
-        ☐ Exercise each eligibility condition, zero/one registrations, same-stage balanced unregistration, and bound updates without re-registration.
-        ☐ Verify mode/death/dimension transitions, preference restoration, world leave/rejoin, GUI rebuilds, resource failures, and repeated disposal.
-        ☐ Assert no stale callbacks/registrations/mesh references or prior-world state leakage; verify size readout still works when drawing fails.
+Traceability: Phase 5 -> BuildModeRuler.proposal.md, Bounds contract / Client state and persistence / Wireframe renderer / Verification and acceptance -> exact inclusive local-Y bounds, 12 unique edges, native shader, eligibility and balanced session ownership. RulerRenderer/RulerRenderBinding and RulerRenderingTests, RulerPersistenceTests, BuildModeHudControlsTests.Ruler supply implementation/evidence; supported-game visual qualification remains Phase 6. Native 1.22.7 WireframeCube/LineMeshUtil, CameraPos dimension encoding, wireframe.vsh and render API/GL setters were consulted. Drawing uses a fixed 0.002-block expansion and zero flags (no extra Z-offset beyond the shader's built-in 0.0014 W bias); exact depth/line state is captured via the installed engine OpenTK binding, blend state is never changed.
+
+Verification: Delegated combined ruler/HUD/table/indicator selection passed 253/253 (shell 399); normal build.ps1 --target=Build and JSON validation passed with 0 errors (shell 394), existing warnings/advisories only. Direct second review checked bounds/matrices, native dimension encoding, state restoration, failure handling and deferred unregistration (native render-stage iteration indexes the live list), owner wiring, and lifecycle/test coverage. Fresh independent read-only completion audit applied audit-stage-completion, consulted the full plan/proposal and implementation/native sources, and found Phase 5 fully satisfied at its implementation boundary with no blocking issues or evidence gaps. No live visual or input acceptance is claimed.
+
+    ✔ Implement client-owned RulerRenderer : IRenderer with a reusable unit-cube line mesh and engine wireframe shader.
+        ✔ Render 12 edges scaled by inclusive sizes and positioned at renderMin; use double-precision camera-relative subtraction before float matrices.
+        ✔ Reuse qualified WireframeCube/LineMeshUtil facilities; do not introduce a custom shader or tessellate block meshes.
+        ✔ Do not allocate meshes, sample blocks, or rebuild geometry per frame.
+        ✔ Draw after opaque terrain with depth test enabled/depth writes disabled; qualify order against brush preview/selection/transparency in Phase 6.
+        ✔ Apply only a small validated visual expansion/depth bias without changing measured bounds.
+        ✔ Restore shader/line/depth/blend state to the render-stage contract, including failures; do not trust helper cleanup to restore arbitrary prior state.
+        ✔ Do not depend on RenderRange or endpoint-distance culling; omit explicit culling unless based on the whole box.
+        ✔ Log/notify GPU/setup failure explicitly while keeping the size readout usable.
+    ✔ Coordinate registration and session lifecycle from the existing client owner/binding.
+        ✔ Register exactly one renderer only for enabled build mode, checked visibility, two valid same-dimension endpoints, matching player dimension, and an available session.
+        ✔ Unregister on loss of any condition at the original stage; endpoint edits update bounds without duplicate registration.
+        ✔ Reuse at most one mesh per session; dispose it on departure/system disposal with idempotent hide/show and teardown.
+        ✔ Start joins with mode disabled and visibility unchecked; load endpoints without enabling either.
+        ✔ Mode-off/death cancels picking and hides while retaining endpoints and the session checkbox preference; mode-on restores eligible visibility.
+        ✔ Dimension change cancels picking and hides without deleting saved endpoints; retain size text and notify mismatch outside the section.
+        ✔ Returning dimensions restores eligible rendering unless a new endpoint replaced the old-dimension ruler.
+        ✔ Retry dirty config while world identity remains available on orderly exit, then detach input/binding/state callbacks and clear session ownership.
+    ✔ Add renderer-registration and lifecycle integration tests.
+        ✔ Assert exact renderMin/exclusive max and scale, not just that a draw callback ran.
+        ✔ Exercise each eligibility condition, zero/one registrations, same-stage balanced unregistration, and bound updates without re-registration.
+        ✔ Verify mode/death/dimension transitions, preference restoration, world leave/rejoin, GUI rebuilds, resource failures, and repeated disposal.
+        ✔ Assert no stale callbacks/registrations/mesh references or prior-world state leakage; verify size readout still works when drawing fails.
 
 Completion criteria:
 
-    ☐ Focused rendering/lifecycle tests establish exact drawing inputs and balanced resource ownership.
-    ☐ The complete feature is wired locally with no server/network/placement-state changes.
+    ✔ Focused rendering/lifecycle tests establish exact drawing inputs and balanced resource ownership.
+    ✔ The complete feature is wired locally with no server/network/placement-state changes.
 
 ## Phase 6: Verify the supported runtime and document delivery
 

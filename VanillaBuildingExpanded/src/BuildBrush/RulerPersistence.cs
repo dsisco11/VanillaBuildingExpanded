@@ -166,10 +166,7 @@ internal sealed class RulerPersistence : IDisposable
 
     private bool IsValidEndpoint(RulerEndpoint endpoint)
     {
-        long internalY = (long)endpoint.Dimension * BlockPos.DimensionBoundary + endpoint.Y;
-        return endpoint.Dimension >= 0 && endpoint.Y >= 0 && endpoint.Y < BlockPos.DimensionBoundary
-            && internalY <= int.MaxValue
-            && world.BlockAccessor.IsValidPos(new BlockPos(endpoint.X, endpoint.Y, endpoint.Z, endpoint.Dimension));
+        return endpoint.IsValid(world.BlockAccessor);
     }
 
     private static JToken WriteEndpoint(RulerEndpoint? endpoint) => endpoint is { } value

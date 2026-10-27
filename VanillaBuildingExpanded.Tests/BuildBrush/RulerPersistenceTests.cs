@@ -397,8 +397,10 @@ public sealed class RulerPersistenceTests
     {
         using var fixture = new Fixture();
         // The native interface's inherited range overloads cannot be proxied by Moq.
-        var player = Assert.IsType<ClientPlayer>(RuntimeHelpers.GetUninitializedObject(typeof(ClientPlayer)));
+        var player = RulerRenderingTests.CreatePlayer();
         var other = Assert.IsType<ClientPlayer>(RuntimeHelpers.GetUninitializedObject(typeof(ClientPlayer)));
+        fixture.Api.Setup(a => a.Render).Returns(new Mock<IRenderAPI>().Object);
+        fixture.Api.Setup(a => a.Event).Returns(new Mock<IClientEventAPI>().Object);
         fixture.World.Setup(w => w.Player).Returns(player);
         var brushWorld = TestHelpers.CreateMockWorld();
         var brushController = new BuildBrushControllerClient(fixture.Api.Object,
@@ -412,9 +414,13 @@ public sealed class RulerPersistenceTests
             Assert.Equal(0, fixture.ReadCount);
             Invoke(system, "Event_PlayerJoin", player);
             var ruler = Assert.IsType<RulerController>(GetField(system, "ruler"));
+            var rendering = Assert.IsType<RulerRenderBinding>(GetField(system, "rulerRendering"));
+            Assert.False(ruler.State.ShowRuler);
+            Assert.False(ruler.State.IsBuildModeEnabled);
             int reads = fixture.ReadCount;
             Invoke(system, "Event_PlayerJoin", player);
             Assert.Same(ruler, GetField(system, "ruler"));
+            Assert.Same(rendering, GetField(system, "rulerRendering"));
             Assert.Equal(reads, fixture.ReadCount);
             fixture.FailWrites = true;
             Commit(ruler, true, new BlockPos(10, 65, 20, 0));
@@ -422,10 +428,19 @@ public sealed class RulerPersistenceTests
             Invoke(system, "Event_LeaveWorld");
             Assert.Null(GetField(system, "ruler"));
             Assert.Null(GetField(system, "rulerPersistence"));
+            Assert.Null(GetField(system, "rulerRendering"));
             Assert.Equal(10, fixture.Read()["worlds"]!["world-a"]!["start"]!["x"]!.Value<int>());
             int writes = fixture.Writes.Count;
             Commit(ruler, false, new BlockPos(14, 67, 23, 0));
             Assert.Equal(writes, fixture.Writes.Count);
+            Invoke(system, "Event_PlayerJoin", player);
+            var fresh = Assert.IsType<RulerController>(GetField(system, "ruler"));
+            Assert.NotSame(ruler, fresh);
+            Assert.NotSame(rendering, GetField(system, "rulerRendering"));
+            Assert.Equal(new RulerEndpoint(10, 65, 20, 0), fresh.State.Start);
+            Assert.Null(fresh.State.End);
+            Assert.False(fresh.State.ShowRuler);
+            Assert.False(fresh.State.IsBuildModeEnabled);
         }
         finally { Invoke(system, "Event_LeaveWorld"); }
     }

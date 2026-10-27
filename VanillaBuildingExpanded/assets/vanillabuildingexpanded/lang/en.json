@@ -14,6 +14,8 @@
   "ruler-aim-at-block": "Aim at a block",
   "ruler-set-other-endpoint": "Ruler moved to this dimension. Set the other endpoint.",
   "ruler-set-both-endpoints": "Set both ruler endpoints to show the ruler.",
+  "ruler-dimension-mismatch": "The ruler belongs to another dimension. Return there to see it, or set a new endpoint here.",
+  "ruler-render-unavailable": "The ruler wireframe is unavailable for this world session. Sizes still work; check the game log.",
   "build-info-title": "Build Mode",
   "build-info-suspended": "Build Mode (suspended)",
   "build-info-snapping-label": "Snapping:",

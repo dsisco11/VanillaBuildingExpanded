@@ -29,6 +29,7 @@ public class BuildBrushSystem_Client : ModSystem
     private RulerController? ruler;
     private RulerPersistence? rulerPersistence;
     private RulerInput? rulerInput;
+    private RulerRenderBinding? rulerRendering;
     private IInventory? subscribedHotbar;
     private long fastTickId;
     private long slowTickId;
@@ -174,6 +175,7 @@ public class BuildBrushSystem_Client : ModSystem
             ruler = new RulerController();
             rulerPersistence = new RulerPersistence(api!, ruler);
             ruler.NoticeRequested += OnRulerNotice;
+            rulerRendering = new RulerRenderBinding(api!, ruler);
         }
         if (subscribedHotbar is not null)
             subscribedHotbar.SlotModified -= Event_HotbarSlotModified;
@@ -202,6 +204,8 @@ public class BuildBrushSystem_Client : ModSystem
     {
         rulerInput?.Dispose();
         rulerInput = null;
+        rulerRendering?.Dispose();
+        rulerRendering = null;
         if (ruler is not null)
         {
             ruler.CancelPicking();
@@ -536,6 +540,7 @@ public class BuildBrushSystem_Client : ModSystem
         bool enabled = controller.State.IsActive;
         bool alive = enabled && Player?.Entity?.Alive == true;
         ruler.SetContext(enabled, alive);
+        rulerRendering?.Refresh();
         if (enabled && alive && rulerInput is null)
         {
             // The public event API has no window-focus hook in 1.22.7.

@@ -1,5 +1,8 @@
 using System;
 
+using Vintagestory.API.Common;
+using Vintagestory.API.MathTools;
+
 namespace VanillaBuildingExpanded.BuildBrush;
 
 internal enum RulerPickMode
@@ -18,7 +21,13 @@ internal enum RulerNotice
     SetBothEndpoints
 }
 
-internal readonly record struct RulerEndpoint(int X, int Y, int Z, int Dimension);
+internal readonly record struct RulerEndpoint(int X, int Y, int Z, int Dimension)
+{
+    public bool IsValid(IBlockAccessor accessor) => Dimension >= 0
+        && Y >= 0 && Y < BlockPos.DimensionBoundary
+        && (long)Dimension * BlockPos.DimensionBoundary + Y <= int.MaxValue
+        && accessor.IsValidPos(new BlockPos(X, Y, Z, Dimension));
+}
 
 internal readonly record struct RulerBounds
 {
