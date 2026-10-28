@@ -88,6 +88,15 @@ public sealed class WorkAreaRenderingTests
     }
 
     [Fact]
+    public void VertexShader_PreservesProjectedDepthForTerrainOcclusion()
+    {
+        string source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory,
+            "assets", "vanillabuildingexpanded", "shaders", "vbe-workarea.vsh"));
+        Assert.Contains("gl_Position = projectionMatrix * modelViewMatrix * vec4(vertexPositionIn, 1.0);", source);
+        Assert.Equal(1, source.Split("gl_Position", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
     public void UnitMesh_HasExactlyTwelveUniqueCellEdgesAndNoWarpOrExtraDepthFlags()
     {
         var mesh = WorkAreaRenderer.CreateUnitCube();

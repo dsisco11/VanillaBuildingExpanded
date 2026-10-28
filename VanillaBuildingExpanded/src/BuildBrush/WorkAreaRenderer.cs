@@ -131,7 +131,7 @@ internal sealed class WorkAreaRenderer : IRenderer
             xyz = new float[8 * 3],
             Rgba = new byte[8 * 4],
             Indices = new int[24],
-            // The work-area shader applies its own small clip-space depth bias.
+            // Separation from block faces comes from VisualExpansion, not a clip-space depth bias.
             Flags = new int[8]
         };
         data.SetMode(EnumDrawMode.Lines);

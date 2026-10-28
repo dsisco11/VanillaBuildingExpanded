@@ -6,5 +6,4 @@ uniform mat4 modelViewMatrix;
 
 void main() {
     gl_Position = projectionMatrix * modelViewMatrix * vec4(vertexPositionIn, 1.0);
-    gl_Position.w += 0.0014;
 }
