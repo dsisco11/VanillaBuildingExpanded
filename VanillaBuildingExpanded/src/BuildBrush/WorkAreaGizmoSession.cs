@@ -32,13 +32,14 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
     public bool IsPending => pending;
 
     public WorkAreaGizmoSession(ICoreClientAPI api, WorkAreaController workArea, List<Action<bool>> focusListeners,
-        Func<GizmoContext>? capture = null, ILineRenderState? renderState = null)
+        Func<GizmoContext>? capture = null, IOitLineRenderState? renderState = null,
+        ILineRenderState? labelRenderState = null)
     {
         this.api = api;
         world = api.World;
         this.workArea = workArea;
         creationTarget = new WorkAreaTerrainTarget(api).Resolve;
-        renderer = new(api, manager, capture, renderState);
+        renderer = new(api, manager, capture, renderState, labelRenderState);
         input = new(api, manager, renderer, Eligible, focusListeners, this);
         workArea.Changed += OnChanged;
         api.Event.LeaveWorld += Dispose;

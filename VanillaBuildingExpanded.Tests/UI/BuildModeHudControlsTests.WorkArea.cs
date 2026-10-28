@@ -416,11 +416,11 @@ public sealed partial class BuildModeHudControlsTests
         manager.Add(gizmo);
         using var input = new GizmoInputAdapter(f.Api.Object, manager, renderer, () => true, []);
         renderer.SetActive(true);
-        renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
+        renderer.OnRenderFrame(0, EnumRenderStage.OIT);
         renderer.OnRenderFrame(0, EnumRenderStage.AfterBlit);
         var events = Mock.Get(f.Api.Object.Event);
         events.Raise(ev => ev.MouseMove += null!, new MouseEvent(e.X, e.Y));
-        renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
+        renderer.OnRenderFrame(0, EnumRenderStage.OIT);
         bool canPick = target is "passive" or "cursor-hud";
         Assert.Equal(canPick, gizmo.HoveredHandle is not null);
         renderer.OnRenderFrame(0, EnumRenderStage.AfterBlit);

@@ -15,13 +15,15 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
     private readonly ICoreClientAPI api;
     private readonly GizmoManager manager;
     private readonly Func<GizmoContext> capture;
-    private readonly ILineRenderState state;
-    private IShaderProgram? shader;
+    private readonly IOitLineRenderState state;
+    private readonly ILineRenderState labelState;
+    private readonly List<GizmoHandleDraw> labelDraws = [];
+    private readonly OitLineShader shader;
     private readonly Dictionary<GizmoShape, MeshRef> meshes = [];
     private GizmoContext? context;
     private GizmoContext? drawnContext;
     private bool desired;
-    private bool opaqueRegistered;
+    private bool oitRegistered;
     private bool overlayRegistered;
     private bool failed;
     private bool disposed;
@@ -36,12 +38,15 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
     public event Action<GizmoContext>? ContextReady;
 
     public GizmoRenderAdapter(ICoreClientAPI api, GizmoManager manager,
-        Func<GizmoContext>? capture = null, ILineRenderState? state = null)
+        Func<GizmoContext>? capture = null, IOitLineRenderState? state = null,
+        ILineRenderState? labelState = null)
     {
         this.api = api;
         this.manager = manager;
         this.capture = capture ?? (() => GizmoCamera.Capture(api));
-        this.state = state ?? new GizmoRenderState(api.Render);
+        this.state = state ?? new OitLineRenderState(api.Render);
+        this.labelState = labelState ?? new GizmoRenderState(api.Render);
+        shader = new OitLineShader(api);
     }
 
     public void SetActive(bool active)
@@ -50,6 +55,7 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
         desired = active;
         if (!active)
         {
+            labelDraws.Clear();
             context = null;
             drawnContext = null;
             manager.InvalidateFrame();
@@ -75,10 +81,10 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
         {
             try
             {
-                if (!opaqueRegistered)
+                if (!oitRegistered)
                 {
-                    api.Event.RegisterRenderer(this, EnumRenderStage.Opaque, "vbe-gizmos");
-                    opaqueRegistered = true;
+                    api.Event.RegisterRenderer(this, EnumRenderStage.OIT, "vbe-gizmos");
+                    oitRegistered = true;
                 }
                 if (!overlayRegistered)
                 {
@@ -91,10 +97,10 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
         }
         try
         {
-            if (opaqueRegistered)
+            if (oitRegistered)
             {
-                api.Event.UnregisterRenderer(this, EnumRenderStage.Opaque);
-                opaqueRegistered = false;
+                api.Event.UnregisterRenderer(this, EnumRenderStage.OIT);
+                oitRegistered = false;
             }
         }
         finally
@@ -117,8 +123,9 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
         callbackDepth++;
         try
         {
-            if (stage == EnumRenderStage.Opaque)
+            if (stage == EnumRenderStage.OIT)
             {
+                labelDraws.Clear();
                 var next = capture();
                 if (next.Camera is null) throw new InvalidOperationException("Gizmo camera capture returned no camera.");
                 if (context is { Camera: { } old } && (context.Dimension != next.Dimension
@@ -130,17 +137,19 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
                 }
                 context = next;
                 ContextReady?.Invoke(next);
-            }
-            else if (stage == EnumRenderStage.AfterBlit && context is { } current)
-            {
+                if (disposed || failed || !desired) return;
                 drawing = true;
                 try
                 {
-                    manager.Render(current);
-                    PruneLabelTextures();
-                    if (!disposed && !failed && desired) drawnContext = current;
+                    manager.Render(next);
+                    if (!disposed && !failed && desired) drawnContext = next;
                 }
                 finally { drawing = false; }
+            }
+            else if (stage == EnumRenderStage.AfterBlit && drawnContext is not null)
+            {
+                DrawLabels();
+                PruneLabelTextures();
             }
         }
         catch (Exception error) when (IsRenderFailure(error)) { Fail(error); }
@@ -153,16 +162,16 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
         var geometry = draw.Geometry;
         var current = geometry.Context;
         if (!drawing || disposed || failed || !ReferenceEquals(current, context))
-            throw new InvalidOperationException("Gizmos draw only inside their session's overlay callback.");
+            throw new InvalidOperationException("Gizmo lines draw only inside their session's OIT callback.");
         if (!CanDraw(geometry)) return;
         var render = api.Render;
-        var shader = GetShader();
+        var shader = this.shader.GetProgram();
         var previous = render.CurrentActiveShader;
         state.Capture();
         try
         {
             previous?.Stop();
-            render.GLDisableDepthTest();
+            render.GLEnableDepthTest();
             render.GLDepthMask(false);
             shader.Use();
             shader.UniformMatrix("projectionMatrix", ToFloat(current.Camera!.Projection));
@@ -175,10 +184,14 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
             if (mesh.Disposed || !mesh.Initialized) throw new InvalidOperationException("Gizmo mesh is unavailable.");
             render.LineWidth = draw.Appearance.LineWidth;
             var color = draw.Appearance.Color;
-            shader.Uniform("colorIn", color.X, color.Y, color.Z, color.W);
             shader.UniformMatrix("modelViewMatrix", ModelView(current.Camera!, geometry));
+            state.SetOccludedDepthTest(false);
+            shader.Uniform("colorIn", color.X, color.Y, color.Z, color.W);
             if (CanDraw(geometry)) render.RenderMesh(mesh);
-            if (CanDraw(geometry)) DrawLabel(draw);
+            state.SetOccludedDepthTest(true);
+            shader.Uniform("colorIn", color.X, color.Y, color.Z, color.W * 0.3f);
+            if (CanDraw(geometry)) render.RenderMesh(mesh);
+            if (CanDraw(geometry) && geometry.Handle.Label is not null) labelDraws.Add(draw);
         }
         finally
         {
@@ -195,42 +208,6 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
         && !geometry.Handle.IsDisposed && geometry.Handle.Visible
         && ReferenceEquals(geometry.Handle.Owner, geometry.Owner)
         && geometry.Owner.Owner == manager && geometry.Owner.IsEligible(geometry.Context.Dimension);
-
-    private IShaderProgram GetShader()
-    {
-        if (shader is null || shader.Disposed)
-        {
-            shader = api.Shader.NewShaderProgram()
-                ?? throw new InvalidOperationException("Gizmo shader creation returned no program.");
-            var vertex = api.Shader.NewShader(EnumShaderType.VertexShader)
-                ?? throw new InvalidOperationException("Gizmo vertex shader creation failed.");
-            vertex.Code = """
-                #version 330 core
-                layout(location = 0) in vec3 vertexPositionIn;
-                uniform mat4 projectionMatrix;
-                uniform mat4 modelViewMatrix;
-                void main() {
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(vertexPositionIn, 1.0);
-                }
-                """;
-            shader.VertexShader = vertex;
-            var fragment = api.Shader.NewShader(EnumShaderType.FragmentShader)
-                ?? throw new InvalidOperationException("Gizmo fragment shader creation failed.");
-            fragment.Code = """
-                #version 330 core
-                uniform vec4 colorIn;
-                layout(location = 0) out vec4 outColor;
-                void main() {
-                    outColor = colorIn;
-                }
-                """;
-            shader.FragmentShader = fragment;
-            api.Shader.RegisterMemoryShaderProgram("vbe-gizmo-overlay", shader);
-            if (!shader.Compile()) throw new InvalidOperationException("The unlit gizmo shader failed to compile.");
-        }
-        if (shader.LoadError) throw new InvalidOperationException("The unlit gizmo shader is unavailable.");
-        return shader;
-    }
 
     internal static float[] ModelView(GizmoCamera camera, GizmoHandleGeometry part)
     {
@@ -277,6 +254,7 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
         if (failed || disposed) return;
         failed = true;
         desired = false;
+        labelDraws.Clear();
         context = null;
         drawnContext = null;
         try { manager.InvalidateFrame(); }
@@ -317,9 +295,8 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
         try { if (labelShader is { Disposed: false }) labelShader.Dispose(); }
         catch (Exception error) { errors.Add(error); }
         labelShader = null;
-        try { if (shader is { Disposed: false }) shader.Dispose(); }
+        try { shader.Dispose(); }
         catch (Exception error) { errors.Add(error); }
-        shader = null;
         if (errors.Count != 0) throw new AggregateException("Gizmo GPU cleanup failed.", errors);
     }
 
@@ -328,6 +305,7 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
         if (disposed) return;
         disposed = true;
         desired = false;
+        labelDraws.Clear();
         context = null;
         drawnContext = null;
         ContextReady = null;

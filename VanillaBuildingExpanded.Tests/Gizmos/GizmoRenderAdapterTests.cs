@@ -123,6 +123,8 @@ public sealed partial class GizmoRenderAdapterTests
         Assert.Equal(0, ready);
         f.Adapter.SetActive(true);
         Assert.Equal(2, f.Active.Count);
+        Assert.Contains((f.Adapter, EnumRenderStage.OIT), f.Active);
+        Assert.Contains((f.Adapter, EnumRenderStage.AfterBlit), f.Active);
         Assert.Equal(0.49, f.Adapter.RenderOrder);
         f.Frame();
         Assert.Equal(1, ready);
@@ -143,14 +145,17 @@ public sealed partial class GizmoRenderAdapterTests
         f.Frame();
         f.Frame();
         Assert.Equal(3, f.Meshes.Count);
-        Assert.Equal(16, f.Draws);
+        Assert.Equal(32, f.Draws);
         Assert.Equal(16, f.State.Captures);
         Assert.Equal(16, f.State.Restores);
-        f.Render.Verify(r => r.GLDisableDepthTest(), Times.Exactly(16));
+        f.Render.Verify(r => r.GLEnableDepthTest(), Times.Exactly(16));
+        f.Render.Verify(r => r.GLDisableDepthTest(), Times.Never);
         f.Render.Verify(r => r.GLDepthMask(false), Times.Exactly(16));
         f.Render.Verify(r => r.GlToggleBlend(It.IsAny<bool>(), It.IsAny<EnumBlendMode>()), Times.Never);
         f.Previous.Verify(p => p.Use(), Times.Exactly(16));
-        f.Shader.Verify(p => p.Uniform("colorIn", 1f, 0.2f, 0.2f, 0.8f), Times.Exactly(4));
+        f.Shader.Verify(p => p.Uniform("colorIn", 1f, 0.2f, 0.2f, 1f), Times.Exactly(4));
+        f.Shader.Verify(p => p.Uniform("colorIn", 1f, 0.2f, 0.2f, 0.3f), Times.Exactly(4));
+        Assert.Equal(Enumerable.Range(0, 16).SelectMany(_ => new[] { false, true }), f.State.Occluded);
         f.Shader.Verify(p => p.UniformMatrix("modelViewMatrix", It.Is<float[]>(m => m.Length == 16)), Times.Exactly(16));
         f.Adapter.Dispose();
         f.Adapter.Dispose();
@@ -184,44 +189,44 @@ public sealed partial class GizmoRenderAdapterTests
     [InlineData(GizmoShape.Diamond, 1)]
     [InlineData(GizmoShape.Diamond, 2)]
     [InlineData(GizmoShape.Diamond, 3)]
-    public void EveryHandle_IsEightyPercentUntilHoveredOrCapturedAndReturnsAfterCancel(GizmoShape shape, int handle)
+    public void EveryHandle_UsesFullVisibleAndThirtyPercentOccludedOpacityInEveryState(GizmoShape shape, int handle)
     {
         using var f = new Fixture();
         var gizmo = f.Add(shape);
         f.Adapter.SetActive(true);
         f.Frame();
-        Assert.All(f.Colors, color => Assert.Equal(0.8f, color.Alpha));
         var baseline = f.Colors.ToArray();
+        AssertColors();
         gizmo.HoveredHandle = new(handle);
         f.Colors.Clear();
         f.Frame();
-        AssertColors(handle);
+        AssertColors();
         gizmo.HoveredHandle = null;
         var pointer = new GizmoPointer(f.Camera, new(V(10, 10, 0), V(-10, -10, -10)));
         Assert.True(gizmo.BeginInteraction(new(handle), pointer));
         f.Colors.Clear();
         f.Frame();
-        AssertColors(handle);
+        AssertColors();
         gizmo.CancelInteraction();
         f.Colors.Clear();
         f.Frame();
-        AssertColors(null);
+        AssertColors();
 
-        void AssertColors(int? highlighted)
+        void AssertColors()
         {
-            Assert.Equal(4, f.Colors.Count);
-            for (int i = 0; i < 4; i++)
+            Assert.Equal(8, f.Colors.Count);
+            for (int i = 0; i < 8; i++)
             {
                 Assert.Equal(baseline[i].Red, f.Colors[i].Red);
                 Assert.Equal(baseline[i].Green, f.Colors[i].Green);
                 Assert.Equal(baseline[i].Blue, f.Colors[i].Blue);
-                Assert.Equal(i == highlighted ? 1f : 0.8f, f.Colors[i].Alpha);
+                Assert.Equal(i % 2 == 0 ? 1f : 0.3f, f.Colors[i].Alpha);
             }
         }
     }
 
     [Fact]
-    public void UnlitShaderIsSharedAcrossHandlesAndRecreatedAfterNativeReload()
+    public void OitShaderIsSharedAcrossHandlesAndRecreatedAfterNativeReload()
     {
         using var f = new Fixture();
         f.Add();
@@ -230,19 +235,20 @@ public sealed partial class GizmoRenderAdapterTests
         f.Frame();
         f.Frame();
         f.Shaders.Verify(s => s.NewShaderProgram(), Times.Once);
-        f.Shaders.Verify(s => s.RegisterMemoryShaderProgram("vbe-gizmo-overlay", f.Shader.Object), Times.Once);
+        f.Shaders.Verify(s => s.RegisterFileShaderProgram("vbe-oit-lines", f.Shader.Object), Times.Once);
+        f.Shader.VerifySet(s => s.AssetDomain = "vanillabuildingexpanded", Times.Once);
+        f.Shader.VerifySet(s => s.Oit = true, Times.Once);
         f.Shader.Verify(s => s.Compile(), Times.Once);
         f.Shaders.Verify(s => s.GetProgram((int)EnumShaderProgram.Wireframe), Times.Never);
-        Assert.Contains("projectionMatrix * modelViewMatrix", f.Vertex.Object.Code);
-        Assert.Contains("outColor = colorIn;", f.Fragment.Object.Code);
-        Assert.DoesNotContain("light", f.Vertex.Object.Code, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("fog", f.Fragment.Object.Code, StringComparison.OrdinalIgnoreCase);
+        f.Shaders.Verify(s => s.NewShader(It.IsAny<EnumShaderType>()), Times.Never);
         var replacement = new Mock<IShaderProgram>();
         replacement.Setup(s => s.Compile()).Returns(true);
         f.Shader.SetupGet(s => s.Disposed).Returns(true);
         f.Shaders.Setup(s => s.NewShaderProgram()).Returns(replacement.Object);
         f.Frame();
         f.Shaders.Verify(s => s.NewShaderProgram(), Times.Exactly(2));
+        f.Shaders.Verify(s => s.RegisterFileShaderProgram("vbe-oit-lines", replacement.Object), Times.Once);
+        replacement.VerifySet(s => s.Oit = true, Times.Once);
         replacement.Verify(s => s.Use(), Times.Exactly(8));
         f.Adapter.Dispose();
         replacement.Verify(s => s.Dispose(), Times.Once);
@@ -327,11 +333,13 @@ public sealed partial class GizmoRenderAdapterTests
         if (dispose) Assert.All(f.Meshes, mesh => Assert.Equal(1, mesh.Disposals));
     }
 
-    private sealed class FakeState : ILineRenderState
+    private sealed class FakeState : IOitLineRenderState
     {
         public int Captures, Restores;
         public bool FailRestore;
+        public readonly List<bool> Occluded = [];
         public void Capture() => Captures++;
+        public void SetOccludedDepthTest(bool occluded) => Occluded.Add(occluded);
         public void Restore()
         {
             Restores++;
@@ -421,7 +429,7 @@ public sealed partial class GizmoRenderAdapterTests
                 .Callback<Action, string>((action, _) => Pending.Add(action));
             Api.Setup(a => a.TriggerIngameError(It.IsAny<object>(), It.IsAny<string>(), It.IsAny<string>()))
                 .Callback(() => Notices++);
-            Adapter = new(Api.Object, Manager, () => Camera, State);
+            Adapter = new(Api.Object, Manager, () => Camera, State, State);
         }
 
         public ComposedPositionGizmo Add(GizmoShape shape = GizmoShape.Circle)
@@ -434,7 +442,7 @@ public sealed partial class GizmoRenderAdapterTests
 
         public void Frame()
         {
-            Adapter.OnRenderFrame(0, EnumRenderStage.Opaque);
+            Adapter.OnRenderFrame(0, EnumRenderStage.OIT);
             Adapter.OnRenderFrame(0, EnumRenderStage.AfterBlit);
         }
 

@@ -17,6 +17,37 @@ namespace VanillaBuildingExpanded.Tests.BuildBrush;
 [Collection("Table composition")]
 public sealed class WorkAreaGizmoSessionTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BoxAndGizmosShareOneShaderUntilBothRenderersAreDisposed(bool disposeBoxFirst)
+    {
+        using var f = new Fixture();
+        var h = f.H;
+        h.WorkArea.RestoreEndpoints(new(-30, 65, -200, 0), new(30, 70, -200, 0));
+        h.Enable();
+        h.Frame();
+        h.AssertLiveBox();
+        h.Api.Verify(a => a.Shader.RegisterFileShaderProgram("vbe-oit-lines", h.Shader.Object), Times.Once);
+        h.Shader.Verify(s => s.Compile(), Times.Once);
+        if (disposeBoxFirst)
+        {
+            h.Box.Dispose();
+            h.Frame();
+        }
+        else
+        {
+            h.Session.Dispose();
+            h.RunPending();
+            h.AssertLiveBox();
+        }
+        h.Shader.Verify(s => s.Dispose(), Times.Never);
+        if (disposeBoxFirst) h.Session.Dispose();
+        else h.Box.Dispose();
+        h.RunPending();
+        h.Shader.Verify(s => s.Dispose(), Times.Once);
+    }
+
     [Fact]
     public void WorkAreaLabelsUseHoverVisibilityAndMidpointTracksTheAreaName()
     {
@@ -685,7 +716,7 @@ public sealed class WorkAreaGizmoSessionTests
                 Assert.All(h.Meshes, mesh => Assert.Equal(0, mesh.Disposals));
             };
         else h.Player.Entity.Alive = false;
-        h.Session.Renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
+        h.Session.Renderer.OnRenderFrame(0, EnumRenderStage.OIT);
         Assert.Equal(active, h.Active);
         Assert.False(h.WorkArea.IsEditing);
         Assert.Null(h.Session.Renderer.Context);
@@ -1087,11 +1118,10 @@ public sealed class WorkAreaGizmoSessionTests
                     return program.Object;
                 });
             Api.Setup(a => a.Shader.NewShader(It.IsAny<EnumShaderType>())).Returns(() => Mock.Of<IShader>());
-            Api.Setup(a => a.Shader.RegisterMemoryShaderProgram("vbe-gizmo-overlay", Shader.Object)).Returns(49);
+            Api.Setup(a => a.Shader.RegisterFileShaderProgram("vbe-oit-lines", It.IsAny<IShaderProgram>()))
+                .Returns(49);
             Api.Setup(a => a.Shader.RegisterMemoryShaderProgram("vbe-gizmo-labels", It.IsAny<IShaderProgram>()))
                 .Returns(50);
-            Api.Setup(a => a.Shader.RegisterFileShaderProgram("vbe-workarea", It.IsAny<IShaderProgram>()))
-                .Returns(51);
             Shader.Setup(s => s.Compile()).Returns(true);
             Shader.Setup(s => s.UniformMatrix("modelViewMatrix", It.IsAny<float[]>()))
                 .Callback<string, float[]>((_, matrix) => LastModel = (float[])matrix.Clone());
@@ -1112,7 +1142,8 @@ public sealed class WorkAreaGizmoSessionTests
             WorkArea.EndpointsCommitted += OnCommit;
             Box = new(api.Object, workArea, new WorkAreaRenderingTests.FakeState(),
                 () => Session?.Renderer.IsInCallback == true);
-            Session = new(api.Object, workArea, Focus, Capture, new WorkAreaRenderingTests.FakeState());
+            Session = new(api.Object, workArea, Focus, Capture, new WorkAreaRenderingTests.FakeState(),
+                new WorkAreaRenderingTests.FakeState());
         }
 
         public GizmoContext Capture() => new(Player.Entity.Pos.Dimension,
@@ -1121,7 +1152,7 @@ public sealed class WorkAreaGizmoSessionTests
         public void Enable() { WorkArea.SetContext(true, true); WorkArea.SetVisibility(true); }
         public void Frame()
         {
-            Session.Renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
+            Session.Renderer.OnRenderFrame(0, EnumRenderStage.OIT);
             Session.Renderer.OnRenderFrame(0, EnumRenderStage.AfterBlit);
             RunPending();
         }

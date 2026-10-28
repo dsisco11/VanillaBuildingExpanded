@@ -1,17 +1,15 @@
 using OpenTK.Graphics.OpenGL;
 
-using VanillaBuildingExpanded.Rendering;
-
 using Vintagestory.API.Client;
 
-namespace VanillaBuildingExpanded.BuildBrush;
+namespace VanillaBuildingExpanded.Rendering;
 
-internal interface IWorkAreaRenderState : ILineRenderState
+internal interface IOitLineRenderState : ILineRenderState
 {
     void SetOccludedDepthTest(bool occluded);
 }
 
-internal sealed class WorkAreaRenderState(IRenderAPI render) : LineRenderState(render), IWorkAreaRenderState
+internal sealed class OitLineRenderState(IRenderAPI render) : LineRenderState(render), IOitLineRenderState
 {
     private DepthFunction depthFunction;
 

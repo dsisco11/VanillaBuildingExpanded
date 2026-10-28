@@ -51,12 +51,12 @@ public sealed class ComposedPositionGizmo : HandleGizmo<GizmoPosition>
         ArgumentNullException.ThrowIfNull(edit);
         var value = new GizmoValueSource<GizmoPosition>(this);
         var plane = new GizmoCameraFrameSource(() => Value);
-        var centerHandle = Add(center, marker, 7, new(1, 0.85f, 0.25f, 0.8f), plane);
+        var centerHandle = Add(center, marker, 7, new(1, 0.85f, 0.25f, 1), plane);
         centerHandle.InteractionTarget = new GizmoPlaneDragTarget(new HandleFrameSource(centerHandle),
             frame => new GizmoPlanePositionParameterSource(value, frame, center, constrain), edit);
-        AddAxis(x, Vector256.Create(1d, 0d, 0d, 0d), new(1, 0.2f, 0.2f, 0.8f));
-        AddAxis(y, Vector256.Create(0d, 1d, 0d, 0d), new(0.2f, 1, 0.2f, 0.8f));
-        AddAxis(z, Vector256.Create(0d, 0d, 1d, 0d), new(0.25f, 0.5f, 1, 0.8f));
+        AddAxis(x, Vector256.Create(1d, 0d, 0d, 0d), new(1, 0.2f, 0.2f, 1));
+        AddAxis(y, Vector256.Create(0d, 1d, 0d, 0d), new(0.2f, 1, 0.2f, 1));
+        AddAxis(z, Vector256.Create(0d, 0d, 1d, 0d), new(0.25f, 0.5f, 1, 1));
 
         void AddAxis(GizmoHandleId id, Vector256<double> direction, Vector4 color)
         {

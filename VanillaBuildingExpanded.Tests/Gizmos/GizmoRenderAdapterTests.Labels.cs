@@ -7,6 +7,53 @@ namespace VanillaBuildingExpanded.Tests.Gizmos;
 
 public sealed partial class GizmoRenderAdapterTests
 {
+    [Fact]
+    public void LinesRenderOnlyInOitAndLabelsRenderOnlyAfterBlitWithoutRedrawingLines()
+    {
+        using var f = new Fixture();
+        var gizmo = f.Add();
+        gizmo.Handles[ComposedPositionGizmo.Center].Label = new("Center");
+        f.Adapter.SetActive(true);
+        f.Adapter.OnRenderFrame(0, EnumRenderStage.Opaque);
+        Assert.Equal(0, f.Draws);
+        Assert.Null(f.Adapter.Context);
+        f.Adapter.OnRenderFrame(0, EnumRenderStage.OIT);
+        Assert.Equal(8, f.Draws);
+        Assert.Equal(0, f.LabelUploads);
+        Assert.Empty(f.LabelRects);
+        Assert.Same(f.Camera, f.Adapter.Context);
+        f.Render.Verify(r => r.GLDisableDepthTest(), Times.Never);
+        f.Adapter.OnRenderFrame(0, EnumRenderStage.AfterBlit);
+        Assert.Equal(9, f.Draws);
+        Assert.Single(f.LabelRects);
+        Assert.Equal(8, f.Colors.Count);
+        f.Render.Verify(r => r.GLEnableDepthTest(), Times.Exactly(4));
+        f.Render.Verify(r => r.GLDisableDepthTest(), Times.Once);
+        Assert.Equal(f.State.Captures, f.State.Restores);
+    }
+
+    [Theory]
+    [InlineData("hide")]
+    [InlineData("remove")]
+    [InlineData("deactivate")]
+    public void LabelsCannotOutliveTheirOitHandlesBetweenStages(string mutation)
+    {
+        using var f = new Fixture();
+        var gizmo = f.Add();
+        var handle = gizmo.Handles[ComposedPositionGizmo.Center];
+        handle.Label = new("Center");
+        f.Adapter.SetActive(true);
+        f.Adapter.OnRenderFrame(0, EnumRenderStage.OIT);
+        if (mutation == "hide") handle.Visible = false;
+        else if (mutation == "remove") gizmo.RemoveHandle(handle);
+        else f.Adapter.SetActive(false);
+        f.Adapter.OnRenderFrame(0, EnumRenderStage.AfterBlit);
+        Assert.Equal(0, f.LabelUploads);
+        Assert.Empty(f.LabelRects);
+        Assert.Equal(8, f.Draws);
+        if (mutation == "remove") handle.Dispose();
+    }
+
     [Theory]
     [InlineData("text-color")]
     [InlineData("background-color")]
@@ -70,6 +117,7 @@ public sealed partial class GizmoRenderAdapterTests
         Assert.Equal(2, f.LabelUploads);
         Assert.True(gizmo.IsInteracting);
         f.Shader.Verify(s => s.Uniform("colorIn", 0f, 1f, 1f, 0.6f), Times.Once);
+        f.Shader.Verify(s => s.Uniform("colorIn", 0f, 1f, 1f, 0.6f * 0.3f), Times.Once);
         f.Render.VerifySet(r => r.LineWidth = 4, Times.Once);
         gizmo.CancelInteraction();
         f.Frame();
@@ -308,7 +356,7 @@ public sealed partial class GizmoRenderAdapterTests
         Assert.Equal(1, f.Notices);
         Assert.Null(f.Adapter.Context);
         Assert.Equal(f.State.Captures, f.State.Restores);
-        f.Previous.Verify(s => s.Use(), Times.Once);
+        f.Previous.Verify(s => s.Use(), Times.Exactly(5));
         f.Flush();
         Assert.Empty(f.Active);
         f.Adapter.Dispose();

@@ -14,7 +14,28 @@ internal sealed partial class GizmoRenderAdapter
     private IShaderProgram? labelShader;
     private MeshRef? labelQuad;
 
-    /// <summary>Draws eligible labels after handle lines, sharing the enclosing render-state guard.</summary>
+    private void DrawLabels()
+    {
+        if (labelDraws.Count == 0) return;
+        var render = api.Render;
+        var previous = render.CurrentActiveShader;
+        labelState.Capture();
+        try
+        {
+            previous?.Stop();
+            render.GLDisableDepthTest();
+            render.GLDepthMask(false);
+            for (int i = 0; i < labelDraws.Count; i++)
+                if (CanDraw(labelDraws[i].Geometry)) DrawLabel(labelDraws[i]);
+        }
+        finally
+        {
+            try { labelState.Restore(); }
+            finally { previous?.Use(); }
+        }
+    }
+
+    /// <summary>Draws eligible labels in AfterBlit, separate from the OIT line draws.</summary>
     private void DrawLabel(GizmoHandleDraw draw)
     {
         if (!TryProjectLabel(draw, out var label, out double x, out double y)) return;
@@ -42,7 +63,6 @@ internal sealed partial class GizmoRenderAdapter
         IShaderProgram? program = null;
         try
         {
-            shader?.Stop();
             program = GetLabelShader();
             labelQuad ??= api.Render.UploadMesh(new MeshData
             {

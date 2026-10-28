@@ -416,7 +416,7 @@ public sealed class GizmoInputAdapterTests
         Assert.Equal(60, f.Completes);
         Assert.Equal(60, f.Cancels);
         Assert.Single(f.Focus);
-        f.Events.Verify(e => e.RegisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.Opaque,
+        f.Events.Verify(e => e.RegisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.OIT,
             It.IsAny<string>()), Times.Once);
         f.Events.Verify(e => e.RegisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.AfterBlit,
             It.IsAny<string>()), Times.Once);
@@ -607,7 +607,7 @@ public sealed class GizmoInputAdapterTests
         public void Frame()
         {
             Context = Capture();
-            Renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
+            Renderer.OnRenderFrame(0, EnumRenderStage.OIT);
             Renderer.OnRenderFrame(0, EnumRenderStage.AfterBlit);
         }
 

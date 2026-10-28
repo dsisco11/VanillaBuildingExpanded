@@ -19,10 +19,10 @@ public sealed class GizmoCompositionTests
         var center = f.Gizmo.Handles[f.Center];
         Assert.Equal(diamond ? GizmoShape.Diamond : GizmoShape.Circle, center.Appearance.Shape);
         Assert.Equal(7, center.Appearance.Size);
-        Assert.Equal(new Vector4(1, 0.85f, 0.25f, 0.8f), center.Appearance.Color);
-        AssertAxis(f.X, new(1, 0.2f, 0.2f, 0.8f), V(1, 0, 0));
-        AssertAxis(f.Y, new(0.2f, 1, 0.2f, 0.8f), V(0, 1, 0));
-        AssertAxis(f.Z, new(0.25f, 0.5f, 1, 0.8f), V(0, 0, 1));
+        Assert.Equal(new Vector4(1, 0.85f, 0.25f, 1), center.Appearance.Color);
+        AssertAxis(f.X, new(1, 0.2f, 0.2f, 1), V(1, 0, 0));
+        AssertAxis(f.Y, new(0.2f, 1, 0.2f, 1), V(0, 1, 0));
+        AssertAxis(f.Z, new(0.25f, 0.5f, 1, 1), V(0, 0, 1));
         Assert.Same(f.Gizmo, f.Manager.UpdateHover(f.Pointer()));
         Assert.Equal(f.Center, f.Gizmo.HoveredHandle);
         Assert.Equal(1, center.Appearance.Color.W);
@@ -31,7 +31,7 @@ public sealed class GizmoCompositionTests
         Assert.Same(center, f.Gizmo.CapturedHandleInstance);
         Assert.Equal(EAppearenceState.Selected, center.AppearanceState);
         f.Manager.Cancel();
-        Assert.Equal(0.8f, center.Appearance.Color.W);
+        Assert.Equal(1, center.Appearance.Color.W);
         Assert.Equal(1.6f, center.Appearance.LineWidth);
 
         void AssertAxis(GizmoHandleId id, Vector4 color, System.Runtime.Intrinsics.Vector256<double> direction)

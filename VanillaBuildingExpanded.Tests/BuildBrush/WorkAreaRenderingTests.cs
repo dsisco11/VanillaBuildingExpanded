@@ -91,7 +91,7 @@ public sealed class WorkAreaRenderingTests
     public void VertexShader_PreservesProjectedDepthForTerrainOcclusion()
     {
         string source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory,
-            "assets", "vanillabuildingexpanded", "shaders", "vbe-workarea.vsh"));
+            "assets", "vanillabuildingexpanded", "shaders", "vbe-oit-lines.vsh"));
         Assert.Contains("gl_Position = projectionMatrix * modelViewMatrix * vec4(vertexPositionIn, 1.0);", source);
         Assert.Equal(1, source.Split("gl_Position", StringSplitOptions.None).Length - 1);
     }
@@ -397,7 +397,7 @@ public sealed class WorkAreaRenderingTests
             case "compile": f.Shader.Setup(s => s.Compile()).Returns(false); break;
             case "create-shader": f.Shaders.Setup(s => s.NewShaderProgram()).Returns((IShaderProgram)null!); break;
             case "register-shader":
-                f.Shaders.Setup(s => s.RegisterFileShaderProgram("vbe-workarea", f.Shader.Object))
+                f.Shaders.Setup(s => s.RegisterFileShaderProgram("vbe-oit-lines", f.Shader.Object))
                     .Throws(new InvalidOperationException("GPU"));
                 break;
             case "occluded-depth": f.State.Fault = "occluded-depth"; break;
@@ -408,7 +408,7 @@ public sealed class WorkAreaRenderingTests
             case "capture": f.State.Fault = "capture"; break;
             case "use": f.Shader.Setup(s => s.Use()).Throws(new InvalidOperationException("GPU")); break;
             case "uniform":
-                f.Shader.Setup(s => s.Uniform("colorIn", 1f, 0.75f, 0.15f, 0.75f))
+                f.Shader.Setup(s => s.Uniform("colorIn", 1f, 0.75f, 0.15f, 1f))
                     .Throws(new InvalidOperationException("GPU"));
                 break;
             case "draw":
@@ -459,8 +459,8 @@ public sealed class WorkAreaRenderingTests
         Assert.Equal(new[] { "capture", "previous-stop", "depth-test", "depth-mask",
             "line-width", "use", "visible-depth", "draw", "occluded-depth", "draw", "stop", "restore", "previous-use" },
             f.Sequence.Take(13));
-        f.Shader.Verify(s => s.Uniform("colorIn", 1f, 0.75f, 0.15f, 0.75f), Times.Exactly(2));
-        f.Shader.Verify(s => s.Uniform("colorIn", 1f, 0.75f, 0.15f, 0.5f), Times.Exactly(2));
+        f.Shader.Verify(s => s.Uniform("colorIn", 1f, 0.75f, 0.15f, 1f), Times.Exactly(2));
+        f.Shader.Verify(s => s.Uniform("colorIn", 1f, 0.75f, 0.15f, 0.3f), Times.Exactly(2));
         f.Shader.Verify(s => s.UniformMatrix("projectionMatrix", f.Projection), Times.Exactly(2));
         f.Render.Verify(r => r.GlToggleBlend(It.IsAny<bool>(), It.IsAny<EnumBlendMode>()), Times.Never);
         f.Render.Verify(r => r.GLDepthMask(false), Times.Exactly(2));
@@ -480,7 +480,7 @@ public sealed class WorkAreaRenderingTests
         f.Shaders.Verify(s => s.NewShaderProgram(), Times.Once);
         f.Shader.VerifySet(s => s.AssetDomain = "vanillabuildingexpanded", Times.Once);
         f.Shader.VerifySet(s => s.Oit = true, Times.Once);
-        f.Shaders.Verify(s => s.RegisterFileShaderProgram("vbe-workarea", f.Shader.Object), Times.Once);
+        f.Shaders.Verify(s => s.RegisterFileShaderProgram("vbe-oit-lines", f.Shader.Object), Times.Once);
         f.Shader.Verify(s => s.Compile(), Times.Once);
         f.Shaders.Verify(s => s.GetProgram(It.IsAny<int>()), Times.Never);
         var replacement = new Mock<IShaderProgram>();
@@ -489,7 +489,7 @@ public sealed class WorkAreaRenderingTests
         f.Shaders.Setup(s => s.NewShaderProgram()).Returns(replacement.Object);
         f.Draw();
         f.Shaders.Verify(s => s.NewShaderProgram(), Times.Exactly(2));
-        f.Shaders.Verify(s => s.RegisterFileShaderProgram("vbe-workarea", replacement.Object), Times.Once);
+        f.Shaders.Verify(s => s.RegisterFileShaderProgram("vbe-oit-lines", replacement.Object), Times.Once);
         replacement.VerifySet(s => s.Oit = true, Times.Once);
         replacement.Verify(s => s.Use(), Times.Once);
         Assert.Equal(1, f.Uploads);
@@ -544,7 +544,7 @@ public sealed class WorkAreaRenderingTests
         target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!
             .SetValue(target, value);
 
-    internal sealed class FakeState(List<string>? sequence = null) : IWorkAreaRenderState
+    internal sealed class FakeState(List<string>? sequence = null) : IOitLineRenderState
     {
         public int Captures;
         public int Restores;

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
+using VanillaBuildingExpanded.Rendering;
+
 using Vintagestory.API.Client;
 using Vintagestory.API.MathTools;
 
@@ -13,10 +15,10 @@ internal sealed class WorkAreaRenderer : IRenderer
     private readonly ICoreClientAPI api;
     private readonly System.Func<IReadOnlyList<WorkAreaBounds>> getBounds;
     private readonly Action<Exception> onFailure;
-    private readonly IWorkAreaRenderState renderState;
+    private readonly IOitLineRenderState renderState;
     private readonly Matrixf model = new();
     private MeshRef? mesh;
-    private IShaderProgram? shader;
+    private readonly OitLineShader shader;
     private bool failed;
     private bool disposed;
     internal bool IsInCallback { get; private set; }
@@ -25,12 +27,13 @@ internal sealed class WorkAreaRenderer : IRenderer
     public int RenderRange => int.MaxValue;
 
     public WorkAreaRenderer(ICoreClientAPI api, System.Func<IReadOnlyList<WorkAreaBounds>> getBounds,
-        Action<Exception> onFailure, IWorkAreaRenderState? renderState = null)
+        Action<Exception> onFailure, IOitLineRenderState? renderState = null)
     {
         this.api = api;
         this.getBounds = getBounds;
         this.onFailure = onFailure;
-        this.renderState = renderState ?? new WorkAreaRenderState(api.Render);
+        this.renderState = renderState ?? new OitLineRenderState(api.Render);
+        shader = new OitLineShader(api);
     }
 
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
@@ -41,7 +44,7 @@ internal sealed class WorkAreaRenderer : IRenderer
         IsInCallback = true;
         try
         {
-            var program = GetShader();
+            var program = shader.GetProgram();
             mesh ??= api.Render.UploadMesh(CreateUnitCube())
                 ?? throw new InvalidOperationException("Work area mesh upload returned no mesh.");
             if (!mesh.Initialized || mesh.Disposed)
@@ -77,10 +80,10 @@ internal sealed class WorkAreaRenderer : IRenderer
             shader.UniformMatrix("projectionMatrix", render.CurrentProjectionMatrix);
             shader.UniformMatrix("modelViewMatrix", model.Values);
             renderState.SetOccludedDepthTest(false);
-            shader.Uniform("colorIn", 1f, 0.75f, 0.15f, 0.75f);
+            shader.Uniform("colorIn", 1f, 0.75f, 0.15f, 1f);
             render.RenderMesh(mesh!);
             renderState.SetOccludedDepthTest(true);
-            shader.Uniform("colorIn", 1f, 0.75f, 0.15f, 0.5f);
+            shader.Uniform("colorIn", 1f, 0.75f, 0.15f, 0.3f);
             render.RenderMesh(mesh!);
         }
         finally
@@ -92,23 +95,6 @@ internal sealed class WorkAreaRenderer : IRenderer
                 finally { previousShader?.Use(); }
             }
         }
-    }
-
-    private IShaderProgram GetShader()
-    {
-        if (shader is null || shader.Disposed)
-        {
-            shader = api.Shader.NewShaderProgram()
-                ?? throw new InvalidOperationException("Work area shader creation returned no program.");
-            shader.AssetDomain = "vanillabuildingexpanded";
-            shader.Oit = true;
-            api.Shader.RegisterFileShaderProgram("vbe-workarea", shader);
-            if (shader.LoadError || !shader.Compile())
-                throw new InvalidOperationException("The work area OIT shader failed to compile.");
-        }
-        if (shader.LoadError)
-            throw new InvalidOperationException("The work area OIT shader is unavailable.");
-        return shader;
     }
 
     internal static void SetModelMatrix(Matrixf model, float[] cameraMatrix, WorkAreaBounds bounds, Vec3d camera)
@@ -157,9 +143,7 @@ internal sealed class WorkAreaRenderer : IRenderer
         disposed = true;
         var ownedMesh = mesh;
         mesh = null;
-        var ownedShader = shader;
-        shader = null;
         try { ownedMesh?.Dispose(); }
-        finally { ownedShader?.Dispose(); }
+        finally { shader.Dispose(); }
     }
 }

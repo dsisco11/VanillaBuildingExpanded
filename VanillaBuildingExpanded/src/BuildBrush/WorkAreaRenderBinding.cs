@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using VanillaBuildingExpanded.Rendering;
+
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -24,7 +26,7 @@ internal sealed class WorkAreaRenderBinding : IDisposable
     private bool disposed;
     private bool queued;
 
-    public WorkAreaRenderBinding(ICoreClientAPI api, WorkAreaController workArea, IWorkAreaRenderState? renderState = null,
+    public WorkAreaRenderBinding(ICoreClientAPI api, WorkAreaController workArea, IOitLineRenderState? renderState = null,
         System.Func<bool>? deferMembership = null)
     {
         this.api = api;
