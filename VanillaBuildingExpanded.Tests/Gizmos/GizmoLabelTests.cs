@@ -8,6 +8,9 @@ namespace VanillaBuildingExpanded.Tests.Gizmos;
 
 public sealed class GizmoLabelTests
 {
+    private static ComposedPositionGizmo Create(GizmoPosition position, Action<GizmoHandleDraw>? draw = null) =>
+        new(position, draw ?? (_ => { }), g => new GizmoEditStateTarget(g, () => true, () => { }, () => { }));
+
     [Theory]
     [InlineData(GizmoLabelVisibility.Always, true, true, true)]
     [InlineData(GizmoLabelVisibility.Hover, false, true, false)]
@@ -17,26 +20,27 @@ public sealed class GizmoLabelTests
     {
         var context = Camera();
         using var manager = new GizmoManager();
-        var gizmo = new PositionGizmo(new(V(0, 0, -10), 0), _ => { });
+        var gizmo = Create(new(V(0, 0, -10), 0));
         manager.Add(gizmo);
         manager.Render(context);
         var label = new GizmoLabel("Center", visibility: mode);
-        Assert.Equal(idle, label.IsVisible(gizmo, PositionGizmo.Center, context));
+        Assert.Equal(idle, label.IsVisible(gizmo.Handles[PositionGizmo.Center], context));
         manager.UpdateHover(context.Camera!.CreatePointer(context, 400, 300));
-        Assert.Equal(hover, label.IsVisible(gizmo, PositionGizmo.Center, context));
-        Assert.Equal(idle, label.IsVisible(gizmo, PositionGizmo.X, context));
+        Assert.Equal(hover, label.IsVisible(gizmo.Handles[PositionGizmo.Center], context));
+        Assert.Equal(idle, label.IsVisible(gizmo.Handles[PositionGizmo.X], context));
         Assert.True(manager.TryBegin(context.Camera.CreatePointer(context, 400, 300)));
-        Assert.Equal(selected, label.IsVisible(gizmo, PositionGizmo.Center, context));
-        Assert.Equal(idle, label.IsVisible(gizmo, PositionGizmo.X, context));
+        Assert.Equal(selected, label.IsVisible(gizmo.Handles[PositionGizmo.Center], context));
+        Assert.Equal(idle, label.IsVisible(gizmo.Handles[PositionGizmo.X], context));
         manager.Complete();
-        Assert.Equal(idle, label.IsVisible(gizmo, PositionGizmo.Center, context));
+        Assert.Equal(idle, label.IsVisible(gizmo.Handles[PositionGizmo.Center], context));
     }
 
     [Fact]
     public void PredicateReceivesLiveContextAndCannotOverrideGizmoEligibility()
     {
         var context = Camera();
-        using var gizmo = new PositionGizmo(new(V(0, 0, -10), 0), _ => { });
+        using var gizmo = Create(new(V(0, 0, -10), 0));
+        var handle = gizmo.Handles[PositionGizmo.X];
         bool show = false;
         int calls = 0;
         var label = new GizmoLabel("Custom", visibility: GizmoLabelVisibility.Predicate, predicate: state =>
@@ -44,23 +48,32 @@ public sealed class GizmoLabelTests
             calls++;
             Assert.Same(gizmo, state.Gizmo);
             Assert.Same(context, state.Context);
-            Assert.Equal(PositionGizmo.X, state.Handle);
+            Assert.Same(handle, state.Handle);
             Assert.False(state.IsHovered);
             Assert.False(state.IsSelected);
             return show;
         });
-        Assert.False(label.IsVisible(gizmo, PositionGizmo.X, context));
+        Assert.False(label.IsVisible(handle, context));
         show = true;
-        Assert.True(label.IsVisible(gizmo, PositionGizmo.X, context));
+        Assert.True(label.IsVisible(handle, context));
         gizmo.Visible = false;
-        Assert.False(label.IsVisible(gizmo, PositionGizmo.X, context));
+        Assert.False(label.IsVisible(handle, context));
         gizmo.Visible = true;
         gizmo.Enabled = false;
-        Assert.False(label.IsVisible(gizmo, PositionGizmo.X, context));
+        Assert.False(label.IsVisible(handle, context));
         gizmo.Enabled = true;
-        Assert.False(label.IsVisible(gizmo, PositionGizmo.X, new(1, context.Camera)));
+        Assert.False(label.IsVisible(handle, new(1, context.Camera)));
+        handle.Visible = false;
+        Assert.False(label.IsVisible(handle, context));
+        handle.Visible = true;
+        handle.Enabled = false;
+        Assert.False(label.IsVisible(handle, context));
+        handle.Enabled = true;
+        gizmo.RemoveHandle(handle);
+        Assert.False(label.IsVisible(handle, context));
         gizmo.Dispose();
-        Assert.False(label.IsVisible(gizmo, PositionGizmo.X, context));
+        Assert.False(label.IsVisible(handle, context));
+        handle.Dispose();
         Assert.Equal(2, calls);
     }
 
@@ -76,16 +89,16 @@ public sealed class GizmoLabelTests
         var camera = new GizmoCamera(baseCamera.View.ToArray(), baseCamera.Projection.ToArray(), reference,
             1600, 1200, scale, windowWidth: 800, windowHeight: 600);
         var context = new GizmoContext(2, camera);
-        PositionGizmoDraw draw = default;
-        using var gizmo = new PositionGizmo(new(reference + V(0, 0, -10), 2), data => draw = data);
+        List<GizmoHandleDraw> draws = [];
+        using var gizmo = Create(new(reference + V(0, 0, -10), 2), draws.Add);
         var id = new GizmoHandleId(handle);
         var label = new GizmoLabel("<literal>", 17, -23);
-        gizmo.SetLabel(id, label);
+        gizmo.Handles[id].Label = label;
         gizmo.Render(context);
-        var part = draw.Geometry.Parts.Single(p => p.Handle == id);
-        var anchor = handle == 0 ? part.Origin : part.Transform(Vector256.Create(1d, 0d, 0d, 0d));
+        var draw = draws.Single(p => p.Geometry.Handle.Id == id);
+        var anchor = draw.Geometry.LabelAnchor;
         Assert.True(camera.TryProject(anchor, out var screen));
-        Assert.True(GizmoRenderAdapter.TryProjectLabel(draw, part, out var found, out double x, out double y));
+        Assert.True(GizmoRenderAdapter.TryProjectLabel(draw, out var found, out double x, out double y));
         Assert.Same(label, found);
         Assert.Equal(screen[0] + 17, x, 8);
         Assert.Equal(screen[1] - 23, y, 8);
@@ -96,22 +109,22 @@ public sealed class GizmoLabelTests
     {
         var context = Camera();
         using var manager = new GizmoManager();
-        var gizmo = new PositionGizmo(new(V(0, 0, -10), 0), _ => { });
+        var gizmo = Create(new(V(0, 0, -10), 0));
+        var handle = gizmo.Handles[PositionGizmo.Center];
         manager.Add(gizmo);
         manager.Render(context);
-        gizmo.SetLabel(PositionGizmo.Center, new("First"));
-        gizmo.SetLabel(PositionGizmo.Center, new("Second"));
-        Assert.Single(gizmo.Labels);
-        Assert.Equal("Second", gizmo.Labels[PositionGizmo.Center].Text);
+        handle.Label = new("First");
+        handle.Label = new("Second");
+        Assert.Single(gizmo.Handles.Values.Where(h => h.Label is not null));
+        Assert.Equal("Second", handle.Label.Text);
         Assert.True(manager.TryBegin(context.Camera!.CreatePointer(context, 400, 300)));
-        gizmo.RemoveLabel(PositionGizmo.Center);
+        handle.Label = null;
         Assert.True(gizmo.IsInteracting);
-        Assert.False(gizmo.RemoveLabel(PositionGizmo.Center));
-        gizmo.SetLabel(PositionGizmo.Center, new("Custom", visibility: GizmoLabelVisibility.Predicate,
-            predicate: _ => true));
+        Assert.Null(handle.Label);
+        handle.Label = new("Custom", visibility: GizmoLabelVisibility.Predicate, predicate: _ => true);
         gizmo.Dispose();
-        Assert.Empty(gizmo.Labels);
-        Assert.Throws<ObjectDisposedException>(() => gizmo.SetLabel(PositionGizmo.X, new("X")));
+        Assert.Null(handle.Label);
+        Assert.Throws<ObjectDisposedException>(() => handle.Label = new("X"));
     }
 
     [Theory]

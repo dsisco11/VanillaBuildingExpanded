@@ -154,7 +154,7 @@ capture. Context supplies frame identity/dimension and a separate validated visu
 ray using built-in `Vector256<double>` SIMD coordinates in `(X, Y, Z, 0)` lanes,
 preserving double precision without a custom vector type.
 
-[PositionGizmo](../VanillaBuildingExpanded/src/Gizmos/PositionGizmo.cs) supplies continuous
+[ComposedPositionGizmo](../VanillaBuildingExpanded/src/Gizmos/ComposedPositionGizmo.cs) supplies continuous
 SIMD double positions, fixed-plane axis and camera-plane center dragging, and a nullable
 owner constraint hook before publishing values. Rejected motion retains the last valid
 value and requests one reasoned notice per uninterrupted invalid interval until recovery.
@@ -172,8 +172,8 @@ unsnapped intersection; axes retain the same scalar step limit.
 [Camera snapshots](../VanillaBuildingExpanded/src/Gizmos/GizmoCamera.cs)
 copy perspective matrices, project/unproject the actual cursor or integer reticle center,
 derive the camera view direction from the inverse view (not an off-center cursor ray),
-and retain local-Y dimension identity. [Shared geometry](../VanillaBuildingExpanded/src/Gizmos/PositionGizmoGeometry.cs)
-drives both line meshes and hit shapes, with clipped parts omitted from both paths.
+and retain local-Y dimension identity. [Shared handle geometry](../VanillaBuildingExpanded/src/Gizmos/GizmoHandleGeometry.cs)
+drives both line meshes and hit shapes from persistent controls, with clipped parts omitted from both paths.
 [The render adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs)
 publishes camera context at Opaque 0.49 and draws overlays at AfterBlit 0.49, sharing
 arrow/circle/diamond meshes. A session-owned unlit memory shader keeps handle colors
@@ -188,7 +188,7 @@ GPU teardown outside native live-list iteration. The session activates it for ch
 enabled/living contexts, including pending creation with zero instances.
 
 [Per-handle labels](../VanillaBuildingExpanded/src/Gizmos/GizmoLabel.cs) attach through
-`Gizmo.SetLabel(handle, label)` and detach through `RemoveLabel`. A label contains
+`GizmoHandle.Label` and detach by assigning null. A label contains
 literal single-line text and an `(OffsetX, OffsetY)` in framebuffer pixels, positive
 right/down, locating its top-left corner relative to the projected arrow tip or
 center marker. Offsets do not scale with GUI scale or world distance; text size
@@ -203,9 +203,10 @@ The [label overlay](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.Lab
 uses the same double-precision projection snapshot and AfterBlit state guard as
 the handle lines. A lazily created textured quad shader maps pixels directly to
 clip space without relying on ambient GUI matrices. Label text is rasterized
-only on first visibility or text/GUI-scale changes; changing visibility, moving,
-or replacing offsets reuses textures. Removing/replacing a label or removing its
-gizmo retires stale textures on the next active overlay frame. Session disposal
+only on first visibility or text/GUI-scale/resolved-style changes; changing visibility,
+moving, or replacing offsets reuses textures. Caches use owner and actual handle
+identity, not numeric IDs. Removing/replacing a label, detaching/disposing its handle
+or removing its gizmo retires stale textures on the next active overlay frame. Session disposal
 releases all remaining textures, the shared quad and shader. Labels do not
 participate in hit testing or input capture.
 
@@ -239,8 +240,7 @@ resolve each nullable state override directly against a validated Default baseli
 Colors are nullable `System.Numerics.Vector4` RGBA values with whole-color fallback.
 Resolved snapshots contain complete handle values and optional complete label styling.
 Invalidation distinguishes spatial geometry, visual changes and label raster/placement.
-The positioning implementation uses its existing ID-based parts independently of
-these optional handle collections.
+Production positioning uses these collections for drawing, picking, hover and capture.
 
 [Frame sources](../VanillaBuildingExpanded/src/Gizmos/GizmoFrameSources.cs) adapt
 live position/axis readers, camera-facing planes or immutable captured frames.
@@ -270,8 +270,8 @@ sources; ending parameter modification does not commit or restore a transaction.
 bind existing owner begin/complete/cancel callbacks to the gizmo's single baseline.
 Owner lifecycle and composed sessions share idempotent restoration through the normal
 setter, before owner cancellation and public canceled notifications. Transaction
-callbacks are not also bound to lifecycle events. These adapters do not replace the
-current production positioning/routing path.
+callbacks are not also bound to lifecycle events. Work-area endpoint and midpoint
+compositions use these adapters with the existing controller's edit scope.
 
 [HandleGizmo](../VanillaBuildingExpanded/src/Gizmos/HandleGizmo.cs) composes those
 contracts through the same manager and native input adapter. Its
@@ -284,8 +284,9 @@ being mistaken for external replacements.
 [ComposedPositionGizmo](../VanillaBuildingExpanded/src/Gizmos/ComposedPositionGizmo.cs)
 explicitly configures a camera-plane center and three world-axis controls with
 replaceable frames, pickers and typed parameter/edit bindings. IDs identify controls
-only. This composition is available for integration testing; work-area gameplay still
-uses the original positioning renderer and binding.
+only. Work-area gameplay uses this composition for both endpoint markers and the
+whole-area midpoint. Normalized role anchors synchronize through the same notifying
+value path during previews without canceling or rebasing the captured measurement.
 
 ### Native input and work-area transactions
 

@@ -19,16 +19,16 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
     private readonly GizmoManager manager = new();
     private readonly GizmoRenderAdapter renderer;
     private readonly GizmoInputAdapter input;
-    private PositionGizmo? start, end, center;
+    private ComposedPositionGizmo? start, end, center;
     private bool publishing, syncing, disposed, pending, explicitlyCanceled;
     private bool wasShown, wasEnabled, mismatched;
     private Guid? selectedId;
 
     internal GizmoManager Manager => manager;
     internal GizmoRenderAdapter Renderer => renderer;
-    internal PositionGizmo? Start => start;
-    internal PositionGizmo? End => end;
-    internal PositionGizmo? Center => center;
+    internal ComposedPositionGizmo? Start => start;
+    internal ComposedPositionGizmo? End => end;
+    internal ComposedPositionGizmo? Center => center;
     public bool IsPending => pending;
 
     public WorkAreaGizmoSession(ICoreClientAPI api, WorkAreaController workArea, List<Action<bool>> focusListeners,
@@ -74,7 +74,7 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
                 explicitlyCanceled = false;
             wasShown = state.ShowWorkArea;
             wasEnabled = state.IsBuildModeEnabled;
-            if (!publishing && manager.CapturedGizmo is PositionGizmo captured)
+            if (!publishing && manager.CapturedGizmo is ComposedPositionGizmo captured)
             {
                 var anchor = ReferenceEquals(captured, center)
                     ? state.Bounds is { } bounds ? WorkAreaGizmoCoordinates.ToCenter(bounds) : (GizmoPosition?)null
@@ -106,7 +106,7 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
         workArea.CommittedEndpoints is { Start: { } first, End: { } last }
             ? WorkAreaGizmoCoordinates.ConstrainTranslation(edit, new(first, last), world.BlockAccessor) : null;
 
-    private void Sync(ref PositionGizmo? gizmo, GizmoPosition? position, WorkAreaEndpointRole? role)
+    private void Sync(ref ComposedPositionGizmo? gizmo, GizmoPosition? position, WorkAreaEndpointRole? role)
     {
         if (position is not { } anchor)
         {
@@ -115,19 +115,17 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
         }
         if (gizmo is null)
         {
-            var instance = new PositionGizmo(anchor, renderer.Draw,
+            var instance = new ComposedPositionGizmo(anchor, renderer.Draw,
+                owner => new GizmoEditStateTarget(owner,
+                    () => role is { } endpointRole ? workArea.BeginEndpointEdit(endpointRole) : workArea.BeginTranslation(),
+                    () => workArea.CompleteEndpointEdit(), () => workArea.CancelEndpointEdit()),
                 edit => role is { } endpointRole
                     ? WorkAreaGizmoCoordinates.Constrain(edit, endpointRole, world.BlockAccessor)
                     : ConstrainTranslation(edit),
                 role == WorkAreaEndpointRole.End ? GizmoShape.Diamond : GizmoShape.Circle);
-            instance.SetLabel(PositionGizmo.X, new("X", visibility: GizmoLabelVisibility.Hover));
-            instance.SetLabel(PositionGizmo.Y, new("Y", visibility: GizmoLabelVisibility.Hover));
-            instance.SetLabel(PositionGizmo.Z, new("Z", visibility: GizmoLabelVisibility.Hover));
-            instance.OnInteractionStarted += _ =>
-            {
-                if (!(role is { } endpointRole ? workArea.BeginEndpointEdit(endpointRole) : workArea.BeginTranslation()))
-                    manager.Cancel();
-            };
+            instance.Handles[PositionGizmo.X].Label = new("X", visibility: GizmoLabelVisibility.Hover);
+            instance.Handles[PositionGizmo.Y].Label = new("Y", visibility: GizmoLabelVisibility.Hover);
+            instance.Handles[PositionGizmo.Z].Label = new("Z", visibility: GizmoLabelVisibility.Hover);
             instance.OnValueChanged += value =>
             {
                 if (syncing || !workArea.IsEditing) return;
@@ -154,22 +152,22 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
                 }
                 finally { publishing = false; }
             };
-            instance.OnInteractionCompleted += _ => workArea.CompleteEndpointEdit();
-            instance.OnInteractionCanceled += _ => workArea.CancelEndpointEdit();
-            instance.NoticeRequested += notice => Notify(notice switch
-            {
-                PositionGizmoNotice.InvalidValue => "workarea-invalid-endpoint",
-                _ => "workarea-drag-unavailable"
-            });
+            instance.NoticeRequested += notice => Notify(notice == nameof(PositionGizmoNotice.InvalidValue)
+                ? "workarea-invalid-endpoint" : "workarea-drag-unavailable");
             gizmo = instance;
             manager.Add(instance);
         }
-        else if (gizmo.Value != anchor) gizmo.Value = anchor;
+        // Normalized role anchors follow the active preview without replacing its frozen solver baseline.
+        else if (gizmo.Value != anchor)
+        {
+            if (publishing) gizmo.SetInteractionValue(anchor);
+            else gizmo.Value = anchor;
+        }
         string centerLabel = role is null
             ? workArea.Areas.Single(area => area.Id == workArea.SelectedId).Name
             : Lang.Get("vanillabuildingexpanded:gizmo-label-center");
-        if (!gizmo.Labels.TryGetValue(PositionGizmo.Center, out var label) || label.Text != centerLabel)
-            gizmo.SetLabel(PositionGizmo.Center, new(centerLabel, 10, 10, GizmoLabelVisibility.Hover));
+        if (gizmo.Handles[PositionGizmo.Center].Label?.Text != centerLabel)
+            gizmo.Handles[PositionGizmo.Center].Label = new(centerLabel, 10, 10, GizmoLabelVisibility.Hover);
         gizmo.Visible = Eligible() && MatchesDimension();
     }
 

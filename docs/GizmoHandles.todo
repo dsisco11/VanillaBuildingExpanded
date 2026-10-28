@@ -2,7 +2,7 @@
 
 Source proposal: [GizmoHandles.proposal.md](./GizmoHandles.proposal.md)
 
-Status: Execution in progress. Phases 1 through 5 were implemented and independently audited on 2026-10-27; later phases remain unchecked. The foundation is inactive in gameplay. Leave tasks unchecked until their stated verification gates pass.
+Status: Execution in progress. Phases 1 through 6 were implemented and independently audited on 2026-10-27; Phase 7 remains unchecked. Production work-area positioning uses the composed handle architecture. Leave tasks unchecked until their stated verification gates pass.
 
 ## Goal and scope
 
@@ -220,31 +220,39 @@ Phase 5 evidence and traceability:
 Prerequisites: Phase 5.
 Outcome: Production positioning uses the new architecture with full visual, label and transaction parity.
 
-    ☐ Move label ownership to GizmoHandle and update predicate/context access as needed.
-        ☐ Preserve Always/Hover/Selected/Predicate semantics; Hover remains distinct from capture.
-        ☐ Evaluate predicates only after owner/handle eligibility checks.
-        ☐ Preserve framebuffer-pixel offsets, top-left placement, positive right/down, arrow-tip anchors and center-origin anchors.
-        ☐ Keep white text, padding and black background at 65% opacity as defaults.
-    ☐ Update GizmoRenderAdapter and label rendering to consume resolved handle configuration.
-        ☐ Remove ID-dependent styling; update anchors after state-dependent geometry changes.
-        ☐ Keep native textures/shaders out of handles and retain renderer-owned GPU/state restoration and disposal.
-        ☐ Key caches by persistent handle identity within the owner; refresh only affected text/scale/style resources.
-        ☐ Prune detached/disposed handles and removed labels; verify shader/resource failure cleanup and no leaks.
-    ☐ Update WorkAreaGizmoSession compositions and existing callers together.
-        ☐ Keep endpoint center text localized Center and midpoint center text synchronized with selected-area name, rename and locale updates.
-        ☐ Retain axis labels and current visibility defaults; label-only changes must not affect capture or hit geometry.
-        ☐ Preserve endpoint and whole-area midpoint constraints, dimension checks, grid snapping and existing preview/commit/cancel wiring.
-        ☐ Confirm drag previews do not write config; completion/cancellation keep existing persistence semantics.
-        ☐ Keep persistence format, HUD controls, resize policy, creation-only terrain targeting and wireframe rendering unchanged.
-    ☐ Run focused label/render/work-area/manager regressions before cutover.
-    ☐ Switch the existing composition path to the new architecture without a second input/render registration.
-        ☐ Remove temporary production-path bridging after passing the focused gate; retain no legacy interaction mode.
-        ☐ Verify repeated endpoint and midpoint interactions through the actual manager/session/controller path.
+    ✔ Move label ownership to GizmoHandle and update predicate/context access as needed.
+        ✔ Preserve Always/Hover/Selected/Predicate semantics; Hover remains distinct from capture.
+        ✔ Evaluate predicates only after owner/handle eligibility checks.
+        ✔ Preserve framebuffer-pixel offsets, top-left placement, positive right/down, arrow-tip anchors and center-origin anchors.
+        ✔ Keep white text, padding and black background at 65% opacity as defaults.
+    ✔ Update GizmoRenderAdapter and label rendering to consume resolved handle configuration.
+        ✔ Remove ID-dependent styling; update anchors after state-dependent geometry changes.
+        ✔ Keep native textures/shaders out of handles and retain renderer-owned GPU/state restoration and disposal.
+        ✔ Key caches by persistent handle identity within the owner; refresh only affected text/scale/style resources.
+        ✔ Prune detached/disposed handles and removed labels; verify shader/resource failure cleanup and no leaks.
+    ✔ Update WorkAreaGizmoSession compositions and existing callers together.
+        ✔ Keep endpoint center text localized Center and midpoint center text synchronized with selected-area name, rename and locale updates.
+        ✔ Retain axis labels and current visibility defaults; label-only changes must not affect capture or hit geometry.
+        ✔ Preserve endpoint and whole-area midpoint constraints, dimension checks, grid snapping and existing preview/commit/cancel wiring.
+        ✔ Confirm drag previews do not write config; completion/cancellation keep existing persistence semantics.
+        ✔ Keep persistence format, HUD controls, resize policy, creation-only terrain targeting and wireframe rendering unchanged.
+    ✔ Run focused label/render/work-area/manager regressions before cutover.
+    ✔ Switch the existing composition path to the new architecture without a second input/render registration.
+        ✔ Remove temporary production-path bridging after passing the focused gate; retain no legacy interaction mode.
+        ✔ Verify repeated endpoint and midpoint interactions through the actual manager/session/controller path.
 
 Completion criteria:
 
-    ☐ Relevant automated tests demonstrate behavior/resource parity and a single active production path.
-    ☐ Labels, rendering and work-area transactions use handles and all seven contracts; no persisted data migration is introduced.
+    ✔ Relevant automated tests demonstrate behavior/resource parity and a single active production path.
+    ✔ Labels, rendering and work-area transactions use handles and all seven contracts; no persisted data migration is introduced.
+
+Phase 6 evidence and traceability:
+
+- Labels -> proposal [labels and rendering](GizmoHandles.proposal.md#labels-and-rendering) and [appearance fields and validation](GizmoHandles.proposal.md#appearance-fields-and-validation) -> [GizmoLabel.cs](../VanillaBuildingExpanded/src/Gizmos/GizmoLabel.cs) and [GizmoLabelTests.cs](../VanillaBuildingExpanded.Tests/Gizmos/GizmoLabelTests.cs): handle-owned labels replace the obsolete map; predicates receive actual handles and cannot override eligibility; offsets and projected anchors retain their semantics. Initial label styling uses standard font, size 14, bold, padding 3, white text and 65%-opaque black.
+- Renderer/cache -> proposal [positioning compatibility baseline](GizmoHandles.proposal.md#positioning-compatibility-baseline) and [labels and rendering](GizmoHandles.proposal.md#labels-and-rendering) -> [GizmoRenderAdapter.cs](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs), [label rendering](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.Labels.cs), and their focused tests: resolved snapshot styling, state-dependent anchors, owner/actual-handle cache identity, selective text/scale/style refresh, detachment/disposal pruning, shared native resources, balanced state restoration and surfaced resource failures.
+- Work-area cutover -> proposal [edit-state targets](GizmoHandles.proposal.md#edit-state-targets) and [migration and compatibility](GizmoHandles.proposal.md#migration-and-compatibility), plus inherited transaction/input/precision requirements at `04172078d76652ec9fc5610351b926c66daf0399` -> [WorkAreaGizmoSession.cs](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaGizmoSession.cs) and [session integration tests](../VanillaBuildingExpanded.Tests/BuildBrush/WorkAreaGizmoSessionTests.cs): composed endpoint/midpoint controls reuse controller transactions, remove duplicate lifecycle-event bindings, preserve notifying normalized preview synchronization without rebasing, and retain constraints, snapping, dimensions, persistence and creation-only targeting.
+- Focused prospective-production cutover gate passed before accepting the switch: 437 Release net10.0 tests passed, zero failed/skipped; normal Build and ValidateJson passed; `git diff --check` passed; no warnings from changed production files. Existing nullable/analyzer diagnostics and CakeBuild package advisories remain unrelated.
+- Own second review and fresh independent read-only audit found no required issues or evidence gaps. Production uses one composed manager/session/controller path and the existing input/render registrations. Retained unused historical positioning definitions are Phase 7 cleanup, not a legacy runtime mode. No installation or live-rendering qualification is claimed; Phase 7 remains unchecked.
 
 ## Phase 7: Remove superseded code, document and qualify delivery
 

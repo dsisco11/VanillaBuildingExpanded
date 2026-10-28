@@ -37,13 +37,14 @@ public sealed partial class GizmoRenderAdapterTests
     {
         var reference = V(2000000000.125, 32768, -2000000000.25);
         var camera = Camera(reference: reference).Camera!;
-        var part = new PositionGizmoPart(PositionGizmo.X, GizmoShape.Arrow,
-            reference + V(0.25, 0.5, -0.75), V(2, 0, 0), V(0, 2, 0), V(0, 0, 2));
+        using var owner = new ComposedPositionGizmo(new(reference + V(0.25, 0.5, -0.75), 0), _ => { },
+            g => new GizmoEditStateTarget(g, () => true, () => { }, () => { }));
+        var part = owner.GetGeometrySource(owner.Handles[PositionGizmo.X]).GetSnapshot(new(0, camera))!.Geometry;
         var matrix = GizmoRenderAdapter.ModelView(camera, part);
         Assert.Equal(0.25f, matrix[12]);
         Assert.Equal(0.5f, matrix[13]);
         Assert.Equal(-0.75f, matrix[14]);
-        Assert.Equal(2f, matrix[0]);
+        Assert.Equal((float)part.BasisX[0], matrix[0]);
     }
 
     [Theory]
@@ -92,14 +93,15 @@ public sealed partial class GizmoRenderAdapterTests
             Assert.Equal(screen[1], roundTrip[1], 3);
             Assert.True(camera.TryProject(pointer.FarPoint!.Value, out var far));
             Assert.Equal(1d, far[2], 5);
-            PositionGizmoDraw? drawing = null;
+            List<GizmoHandleDraw> drawing = [];
             using var manager = new GizmoManager();
-            var gizmo = new PositionGizmo(new(anchor, dimension), data => drawing = data);
+            var gizmo = new ComposedPositionGizmo(new(anchor, dimension), drawing.Add,
+                g => new GizmoEditStateTarget(g, () => true, () => { }, () => { }));
             manager.Add(gizmo);
             manager.Render(context);
             Assert.True(manager.TryBegin(pointer));
             Assert.Equal(PositionGizmo.Center, manager.CapturedHandle);
-            var part = drawing!.Value.Geometry.Parts.Single(p => p.Handle == PositionGizmo.Center);
+            var part = drawing.Single(p => p.Geometry.Handle.Id == PositionGizmo.Center).Geometry;
             var model = GizmoRenderAdapter.ModelView(camera, part);
             Assert.Equal(0f, model[12]);
             Assert.Equal(0.25f, model[13]);
@@ -142,12 +144,12 @@ public sealed partial class GizmoRenderAdapterTests
         f.Frame();
         Assert.Equal(3, f.Meshes.Count);
         Assert.Equal(16, f.Draws);
-        Assert.Equal(4, f.State.Captures);
-        Assert.Equal(4, f.State.Restores);
-        f.Render.Verify(r => r.GLDisableDepthTest(), Times.Exactly(4));
-        f.Render.Verify(r => r.GLDepthMask(false), Times.Exactly(4));
+        Assert.Equal(16, f.State.Captures);
+        Assert.Equal(16, f.State.Restores);
+        f.Render.Verify(r => r.GLDisableDepthTest(), Times.Exactly(16));
+        f.Render.Verify(r => r.GLDepthMask(false), Times.Exactly(16));
         f.Render.Verify(r => r.GlToggleBlend(It.IsAny<bool>(), It.IsAny<EnumBlendMode>()), Times.Never);
-        f.Previous.Verify(p => p.Use(), Times.Exactly(4));
+        f.Previous.Verify(p => p.Use(), Times.Exactly(16));
         f.Shader.Verify(p => p.Uniform("colorIn", 1f, 0.2f, 0.2f, 0.8f), Times.Exactly(4));
         f.Shader.Verify(p => p.UniformMatrix("modelViewMatrix", It.Is<float[]>(m => m.Length == 16)), Times.Exactly(16));
         f.Adapter.Dispose();
@@ -241,7 +243,7 @@ public sealed partial class GizmoRenderAdapterTests
         f.Shaders.Setup(s => s.NewShaderProgram()).Returns(replacement.Object);
         f.Frame();
         f.Shaders.Verify(s => s.NewShaderProgram(), Times.Exactly(2));
-        replacement.Verify(s => s.Use(), Times.Exactly(2));
+        replacement.Verify(s => s.Use(), Times.Exactly(8));
         f.Adapter.Dispose();
         replacement.Verify(s => s.Dispose(), Times.Once);
         f.Shader.Verify(s => s.Dispose(), Times.Never);
@@ -278,7 +280,7 @@ public sealed partial class GizmoRenderAdapterTests
         f.Frame();
         var pointer = f.Camera.Camera!.CreatePointer(f.Camera, 400, 300);
         Assert.True(f.Manager.TryBegin(pointer));
-        gizmo.Value = new(V(1, 0, -10), 0);
+        f.Manager.Update(new(f.Camera, new(V(0, 0, 0), V(1, 0, -10))));
         if (fault == "upload")
         {
             f.Add(GizmoShape.Diamond);
@@ -422,9 +424,10 @@ public sealed partial class GizmoRenderAdapterTests
             Adapter = new(Api.Object, Manager, () => Camera, State);
         }
 
-        public PositionGizmo Add(GizmoShape shape = GizmoShape.Circle)
+        public ComposedPositionGizmo Add(GizmoShape shape = GizmoShape.Circle)
         {
-            var gizmo = new PositionGizmo(new(V(0, 0, -10), 0), Adapter.Draw, marker: shape);
+            var gizmo = new ComposedPositionGizmo(new(V(0, 0, -10), 0), Adapter.Draw,
+                g => new GizmoEditStateTarget(g, () => true, () => { }, () => { }), marker: shape);
             Manager.Add(gizmo);
             return gizmo;
         }

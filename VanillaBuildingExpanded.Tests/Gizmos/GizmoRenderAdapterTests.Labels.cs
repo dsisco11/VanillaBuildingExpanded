@@ -7,12 +7,159 @@ namespace VanillaBuildingExpanded.Tests.Gizmos;
 
 public sealed partial class GizmoRenderAdapterTests
 {
+    [Theory]
+    [InlineData("text-color")]
+    [InlineData("background-color")]
+    [InlineData("font")]
+    [InlineData("size")]
+    [InlineData("bold")]
+    [InlineData("padding")]
+    public void ResolvedStyleChangesRebuildOnlyTheAffectedLabel(string field)
+    {
+        using var f = new Fixture();
+        var gizmo = f.Add();
+        var handle = gizmo.Handles[PositionGizmo.X];
+        handle.Label = new("X");
+        gizmo.Handles[PositionGizmo.Center].Label = new("Center");
+        f.Adapter.SetActive(true);
+        f.Frame();
+        var baseline = handle.Appearances[EAppearenceState.Default];
+        var changed = field switch
+        {
+            "text-color" => baseline with { LabelTextColor = new(0, 1, 0, 0.5f) },
+            "background-color" => baseline with { LabelBackgroundColor = new(0.5f, 0, 0, 0.3f) },
+            "font" => baseline with { LabelFontFamily = "monospace" },
+            "size" => baseline with { LabelFontSize = 20 },
+            "bold" => baseline with { LabelBold = false },
+            _ => baseline with { LabelPadding = 7 }
+        };
+        handle.SetAppearance(EAppearenceState.Default, changed);
+        f.Frame();
+        Assert.Equal(3, f.LabelUploads);
+        Assert.Equal(new[] { 102 }, f.DeletedTextures);
+        handle.SetAppearance(EAppearenceState.Default, changed with { Color = new(1, 0, 1, 0.4f), LineWidth = 3 });
+        handle.Label = new("X", 30, 40);
+        f.Frame();
+        Assert.Equal(3, f.LabelUploads);
+        Assert.Single(f.DeletedTextures);
+    }
+
+    [Fact]
+    public void SelectedStyleAndStateDependentGeometryUseFreshAnchorsWithoutRebasingCapture()
+    {
+        using var f = new Fixture();
+        var gizmo = f.Add();
+        var handle = gizmo.Handles[PositionGizmo.X];
+        handle.Label = new("X", 10, 12);
+        f.Adapter.SetActive(true);
+        f.Frame();
+        var baselineRect = f.LabelRects.Single();
+        handle.SetAppearance(EAppearenceState.Selected, new()
+        {
+            Size = 96, LabelFontSize = 22, Color = new(0, 1, 1, 0.6f), LineWidth = 4
+        });
+        Assert.True(gizmo.BeginInteraction(handle.Id,
+            new(f.Camera, new(PositionGizmoTests.V(0, 0, 0), PositionGizmoTests.V(0.5, 0, -10)))));
+        f.Frame();
+        var snapshot = gizmo.GetGeometrySource(handle).Snapshot!;
+        Assert.True(f.Camera.Camera!.TryProject(snapshot.Geometry.LabelAnchor, out var screen));
+        var rect = f.LabelRects.Last();
+        Assert.Equal((float)(2 * (screen[0] + 10) / f.Camera.Camera.Width - 1), rect.X, 6);
+        Assert.Equal((float)(1 - 2 * (screen[1] + 12) / f.Camera.Camera.Height), rect.Y, 6);
+        Assert.NotEqual(baselineRect.X, rect.X);
+        Assert.Equal(2, f.LabelUploads);
+        Assert.True(gizmo.IsInteracting);
+        f.Shader.Verify(s => s.Uniform("colorIn", 0f, 1f, 1f, 0.6f), Times.Once);
+        f.Render.VerifySet(r => r.LineWidth = 4, Times.Once);
+        gizmo.CancelInteraction();
+        f.Frame();
+        Assert.Equal(3, f.LabelUploads);
+    }
+
+    [Fact]
+    public void ReusingAnIdentityCannotReuseADetachedHandlesTexture()
+    {
+        using var f = new Fixture();
+        var gizmo = f.Add();
+        var original = gizmo.Handles[PositionGizmo.Center];
+        original.Label = new("Same");
+        f.Adapter.SetActive(true);
+        f.Frame();
+        gizmo.RemoveHandle(original);
+        var replacement = new GizmoHandle(original.Id, original.Appearances[EAppearenceState.Default], new("Same"))
+        {
+            FrameSource = original.FrameSource
+        };
+        gizmo.AddHandle(replacement);
+        f.Frame();
+        Assert.Equal(2, f.LabelUploads);
+        Assert.Equal(new[] { 101 }, f.DeletedTextures);
+        original.Dispose();
+        replacement.Dispose();
+        f.Frame();
+        Assert.Equal(new[] { 101, 102 }, f.DeletedTextures);
+    }
+
+    [Theory]
+    [InlineData("hide")]
+    [InlineData("disable")]
+    [InlineData("remove")]
+    public void PredicateCannotPublishALabelAfterInvalidatingItsHandle(string mutation)
+    {
+        using var f = new Fixture();
+        var gizmo = f.Add();
+        var handle = gizmo.Handles[PositionGizmo.Center];
+        handle.Label = new("Custom", visibility: GizmoLabelVisibility.Predicate, predicate: _ =>
+        {
+            if (mutation == "hide") handle.Visible = false;
+            else if (mutation == "disable") handle.Enabled = false;
+            else gizmo.RemoveHandle(handle);
+            return true;
+        });
+        f.Adapter.SetActive(true);
+        f.Frame();
+        Assert.Equal(0, f.LabelUploads);
+        Assert.Empty(f.LabelRects);
+        if (mutation == "remove") handle.Dispose();
+    }
+
+    [Theory]
+    [InlineData("upload")]
+    [InlineData("compile")]
+    [InlineData("quad")]
+    [InlineData("oversized")]
+    public void LabelResourceFailuresAreReportedAndAllAllocatedResourcesRetireOnce(string failure)
+    {
+        using var f = new Fixture();
+        var gizmo = f.Add();
+        var handle = gizmo.Handles[PositionGizmo.Center];
+        handle.Label = new("Center");
+        if (failure == "upload")
+            f.Api.Setup(a => a.Gui.LoadCairoTexture(It.IsAny<Cairo.ImageSurface>(), It.IsAny<bool>())).Returns(0);
+        if (failure == "compile") f.LabelShader.Setup(s => s.Compile()).Returns(false);
+        if (failure == "quad")
+            f.Render.Setup(r => r.UploadMesh(It.Is<MeshData>(m => m.VerticesCount == 4 && m.IndicesCount == 6)))
+                .Throws(new InvalidOperationException("quad failure"));
+        if (failure == "oversized") handle.SetAppearance(EAppearenceState.Default,
+            handle.Appearances[EAppearenceState.Default] with { LabelPadding = double.MaxValue });
+        f.Adapter.SetActive(true);
+        f.Frame();
+        Assert.Equal(1, f.Notices);
+        Assert.Null(f.Adapter.Context);
+        f.Flush();
+        Assert.Empty(f.Active);
+        f.Adapter.Dispose();
+        Assert.All(f.Meshes, mesh => Assert.Equal(1, mesh.Disposals));
+        Assert.Equal(f.DeletedTextures.Count, f.DeletedTextures.Distinct().Count());
+        if (failure is "compile" or "quad") Assert.Equal(new[] { 101 }, f.DeletedTextures);
+    }
+
     [Fact]
     public void LabelTexturesAreLazyReusedWhileHoveredAndRetiredWhenRemoved()
     {
         using var f = new Fixture();
         var gizmo = f.Add();
-        gizmo.SetLabel(PositionGizmo.Center, new("Center", visibility: GizmoLabelVisibility.Hover));
+        gizmo.Handles[PositionGizmo.Center].Label = new("Center", visibility: GizmoLabelVisibility.Hover);
         f.Adapter.SetActive(true);
         f.Frame();
         Assert.Equal(0, f.LabelUploads);
@@ -37,7 +184,7 @@ public sealed partial class GizmoRenderAdapterTests
         f.Manager.UpdateHover(pointer);
         f.Frame();
         Assert.Equal(1, f.LabelUploads);
-        gizmo.RemoveLabel(PositionGizmo.Center);
+        gizmo.Handles[PositionGizmo.Center].Label = null;
         f.Frame();
         Assert.Equal(new[] { 101 }, f.DeletedTextures);
         f.Adapter.Dispose();
@@ -51,13 +198,13 @@ public sealed partial class GizmoRenderAdapterTests
     {
         using var f = new Fixture();
         var gizmo = f.Add();
-        gizmo.SetLabel(PositionGizmo.X, new("X"));
+        gizmo.Handles[PositionGizmo.X].Label = new("X");
         f.Adapter.SetActive(true);
         f.Frame();
-        gizmo.SetLabel(PositionGizmo.X, new("X", 20, 20));
+        gizmo.Handles[PositionGizmo.X].Label = new("X", 20, 20);
         f.Frame();
         Assert.Equal(1, f.LabelUploads);
-        gizmo.SetLabel(PositionGizmo.X, new("Changed"));
+        gizmo.Handles[PositionGizmo.X].Label = new("Changed");
         f.Frame();
         Assert.Equal(2, f.LabelUploads);
         Assert.Equal(new[] { 101 }, f.DeletedTextures);
@@ -73,9 +220,9 @@ public sealed partial class GizmoRenderAdapterTests
         using var f = new Fixture();
         var gizmo = f.Add();
         bool show = false;
-        gizmo.SetLabel(PositionGizmo.Center, new("Selected", visibility: GizmoLabelVisibility.Selected));
-        gizmo.SetLabel(PositionGizmo.X, new("Predicate", visibility: GizmoLabelVisibility.Predicate,
-            predicate: _ => show));
+        gizmo.Handles[PositionGizmo.Center].Label = new("Selected", visibility: GizmoLabelVisibility.Selected);
+        gizmo.Handles[PositionGizmo.X].Label = new("Predicate", visibility: GizmoLabelVisibility.Predicate,
+            predicate: _ => show);
         f.Adapter.SetActive(true);
         f.Frame();
         Assert.Empty(f.LabelRects);
@@ -96,7 +243,7 @@ public sealed partial class GizmoRenderAdapterTests
     {
         using var f = new Fixture();
         var gizmo = f.Add();
-        gizmo.SetLabel(PositionGizmo.Center, new("Scale"));
+        gizmo.Handles[PositionGizmo.Center].Label = new("Scale");
         f.Adapter.SetActive(true);
         f.Frame();
         var originalRect = f.LabelRects.Single();
@@ -128,7 +275,7 @@ public sealed partial class GizmoRenderAdapterTests
     {
         using var f = new Fixture();
         var gizmo = f.Add();
-        gizmo.SetLabel(PositionGizmo.Center, new("Visible"));
+        gizmo.Handles[PositionGizmo.Center].Label = new("Visible");
         gizmo.Value = new(PositionGizmoTests.V(0, 0, 10), 0);
         f.Adapter.SetActive(true);
         f.Frame();
@@ -153,7 +300,7 @@ public sealed partial class GizmoRenderAdapterTests
     {
         using var f = new Fixture();
         var gizmo = f.Add();
-        gizmo.SetLabel(PositionGizmo.Center, new("Center"));
+        gizmo.Handles[PositionGizmo.Center].Label = new("Center");
         f.LabelShader.Setup(s => s.BindTexture2D("labelTexture", It.IsAny<int>(), 0))
             .Throws(new InvalidOperationException("label draw"));
         f.Adapter.SetActive(true);

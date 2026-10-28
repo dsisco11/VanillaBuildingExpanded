@@ -147,10 +147,14 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
         finally { callbackDepth--; }
     }
 
-    public void Draw(PositionGizmoDraw draw)
+    /// <summary>Draws the resolved snapshot shared with picking; handles retain no native resources.</summary>
+    public void Draw(GizmoHandleDraw draw)
     {
-        if (!drawing || disposed || failed || !ReferenceEquals(draw.Context, context))
+        var geometry = draw.Geometry;
+        var current = geometry.Context;
+        if (!drawing || disposed || failed || !ReferenceEquals(current, context))
             throw new InvalidOperationException("Gizmos draw only inside their session's overlay callback.");
+        if (!CanDraw(geometry)) return;
         var render = api.Render;
         var shader = GetShader();
         var previous = render.CurrentActiveShader;
@@ -161,29 +165,20 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
             render.GLDisableDepthTest();
             render.GLDepthMask(false);
             shader.Use();
-            shader.UniformMatrix("projectionMatrix", ToFloat(draw.Context.Camera!.Projection));
-            foreach (var part in draw.Geometry.Parts)
+            shader.UniformMatrix("projectionMatrix", ToFloat(current.Camera!.Projection));
+            if (!meshes.TryGetValue(geometry.Shape, out var mesh))
             {
-                if (disposed || failed || !desired || !draw.Gizmo.IsEligible(draw.Context.Dimension)) break;
-                if (!meshes.TryGetValue(part.Shape, out var mesh))
-                {
-                    mesh = render.UploadMesh(CreateMesh(part.Shape))
-                        ?? throw new InvalidOperationException("Gizmo mesh upload returned no mesh.");
-                    meshes.Add(part.Shape, mesh);
-                }
-                if (mesh.Disposed || !mesh.Initialized) throw new InvalidOperationException("Gizmo mesh is unavailable.");
-                bool emphasized = draw.Gizmo.CapturedHandle == part.Handle || draw.Gizmo.HoveredHandle == part.Handle;
-                render.LineWidth = emphasized ? 2.8f : 1.6f;
-                var color = part.Handle.Value switch
-                {
-                    1 => (1f, 0.2f, 0.2f), 2 => (0.2f, 1f, 0.2f), 3 => (0.25f, 0.5f, 1f),
-                    _ => (1f, 0.85f, 0.25f)
-                };
-                shader.Uniform("colorIn", color.Item1, color.Item2, color.Item3, emphasized ? 1f : 0.8f);
-                shader.UniformMatrix("modelViewMatrix", ModelView(draw.Context.Camera!, part));
-                render.RenderMesh(mesh);
+                mesh = render.UploadMesh(CreateMesh(geometry.Shape))
+                    ?? throw new InvalidOperationException("Gizmo mesh upload returned no mesh.");
+                meshes.Add(geometry.Shape, mesh);
             }
-            DrawLabels(draw);
+            if (mesh.Disposed || !mesh.Initialized) throw new InvalidOperationException("Gizmo mesh is unavailable.");
+            render.LineWidth = draw.Appearance.LineWidth;
+            var color = draw.Appearance.Color;
+            shader.Uniform("colorIn", color.X, color.Y, color.Z, color.W);
+            shader.UniformMatrix("modelViewMatrix", ModelView(current.Camera!, geometry));
+            if (CanDraw(geometry)) render.RenderMesh(mesh);
+            if (CanDraw(geometry)) DrawLabel(draw);
         }
         finally
         {
@@ -195,6 +190,11 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
             }
         }
     }
+
+    private bool CanDraw(GizmoHandleGeometry geometry) => !disposed && !failed && desired
+        && !geometry.Handle.IsDisposed && geometry.Handle.Visible
+        && ReferenceEquals(geometry.Handle.Owner, geometry.Owner)
+        && geometry.Owner.Owner == manager && geometry.Owner.IsEligible(geometry.Context.Dimension);
 
     private IShaderProgram GetShader()
     {
@@ -232,9 +232,9 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
         return shader;
     }
 
-    internal static float[] ModelView(GizmoCamera camera, PositionGizmoPart part)
+    internal static float[] ModelView(GizmoCamera camera, GizmoHandleGeometry part)
     {
-        var offset = part.Origin - camera.ReferencePosition;
+        var offset = part.Frame.Origin - camera.ReferencePosition;
         var model = new double[16];
         for (int i = 0; i < 3; i++)
         {
@@ -293,7 +293,7 @@ internal sealed partial class GizmoRenderAdapter : IRenderer
     }
 
     private static bool IsRenderFailure(Exception error) => error.GetType() == typeof(Exception)
-        || error is InvalidOperationException or ArgumentException or NotSupportedException
+        || error is InvalidOperationException or ArgumentException or NotSupportedException or OverflowException
             or ExternalException or OutOfMemoryException;
 
     private void DisposeResources()

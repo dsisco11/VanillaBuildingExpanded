@@ -2,9 +2,11 @@ using System;
 using System.Numerics;
 using System.Runtime.Intrinsics;
 
+using Vintagestory.API.Client;
+
 namespace VanillaBuildingExpanded.Gizmos;
 
-/// <summary>Explicit positioning composition; gameplay retains its existing implementation until renderer cutover.</summary>
+/// <summary>Explicit positioning composition with independently replaceable visual and interaction contracts.</summary>
 public sealed class ComposedPositionGizmo : HandleGizmo<GizmoPosition>
 {
     /// <inheritdoc />
@@ -72,7 +74,7 @@ public sealed class ComposedPositionGizmo : HandleGizmo<GizmoPosition>
         {
             Shape = shape, Size = size, Color = color, LineWidth = 1.6f,
             LabelTextColor = Vector4.One, LabelBackgroundColor = new(0, 0, 0, 0.65f),
-            LabelFontFamily = "Arial", LabelFontSize = 14, LabelBold = false, LabelPadding = 4
+            LabelFontFamily = GuiStyle.StandardFontName, LabelFontSize = 14, LabelBold = true, LabelPadding = 3
         });
         var highlight = new AppearenceProperties { Color = color with { W = 1 }, LineWidth = 2.8f };
         handle.SetAppearance(EAppearenceState.Hover, highlight);

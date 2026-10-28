@@ -27,20 +27,20 @@ public sealed class WorkAreaGizmoSessionTests
         h.Frame();
         foreach (var gizmo in new[] { h.Session.Start!, h.Session.End!, h.Session.Center! })
         {
-            Assert.Equal(4, gizmo.Labels.Count);
-            Assert.Equal("X", gizmo.Labels[PositionGizmo.X].Text);
-            Assert.Equal("Y", gizmo.Labels[PositionGizmo.Y].Text);
-            Assert.Equal("Z", gizmo.Labels[PositionGizmo.Z].Text);
-            Assert.All(gizmo.Labels.Values, label => Assert.Equal(GizmoLabelVisibility.Hover, label.Visibility));
+            Assert.Equal(4, gizmo.Handles.Count);
+            Assert.Equal("X", gizmo.Handles[PositionGizmo.X].Label!.Text);
+            Assert.Equal("Y", gizmo.Handles[PositionGizmo.Y].Label!.Text);
+            Assert.Equal("Z", gizmo.Handles[PositionGizmo.Z].Label!.Text);
+            Assert.All(gizmo.Handles.Values, handle => Assert.Equal(GizmoLabelVisibility.Hover, handle.Label!.Visibility));
         }
         var midpoint = h.Session.Center!;
         h.WorkArea.RenameArea(h.WorkArea.SelectedId!.Value, "Workshop <1>");
         Assert.Same(midpoint, h.Session.Center);
-        Assert.Equal("Workshop <1>", midpoint.Labels[PositionGizmo.Center].Text);
+        Assert.Equal("Workshop <1>", midpoint.Handles[PositionGizmo.Center].Label!.Text);
         var other = h.WorkArea.CreateArea("Garden");
         h.WorkArea.RestoreEndpoints(new(0, 65, -200, 0), new(30, 70, -200, 0));
         Assert.Equal(other, h.WorkArea.SelectedId);
-        Assert.Equal("Garden", h.Session.Center!.Labels[PositionGizmo.Center].Text);
+        Assert.Equal("Garden", h.Session.Center!.Handles[PositionGizmo.Center].Label!.Text);
     }
 
     [Theory]

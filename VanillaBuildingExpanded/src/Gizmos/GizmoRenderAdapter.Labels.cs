@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.Intrinsics;
 
 using Cairo;
 using Vintagestory.API.Client;
@@ -10,74 +9,72 @@ namespace VanillaBuildingExpanded.Gizmos;
 /// <summary>Projects handle labels into the same overlay viewport without changing hit geometry.</summary>
 internal sealed partial class GizmoRenderAdapter
 {
-    private sealed record LabelTexture(string Text, double Scale, LoadedTexture Texture);
-    private readonly Dictionary<(Gizmo Gizmo, GizmoHandleId Handle), LabelTexture> labelTextures = [];
+    private sealed record LabelTexture(string Text, double Scale, ResolvedGizmoLabelStyle Style, LoadedTexture Texture);
+    private readonly Dictionary<(Gizmo Owner, GizmoHandle Handle), LabelTexture> labelTextures = [];
     private IShaderProgram? labelShader;
     private MeshRef? labelQuad;
 
     /// <summary>Draws eligible labels after handle lines, sharing the enclosing render-state guard.</summary>
-    private void DrawLabels(PositionGizmoDraw draw)
+    private void DrawLabel(GizmoHandleDraw draw)
     {
-        if (draw.Gizmo.Labels.Count == 0) return;
+        if (!TryProjectLabel(draw, out var label, out double x, out double y)) return;
+        var geometry = draw.Geometry;
+        if (!CanDraw(geometry)) return;
+        var camera = geometry.Context.Camera!;
+        var style = draw.Appearance.LabelStyle
+            ?? throw new InvalidOperationException("A labeled handle requires resolved label styling.");
+        var key = (geometry.Owner, geometry.Handle);
+        if (labelTextures.TryGetValue(key, out var cached)
+            && (cached.Text != label.Text || cached.Scale != camera.GuiScale || cached.Style != style))
+        {
+            labelTextures.Remove(key);
+            cached.Texture.Dispose();
+            cached = null;
+        }
+        if (cached is null)
+        {
+            cached = new(label.Text, camera.GuiScale, style, CreateLabelTexture(label.Text, camera.GuiScale, style));
+            labelTextures.Add(key, cached);
+        }
+        var texture = cached.Texture;
+        if (x + texture.Width <= 0 || y + texture.Height <= 0 || x >= camera.Width || y >= camera.Height)
+            return;
         IShaderProgram? program = null;
         try
         {
-            foreach (var part in draw.Geometry.Parts)
+            shader?.Stop();
+            program = GetLabelShader();
+            labelQuad ??= api.Render.UploadMesh(new MeshData
             {
-                if (disposed || failed || !desired || !draw.Gizmo.IsEligible(draw.Context.Dimension)) break;
-                if (!TryProjectLabel(draw, part, out var label, out double x, out double y)) continue;
-                if (disposed || failed || !desired || !draw.Gizmo.IsEligible(draw.Context.Dimension)) break;
-                var camera = draw.Context.Camera!;
-                var key = ((Gizmo)draw.Gizmo, part.Handle);
-                if (labelTextures.TryGetValue(key, out var cached)
-                    && (cached.Text != label.Text || cached.Scale != camera.GuiScale))
-                {
-                    labelTextures.Remove(key);
-                    cached.Texture.Dispose();
-                    cached = null;
-                }
-                if (cached is null)
-                {
-                    cached = new(label.Text, camera.GuiScale, CreateLabelTexture(label.Text, camera.GuiScale));
-                    labelTextures.Add(key, cached);
-                }
-                var texture = cached.Texture;
-                if (x + texture.Width <= 0 || y + texture.Height <= 0 || x >= camera.Width || y >= camera.Height)
-                    continue;
-                if (program is null)
-                {
-                    shader?.Stop();
-                    program = GetLabelShader();
-                    labelQuad ??= api.Render.UploadMesh(new MeshData
-                    {
-                        xyz = [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0],
-                        Indices = [0, 2, 1, 0, 3, 2], VerticesCount = 4, IndicesCount = 6
-                    }) ?? throw new InvalidOperationException("Gizmo label quad upload failed.");
-                    if (labelQuad.Disposed || !labelQuad.Initialized)
-                        throw new InvalidOperationException("The gizmo label quad is unavailable.");
-                    program.Use();
-                }
-                program.Uniform("screenRect", (float)(2 * x / camera.Width - 1),
-                    (float)(1 - 2 * y / camera.Height), 2f * texture.Width / camera.Width,
-                    -2f * texture.Height / camera.Height);
-                program.BindTexture2D("labelTexture", texture.TextureId, 0);
-                api.Render.RenderMesh(labelQuad!);
-            }
+                xyz = [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0],
+                Indices = [0, 2, 1, 0, 3, 2], VerticesCount = 4, IndicesCount = 6
+            }) ?? throw new InvalidOperationException("Gizmo label quad upload failed.");
+            if (labelQuad.Disposed || !labelQuad.Initialized)
+                throw new InvalidOperationException("The gizmo label quad is unavailable.");
+            program.Use();
+            program.Uniform("screenRect", (float)(2 * x / camera.Width - 1),
+                (float)(1 - 2 * y / camera.Height), 2f * texture.Width / camera.Width,
+                -2f * texture.Height / camera.Height);
+            program.BindTexture2D("labelTexture", texture.TextureId, 0);
+            if (CanDraw(geometry)) api.Render.RenderMesh(labelQuad);
         }
         finally { program?.Stop(); }
     }
 
     /// <summary>Resolves the label's top-left pixel position from the rendered center or arrow tip.</summary>
-    internal static bool TryProjectLabel(PositionGizmoDraw draw, PositionGizmoPart part,
+    internal static bool TryProjectLabel(GizmoHandleDraw draw,
         out GizmoLabel label, out double x, out double y)
     {
         x = y = 0;
         label = null!;
-        if (!draw.Gizmo.Labels.TryGetValue(part.Handle, out var candidate)
-            || !candidate.IsVisible(draw.Gizmo, part.Handle, draw.Context)) return false;
-        var anchor = part.Shape == GizmoShape.Arrow
-            ? part.Transform(Vector256.Create(1d, 0d, 0d, 0d)) : part.Origin;
-        if (draw.Context.Camera is not { } camera || !camera.TryProject(anchor, out var screen)) return false;
+        var geometry = draw.Geometry;
+        var handle = geometry.Handle;
+        if (!ReferenceEquals(handle.Owner, geometry.Owner) || handle.Label is not { } candidate
+            || !candidate.IsVisible(handle, geometry.Context)) return false;
+        if (!handle.IsEligible(geometry.Context.Dimension) || !ReferenceEquals(handle.Owner, geometry.Owner)
+            || !ReferenceEquals(handle.Label, candidate)) return false;
+        if (geometry.Context.Camera is not { } camera
+            || !camera.TryProject(geometry.LabelAnchor, out var screen)) return false;
         x = screen[0] + candidate.OffsetX;
         y = screen[1] + candidate.OffsetY;
         if (!double.IsFinite(x) || !double.IsFinite(y)) return false;
@@ -85,22 +82,28 @@ internal sealed partial class GizmoRenderAdapter
         return true;
     }
 
-    /// <summary>Rasterizes literal single-line text only when content or GUI scale changes.</summary>
-    private LoadedTexture CreateLabelTexture(string text, double scale)
+    /// <summary>Rasterizes literal single-line text only when content, scale or resolved style changes.</summary>
+    private LoadedTexture CreateLabelTexture(string text, double scale, ResolvedGizmoLabelStyle style)
     {
+        double fontSize = style.FontSize * scale;
+        double padding = Math.Ceiling(style.Padding * scale);
+        if (!double.IsFinite(fontSize) || !double.IsFinite(padding)
+            || fontSize > int.MaxValue || padding > int.MaxValue / 2)
+            throw new InvalidOperationException("The resolved label style exceeds supported raster dimensions.");
         using var measureSurface = new ImageSurface(Format.Argb32, 1, 1);
         using var measure = new Context(measureSurface);
         Configure(measure);
         var extents = measure.TextExtents(text);
-        double padding = Math.Ceiling(3 * scale);
-        int width = checked((int)Math.Ceiling(extents.Width + 2 * padding));
-        int height = checked((int)Math.Ceiling(measure.FontExtents.Height + 2 * padding));
+        int width = Math.Max(1, checked((int)Math.Ceiling(extents.Width + 2 * padding)));
+        int height = Math.Max(1, checked((int)Math.Ceiling(measure.FontExtents.Height + 2 * padding)));
         using var surface = new ImageSurface(Format.Argb32, width, height);
         using var ctx = new Context(surface);
         Configure(ctx);
-        ctx.SetSourceRGBA(0, 0, 0, 0.65);
+        var background = style.BackgroundColor;
+        ctx.SetSourceRGBA(background.X, background.Y, background.Z, background.W);
         ctx.Paint();
-        ctx.SetSourceRGBA(1, 1, 1, 1);
+        var color = style.TextColor;
+        ctx.SetSourceRGBA(color.X, color.Y, color.Z, color.W);
         ctx.MoveTo(padding - extents.XBearing, padding + ctx.FontExtents.Ascent);
         ctx.ShowText(text);
         surface.DemulAlpha();
@@ -110,8 +113,8 @@ internal sealed partial class GizmoRenderAdapter
 
         void Configure(Context context)
         {
-            context.SelectFontFace(GuiStyle.StandardFontName, FontSlant.Normal, FontWeight.Bold);
-            context.SetFontSize(14 * scale);
+            context.SelectFontFace(style.FontFamily, FontSlant.Normal, style.Bold ? FontWeight.Bold : FontWeight.Normal);
+            context.SetFontSize(fontSize);
         }
     }
 
@@ -157,10 +160,12 @@ internal sealed partial class GizmoRenderAdapter
     /// <summary>Releases cached textures when their handle label or manager membership no longer exists.</summary>
     private void PruneLabelTextures()
     {
-        List<(Gizmo Gizmo, GizmoHandleId Handle)>? expired = null;
+        List<(Gizmo Owner, GizmoHandle Handle)>? expired = null;
         foreach (var (key, cached) in labelTextures)
-            if (key.Gizmo.IsDisposed || key.Gizmo.Owner != manager
-                || !key.Gizmo.Labels.TryGetValue(key.Handle, out var label) || label.Text != cached.Text)
+            if (key.Owner.IsDisposed || key.Owner.Owner != manager || key.Handle.IsDisposed
+                || !ReferenceEquals(key.Handle.Owner, key.Owner)
+                || key.Handle.Label is not { } label || label.Text != cached.Text
+                || key.Handle.Appearance.LabelStyle != cached.Style)
                 (expired ??= []).Add(key);
         if (expired is null) return;
         foreach (var key in expired)

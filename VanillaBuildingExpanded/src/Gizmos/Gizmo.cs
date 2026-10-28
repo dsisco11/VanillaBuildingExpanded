@@ -6,7 +6,6 @@ namespace VanillaBuildingExpanded.Gizmos;
 
 public abstract partial class Gizmo : IDisposable
 {
-    private readonly Dictionary<GizmoHandleId, GizmoLabel> labels = [];
     private bool visible = true;
     private bool enabled = true;
     private bool ending;
@@ -34,33 +33,10 @@ public abstract partial class Gizmo : IDisposable
         private set => SetHandleState(ref capturedHandleId, ref capturedHandleInstance, value, true);
     }
 
-    /// <summary>Gets optional labels keyed by their owning handle IDs.</summary>
-    public IReadOnlyDictionary<GizmoHandleId, GizmoLabel> Labels { get; }
-
-    /// <summary>Initializes read-only views over the gizmo's label and handle configuration.</summary>
+    /// <summary>Initializes the read-only view over persistent handle configuration.</summary>
     protected Gizmo()
     {
-        Labels = new ReadOnlyDictionary<GizmoHandleId, GizmoLabel>(labels);
         Handles = new ReadOnlyDictionary<GizmoHandleId, GizmoHandle>(handles);
-    }
-
-    /// <summary>Adds or replaces a handle's label without changing geometry or interaction state.</summary>
-    /// <param name="handle">The handle whose rendered anchor carries the label.</param>
-    /// <param name="label">The immutable text, offset and visibility configuration.</param>
-    public void SetLabel(GizmoHandleId handle, GizmoLabel label)
-    {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
-        ArgumentNullException.ThrowIfNull(label);
-        labels[handle] = label;
-    }
-
-    /// <summary>Removes a handle's optional label without changing its hit target.</summary>
-    /// <param name="handle">The handle whose label should be removed.</param>
-    /// <returns>Whether the handle previously had a label.</returns>
-    public bool RemoveLabel(GizmoHandleId handle)
-    {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
-        return labels.Remove(handle);
     }
 
     public bool Visible
@@ -314,7 +290,6 @@ public abstract partial class Gizmo : IDisposable
                 InteractionEnded = null;
                 HandleInvalidated = null;
                 ClearValueSubscriptions();
-                labels.Clear();
             }
         }
     }

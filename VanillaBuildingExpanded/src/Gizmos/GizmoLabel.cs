@@ -17,14 +17,14 @@ public enum GizmoLabelVisibility
 
 /// <summary>Live handle state supplied to a label's visibility predicate.</summary>
 /// <param name="Gizmo">The owning gizmo.</param>
-/// <param name="Handle">The handle carrying the label.</param>
+/// <param name="Handle">The actual owned handle carrying the label.</param>
 /// <param name="Context">The current rendered camera and dimension snapshot.</param>
-public readonly record struct GizmoLabelContext(Gizmo Gizmo, GizmoHandleId Handle, GizmoContext Context)
+public readonly record struct GizmoLabelContext(Gizmo Gizmo, GizmoHandle Handle, GizmoContext Context)
 {
     /// <summary>Gets whether this particular handle is hovered.</summary>
-    public bool IsHovered => Gizmo.HoveredHandle == Handle;
+    public bool IsHovered => ReferenceEquals(Gizmo.HoveredHandleInstance, Handle);
     /// <summary>Gets whether this particular handle is captured, rather than merely hovered.</summary>
-    public bool IsSelected => Gizmo.CapturedHandle == Handle;
+    public bool IsSelected => ReferenceEquals(Gizmo.CapturedHandleInstance, Handle);
 }
 
 /// <summary>Immutable literal text and screen-space placement for one gizmo handle.</summary>
@@ -70,20 +70,21 @@ public sealed class GizmoLabel
     }
 
     /// <summary>Evaluates visibility without overriding the owning gizmo's eligibility.</summary>
-    /// <param name="gizmo">The label's owning gizmo.</param>
     /// <param name="handle">The label's owning handle.</param>
     /// <param name="context">The current rendering context.</param>
     /// <returns>Whether the label's policy permits rendering in this context.</returns>
-    public bool IsVisible(Gizmo gizmo, GizmoHandleId handle, GizmoContext context)
+    public bool IsVisible(GizmoHandle handle, GizmoContext context)
     {
-        ArgumentNullException.ThrowIfNull(gizmo);
+        ArgumentNullException.ThrowIfNull(handle);
         ArgumentNullException.ThrowIfNull(context);
-        if (!gizmo.IsEligible(context.Dimension)) return false;
+        if (!handle.IsEligible(context.Dimension) || handle.Owner is not { } gizmo
+            || !gizmo.Handles.TryGetValue(handle.Id, out var member) || !ReferenceEquals(member, handle))
+            return false;
         return Visibility switch
         {
             GizmoLabelVisibility.Always => true,
-            GizmoLabelVisibility.Hover => gizmo.HoveredHandle == handle,
-            GizmoLabelVisibility.Selected => gizmo.CapturedHandle == handle,
+            GizmoLabelVisibility.Hover => handle.IsHovered,
+            GizmoLabelVisibility.Selected => handle.IsSelected,
             GizmoLabelVisibility.Predicate => Predicate!(new(gizmo, handle, context)),
             _ => throw new InvalidOperationException("Unsupported gizmo label visibility.")
         };
