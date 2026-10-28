@@ -279,17 +279,19 @@ public sealed class WorkAreaControllerTests
     }
 
     [Fact]
-    public void RestoredAreasNormalizeAllCornersAndStartHiddenWithoutEditingOrSaving()
+    public void RestoredAreasNormalizeAllCornersAndPreserveVisibilityWithoutEditingOrSaving()
     {
         var controller = new WorkAreaController();
         int commits = 0;
         controller.AreasCommitted += () => commits++;
         var id = Guid.NewGuid();
         controller.RestoreAreas([new(id, "Home", new(10, 1, 30, 0), new(5, 2, 20, 0), true),
-            new(Guid.NewGuid(), "Field", null, new(1, 2, 3, 2), true)]);
+            new(Guid.NewGuid(), "Field", null, new(1, 2, 3, 2), false)]);
         Assert.Equal(id, controller.SelectedId);
         Assert.Equal(new WorkAreaEndpoint(5, 1, 20, 0), controller.State.Start);
-        Assert.All(controller.Areas, area => Assert.False(area.IsVisible));
+        Assert.True(controller.State.ShowWorkArea);
+        Assert.True(controller.Areas[0].IsVisible);
+        Assert.False(controller.Areas[1].IsVisible);
         Assert.False(controller.IsEditing);
         Assert.Equal(0, commits);
         Assert.Throws<ArgumentException>(() => controller.RestoreAreas([controller.Areas[0], controller.Areas[0]]));
@@ -297,14 +299,15 @@ public sealed class WorkAreaControllerTests
     }
 
     [Fact]
-    public void NewController_IsInactiveIncompleteAndHidden()
+    public void NewController_IsInactiveIncompleteWithVisibilityEnabledByDefault()
     {
         var controller = new WorkAreaController();
         Assert.Null(controller.State.Start);
         Assert.Null(controller.State.End);
         Assert.Null(controller.State.Bounds);
         Assert.False(controller.State.CanPick);
-        Assert.False(controller.State.ShowWorkArea);
+        Assert.True(controller.State.ShowWorkArea);
+        Assert.True(Assert.Single(controller.Areas).IsVisible);
         Assert.False(controller.IsEditing);
     }
 
@@ -325,15 +328,21 @@ public sealed class WorkAreaControllerTests
     {
         var controller = new WorkAreaController();
         var changes = new List<WorkAreaState>();
+        int commits = 0;
         controller.Changed += changes.Add;
+        controller.AreasCommitted += () => commits++;
         controller.SetVisibility(true);
         controller.SetVisibility(true);
-        Assert.Single(changes);
+        Assert.Empty(changes);
+        Assert.Equal(0, commits);
         Assert.True(controller.State.ShowWorkArea);
         Assert.Null(controller.State.Bounds);
         controller.SetContext(false, false);
         Assert.True(controller.State.ShowWorkArea);
         controller.SetVisibility(false);
+        controller.SetVisibility(false);
+        Assert.Single(changes);
+        Assert.Equal(1, commits);
         Assert.False(controller.State.ShowWorkArea);
     }
 

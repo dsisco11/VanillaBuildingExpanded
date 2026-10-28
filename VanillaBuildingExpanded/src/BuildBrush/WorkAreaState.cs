@@ -16,7 +16,7 @@ internal enum WorkAreaNotice
 internal enum WorkAreaNameError { None, Invalid, Duplicate }
 
 internal sealed record NamedWorkArea(Guid Id, string Name, WorkAreaEndpoint? Start, WorkAreaEndpoint? End,
-    bool IsVisible = false)
+    bool IsVisible = true)
 {
     public WorkAreaBounds? Bounds => Start is { } start && End is { } end
         && start.Dimension == end.Dimension ? new WorkAreaBounds(start, end) : null;

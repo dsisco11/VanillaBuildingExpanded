@@ -334,7 +334,6 @@ public sealed partial class BuildModeHudControlsTests
         using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         h.Dialogs.Add(hud);
         hud.SetVisible(true);
-        ClickWorkArea(hud, f, "show");
         h.Frame();
         var check = WorkAreaMouse(f, WorkAreaElement(hud, "show"));
         Assert.False(h.Down(check.X, check.Y).Handled);
@@ -479,7 +478,7 @@ public sealed partial class BuildModeHudControlsTests
         using var binding = new WorkAreaRenderBinding(f.Api.Object, workArea, new BuildBrush.WorkAreaRenderingTests.FakeState());
         using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
-        ClickWorkArea(hud, f, "show");
+        Assert.True(Assert.IsType<GuiElementSwitch>(WorkAreaElement(hud, "show")).On);
         Assert.NotNull(renderer);
         var originalRenderer = renderer;
         f.ScaleWatcher!(1.25f);
@@ -526,7 +525,6 @@ public sealed partial class BuildModeHudControlsTests
         Assert.NotNull(hud);
         Assert.True(hud.IsOpened());
         Assert.False(brush.CanUseBrushControls);
-        ClickWorkArea(hud, f, "show");
         Assert.True(workArea.State.ShowWorkArea);
         workArea.RestoreEndpoints(new(10, 65, 20, 0), new(14, 67, 23, 0));
         hud.OnRenderGUI(0);
@@ -594,19 +592,20 @@ public sealed partial class BuildModeHudControlsTests
         using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
         var checkbox = Assert.IsType<GuiElementSwitch>(WorkAreaElement(hud, "show"));
+        Assert.True(checkbox.On);
         var press = WorkAreaMouse(f, checkbox);
         hud.OnMouseDown(press);
         Assert.True(press.Handled);
-        Assert.True(workArea.State.ShowWorkArea);
+        Assert.False(workArea.State.ShowWorkArea);
         hud.OnMouseUp(new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0));
         hud.OnRenderGUI(0);
-        Assert.True(Assert.IsAssignableFrom<GuiElementSwitch>(WorkAreaElement(hud, "show")).On);
+        Assert.False(Assert.IsAssignableFrom<GuiElementSwitch>(WorkAreaElement(hud, "show")).On);
         var state = workArea.State;
         ClickToggle(hud, f, "workArea");
         Assert.Null(hud.SingleComposer.GetElement("workarea-table"));
         Assert.Equal(state, workArea.State);
         ClickToggle(hud, f, "workArea");
-        Assert.True(Assert.IsAssignableFrom<GuiElementSwitch>(WorkAreaElement(hud, "show")).On);
+        Assert.False(Assert.IsAssignableFrom<GuiElementSwitch>(WorkAreaElement(hud, "show")).On);
         Assert.Null(workArea.State.Start);
         Assert.Null(workArea.State.End);
     }
@@ -631,7 +630,7 @@ public sealed partial class BuildModeHudControlsTests
         hud.OnMouseUp(release);
         Assert.False(release.Handled);
         Assert.False(WorkAreaTable(hud).HasPointerCapture);
-        Assert.True(workArea.State.ShowWorkArea);
+        Assert.False(workArea.State.ShowWorkArea);
         foreach (GuiElement passive in new[]
         {
             WorkAreaSizeTable(hud).GetElement("label"),
@@ -648,7 +647,7 @@ public sealed partial class BuildModeHudControlsTests
             Assert.False(e.Handled);
         }
         ClickWorkArea(hud, f, "show");
-        Assert.False(workArea.State.ShowWorkArea);
+        Assert.True(workArea.State.ShowWorkArea);
     }
 
     [Theory]
@@ -686,7 +685,7 @@ public sealed partial class BuildModeHudControlsTests
         Assert.False(table.HasPointerCapture);
         hud.OnMouseUp(new MouseEvent(press.X, press.Y, EnumMouseButton.Left, 0));
         Assert.Equal(1, changes);
-        Assert.True(workArea.State.ShowWorkArea);
+        Assert.False(workArea.State.ShowWorkArea);
         if (change != "dispose")
         {
             f.MouseGrabbed = false;

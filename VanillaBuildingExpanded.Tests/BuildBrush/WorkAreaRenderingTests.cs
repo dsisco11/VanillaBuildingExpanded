@@ -465,7 +465,7 @@ public sealed class WorkAreaRenderingTests
         f.Render.Verify(r => r.GlToggleBlend(It.IsAny<bool>(), It.IsAny<EnumBlendMode>()), Times.Never);
         f.Render.Verify(r => r.GLDepthMask(false), Times.Exactly(2));
         f.Render.VerifySet(r => r.LineWidth = 1.6f, Times.Exactly(2));
-        f.Accessor.Verify(a => a.IsValidPos(It.IsAny<BlockPos>()), Times.Exactly(6));
+        f.Accessor.Verify(a => a.IsValidPos(It.IsAny<BlockPos>()), Times.Exactly(4));
         Assert.Equal(5.004f, f.Model![0]);
     }
 
@@ -517,7 +517,7 @@ public sealed class WorkAreaRenderingTests
         Assert.Equal(registers, f.Registers);
         f.Events.VerifyRemove(e => e.PlayerDimensionChanged -= It.IsAny<PlayerCommonDelegate>(), Times.Once);
         using var fresh = new Fixture();
-        Assert.False(fresh.WorkArea.State.ShowWorkArea);
+        Assert.True(fresh.WorkArea.State.ShowWorkArea);
         Assert.False(fresh.WorkArea.State.IsBuildModeEnabled);
         Assert.Null(fresh.WorkArea.State.Bounds);
         Assert.Empty(fresh.Active);

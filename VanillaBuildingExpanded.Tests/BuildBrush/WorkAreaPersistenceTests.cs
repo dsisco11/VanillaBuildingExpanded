@@ -53,6 +53,7 @@ public sealed class WorkAreaPersistenceTests
         using var persistence = fixture.Open();
         Assert.Equal(WorkAreaResizeMode.Expansion, fixture.Controller.ResizeMode);
         Assert.Equal(new WorkAreaEndpoint(10, 65, 20, 0), fixture.Controller.State.Start);
+        Assert.True(fixture.Controller.State.ShowWorkArea);
         Assert.Equal(original, File.ReadAllText(fixture.ConfigPath));
         Assert.Empty(fixture.Writes);
     }
@@ -104,7 +105,97 @@ public sealed class WorkAreaPersistenceTests
     }
 
     [Fact]
-    public void NamedAreas_RoundTripNamesIdsAndBoundsButNotSelectionOrVisibility()
+    public void VisibilityChangesRoundTripWithoutEndpointsAndSkipUnchangedSaves()
+    {
+        using var fixture = new Fixture();
+        using var persistence = fixture.Open();
+        Assert.True(fixture.Controller.State.ShowWorkArea);
+        fixture.Controller.SetVisibility(false);
+        Assert.Single(fixture.Writes);
+        Assert.False(fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!["isVisible"]!.Value<bool>());
+        fixture.Controller.SetVisibility(false);
+        Assert.Single(fixture.Writes);
+        var restored = new WorkAreaController();
+        using (var reopened = fixture.Open(restored))
+        {
+            Assert.False(restored.State.ShowWorkArea);
+            Assert.Null(restored.State.Start);
+            Assert.Null(restored.State.End);
+            restored.SetVisibility(true);
+            Assert.Equal(2, fixture.Writes.Count);
+        }
+        var enabled = new WorkAreaController();
+        using var reenabled = fixture.Open(enabled);
+        Assert.True(enabled.State.ShowWorkArea);
+        Assert.Equal(2, fixture.Writes.Count);
+    }
+
+    [Fact]
+    public void NonselectedVisibilityChangesSaveCommittedBoundsDuringAPreview()
+    {
+        using var fixture = new Fixture();
+        using var persistence = fixture.Open();
+        Commit(fixture.Controller, true, new BlockPos(10, 65, 20, 0));
+        Commit(fixture.Controller, false, new BlockPos(20, 70, 30, 0));
+        var first = fixture.Controller.SelectedId!.Value;
+        var second = fixture.Controller.CreateArea("Garden");
+        fixture.Controller.SelectArea(first);
+        Assert.True(fixture.Controller.BeginTranslation());
+        Assert.True(fixture.Controller.PreviewTranslation(100, 0, 0, fixture.Accessor.Object));
+        int writes = fixture.Writes.Count;
+        fixture.Controller.SetVisibility(second, false);
+        Assert.True(fixture.Controller.IsEditing);
+        Assert.Equal(first, fixture.Controller.SelectedId);
+        Assert.Equal(writes + 1, fixture.Writes.Count);
+        var saved = (JArray)fixture.Read()["worlds"]!["world-a"]!["areas"]!;
+        Assert.Equal(10, saved[0]!["start"]!["x"]!.Value<int>());
+        Assert.True(saved[0]!["isVisible"]!.Value<bool>());
+        Assert.False(saved[1]!["isVisible"]!.Value<bool>());
+        fixture.Controller.SetVisibility(second, false);
+        Assert.Equal(writes + 1, fixture.Writes.Count);
+        fixture.Controller.CancelEndpointEdit();
+        Assert.Equal(writes + 1, fixture.Writes.Count);
+    }
+
+    [Fact]
+    public void FailedVisibilitySaveStaysDirtyAndRetriesOnExit()
+    {
+        using var fixture = new Fixture();
+        var persistence = fixture.Open();
+        fixture.FailWrites = true;
+        fixture.Controller.SetVisibility(false);
+        Assert.True(persistence.IsDirty);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-save-failed", fixture.Errors);
+        fixture.FailWrites = false;
+        persistence.Dispose();
+        Assert.False(persistence.IsDirty);
+        var restored = new WorkAreaController();
+        using var reopened = fixture.Open(restored);
+        Assert.False(restored.State.ShowWorkArea);
+    }
+
+    [Theory]
+    [InlineData("\"false\"")]
+    [InlineData("0")]
+    [InlineData("null")]
+    [InlineData("{}")]
+    [InlineData("[]")]
+    public void InvalidSavedVisibilityIsReportedWithoutRewriting(string value)
+    {
+        using var fixture = new Fixture();
+        var document = Config(("world-a", Pair(Endpoint(10, 65, 20), null)));
+        document["worlds"]!["world-a"]!["areas"]![0]!["isVisible"] = JToken.Parse(value);
+        string original = fixture.Write(document);
+        using var persistence = fixture.Open();
+        Assert.True(fixture.Controller.State.ShowWorkArea);
+        Assert.Null(fixture.Controller.State.Start);
+        Assert.Contains("vanillabuildingexpanded:workarea-persistence-invalid-entry", fixture.Errors);
+        Assert.Empty(fixture.Writes);
+        Assert.Equal(original, File.ReadAllText(fixture.ConfigPath));
+    }
+
+    [Fact]
+    public void NamedAreas_RoundTripNamesIdsBoundsAndVisibilityButNotSelection()
     {
         using var fixture = new Fixture();
         using var persistence = fixture.Open();
@@ -114,12 +205,12 @@ public sealed class WorkAreaPersistenceTests
         Commit(fixture.Controller, false, new BlockPos(10, 75, 30, 0));
         var second = fixture.Controller.CreateArea("Garden");
         Commit(fixture.Controller, true, new BlockPos(30, 65, 40, 2));
-        var expected = fixture.Controller.CommittedAreas.Select(area => area with { IsVisible = false }).ToArray();
         int writes = fixture.Writes.Count;
         fixture.Controller.SelectArea(first);
         fixture.Controller.SetVisibility(first, true);
         fixture.Controller.SetVisibility(second, false);
-        Assert.Equal(writes, fixture.Writes.Count);
+        Assert.Equal(writes + 1, fixture.Writes.Count);
+        var expected = fixture.Controller.CommittedAreas.ToArray();
         var restored = new WorkAreaController();
         using var reopened = fixture.Open(restored);
         Assert.Equal(expected, restored.Areas);
@@ -129,7 +220,7 @@ public sealed class WorkAreaPersistenceTests
         Assert.Null(restored.State.End);
         Assert.False(restored.State.ShowWorkArea);
         var record = fixture.Read()["worlds"]!["world-a"]!["areas"]![0]!;
-        Assert.Equal(new[] { "id", "name", "start", "end" }, ((JObject)record).Properties().Select(p => p.Name));
+        Assert.Equal(new[] { "id", "name", "start", "end", "isVisible" }, ((JObject)record).Properties().Select(p => p.Name));
     }
 
     [Fact]
@@ -437,7 +528,7 @@ public sealed class WorkAreaPersistenceTests
             Assert.Equal(cell.Dimension, saved["dimension"]!.Value<int>());
         }
         h.AssertNoTargeting();
-        Assert.False(restored.State.ShowWorkArea);
+        Assert.True(restored.State.ShowWorkArea);
         Assert.False(restored.State.CanPick);
     }
 
@@ -481,7 +572,7 @@ public sealed class WorkAreaPersistenceTests
         Assert.Equal(committed, restored.CommittedEndpoints);
         Assert.Equal(new WorkAreaEndpoint(-1999999998, 32767, 2000000000, 65535), restored.State.Start);
         Assert.Equal(new WorkAreaEndpoint(-1999999977, 32767, 2000000020, 65535), restored.State.End);
-        Assert.False(restored.State.ShowWorkArea);
+        Assert.True(restored.State.ShowWorkArea);
         Assert.False(restored.IsEditing);
     }
 
@@ -723,14 +814,15 @@ public sealed class WorkAreaPersistenceTests
         Assert.Equal(saved.Start, fresh.State.Start);
         Assert.Equal(saved.End, fresh.State.End);
         Assert.Equal(saved.Bounds, fresh.State.Bounds);
-        Assert.False(fresh.State.ShowWorkArea);
+        Assert.True(fresh.State.ShowWorkArea);
         Assert.False(fresh.State.IsBuildModeEnabled);
         Assert.False(fresh.State.IsPlayerAlive);
         Assert.False(fresh.IsEditing);
         Assert.False(reopened.IsDirty);
         Assert.Empty(fixture.Errors);
         var record = Assert.IsType<JObject>(fixture.Read()["worlds"]!["world-a"]!["areas"]![0]);
-        Assert.Equal(new[] { "id", "name", "start", "end" }, record.Properties().Select(p => p.Name));
+        Assert.Equal(hasStart || hasEnd ? new[] { "id", "name", "start", "end", "isVisible" }
+            : new[] { "id", "name", "start", "end" }, record.Properties().Select(p => p.Name));
         foreach (var endpoint in record.Properties().Select(p => p.Value).OfType<JObject>())
             Assert.Equal(new[] { "x", "y", "z", "dimension" }, endpoint.Properties().Select(p => p.Name));
     }
@@ -1051,7 +1143,7 @@ public sealed class WorkAreaPersistenceTests
 
         Assert.Equal(0, commits);
         Assert.False(controller.State.IsBuildModeEnabled);
-        Assert.False(controller.State.ShowWorkArea);
+        Assert.True(controller.State.ShowWorkArea);
         var before = controller.State;
         Assert.Throws<ArgumentException>(() => controller.RestoreEndpoints(
             before.Start, new WorkAreaEndpoint(14, 67, 23, 0)));
@@ -1081,7 +1173,7 @@ public sealed class WorkAreaPersistenceTests
             Invoke(system, "Event_PlayerJoin", player);
             var workArea = Assert.IsType<WorkAreaController>(GetField(system, "workArea"));
             var rendering = Assert.IsType<WorkAreaRenderBinding>(GetField(system, "workAreaRendering"));
-            Assert.False(workArea.State.ShowWorkArea);
+            Assert.True(workArea.State.ShowWorkArea);
             Assert.False(workArea.State.IsBuildModeEnabled);
             int reads = fixture.ReadCount;
             Invoke(system, "Event_PlayerJoin", player);
@@ -1109,7 +1201,7 @@ public sealed class WorkAreaPersistenceTests
             Assert.NotSame(rendering, GetField(system, "workAreaRendering"));
             Assert.Equal(new WorkAreaEndpoint(10, 65, 20, 0), fresh.State.Start);
             Assert.Null(fresh.State.End);
-            Assert.False(fresh.State.ShowWorkArea);
+            Assert.True(fresh.State.ShowWorkArea);
             Assert.False(fresh.State.IsBuildModeEnabled);
         }
         finally { Invoke(system, "Event_LeaveWorld"); }

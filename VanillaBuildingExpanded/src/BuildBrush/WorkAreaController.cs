@@ -51,7 +51,7 @@ internal sealed class WorkAreaController
         var first = new NamedWorkArea(Guid.NewGuid(), this.defaultName, null, null);
         areas.Add(first);
         SelectedId = first.Id;
-        State = new(null, null, false, false, false);
+        State = new(null, null, first.IsVisible, false, false);
     }
 
     public WorkAreaNameError ValidateName(string? name, Guid? except = null)
@@ -125,8 +125,7 @@ internal sealed class WorkAreaController
         foreach (var area in entries)
         {
             var bounds = area.Bounds;
-            areas.Add(area with { Start = bounds?.MinCell ?? area.Start, End = bounds?.MaxCell ?? area.End,
-                IsVisible = false });
+            areas.Add(area with { Start = bounds?.MinCell ?? area.Start, End = bounds?.MaxCell ?? area.End });
         }
         SelectedId = areas.Count == 0 ? null : areas[0].Id;
         ProjectSelection();
@@ -320,11 +319,13 @@ internal sealed class WorkAreaController
             if (areas[index].IsVisible == visible) return;
             areas[index] = areas[index] with { IsVisible = visible };
             Changed?.Invoke(State);
+            AreasCommitted?.Invoke();
             return;
         }
         if (!visible) CancelEndpointEdit();
         if (State.ShowWorkArea == visible) return;
         SetState(State with { ShowWorkArea = visible });
+        AreasCommitted?.Invoke();
     }
 
     private void SetState(WorkAreaState next)

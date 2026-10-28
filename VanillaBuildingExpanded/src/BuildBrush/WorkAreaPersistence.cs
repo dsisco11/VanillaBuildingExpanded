@@ -129,7 +129,14 @@ internal sealed class WorkAreaPersistence : IDisposable
                     var start = ReadEndpoint(area["start"]!);
                     var end = ReadEndpoint(area["end"]!);
                     ValidatePair(start, end);
-                    areas.Add(new(id, area["name"]!.Value<string>()!, start, end));
+                    bool visible = true;
+                    if (area.TryGetValue("isVisible", out var visibility))
+                    {
+                        if (visibility.Type != JTokenType.Boolean)
+                            throw new InvalidDataException("A saved work area's isVisible must be a boolean.");
+                        visible = visibility.Value<bool>();
+                    }
+                    areas.Add(new(id, area["name"]!.Value<string>()!, start, end, visible));
                 }
                 controller.RestoreAreas(areas);
             }
@@ -187,7 +194,8 @@ internal sealed class WorkAreaPersistence : IDisposable
         foreach (var area in controller.CommittedAreas)
         {
             result.Add(new JObject { ["id"] = area.Id.ToString("N"), ["name"] = area.Name,
-                ["start"] = WriteEndpoint(area.Start), ["end"] = WriteEndpoint(area.End) });
+                ["start"] = WriteEndpoint(area.Start), ["end"] = WriteEndpoint(area.End),
+                ["isVisible"] = area.IsVisible });
         }
         return result;
     }
