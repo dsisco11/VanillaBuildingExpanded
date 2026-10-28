@@ -10,7 +10,7 @@ namespace VanillaBuildingExpanded.BuildBrush;
 
 internal sealed class WorkAreaRenderBinding : IDisposable
 {
-    private const EnumRenderStage Stage = EnumRenderStage.Opaque;
+    private const EnumRenderStage Stage = EnumRenderStage.OIT;
     private readonly ICoreClientAPI api;
     private readonly IClientWorldAccessor world;
     private readonly WorkAreaController workArea;

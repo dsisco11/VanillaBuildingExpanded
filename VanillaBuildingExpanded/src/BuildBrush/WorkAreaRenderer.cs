@@ -16,6 +16,7 @@ internal sealed class WorkAreaRenderer : IRenderer
     private readonly IWorkAreaRenderState renderState;
     private readonly Matrixf model = new();
     private MeshRef? mesh;
+    private IShaderProgram? shader;
     private bool failed;
     private bool disposed;
     internal bool IsInCallback { get; private set; }
@@ -34,15 +35,13 @@ internal sealed class WorkAreaRenderer : IRenderer
 
     public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
     {
-        if (disposed || failed || stage != EnumRenderStage.Opaque) return;
+        if (disposed || failed || stage != EnumRenderStage.OIT) return;
         var bounds = getBounds();
         if (bounds.Count == 0) return;
         IsInCallback = true;
         try
         {
-            var shader = api.Shader.GetProgram((int)EnumShaderProgram.Wireframe);
-            if (shader is null || shader.Disposed || shader.LoadError)
-                throw new InvalidOperationException("The engine wireframe shader is unavailable.");
+            var program = GetShader();
             mesh ??= api.Render.UploadMesh(CreateUnitCube())
                 ?? throw new InvalidOperationException("Work area mesh upload returned no mesh.");
             if (!mesh.Initialized || mesh.Disposed)
@@ -51,7 +50,7 @@ internal sealed class WorkAreaRenderer : IRenderer
             foreach (var box in bounds)
             {
                 SetModelMatrix(model, api.Render.CameraMatrixOriginf, box, camera);
-                Draw(shader);
+                Draw(program);
             }
         }
         catch (Exception error) when (IsRenderFailure(error))
@@ -73,13 +72,15 @@ internal sealed class WorkAreaRenderer : IRenderer
             render.GLEnableDepthTest();
             render.GLDepthMask(false);
             render.LineWidth = 1.6f;
-            // Opaque color needs no blend change, preserving even indexed MRT blend settings.
+            // Preserve the OIT pass's indexed accumulation/revealage blend settings.
             shader.Use();
-            shader.Uniform("origin", 0f, 0f, 0f);
-            shader.Uniform("extraGlow", 0f);
-            shader.Uniform("colorIn", 1f, 0.75f, 0.15f, 1f);
             shader.UniformMatrix("projectionMatrix", render.CurrentProjectionMatrix);
             shader.UniformMatrix("modelViewMatrix", model.Values);
+            renderState.SetOccludedDepthTest(false);
+            shader.Uniform("colorIn", 1f, 0.75f, 0.15f, 0.75f);
+            render.RenderMesh(mesh!);
+            renderState.SetOccludedDepthTest(true);
+            shader.Uniform("colorIn", 1f, 0.75f, 0.15f, 0.5f);
             render.RenderMesh(mesh!);
         }
         finally
@@ -91,6 +92,23 @@ internal sealed class WorkAreaRenderer : IRenderer
                 finally { previousShader?.Use(); }
             }
         }
+    }
+
+    private IShaderProgram GetShader()
+    {
+        if (shader is null || shader.Disposed)
+        {
+            shader = api.Shader.NewShaderProgram()
+                ?? throw new InvalidOperationException("Work area shader creation returned no program.");
+            shader.AssetDomain = "vanillabuildingexpanded";
+            shader.Oit = true;
+            api.Shader.RegisterFileShaderProgram("vbe-workarea", shader);
+            if (shader.LoadError || !shader.Compile())
+                throw new InvalidOperationException("The work area OIT shader failed to compile.");
+        }
+        if (shader.LoadError)
+            throw new InvalidOperationException("The work area OIT shader is unavailable.");
+        return shader;
     }
 
     internal static void SetModelMatrix(Matrixf model, float[] cameraMatrix, WorkAreaBounds bounds, Vec3d camera)
@@ -113,7 +131,7 @@ internal sealed class WorkAreaRenderer : IRenderer
             xyz = new float[8 * 3],
             Rgba = new byte[8 * 4],
             Indices = new int[24],
-            // Zero flags avoid wind and extra Z-offset; the native shader already biases W by 0.0014.
+            // The work-area shader applies its own small clip-space depth bias.
             Flags = new int[8]
         };
         data.SetMode(EnumDrawMode.Lines);
@@ -139,6 +157,9 @@ internal sealed class WorkAreaRenderer : IRenderer
         disposed = true;
         var ownedMesh = mesh;
         mesh = null;
-        ownedMesh?.Dispose();
+        var ownedShader = shader;
+        shader = null;
+        try { ownedMesh?.Dispose(); }
+        finally { ownedShader?.Dispose(); }
     }
 }

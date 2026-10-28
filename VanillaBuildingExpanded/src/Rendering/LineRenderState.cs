@@ -16,14 +16,14 @@ internal class LineRenderState(IRenderAPI render) : ILineRenderState
     protected bool depthWrite;
     protected float lineWidth;
 
-    public void Capture()
+    public virtual void Capture()
     {
         depthTest = GL.IsEnabled(EnableCap.DepthTest);
         depthWrite = GL.GetBoolean(GetPName.DepthWritemask);
         lineWidth = GL.GetFloat(GetPName.LineWidth);
     }
 
-    public void Restore()
+    public virtual void Restore()
     {
         try { render.LineWidth = lineWidth; }
         finally

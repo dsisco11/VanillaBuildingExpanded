@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 
 using Moq;
 using VanillaBuildingExpanded.BuildBrush;
+using VanillaBuildingExpanded.Rendering;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -25,19 +26,19 @@ public sealed class WorkAreaRenderingTests
         var second = f.WorkArea.CreateArea("Second");
         f.WorkArea.RestoreEndpoints(new(30, 65, 20, 0), new(34, 67, 23, 0));
         f.Draw();
-        Assert.Equal(2, f.Draws);
+        Assert.Equal(4, f.Draws);
         Assert.Equal(1, f.Uploads);
         Assert.Equal(1, f.Registers);
         f.WorkArea.SetVisibility(second, false);
         Assert.False(f.WorkArea.State.ShowWorkArea);
         f.Draw();
-        Assert.Equal(3, f.Draws);
+        Assert.Equal(6, f.Draws);
         Assert.Single(f.Active);
         f.WorkArea.SetVisibility(first, false);
         Assert.Empty(f.Active);
         f.WorkArea.SetVisibility(second, true);
         f.Draw();
-        Assert.Equal(4, f.Draws);
+        Assert.Equal(8, f.Draws);
         Assert.Equal(1, f.Uploads);
     }
 
@@ -50,11 +51,11 @@ public sealed class WorkAreaRenderingTests
         f.WorkArea.CreateArea("Other dimension");
         f.WorkArea.RestoreEndpoints(new(30, 65, 20, 2), new(34, 67, 23, 2));
         f.Draw();
-        Assert.Equal(1, f.Draws);
+        Assert.Equal(2, f.Draws);
         f.Player.Entity.Pos.Dimension = 2;
         f.Binding.Refresh();
         f.Draw();
-        Assert.Equal(2, f.Draws);
+        Assert.Equal(4, f.Draws);
         Assert.Equal(5.004f, f.Model![0]);
         f.Player.Entity.Pos.Dimension = 3;
         f.Binding.Refresh();
@@ -72,7 +73,7 @@ public sealed class WorkAreaRenderingTests
         bool depthTest, bool depthWrite, bool failWidth)
     {
         var render = new Mock<IRenderAPI>();
-        var state = new WorkAreaRenderState(render.Object);
+        var state = new LineRenderState(render.Object);
         SetField(state, "depthTest", depthTest);
         SetField(state, "depthWrite", depthWrite);
         SetField(state, "lineWidth", 1.25f);
@@ -228,7 +229,7 @@ public sealed class WorkAreaRenderingTests
         f.WorkArea.SetVisibility(false);
         f.WorkArea.SetVisibility(true);
         f.Events.Raise(e => e.PlayerDimensionChanged += null!, f.Player);
-        first.OnRenderFrame(0, EnumRenderStage.Opaque);
+        first.OnRenderFrame(0, EnumRenderStage.OIT);
         Assert.Empty(f.Active);
         Assert.Equal(draws, f.Draws);
         Assert.Equal(1, f.Uploads);
@@ -254,7 +255,7 @@ public sealed class WorkAreaRenderingTests
     public void RegistrationFailure_IsReportedOnceWithoutMeshAllocationOrRetryLoop()
     {
         using var f = new Fixture();
-        f.Events.Setup(e => e.RegisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.Opaque, It.IsAny<string>()))
+        f.Events.Setup(e => e.RegisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.OIT, It.IsAny<string>()))
             .Throws(new InvalidOperationException("Render registration unavailable"));
         f.Complete();
         f.Enable();
@@ -266,7 +267,7 @@ public sealed class WorkAreaRenderingTests
         f.WorkArea.SetVisibility(false);
         f.WorkArea.SetVisibility(true);
         Assert.Empty(f.Active);
-        f.Events.Verify(e => e.RegisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.Opaque,
+        f.Events.Verify(e => e.RegisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.OIT,
             It.IsAny<string>()), Times.Once);
     }
 
@@ -277,6 +278,7 @@ public sealed class WorkAreaRenderingTests
         f.Complete();
         f.Enable();
         Assert.Single(f.Active).OnRenderFrame(0, EnumRenderStage.Ortho);
+        Assert.Single(f.Active).OnRenderFrame(0, EnumRenderStage.Opaque);
         Assert.Equal(0, f.Uploads);
         Assert.Equal(0, f.Draws);
         Assert.Equal(0, f.State.Captures);
@@ -351,6 +353,11 @@ public sealed class WorkAreaRenderingTests
     [InlineData("gpu-memory")]
     [InlineData("mesh")]
     [InlineData("shader")]
+    [InlineData("compile")]
+    [InlineData("create-shader")]
+    [InlineData("register-shader")]
+    [InlineData("occluded-depth")]
+    [InlineData("occluded-draw")]
     [InlineData("capture")]
     [InlineData("use")]
     [InlineData("uniform")]
@@ -378,10 +385,22 @@ public sealed class WorkAreaRenderingTests
                 break;
             case "mesh": f.Mesh.Ready = false; break;
             case "shader": f.Shader.SetupGet(s => s.LoadError).Returns(true); break;
+            case "compile": f.Shader.Setup(s => s.Compile()).Returns(false); break;
+            case "create-shader": f.Shaders.Setup(s => s.NewShaderProgram()).Returns((IShaderProgram)null!); break;
+            case "register-shader":
+                f.Shaders.Setup(s => s.RegisterFileShaderProgram("vbe-workarea", f.Shader.Object))
+                    .Throws(new InvalidOperationException("GPU"));
+                break;
+            case "occluded-depth": f.State.Fault = "occluded-depth"; break;
+            case "occluded-draw":
+                f.Render.SetupSequence(r => r.RenderMesh(It.IsAny<MeshRef>()))
+                    .Pass().Throws(new InvalidOperationException("GPU"));
+                break;
             case "capture": f.State.Fault = "capture"; break;
             case "use": f.Shader.Setup(s => s.Use()).Throws(new InvalidOperationException("GPU")); break;
             case "uniform":
-                f.Shader.Setup(s => s.Uniform("extraGlow", 0f)).Throws(new InvalidOperationException("GPU"));
+                f.Shader.Setup(s => s.Uniform("colorIn", 1f, 0.75f, 0.15f, 0.75f))
+                    .Throws(new InvalidOperationException("GPU"));
                 break;
             case "draw":
                 f.Render.Setup(r => r.RenderMesh(It.IsAny<MeshRef>())).Throws(new InvalidOperationException("GPU"));
@@ -389,14 +408,14 @@ public sealed class WorkAreaRenderingTests
             case "stop": f.Shader.Setup(s => s.Stop()).Throws(new InvalidOperationException("GPU")); break;
             case "restore": f.State.Fault = "restore"; break;
         }
-        renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
+        renderer.OnRenderFrame(0, EnumRenderStage.OIT);
         Assert.Single(f.Notices, code => code.EndsWith("workarea-render-unavailable"));
         Assert.Single(f.Pending);
         // A callback must not remove itself from the native live indexed render list.
         Assert.Single(f.Active);
         Assert.Equal(bounds, f.WorkArea.State.Bounds);
         Assert.True(f.WorkArea.State.ShowWorkArea);
-        if (fault is "use" or "uniform" or "draw" or "stop" or "restore")
+        if (fault is "use" or "uniform" or "draw" or "stop" or "restore" or "occluded-depth" or "occluded-draw")
         {
             Assert.Equal(1, f.State.Restores);
             f.PreviousShader.Verify(s => s.Use(), Times.Once);
@@ -406,17 +425,18 @@ public sealed class WorkAreaRenderingTests
         f.WorkArea.SetVisibility(false);
         f.WorkArea.SetVisibility(true);
         f.Binding.Refresh();
-        renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
+        renderer.OnRenderFrame(0, EnumRenderStage.OIT);
         Assert.Single(f.Notices, code => code.EndsWith("workarea-render-unavailable"));
         Assert.Empty(f.Active);
         f.Api.Verify(a => a.Logger.Error("[WorkArea] Wireframe unavailable for this session: {0}",
             It.IsAny<object[]>()), Times.Once);
         f.Binding.Dispose();
         Assert.Equal(f.Uploads > 0 ? 1 : 0, f.Mesh.Disposals);
+        f.Shader.Verify(s => s.Dispose(), fault == "create-shader" ? Times.Never : Times.Once);
     }
 
     [Fact]
-    public void Draw_SetsNativeShaderMatricesDepthAndOpaqueColorWithoutChangingBlend()
+    public void Draw_UsesComplementaryDepthTestsAndExactOpacitiesWithoutChangingOitBlend()
     {
         using var f = new Fixture();
         f.Complete();
@@ -424,21 +444,49 @@ public sealed class WorkAreaRenderingTests
         f.Draw();
         f.Draw();
         Assert.Equal(1, f.Uploads);
-        Assert.Equal(2, f.Draws);
+        Assert.Equal(4, f.Draws);
         Assert.Equal(2, f.State.Captures);
         Assert.Equal(2, f.State.Restores);
         Assert.Equal(new[] { "capture", "previous-stop", "depth-test", "depth-mask",
-            "line-width", "use", "draw", "stop", "restore", "previous-use" },
-            f.Sequence.Take(10));
-        f.Shader.Verify(s => s.Uniform("origin", 0f, 0f, 0f), Times.Exactly(2));
-        f.Shader.Verify(s => s.Uniform("extraGlow", 0f), Times.Exactly(2));
-        f.Shader.Verify(s => s.Uniform("colorIn", 1f, 0.75f, 0.15f, 1f), Times.Exactly(2));
+            "line-width", "use", "visible-depth", "draw", "occluded-depth", "draw", "stop", "restore", "previous-use" },
+            f.Sequence.Take(13));
+        f.Shader.Verify(s => s.Uniform("colorIn", 1f, 0.75f, 0.15f, 0.75f), Times.Exactly(2));
+        f.Shader.Verify(s => s.Uniform("colorIn", 1f, 0.75f, 0.15f, 0.5f), Times.Exactly(2));
         f.Shader.Verify(s => s.UniformMatrix("projectionMatrix", f.Projection), Times.Exactly(2));
         f.Render.Verify(r => r.GlToggleBlend(It.IsAny<bool>(), It.IsAny<EnumBlendMode>()), Times.Never);
         f.Render.Verify(r => r.GLDepthMask(false), Times.Exactly(2));
         f.Render.VerifySet(r => r.LineWidth = 1.6f, Times.Exactly(2));
         f.Accessor.Verify(a => a.IsValidPos(It.IsAny<BlockPos>()), Times.Exactly(6));
         Assert.Equal(5.004f, f.Model![0]);
+    }
+
+    [Fact]
+    public void OitShader_IsOwnedReusedAndRecreatedAfterNativeReload()
+    {
+        using var f = new Fixture();
+        f.Complete();
+        f.Enable();
+        f.Draw();
+        f.Draw();
+        f.Shaders.Verify(s => s.NewShaderProgram(), Times.Once);
+        f.Shader.VerifySet(s => s.AssetDomain = "vanillabuildingexpanded", Times.Once);
+        f.Shader.VerifySet(s => s.Oit = true, Times.Once);
+        f.Shaders.Verify(s => s.RegisterFileShaderProgram("vbe-workarea", f.Shader.Object), Times.Once);
+        f.Shader.Verify(s => s.Compile(), Times.Once);
+        f.Shaders.Verify(s => s.GetProgram(It.IsAny<int>()), Times.Never);
+        var replacement = new Mock<IShaderProgram>();
+        replacement.Setup(s => s.Compile()).Returns(true);
+        f.Shader.SetupGet(s => s.Disposed).Returns(true);
+        f.Shaders.Setup(s => s.NewShaderProgram()).Returns(replacement.Object);
+        f.Draw();
+        f.Shaders.Verify(s => s.NewShaderProgram(), Times.Exactly(2));
+        f.Shaders.Verify(s => s.RegisterFileShaderProgram("vbe-workarea", replacement.Object), Times.Once);
+        replacement.VerifySet(s => s.Oit = true, Times.Once);
+        replacement.Verify(s => s.Use(), Times.Once);
+        Assert.Equal(1, f.Uploads);
+        f.Binding.Dispose();
+        f.Binding.Dispose();
+        replacement.Verify(s => s.Dispose(), Times.Once);
     }
 
     [Fact]
@@ -455,7 +503,7 @@ public sealed class WorkAreaRenderingTests
         int registers = f.Registers;
         f.WorkArea.RestoreEndpoints(new(0, 65, 0, 1), new(1, 65, 1, 1));
         f.Events.Raise(e => e.PlayerDimensionChanged += null!, f.Player);
-        old.OnRenderFrame(0, EnumRenderStage.Opaque);
+        old.OnRenderFrame(0, EnumRenderStage.OIT);
         Assert.Empty(f.Active);
         Assert.Equal(registers, f.Registers);
         f.Events.VerifyRemove(e => e.PlayerDimensionChanged -= It.IsAny<PlayerCommonDelegate>(), Times.Once);
@@ -505,6 +553,13 @@ public sealed class WorkAreaRenderingTests
             Restores++;
             sequence?.Add("restore");
             if (Fault == "restore") throw new InvalidOperationException("GPU state restore");
+        }
+
+        public void SetOccludedDepthTest(bool occluded)
+        {
+            sequence?.Add(occluded ? "occluded-depth" : "visible-depth");
+            if (occluded && Fault == "occluded-depth")
+                throw new InvalidOperationException("GPU depth comparison");
         }
     }
 
@@ -568,7 +623,7 @@ public sealed class WorkAreaRenderingTests
             Events.Setup(e => e.RegisterRenderer(It.IsAny<IRenderer>(), It.IsAny<EnumRenderStage>(), It.IsAny<string>()))
                 .Callback<IRenderer, EnumRenderStage, string>((renderer, stage, _) =>
                 {
-                    Assert.Equal(EnumRenderStage.Opaque, stage);
+                    Assert.Equal(EnumRenderStage.OIT, stage);
                     Assert.InRange(renderer.RenderOrder, 0.5, 0.6);
                     Assert.True(Active.Add(renderer));
                     Registers++;
@@ -576,7 +631,7 @@ public sealed class WorkAreaRenderingTests
             Events.Setup(e => e.UnregisterRenderer(It.IsAny<IRenderer>(), It.IsAny<EnumRenderStage>()))
                 .Callback<IRenderer, EnumRenderStage>((renderer, stage) =>
                 {
-                    Assert.Equal(EnumRenderStage.Opaque, stage);
+                    Assert.Equal(EnumRenderStage.OIT, stage);
                     Assert.True(Active.Remove(renderer));
                     Unregisters++;
                 });
@@ -592,7 +647,8 @@ public sealed class WorkAreaRenderingTests
             Render.Setup(r => r.GLEnableDepthTest()).Callback(() => Sequence.Add("depth-test"));
             Render.Setup(r => r.GLDepthMask(false)).Callback(() => Sequence.Add("depth-mask"));
             Render.SetupSet(r => r.LineWidth = 1.6f).Callback(() => Sequence.Add("line-width"));
-            Shaders.Setup(s => s.GetProgram((int)EnumShaderProgram.Wireframe)).Returns(Shader.Object);
+            Shaders.Setup(s => s.NewShaderProgram()).Returns(Shader.Object);
+            Shader.Setup(s => s.Compile()).Returns(true);
             Shader.Setup(s => s.UniformMatrix("modelViewMatrix", It.IsAny<float[]>()))
                 .Callback<string, float[]>((_, matrix) => Model = (float[])matrix.Clone());
             Shader.Setup(s => s.Use()).Callback(() => Sequence.Add("use"));
@@ -606,7 +662,7 @@ public sealed class WorkAreaRenderingTests
         public void Enable() { WorkArea.SetContext(true, true); WorkArea.SetVisibility(true); }
         public void Draw()
         {
-            foreach (var renderer in Active.ToArray()) renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
+            foreach (var renderer in Active.ToArray()) renderer.OnRenderFrame(0, EnumRenderStage.OIT);
         }
         public void RunPending()
         {

@@ -444,17 +444,17 @@ public sealed partial class BuildModeHudControlsTests
         workArea.RestoreEndpoints(new(10, 65, 20, 0), new(14, 67, 23, 0));
         IRenderer? renderer = null;
         int registrations = 0, unregistrations = 0;
-        f.Api.Setup(a => a.Event.RegisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.Opaque, It.IsAny<string>()))
+        f.Api.Setup(a => a.Event.RegisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.OIT, It.IsAny<string>()))
             .Callback<IRenderer, EnumRenderStage, string>((value, _, _) =>
             {
                 renderer = value;
                 registrations++;
             });
-        f.Api.Setup(a => a.Event.UnregisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.Opaque))
+        f.Api.Setup(a => a.Event.UnregisterRenderer(It.IsAny<IRenderer>(), EnumRenderStage.OIT))
             .Callback(() => unregistrations++);
         var shader = new Mock<IShaderProgram>();
         shader.SetupGet(s => s.LoadError).Returns(true);
-        f.Api.Setup(a => a.Shader.GetProgram((int)EnumShaderProgram.Wireframe)).Returns(shader.Object);
+        f.Api.Setup(a => a.Shader.NewShaderProgram()).Returns(shader.Object);
         using var binding = new WorkAreaRenderBinding(f.Api.Object, workArea, new BuildBrush.WorkAreaRenderingTests.FakeState());
         using var hud = new BuildModeHud(f.Api.Object, () => default, workArea);
         hud.SetVisible(true);
@@ -467,7 +467,7 @@ public sealed partial class BuildModeHudControlsTests
         Assert.Equal(1, registrations);
         Assert.Equal(0, unregistrations);
         Assert.Same(originalRenderer, renderer);
-        renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
+        renderer.OnRenderFrame(0, EnumRenderStage.OIT);
         binding.Refresh();
         Assert.Equal(1, unregistrations);
         hud.OnRenderGUI(0);

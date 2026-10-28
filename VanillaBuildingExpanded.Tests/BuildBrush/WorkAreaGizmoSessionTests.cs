@@ -1075,15 +1075,23 @@ public sealed class WorkAreaGizmoSessionTests
             Render.Setup(r => r.FrameWidth).Returns(800);
             Render.Setup(r => r.FrameHeight).Returns(600);
             Render.Setup(r => r.CameraMatrixOriginf).Returns(new Matrixf().Values);
-            Api.Setup(a => a.Shader.GetProgram((int)EnumShaderProgram.Wireframe)).Returns(Shader.Object);
-            var labelShader = new Mock<IShaderProgram>();
-            labelShader.Setup(s => s.Compile()).Returns(true);
             int programCount = 0;
             Api.Setup(a => a.Shader.NewShaderProgram())
-                .Returns(() => programCount++ == 0 ? Shader.Object : labelShader.Object);
+                .Returns(() =>
+                {
+                    if (programCount++ == 0) return Shader.Object;
+                    var program = new Mock<IShaderProgram>();
+                    program.Setup(s => s.Compile()).Returns(true);
+                    program.Setup(s => s.UniformMatrix("modelViewMatrix", It.IsAny<float[]>()))
+                        .Callback<string, float[]>((_, matrix) => LastModel = (float[])matrix.Clone());
+                    return program.Object;
+                });
             Api.Setup(a => a.Shader.NewShader(It.IsAny<EnumShaderType>())).Returns(() => Mock.Of<IShader>());
             Api.Setup(a => a.Shader.RegisterMemoryShaderProgram("vbe-gizmo-overlay", Shader.Object)).Returns(49);
-            Api.Setup(a => a.Shader.RegisterMemoryShaderProgram("vbe-gizmo-labels", labelShader.Object)).Returns(50);
+            Api.Setup(a => a.Shader.RegisterMemoryShaderProgram("vbe-gizmo-labels", It.IsAny<IShaderProgram>()))
+                .Returns(50);
+            Api.Setup(a => a.Shader.RegisterFileShaderProgram("vbe-workarea", It.IsAny<IShaderProgram>()))
+                .Returns(51);
             Shader.Setup(s => s.Compile()).Returns(true);
             Shader.Setup(s => s.UniformMatrix("modelViewMatrix", It.IsAny<float[]>()))
                 .Callback<string, float[]>((_, matrix) => LastModel = (float[])matrix.Clone());
@@ -1132,8 +1140,8 @@ public sealed class WorkAreaGizmoSessionTests
                 Reference[1] + (double)Player.Entity.Pos.Dimension * BlockPos.DimensionBoundary, Reference[2]);
             LastModel = null;
             var box = Assert.Single(Active, pair => pair.Item1 is WorkAreaRenderer
-                && pair.Item2 == EnumRenderStage.Opaque).Item1;
-            box.OnRenderFrame(0, EnumRenderStage.Opaque);
+                && pair.Item2 == EnumRenderStage.OIT).Item1;
+            box.OnRenderFrame(0, EnumRenderStage.OIT);
             Assert.NotNull(LastModel);
             double expansion = WorkAreaRenderer.VisualExpansion;
             Assert.Equal((float)(expectedSize.Item1 + 2 * expansion), LastModel[0]);
