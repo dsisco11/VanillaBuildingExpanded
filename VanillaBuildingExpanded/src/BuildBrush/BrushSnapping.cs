@@ -9,10 +9,10 @@ namespace VanillaBuildingExpanded;
 /// <summary>
 /// Used to track and compare snapping state changes.
 /// </summary>
-public readonly record struct BrushSnappingState(int Horizontal = 0, int Vertical = 0, EBuildBrushSnapping Mode = EBuildBrushSnapping.None);
+public readonly record struct BrushSnappingState(int FaceU = 0, int FaceV = 0, EBuildBrushSnapping Mode = EBuildBrushSnapping.None);
 
 /// <summary>
-/// Represents a pair of horizontal and vertical snapping offsets which are resolved based on the block face quadrants that got hit by a ray-trace.
+/// Represents face-local snapping directions resolved from the block face quadrants hit by a ray-trace.
 /// </summary>
 public readonly record struct BrushSnapping
 {
@@ -21,10 +21,10 @@ public readonly record struct BrushSnapping
     private const float CenterThreshold = 0.15f;
     /// <summary> The original block selection ray used to determine the snapping directions. </summary>
     public readonly BlockSelectionRay Selection;
-    /// <summary> The horizontal snapping direction: -1 (negative), 0 (centered), or 1 (positive). </summary>
-    public readonly int Horizontal;
-    /// <summary> The vertical snapping direction: -1 (negative), 0 (centered), or 1 (positive). </summary>
-    public readonly int Vertical;
+    /// <summary> The face-local U snapping direction: -1, 0, or 1. Maps to Z on X-normal faces, otherwise X. </summary>
+    public readonly int FaceU;
+    /// <summary> The face-local V snapping direction: -1, 0, or 1. Maps to Z on Y-normal faces, otherwise Y. </summary>
+    public readonly int FaceV;
     #endregion
 
     #region Constructors
@@ -38,14 +38,14 @@ public readonly record struct BrushSnapping
         Vector3 faceRelativeHitPos = selectionRay.HitPosition - faceCenterPoint;
         Vector2 hitPos = selectionRay.Face.ToAB(faceRelativeHitPos);
 
-        this.Horizontal = hitPos.X switch
+        this.FaceU = hitPos.X switch
         {
             > CenterThreshold => 1,
             < -CenterThreshold => -1,
             _ => 0,
         };
 
-        this.Vertical = hitPos.Y switch
+        this.FaceV = hitPos.Y switch
         {
             > CenterThreshold => 1,
             < -CenterThreshold => -1,
@@ -72,39 +72,39 @@ public readonly record struct BrushSnapping
 
         if (snappingMode.HasFlag(EBuildBrushSnapping.Horizontal))
         {
-            FastVec3i horzDir = GetHorizontal(Selection.Face.Axis);
-            resolved.Add(horzDir);
+            FastVec3i faceUOffset = GetFaceUOffset(Selection.Face.Axis);
+            resolved.Add(faceUOffset);
         }
 
         if (snappingMode.HasFlag(EBuildBrushSnapping.Vertical))
         {
-            FastVec3i vertDir = GetVertical(Selection.Face.Axis);
-            resolved.Add(vertDir);
+            FastVec3i faceVOffset = GetFaceVOffset(Selection.Face.Axis);
+            resolved.Add(faceVOffset);
         }
 
         return resolved;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly FastVec3i GetHorizontal(EnumAxis axis)
+    public readonly FastVec3i GetFaceUOffset(EnumAxis axis)
     {
         return axis switch
         {
-            EnumAxis.X => new(0, 0, Horizontal),
-            EnumAxis.Y => new(Horizontal, 0, 0),
-            EnumAxis.Z => new(Horizontal, 0, 0),
+            EnumAxis.X => new(0, 0, FaceU),
+            EnumAxis.Y => new(FaceU, 0, 0),
+            EnumAxis.Z => new(FaceU, 0, 0),
             _ => new FastVec3i(0, 0, 0),
         };
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly FastVec3i GetVertical(EnumAxis axis)
+    public readonly FastVec3i GetFaceVOffset(EnumAxis axis)
     {
         return axis switch
         {
-            EnumAxis.X => new(0, Vertical, 0),
-            EnumAxis.Y => new(0, 0, Vertical),
-            EnumAxis.Z => new(0, Vertical, 0),
+            EnumAxis.X => new(0, FaceV, 0),
+            EnumAxis.Y => new(0, 0, FaceV),
+            EnumAxis.Z => new(0, FaceV, 0),
             _ => new FastVec3i(0, 0, 0),
         };
     }

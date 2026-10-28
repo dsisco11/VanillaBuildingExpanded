@@ -33,8 +33,8 @@ public class BrushSnappingTests
         var state = new BrushSnappingState();
 
         // Assert - all values are zeroed (Mode = 0, not EBuildBrushSnapping.None which is 1)
-        Assert.Equal(0, state.Horizontal);
-        Assert.Equal(0, state.Vertical);
+        Assert.Equal(0, state.FaceU);
+        Assert.Equal(0, state.FaceV);
         Assert.Equal((EBuildBrushSnapping)0, state.Mode);
     }
 
@@ -45,8 +45,8 @@ public class BrushSnappingTests
         var state = default(BrushSnappingState);
 
         // Assert - default struct has all zero values
-        Assert.Equal(0, state.Horizontal);
-        Assert.Equal(0, state.Vertical);
+        Assert.Equal(0, state.FaceU);
+        Assert.Equal(0, state.FaceV);
         Assert.Equal((EBuildBrushSnapping)0, state.Mode);
     }
 
@@ -54,14 +54,14 @@ public class BrushSnappingTests
     [InlineData(-1, 1, EBuildBrushSnapping.Horizontal)]
     [InlineData(0, -1, EBuildBrushSnapping.Vertical)]
     [InlineData(1, 0, EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical)]
-    public void BrushSnappingState_WithValues_StoresCorrectly(int horizontal, int vertical, EBuildBrushSnapping mode)
+    public void BrushSnappingState_WithValues_StoresCorrectly(int faceU, int faceV, EBuildBrushSnapping mode)
     {
         // Act
-        var state = new BrushSnappingState(horizontal, vertical, mode);
+        var state = new BrushSnappingState(faceU, faceV, mode);
 
         // Assert
-        Assert.Equal(horizontal, state.Horizontal);
-        Assert.Equal(vertical, state.Vertical);
+        Assert.Equal(faceU, state.FaceU);
+        Assert.Equal(faceV, state.FaceV);
         Assert.Equal(mode, state.Mode);
     }
 
@@ -101,8 +101,8 @@ public class BrushSnappingTests
         Assert.Equal(10, snapping.Selection.Position.Y);
         Assert.Equal(15, snapping.Selection.Position.Z);
         Assert.Equal(BlockFacing.UP, snapping.Selection.Face);
-        Assert.Equal(1, snapping.Horizontal);  // High X = positive horizontal for Y-axis
-        Assert.Equal(-1, snapping.Vertical);   // Low Z = negative vertical for Y-axis
+        Assert.Equal(1, snapping.FaceU);  // High X = positive U for Y-axis
+        Assert.Equal(-1, snapping.FaceV); // Low Z = negative V for Y-axis
     }
 
     #endregion
@@ -123,15 +123,15 @@ public class BrushSnappingTests
         var snapping = new BrushSnapping(selectionRay);
 
         // Assert
-        Assert.Equal(0, snapping.Horizontal);
-        Assert.Equal(0, snapping.Vertical);
+        Assert.Equal(0, snapping.FaceU);
+        Assert.Equal(0, snapping.FaceV);
     }
 
     [Fact]
     public void Constructor_FaceXAxis_TopRightHit_BothDirectionsPositive()
     {
         // Arrange - hit at top-right corner of EAST face
-        // For X-axis face, horizontal=Z, vertical=Y
+        // For X-axis face, U=Z, V=Y
         var position = new BlockPos(0, 0, 0);
         var face = BlockFacing.EAST;
         var hitPosition = new Vector3(1.0f, 0.9f, 0.9f); // High Y and high Z
@@ -142,8 +142,8 @@ public class BrushSnappingTests
         var snapping = new BrushSnapping(selectionRay);
 
         // Assert
-        Assert.Equal(1, snapping.Horizontal); // High Z = positive horizontal
-        Assert.Equal(1, snapping.Vertical);   // High Y = positive vertical
+        Assert.Equal(1, snapping.FaceU); // High Z = positive U
+        Assert.Equal(1, snapping.FaceV); // High Y = positive V
     }
 
     [Fact]
@@ -160,8 +160,8 @@ public class BrushSnappingTests
         var snapping = new BrushSnapping(selectionRay);
 
         // Assert
-        Assert.Equal(-1, snapping.Horizontal); // Low Z = negative horizontal
-        Assert.Equal(-1, snapping.Vertical);   // Low Y = negative vertical
+        Assert.Equal(-1, snapping.FaceU); // Low Z = negative U
+        Assert.Equal(-1, snapping.FaceV); // Low Y = negative V
     }
 
     #endregion
@@ -182,15 +182,15 @@ public class BrushSnappingTests
         var snapping = new BrushSnapping(selectionRay);
 
         // Assert
-        Assert.Equal(0, snapping.Horizontal);
-        Assert.Equal(0, snapping.Vertical);
+        Assert.Equal(0, snapping.FaceU);
+        Assert.Equal(0, snapping.FaceV);
     }
 
     [Fact]
     public void Constructor_FaceYAxis_CornerHit_CorrectDirections()
     {
         // Arrange - hit at corner of UP face
-        // For Y-axis face, horizontal=X, vertical=Z
+        // For Y-axis face, U=X, V=Z
         var position = new BlockPos(0, 0, 0);
         var face = BlockFacing.UP;
         var hitPosition = new Vector3(0.9f, 1.0f, 0.1f); // High X, low Z
@@ -201,8 +201,8 @@ public class BrushSnappingTests
         var snapping = new BrushSnapping(selectionRay);
 
         // Assert
-        Assert.Equal(1, snapping.Horizontal);  // High X = positive horizontal
-        Assert.Equal(-1, snapping.Vertical);   // Low Z = negative vertical
+        Assert.Equal(1, snapping.FaceU);  // High X = positive U
+        Assert.Equal(-1, snapping.FaceV); // Low Z = negative V
     }
 
     #endregion
@@ -223,15 +223,15 @@ public class BrushSnappingTests
         var snapping = new BrushSnapping(selectionRay);
 
         // Assert
-        Assert.Equal(0, snapping.Horizontal);
-        Assert.Equal(0, snapping.Vertical);
+        Assert.Equal(0, snapping.FaceU);
+        Assert.Equal(0, snapping.FaceV);
     }
 
     [Fact]
     public void Constructor_FaceZAxis_CornerHit_CorrectDirections()
     {
         // Arrange - hit at corner of SOUTH face
-        // For Z-axis face, horizontal=X, vertical=Y
+        // For Z-axis face, U=X, V=Y
         var position = new BlockPos(0, 0, 0);
         var face = BlockFacing.SOUTH;
         var hitPosition = new Vector3(0.1f, 0.9f, 1.0f); // Low X, high Y
@@ -242,8 +242,8 @@ public class BrushSnappingTests
         var snapping = new BrushSnapping(selectionRay);
 
         // Assert
-        Assert.Equal(-1, snapping.Horizontal); // Low X = negative horizontal
-        Assert.Equal(1, snapping.Vertical);    // High Y = positive vertical
+        Assert.Equal(-1, snapping.FaceU); // Low X = negative U
+        Assert.Equal(1, snapping.FaceV);  // High Y = positive V
     }
 
     #endregion
@@ -255,9 +255,9 @@ public class BrushSnappingTests
     [InlineData(0.5f + CenterThreshold + 0.01f, 1)]  // Just outside center (positive)
     [InlineData(0.5f - CenterThreshold + 0.01f, 0)]  // Just inside center
     [InlineData(0.5f - CenterThreshold - 0.01f, -1)] // Just outside center (negative)
-    public void Constructor_ThresholdBoundary_CorrectSnapping(float hitZ, int expectedHorizontal)
+    public void Constructor_ThresholdBoundary_CorrectSnapping(float hitZ, int expectedFaceU)
     {
-        // Arrange - Test threshold boundary on X-axis face where horizontal maps to Z
+        // Arrange - Test threshold boundary on X-axis face where U maps to Z
         var position = new BlockPos(0, 0, 0);
         var face = BlockFacing.EAST;
         var hitPosition = new Vector3(1.0f, 0.5f, hitZ);
@@ -268,7 +268,7 @@ public class BrushSnappingTests
         var snapping = new BrushSnapping(selectionRay);
 
         // Assert
-        Assert.Equal(expectedHorizontal, snapping.Horizontal);
+        Assert.Equal(expectedFaceU, snapping.FaceU);
     }
 
     #endregion
@@ -490,16 +490,16 @@ public class BrushSnappingTests
 
     #endregion
 
-    #region GetHorizontal Tests
+    #region GetFaceUOffset Tests
 
     [Theory]
-    [InlineData(EnumAxis.X, 1, 0, 0, 1)]   // X-axis: horizontal maps to Z
+    [InlineData(EnumAxis.X, 1, 0, 0, 1)]   // X-axis: U maps to Z
     [InlineData(EnumAxis.X, -1, 0, 0, -1)]
-    [InlineData(EnumAxis.Y, 1, 1, 0, 0)]   // Y-axis: horizontal maps to X
+    [InlineData(EnumAxis.Y, 1, 1, 0, 0)]   // Y-axis: U maps to X
     [InlineData(EnumAxis.Y, -1, -1, 0, 0)]
-    [InlineData(EnumAxis.Z, 1, 1, 0, 0)]   // Z-axis: horizontal maps to X
+    [InlineData(EnumAxis.Z, 1, 1, 0, 0)]   // Z-axis: U maps to X
     [InlineData(EnumAxis.Z, -1, -1, 0, 0)]
-    public void GetHorizontal_ReturnsCorrectDirection(EnumAxis axis, int horizontal, int expectedX, int expectedY, int expectedZ)
+    public void GetFaceUOffset_ReturnsCorrectDirection(EnumAxis axis, int faceU, int expectedX, int expectedY, int expectedZ)
     {
         // Arrange
         var face = axis switch
@@ -510,11 +510,11 @@ public class BrushSnappingTests
             _ => BlockFacing.EAST
         };
 
-        // Create a hit position that results in the desired horizontal direction
-        var hitPosition = horizontal switch
+        // Create a hit position that results in the desired face-local U direction
+        var hitPosition = faceU switch
         {
-            1 => GetHitPositionForPositiveHorizontal(face),
-            -1 => GetHitPositionForNegativeHorizontal(face),
+            1 => GetHitPositionForPositiveFaceU(face),
+            -1 => GetHitPositionForNegativeFaceU(face),
             _ => new Vector3(0.5f, 0.5f, 0.5f)
         };
 
@@ -523,7 +523,7 @@ public class BrushSnappingTests
         var snapping = new BrushSnapping(selectionRay);
 
         // Act
-        var result = snapping.GetHorizontal(axis);
+        var result = snapping.GetFaceUOffset(axis);
 
         // Assert
         Assert.Equal(expectedX, result.X);
@@ -533,16 +533,16 @@ public class BrushSnappingTests
 
     #endregion
 
-    #region GetVertical Tests
+    #region GetFaceVOffset Tests
 
     [Theory]
-    [InlineData(EnumAxis.X, 1, 0, 1, 0)]   // X-axis: vertical maps to Y
+    [InlineData(EnumAxis.X, 1, 0, 1, 0)]   // X-axis: V maps to Y
     [InlineData(EnumAxis.X, -1, 0, -1, 0)]
-    [InlineData(EnumAxis.Y, 1, 0, 0, 1)]   // Y-axis: vertical maps to Z
+    [InlineData(EnumAxis.Y, 1, 0, 0, 1)]   // Y-axis: V maps to Z
     [InlineData(EnumAxis.Y, -1, 0, 0, -1)]
-    [InlineData(EnumAxis.Z, 1, 0, 1, 0)]   // Z-axis: vertical maps to Y
+    [InlineData(EnumAxis.Z, 1, 0, 1, 0)]   // Z-axis: V maps to Y
     [InlineData(EnumAxis.Z, -1, 0, -1, 0)]
-    public void GetVertical_ReturnsCorrectDirection(EnumAxis axis, int vertical, int expectedX, int expectedY, int expectedZ)
+    public void GetFaceVOffset_ReturnsCorrectDirection(EnumAxis axis, int faceV, int expectedX, int expectedY, int expectedZ)
     {
         // Arrange
         var face = axis switch
@@ -553,11 +553,11 @@ public class BrushSnappingTests
             _ => BlockFacing.EAST
         };
 
-        // Create a hit position that results in the desired vertical direction
-        var hitPosition = vertical switch
+        // Create a hit position that results in the desired face-local V direction
+        var hitPosition = faceV switch
         {
-            1 => GetHitPositionForPositiveVertical(face),
-            -1 => GetHitPositionForNegativeVertical(face),
+            1 => GetHitPositionForPositiveFaceV(face),
+            -1 => GetHitPositionForNegativeFaceV(face),
             _ => new Vector3(0.5f, 0.5f, 0.5f)
         };
 
@@ -566,7 +566,7 @@ public class BrushSnappingTests
         var snapping = new BrushSnapping(selectionRay);
 
         // Act
-        var result = snapping.GetVertical(axis);
+        var result = snapping.GetFaceVOffset(axis);
 
         // Assert
         Assert.Equal(expectedX, result.X);
@@ -602,7 +602,7 @@ public class BrushSnappingTests
 
     #region Helper Methods
 
-    private static Vector3 GetHitPositionForPositiveHorizontal(BlockFacing face)
+    private static Vector3 GetHitPositionForPositiveFaceU(BlockFacing face)
     {
         return face.Axis switch
         {
@@ -613,7 +613,7 @@ public class BrushSnappingTests
         };
     }
 
-    private static Vector3 GetHitPositionForNegativeHorizontal(BlockFacing face)
+    private static Vector3 GetHitPositionForNegativeFaceU(BlockFacing face)
     {
         return face.Axis switch
         {
@@ -624,7 +624,7 @@ public class BrushSnappingTests
         };
     }
 
-    private static Vector3 GetHitPositionForPositiveVertical(BlockFacing face)
+    private static Vector3 GetHitPositionForPositiveFaceV(BlockFacing face)
     {
         return face.Axis switch
         {
@@ -635,7 +635,7 @@ public class BrushSnappingTests
         };
     }
 
-    private static Vector3 GetHitPositionForNegativeVertical(BlockFacing face)
+    private static Vector3 GetHitPositionForNegativeFaceV(BlockFacing face)
     {
         return face.Axis switch
         {
