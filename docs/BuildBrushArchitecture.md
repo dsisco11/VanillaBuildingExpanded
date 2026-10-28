@@ -273,6 +273,20 @@ setter, before owner cancellation and public canceled notifications. Transaction
 callbacks are not also bound to lifecycle events. These adapters do not replace the
 current production positioning/routing path.
 
+[HandleGizmo](../VanillaBuildingExpanded/src/Gizmos/HandleGizmo.cs) composes those
+contracts through the same manager and native input adapter. Its
+[drag input behavior](../VanillaBuildingExpanded/src/Gizmos/GizmoDragInputBehavior.cs)
+owns only the capture-local session, handling preparation, rejection, termination
+and disposal without solver math or input subscriptions. Handle mutations cancel
+through the owner's lifecycle, including during initialization. External authoritative
+values cancel before assignment; parameter writes retain the notifying setter without
+being mistaken for external replacements.
+[ComposedPositionGizmo](../VanillaBuildingExpanded/src/Gizmos/ComposedPositionGizmo.cs)
+explicitly configures a camera-plane center and three world-axis controls with
+replaceable frames, pickers and typed parameter/edit bindings. IDs identify controls
+only. This composition is available for integration testing; work-area gameplay still
+uses the original positioning renderer and binding.
+
 ### Native input and work-area transactions
 
 The [native input adapter](../VanillaBuildingExpanded/src/Gizmos/GizmoInputAdapter.cs)

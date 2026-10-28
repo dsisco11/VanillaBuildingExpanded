@@ -25,6 +25,9 @@ public abstract partial class Gizmo
     public GizmoHandle? HoveredHandleInstance => hoveredHandleInstance;
     /// <summary>Gets the captured owned instance, or null for no capture or an ID-only composition.</summary>
     public GizmoHandle? CapturedHandleInstance => capturedHandleInstance;
+    /// <summary>Includes initialization so reentrant configuration changes terminate the prepared session.</summary>
+    internal bool IsInteractionHandle(GizmoHandle handle) => ReferenceEquals(capturedHandleInstance, handle)
+        || ReferenceEquals(initializingHandle, handle);
     /// <summary>Forwards current members' invalidation to owner-level consumers without changing global capture.</summary>
     internal event Action<GizmoHandle, GizmoHandleInvalidation>? HandleInvalidated;
 
@@ -64,7 +67,7 @@ public abstract partial class Gizmo
         if (!OwnsHandle(handle)) return false;
         try
         {
-            if (ReferenceEquals(capturedHandleInstance, handle)) CancelInteraction();
+            if (IsInteractionHandle(handle)) CancelInteraction();
         }
         finally
         {
@@ -104,7 +107,9 @@ public abstract partial class Gizmo
     /// <param name="identity">The corresponding public/legacy identity field.</param>
     /// <param name="instance">The corresponding actual instance field.</param>
     /// <param name="value">The new identity, or null to clear state.</param>
-    private void SetHandleState(ref GizmoHandleId? identity, ref GizmoHandle? instance, GizmoHandleId? value)
+    /// <param name="interacting">Whether to acknowledge capture instead of hover.</param>
+    private void SetHandleState(ref GizmoHandleId? identity, ref GizmoHandle? instance, GizmoHandleId? value,
+        bool interacting = false)
     {
         if (identity == value) return;
         GizmoHandle? next = null;
@@ -122,6 +127,16 @@ public abstract partial class Gizmo
         if (previous is not null && previousState is { } oldState) previous.StateChanged(oldState);
         if (next is not null && nextState is { } newState && ReferenceEquals(instance, next))
             next.StateChanged(newState);
+        if (previous is not null && OwnsHandle(previous) && !ReferenceEquals(instance, previous))
+        {
+            if (interacting) previous.HitTarget?.UpdateInteracting(previous, false);
+            else previous.HitTarget?.UpdateHover(previous, false);
+        }
+        if (next is not null && OwnsHandle(next) && ReferenceEquals(instance, next))
+        {
+            if (interacting) next.HitTarget?.UpdateInteracting(next, true);
+            else next.HitTarget?.UpdateHover(next, true);
+        }
     }
 
     /// <summary>Forwards notifications only while the emitting instance is still a member.</summary>

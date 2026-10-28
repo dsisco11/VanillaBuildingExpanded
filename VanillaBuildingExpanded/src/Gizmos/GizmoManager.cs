@@ -44,13 +44,24 @@ public sealed class GizmoManager : IDisposable
         ArgumentNullException.ThrowIfNull(gizmo);
         var entry = Find(gizmo);
         if (entry is null) return;
-        entries.Remove(entry);
-        gizmo.Owner = null;
-        gizmo.Invalidated -= OnInvalidated;
-        gizmo.InteractionEnded -= OnInteractionEnded;
-        if (ReferenceEquals(CapturedGizmo, gizmo)) CapturedGizmo = null;
-        gizmo.HoveredHandle = null;
-        gizmo.CancelInteraction();
+        transitionDepth++;
+        try { gizmo.CancelInteraction(); }
+        finally
+        {
+            try
+            {
+                if (Find(gizmo) == entry)
+                {
+                    entries.Remove(entry);
+                    gizmo.Owner = null;
+                    gizmo.Invalidated -= OnInvalidated;
+                    gizmo.InteractionEnded -= OnInteractionEnded;
+                    if (ReferenceEquals(CapturedGizmo, gizmo)) CapturedGizmo = null;
+                    gizmo.HoveredHandle = null;
+                }
+            }
+            finally { transitionDepth--; }
+        }
     }
 
     public void Render(GizmoContext context)
@@ -81,19 +92,19 @@ public sealed class GizmoManager : IDisposable
     {
         Validate(pointer);
         if (transitionDepth != 0) return CapturedGizmo;
-        ClearHover();
-        if (CapturedGizmo is { } captured)
-        {
-            if (captured.IsEligible(pointer.Context.Dimension)) return captured;
-            Cancel();
-        }
         transitionDepth++;
         try
         {
+            ClearHover();
+            if (CapturedGizmo is { } captured)
+            {
+                if (captured.IsEligible(pointer.Context.Dimension)) return captured;
+                Cancel();
+            }
             var best = Select(pointer);
             if (best is not { } target) return null;
             target.Entry.Gizmo.HoveredHandle = target.Hit.Handle;
-            return target.Entry.Gizmo;
+            return IsCurrentHit(target, pointer.Context) ? target.Entry.Gizmo : null;
         }
         finally { transitionDepth--; }
     }
@@ -110,6 +121,7 @@ public sealed class GizmoManager : IDisposable
                 || !CanHit(target.Entry, pointer.Context)) return false;
             var gizmo = target.Entry.Gizmo;
             ClearHover();
+            if (!IsCurrentHit(target, pointer.Context)) return false;
             CapturedGizmo = gizmo;
             try
             {
@@ -166,9 +178,9 @@ public sealed class GizmoManager : IDisposable
         Cancel();
     }
 
-    private (Entry Entry, GizmoHit Hit)? Select(GizmoPointer pointer)
+    private (Entry Entry, GizmoHit Hit, GizmoHandle? Handle)? Select(GizmoPointer pointer)
     {
-        (Entry Entry, GizmoHit Hit)? best = null;
+        (Entry Entry, GizmoHit Hit, GizmoHandle? Handle)? best = null;
         foreach (var entry in entries.ToArray())
         {
             var gizmo = entry.Gizmo;
@@ -178,11 +190,15 @@ public sealed class GizmoManager : IDisposable
             if (best is not { } previous || DepthKey(candidate) < DepthKey(previous.Hit)
                 || (DepthKey(candidate) == DepthKey(previous.Hit)
                     && entry.InsertionId < previous.Entry.InsertionId))
-                best = (entry, candidate);
+                best = (entry, candidate, gizmo.Handles.GetValueOrDefault(candidate.Handle));
         }
-        return best is { } result && CanHit(result.Entry, pointer.Context) ? best : null;
+        return best is { } result && IsCurrentHit(result, pointer.Context) ? best : null;
     }
 
+    private bool IsCurrentHit((Entry Entry, GizmoHit Hit, GizmoHandle? Handle) hit, GizmoContext context) =>
+        CanHit(hit.Entry, context) && (hit.Handle is null || (hit.Handle.IsEligible(context.Dimension)
+            && hit.Entry.Gizmo.Handles.TryGetValue(hit.Hit.Handle, out var member)
+            && ReferenceEquals(hit.Handle, member)));
     private static double DepthKey(GizmoHit hit) => Math.Floor(hit.Distance / 1e-6);
     private bool CanHit(Entry entry, GizmoContext context) => !IsDisposed
         && Find(entry.Gizmo) == entry && ReferenceEquals(entry.RenderedContext, context)
@@ -203,7 +219,8 @@ public sealed class GizmoManager : IDisposable
 
     private void ClearHover()
     {
-        foreach (var entry in entries) entry.Gizmo.HoveredHandle = null;
+        foreach (var entry in entries.ToArray())
+            if (Find(entry.Gizmo) == entry) entry.Gizmo.HoveredHandle = null;
     }
 
     private void Validate(GizmoPointer pointer)

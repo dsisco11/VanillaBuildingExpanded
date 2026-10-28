@@ -329,7 +329,7 @@ public sealed class GizmoHandle : IGizmoHandle, IDisposable
     /// <summary>Uses the existing owner cancellation path, preserving its value/notification ordering.</summary>
     private void CancelCapture()
     {
-        if (IsSelected) Owner!.CancelInteraction();
+        if (Owner is { } owner && owner.IsInteractionHandle(this)) owner.CancelInteraction();
     }
 
     /// <summary>Rejects mutation or resolution after disposal.</summary>

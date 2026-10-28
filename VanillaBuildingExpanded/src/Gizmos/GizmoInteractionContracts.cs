@@ -211,5 +211,5 @@ public sealed class GizmoValueSource<TValue> : IGizmoValueSource<TValue>
 
     /// <inheritdoc />
     /// <exception cref="ObjectDisposedException">An assignment is attempted after the borrowed gizmo is disposed.</exception>
-    public TValue Value { get => gizmo.Value; set => gizmo.Value = value; }
+    public TValue Value { get => gizmo.Value; set => gizmo.SetInteractionValue(value); }
 }

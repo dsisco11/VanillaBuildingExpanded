@@ -11,6 +11,8 @@ public abstract partial class Gizmo : IDisposable
     private bool enabled = true;
     private bool ending;
     private bool beginning;
+    private bool beginCanceled;
+    private GizmoHandle? initializingHandle;
     private bool disposing;
     private bool resourcesDisposed;
 
@@ -29,7 +31,7 @@ public abstract partial class Gizmo : IDisposable
     public GizmoHandleId? CapturedHandle
     {
         get => capturedHandleId;
-        private set => SetHandleState(ref capturedHandleId, ref capturedHandleInstance, value);
+        private set => SetHandleState(ref capturedHandleId, ref capturedHandleInstance, value, true);
     }
 
     /// <summary>Gets optional labels keyed by their owning handle IDs.</summary>
@@ -68,6 +70,8 @@ public abstract partial class Gizmo : IDisposable
         {
             ObjectDisposedException.ThrowIf(IsDisposed, this);
             if (visible == value) return;
+            if (!value) CancelInteraction();
+            ObjectDisposedException.ThrowIf(IsDisposed, this);
             visible = value;
             Invalidate();
         }
@@ -80,6 +84,8 @@ public abstract partial class Gizmo : IDisposable
         {
             ObjectDisposedException.ThrowIf(IsDisposed, this);
             if (enabled == value) return;
+            if (!value) CancelInteraction();
+            ObjectDisposedException.ThrowIf(IsDisposed, this);
             enabled = value;
             Invalidate();
         }
@@ -116,6 +122,7 @@ public abstract partial class Gizmo : IDisposable
     internal GizmoHit? HitTest(GizmoPointer pointer)
     {
         GizmoHit? best = null;
+        GizmoHandle? bestHandle = null;
         foreach (var hit in HitTestCore(pointer))
         {
             if (!double.IsFinite(hit.Distance) || hit.Distance <= 0)
@@ -129,8 +136,13 @@ public abstract partial class Gizmo : IDisposable
             if (best is not { } previous || hit.Priority < previous.Priority
                 || (hit.Priority == previous.Priority && (hit.Distance < previous.Distance
                     || (hit.Distance == previous.Distance && hit.Handle.Value < previous.Handle.Value))))
+            {
                 best = hit;
+                bestHandle = hasHandleComposition ? handles[hit.Handle] : null;
+            }
         }
+        if (hasHandleComposition && (bestHandle is null || !OwnsHandle(bestHandle)
+            || !bestHandle.IsEligible(pointer.Context.Dimension))) return null;
         return best;
     }
 
@@ -144,11 +156,13 @@ public abstract partial class Gizmo : IDisposable
             return false;
         bool accepted = false;
         beginning = true;
+        beginCanceled = false;
+        initializingHandle = expectedHandle;
         try
         {
             SaveEditBaseline();
             if (!BeginInteractionCore(handle, pointer)) return false;
-            if (!IsEligible(pointer.Context.Dimension)) return false;
+            if (beginCanceled || !IsEligible(pointer.Context.Dimension)) return false;
             if (expectedHandle is not null
                 ? !OwnsHandle(expectedHandle) || !expectedHandle.IsEligible(pointer.Context.Dimension)
                 : hasHandleComposition) return false;
@@ -167,12 +181,20 @@ public abstract partial class Gizmo : IDisposable
                     try
                     {
                         if (IsInteracting) CancelInteraction();
-                        else editStateTarget?.Cancel();
+                        else
+                        {
+                            try { CancelInteractionCore(); }
+                            finally { editStateTarget?.Cancel(); }
+                        }
                     }
                     finally { baselineSaved = false; }
                 }
             }
-            finally { beginning = false; }
+            finally
+            {
+                initializingHandle = null;
+                beginning = false;
+            }
         }
     }
 
@@ -195,7 +217,16 @@ public abstract partial class Gizmo : IDisposable
     {
         if (CapturedHandle is not { } handle)
         {
-            if (!complete) editStateTarget?.Cancel();
+            if (!complete)
+            {
+                if (beginning && !beginCanceled)
+                {
+                    beginCanceled = true;
+                    try { CancelInteractionCore(); }
+                    finally { editStateTarget?.Cancel(); }
+                }
+                else editStateTarget?.Cancel();
+            }
             return;
         }
         var notification = complete ? OnInteractionCompleted : OnInteractionCanceled;
@@ -304,19 +335,29 @@ public abstract class Gizmo<TValue> : Gizmo
         baseline = initialValue;
     }
 
+    /// <summary>Whether external changes cancel capture before assignment; legacy owners retain their existing binding.</summary>
+    protected virtual bool CancelOnExternalValueChange => false;
+
     public TValue Value
     {
         get => value;
-        set
-        {
-            ObjectDisposedException.ThrowIf(IsDisposed && !IsRestoringInteractionValue, this);
-            if (EqualityComparer<TValue>.Default.Equals(this.value, value)) return;
-            this.value = value;
-            Invalidate();
-            OnValueChanged?.Invoke(value);
-        }
+        set => SetValue(value, false);
     }
 
+    /// <summary>Publishes an accepted parameter edit through the same notifying setter, not as an external replacement.</summary>
+    internal void SetInteractionValue(TValue value) => SetValue(value, true);
+
+    private void SetValue(TValue value, bool interaction)
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed && !IsRestoringInteractionValue, this);
+        if (EqualityComparer<TValue>.Default.Equals(this.value, value)) return;
+        if (!interaction && !IsRestoringInteractionValue && CancelOnExternalValueChange)
+            CancelInteraction();
+        ObjectDisposedException.ThrowIf(IsDisposed && !IsRestoringInteractionValue, this);
+        this.value = value;
+        Invalidate();
+        OnValueChanged?.Invoke(value);
+    }
     public event Action<TValue>? OnValueChanged;
 
     protected sealed override void SaveInteractionValue() => baseline = value;

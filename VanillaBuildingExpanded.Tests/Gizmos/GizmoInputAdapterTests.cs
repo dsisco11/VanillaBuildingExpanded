@@ -14,6 +14,97 @@ namespace VanillaBuildingExpanded.Tests.Gizmos;
 [Collection("Table composition")]
 public sealed class GizmoInputAdapterTests
 {
+    [Fact]
+    public void ComposedControls_ReentrantHoverRemovalDoesNotDisableNativeInput()
+    {
+        using var f = new Fixture(composed: true);
+        var context = f.Renderer.Context!;
+        Assert.Same(f.Gizmo, f.Manager.UpdateHover(context.Camera!.CreatePointer(context, 400, 300)));
+        var handle = f.Gizmo.HoveredHandleInstance!;
+        bool removed = false;
+        handle.Invalidated += (_, _) =>
+        {
+            if (handle.IsHovered || removed) return;
+            removed = true;
+            f.Manager.Remove(f.Gizmo);
+        };
+        f.Frame();
+        Assert.True(removed);
+        f.Manager.Add(f.Gizmo);
+        f.Frame();
+        Assert.True(f.Down().Handled);
+        Assert.Equal(1, f.Starts);
+        f.Up();
+        f.Api.Verify(a => a.TriggerIngameError(It.IsAny<object>(),
+            "vanillabuildingexpanded:gizmo-input-unavailable", It.IsAny<string>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void ComposedControls_UseActualAdapterPointerModesAndSuppressBothActionFamilies(bool grabbed, bool thirdPerson)
+    {
+        using var f = new Fixture(grabbed, thirdPerson, composed: true);
+        Assert.True(f.Down().Handled);
+        Assert.Same(f.Gizmo, f.Manager.CapturedGizmo);
+        f.Move(600, 450);
+        if (grabbed) f.ViewX += 2;
+        f.Frame();
+        Assert.NotEqual(f.Baseline, f.Gizmo.Value);
+        Assert.True(f.Up(650, 400).Handled);
+        Assert.Equal(1, f.Completes);
+        f.SuppressBothFamilies();
+        f.AssertNoGameplay();
+        f.Gizmo.Value = f.Baseline;
+        f.Frame();
+        Assert.True(f.Down().Handled);
+        f.Key();
+        Assert.Equal(1, f.Cancels);
+        Assert.Equal(f.Baseline, f.Gizmo.Value);
+    }
+
+    [Theory]
+    [InlineData("handled")]
+    [InlineData("dialog")]
+    [InlineData("raw")]
+    [InlineData("all")]
+    [InlineData("disabled")]
+    public void ComposedControls_PreserveExistingInputPriority(string reason)
+    {
+        using var f = new Fixture(composed: true);
+        f.Change(reason);
+        f.Down(handled: reason == "handled");
+        Assert.Null(f.Manager.CapturedGizmo);
+        Assert.Equal(0, f.Starts);
+        f.Action(EnumEntityAction.InWorldLeftMouseDown, true);
+        Assert.Equal(1, f.Mining);
+    }
+
+    [Theory]
+    [InlineData("dialog")]
+    [InlineData("focus")]
+    [InlineData("dimension-silent")]
+    [InlineData("mode")]
+    [InlineData("disabled")]
+    public void ComposedControls_ContextLossCancelsWithoutGameplayLeak(string reason)
+    {
+        using var f = new Fixture(composed: true);
+        f.Down();
+        f.Move(550, 350);
+        f.Frame();
+        Assert.NotEqual(f.Baseline, f.Gizmo.Value);
+        f.Change(reason);
+        f.Input.Refresh();
+        Assert.Equal(f.Baseline, f.Gizmo.Value);
+        Assert.Null(f.Manager.CapturedGizmo);
+        Assert.Equal(1, f.Cancels);
+        f.SuppressBothFamilies();
+        f.Up();
+        f.AssertNoGameplay();
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
@@ -449,7 +540,7 @@ public sealed class GizmoInputAdapterTests
         public readonly GizmoManager Manager = new();
         public readonly GizmoRenderAdapter Renderer;
         public readonly GizmoInputAdapter Input;
-        public readonly PositionGizmo Gizmo;
+        public readonly Gizmo<GizmoPosition> Gizmo;
         public readonly GizmoPosition Baseline;
         public readonly Creation Creation = new();
         public PositionGizmoEdit? LastEdit;
@@ -459,7 +550,7 @@ public sealed class GizmoInputAdapterTests
         public int Width = 801, Height = 601;
         public double ViewX;
 
-        public Fixture(bool grabbed = false, bool thirdPerson = false, bool held = false)
+        public Fixture(bool grabbed = false, bool thirdPerson = false, bool held = false, bool composed = false)
         {
             var translations = new Mock<ITranslationService>();
             translations.Setup(t => t.HasTranslation(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<bool>()))
@@ -489,12 +580,16 @@ public sealed class GizmoInputAdapterTests
             var initialPointer = Context.Camera!.CreatePointer(Context, 400, 300);
             Baseline = new(initialPointer.Ray.Origin + initialPointer.Ray.Direction * 200, 0);
             Renderer = new(Api.Object, Manager, () => Context, new WorkAreaRenderingTests.FakeState());
-            Gizmo = new(Baseline, _ => { }, edit =>
+            GizmoPosition? Constrain(PositionGizmoEdit edit)
             {
                 if (ThrowConstraint) throw new InvalidOperationException("constraint failure");
                 LastEdit = edit;
                 return edit.Candidate;
-            });
+            }
+            Gizmo = composed
+                ? new ComposedPositionGizmo(Baseline, _ => { },
+                    g => new GizmoEditStateTarget(g, () => true, () => { }, () => { }), Constrain)
+                : new PositionGizmo(Baseline, _ => { }, Constrain);
             Gizmo.OnInteractionStarted += _ => Starts++;
             Gizmo.OnInteractionCompleted += _ => Completes++;
             Gizmo.OnInteractionCanceled += _ => Cancels++;

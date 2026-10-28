@@ -2,7 +2,7 @@
 
 Source proposal: [GizmoHandles.proposal.md](./GizmoHandles.proposal.md)
 
-Status: Execution in progress. Phases 1 through 4 were implemented and independently audited on 2026-10-27; later phases remain unchecked. The foundation is inactive in gameplay. Leave tasks unchecked until their stated verification gates pass.
+Status: Execution in progress. Phases 1 through 5 were implemented and independently audited on 2026-10-27; later phases remain unchecked. The foundation is inactive in gameplay. Leave tasks unchecked until their stated verification gates pass.
 
 ## Goal and scope
 
@@ -186,26 +186,34 @@ Phase 4 evidence (2026-10-27):
 Prerequisites: Phases 2, 3 and 4.
 Outcome: The complete new input/capture path is integration-tested but not yet substituted for gameplay.
 
-    ☐ Implement GizmoDragInputBehavior through existing manager/input adapter routing.
-        ☐ Keep global hit arbitration and exclusive capture in the manager; do not subscribe per handle or run competing adapters.
-        ☐ Route eligibility/press/drag/release/termination to the selected target without gesture code implementing solver math.
-        ☐ Preserve free-cursor/reticle operation, GUI/handled-input priority and existing brush-action suppression.
-    ☐ Compose existing Center/X/Y/Z controls using explicit handles, frame/hit/measurement/parameter/value/edit-state contracts.
-        ☐ Preserve endpoint circle/diamond markers, RGB axis colors, opacity 0.8/1.0 and line widths 1.6/2.8.
-        ☐ Ensure IDs are identity/tie-break information, not generic shape, color or operation selectors.
-    ☐ Wire mutation and lifecycle cancellation through the single capture path.
-        ☐ Cancel before removing/hiding/disabling a captured handle or making its owner ineligible, dimension-changed, removed or disposed.
-        ☐ Cancel before replacing captured interaction/hit/frame/parameter/value/edit-state configuration.
-        ☐ Preserve cancel-then-assign for genuinely different external authoritative values.
-        ☐ Do not cancel for ordinary hover/selected transitions, appearance edits or label-only changes; preserve solver baselines.
-        ☐ Release sessions, callbacks and capture exactly once, including reentrant completion/cancellation/disposal.
-    ☐ Integration-test global exclusivity, rejected begin, notification ordering and capture mutation through the actual manager.
-    ☐ Verify alternate IDs and replacement contracts preserve configured behavior without central dispatch edits.
+    ✔ Implement GizmoDragInputBehavior through existing manager/input adapter routing.
+        ✔ Keep global hit arbitration and exclusive capture in the manager; do not subscribe per handle or run competing adapters.
+        ✔ Route eligibility/press/drag/release/termination to the selected target without gesture code implementing solver math.
+        ✔ Preserve free-cursor/reticle operation, GUI/handled-input priority and existing brush-action suppression.
+    ✔ Compose existing Center/X/Y/Z controls using explicit handles, frame/hit/measurement/parameter/value/edit-state contracts.
+        ✔ Preserve endpoint circle/diamond markers, RGB axis colors, opacity 0.8/1.0 and line widths 1.6/2.8.
+        ✔ Ensure IDs are identity/tie-break information, not generic shape, color or operation selectors.
+    ✔ Wire mutation and lifecycle cancellation through the single capture path.
+        ✔ Cancel before removing/hiding/disabling a captured handle or making its owner ineligible, dimension-changed, removed or disposed.
+        ✔ Cancel before replacing captured interaction/hit/frame/parameter/value/edit-state configuration.
+        ✔ Preserve cancel-then-assign for genuinely different external authoritative values.
+        ✔ Do not cancel for ordinary hover/selected transitions, appearance edits or label-only changes; preserve solver baselines.
+        ✔ Release sessions, callbacks and capture exactly once, including reentrant completion/cancellation/disposal.
+    ✔ Integration-test global exclusivity, rejected begin, notification ordering and capture mutation through the actual manager.
+    ✔ Verify alternate IDs and replacement contracts preserve configured behavior without central dispatch edits.
 
 Completion criteria:
 
-    ☐ New-path manager integration tests pass, including repeated edits and lifecycle cancellation.
-    ☐ Existing gameplay path remains the only active path until label/render/work-area integration is verified in Phase 6.
+    ✔ New-path manager integration tests pass, including repeated edits and lifecycle cancellation.
+    ✔ Existing gameplay path remains the only active path until label/render/work-area integration is verified in Phase 6.
+
+Phase 5 evidence and traceability:
+
+- Gesture routing -> proposal [input behavior and hit targets](GizmoHandles.proposal.md#input-behavior-and-hit-targets) and [edit-state targets](GizmoHandles.proposal.md#edit-state-targets) -> [GizmoDragInputBehavior.cs](../VanillaBuildingExpanded/src/Gizmos/GizmoDragInputBehavior.cs) and [HandleGizmo.cs](../VanillaBuildingExpanded/src/Gizmos/HandleGizmo.cs): session-only gesture ownership through the existing manager/native adapter, initialization unwind, explicit throttled rejection notices and exactly-once terminal cleanup. Inherited input/precision/cancellation requirements were consulted at `04172078d76652ec9fc5610351b926c66daf0399`.
+- Positioning composition -> proposal [positioning compatibility baseline](GizmoHandles.proposal.md#positioning-compatibility-baseline) and [examples of composition](GizmoHandles.proposal.md#examples-of-composition) -> [ComposedPositionGizmo.cs](../VanillaBuildingExpanded/src/Gizmos/ComposedPositionGizmo.cs): explicitly configured marker/axis visuals, arbitrary identities, replaceable frame/pick/measurement bindings, typed parameter/value sources and supplied owner edit callbacks.
+- Lifecycle and mutation -> proposal [capture, cancellation and mutation](GizmoHandles.proposal.md#capture-cancellation-and-mutation) -> [GizmoCompositionTests.cs](../VanillaBuildingExpanded.Tests/Gizmos/GizmoCompositionTests.cs) and [GizmoInputAdapterTests.cs](../VanillaBuildingExpanded.Tests/Gizmos/GizmoInputAdapterTests.cs): actual-manager exclusivity, repeated edits, rejected/throwing initialization, notification ordering, external-value replacement, capture mutations, reentrant cleanup, pointer modes, priority and both native action families. The audit-discovered live-list hover teardown defect was corrected with snapshot iteration and membership checks; regression tests cover owner/manager removal/disposal and continued native input.
+- Own second review and independent read-only audit completed; affected-scope recheck accepted the correction with no required findings or evidence gaps. Final delegated verification: 422 focused Release net10.0 tests passed, zero failed/skipped; normal Build and ValidateJson passed; `git diff --check` passed; no warnings from changed production files. Existing nullable diagnostics and CakeBuild package advisories remain unrelated.
+- The architecture document describes the optional composition; production work-area rendering/binding remains unchanged. No live graphics qualification is claimed, and Phase 6 remains unchecked.
 
 ## Phase 6: Migrate labels/rendering and cut over work-area integration
 
