@@ -7,6 +7,7 @@ using VanillaBuildingExpanded.BuildBrush;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
+using Vintagestory.Client.NoObf;
 
 namespace VanillaBuildingExpanded.Gizmos;
 
@@ -80,7 +81,9 @@ internal sealed class GizmoInputAdapter : IDisposable
 
     private bool HudOwnsPointer(int x, int y) => api.Gui.OpenedGuis.Any(gui =>
         gui is BuildModeHud hud ? hud.ReservesPointer(x, y) :
-        gui.ShouldReceiveMouseEvents() && gui.Composers.Values.Any(composer => composer.Bounds.PointInside(x, y)));
+        // Native cursor/tooltip composers fill the window, but their mouse handlers do nothing.
+        gui is not HudMouseTools && gui.ShouldReceiveMouseEvents()
+            && gui.Composers.Values.Any(composer => composer.Bounds.PointInside(x, y)));
 
     public void Refresh() => Guard(() =>
     {

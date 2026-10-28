@@ -5,6 +5,7 @@ using VanillaBuildingExpanded.UI;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
+using Vintagestory.Client.NoObf;
 using Xunit;
 
 namespace VanillaBuildingExpanded.Tests.UI;
@@ -367,6 +368,7 @@ public sealed partial class BuildModeHudControlsTests
     [InlineData("control")]
     [InlineData("passive")]
     [InlineData("native-hud")]
+    [InlineData("cursor-hud")]
     public void GizmoInput_ReservesActualHudHitsButNotPassiveTextOrStaleHover(string target)
     {
         using var f = WorkAreaFixture();
@@ -384,12 +386,26 @@ public sealed partial class BuildModeHudControlsTests
         hud.OnMouseMove(WorkAreaMouse(f, show));
         var e = WorkAreaMouse(f, target == "control" ? show : WorkAreaSizeTable(hud).GetElement("label"));
         using var receiver = new ReceivingHud(f.Api.Object);
+        var cursorMock = new Mock<HudMouseTools>(f.Api.Object) { CallBase = true };
+        cursorMock.Setup(gui => gui.ShouldReceiveMouseEvents()).Returns(true);
+        using var cursor = cursorMock.Object;
         if (target == "native-hud")
         {
             var bounds = ElementBounds.Fixed(e.X - 5, e.Y - 5, 10, 10).WithEmptyParent();
             bounds.CalcWorldBounds();
             receiver.SingleComposer = f.Composer(bounds);
             dialogs.Add(receiver);
+        }
+        if (target == "cursor-hud")
+        {
+            var bounds = ElementBounds.Fixed(0, 0, 1920, 1080).WithEmptyParent();
+            bounds.CalcWorldBounds();
+            cursor.Composers["mouseSlot"] = f.Composer(bounds);
+            cursor.Composers["itemstackinfo"] = f.Composer(bounds.FlatCopy().WithEmptyParent());
+            dialogs.Add(cursor);
+            var nativeClick = new MouseEvent(e.X, e.Y, EnumMouseButton.Left, 0);
+            cursor.OnMouseDown(nativeClick);
+            Assert.False(nativeClick.Handled);
         }
         var context = Gizmos.ComposedPositionGizmoTests.Camera(1920, 1080);
         var pointer = context.Camera!.CreatePointer(context, e.X, e.Y);
@@ -402,11 +418,16 @@ public sealed partial class BuildModeHudControlsTests
         renderer.SetActive(true);
         renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
         renderer.OnRenderFrame(0, EnumRenderStage.AfterBlit);
-        raw.Left = true;
         var events = Mock.Get(f.Api.Object.Event);
+        events.Raise(ev => ev.MouseMove += null!, new MouseEvent(e.X, e.Y));
+        renderer.OnRenderFrame(0, EnumRenderStage.Opaque);
+        bool canPick = target is "passive" or "cursor-hud";
+        Assert.Equal(canPick, gizmo.HoveredHandle is not null);
+        renderer.OnRenderFrame(0, EnumRenderStage.AfterBlit);
+        raw.Left = true;
         events.Raise(ev => ev.MouseDown += null!, e);
-        Assert.Equal(target == "passive", e.Handled);
-        Assert.Equal(target == "passive", ReferenceEquals(gizmo, manager.CapturedGizmo));
+        Assert.Equal(canPick, e.Handled);
+        Assert.Equal(canPick, ReferenceEquals(gizmo, manager.CapturedGizmo));
         if (target == "control")
         {
             hud.OnMouseDown(e);

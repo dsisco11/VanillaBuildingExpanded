@@ -108,6 +108,8 @@ A third gizmo at the midpoint of a complete selection moves the entire box. Drag
 
 All center handles and axis arrows use bright, unlit colors at 80% opacity. Hovering or dragging a handle raises it to full opacity and thickens its lines; scene lighting does not dim the controls.
 
+With the free cursor, passive cursor/item-tooltip overlays do not block handle hover or dragging. Interactive HUD controls and open dialogs retain input priority.
+
 Hovering an axis handle shows its X/Y/Z label beside the arrow tip. Endpoint center
 handles show **Center**; the whole-area midpoint shows the work area's name and
 updates when renamed. Labels follow the handles with fixed screen-pixel offsets
