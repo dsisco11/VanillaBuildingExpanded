@@ -323,7 +323,7 @@ public sealed class WorkAreaPersistenceTests
             h.Aim(origin);
             Assert.True(h.Down().Handled);
             Assert.Same(center, h.Session.Manager.CapturedGizmo);
-            h.Aim(origin + Gizmos.PositionGizmoTests.V(x, y, 0));
+            h.Aim(origin + Gizmos.ComposedPositionGizmoTests.V(x, y, 0));
             h.Move(h.X, h.Y);
             for (int frame = 0; frame < 120; frame++) h.Frame();
             h.AssertLiveBox();
@@ -454,7 +454,7 @@ public sealed class WorkAreaPersistenceTests
         using var h = new WorkAreaGizmoSessionTests.Harness(fixture.Api, fixture.World,
             fixture.Accessor, fixture.Controller, grabbed);
         h.Player.Entity.Pos.Dimension = 65535;
-        h.Reference = Gizmos.PositionGizmoTests.V(-2000000000, 32767, 2000000200);
+        h.Reference = Gizmos.ComposedPositionGizmoTests.V(-2000000000, 32767, 2000000200);
         h.Enable();
         for (int drag = 0; drag < 2; drag++)
         {
@@ -499,25 +499,24 @@ public sealed class WorkAreaPersistenceTests
         var initial = (start ? controller.State.Start : controller.State.End)!.Value;
         var target = initial;
         var initialAnchor = WorkAreaGizmoCoordinates.ToAnchor(initial, role);
-        using var gizmo = new PositionGizmo(initialAnchor, _ => { },
+        using var gizmo = new ComposedPositionGizmo(initialAnchor, _ => { },
+            owner => new GizmoEditStateTarget(owner, () => controller.BeginEndpointEdit(role),
+                () => Assert.True(controller.CompleteEndpointEdit()), controller.CancelEndpointEdit),
             edit => WorkAreaGizmoCoordinates.Constrain(edit, role, fixture.Accessor.Object));
-        gizmo.OnInteractionStarted += _ => Assert.True(controller.BeginEndpointEdit(role));
         gizmo.OnValueChanged += anchor =>
         {
             Assert.True(WorkAreaGizmoCoordinates.TryDecode(anchor, role, fixture.Accessor.Object, out var cell));
             Assert.True(controller.PreviewEndpoint(cell, fixture.Accessor.Object));
         };
-        gizmo.OnInteractionCompleted += _ => Assert.True(controller.CompleteEndpointEdit());
-        gizmo.OnInteractionCanceled += _ => controller.CancelEndpointEdit();
-        var origin = initialAnchor.Coordinates + Gizmos.PositionGizmoTests.V(0.25, -0.25, 10);
-        var context = Gizmos.PositionGizmoTests.Camera(reference: origin);
-        var pointer = new GizmoPointer(context, new(origin, Gizmos.PositionGizmoTests.V(0, 0, -1)));
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, pointer));
+        var origin = initialAnchor.Coordinates + Gizmos.ComposedPositionGizmoTests.V(0.25, -0.25, 10);
+        var context = Gizmos.ComposedPositionGizmoTests.Camera(reference: origin);
+        var pointer = new GizmoPointer(context, new(origin, Gizmos.ComposedPositionGizmoTests.V(0, 0, -1)));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.Center, pointer));
         for (int i = 1; i <= 100; i++)
         {
             target = new(initial.X + i, initial.Y, initial.Z, initial.Dimension);
-            gizmo.UpdateInteraction(new(context, new(origin + Gizmos.PositionGizmoTests.V(i, 0, 0),
-                Gizmos.PositionGizmoTests.V(0, 0, -1))));
+            gizmo.UpdateInteraction(new(context, new(origin + Gizmos.ComposedPositionGizmoTests.V(i, 0, 0),
+                Gizmos.ComposedPositionGizmoTests.V(0, 0, -1))));
             Assert.Empty(fixture.Writes);
             Assert.False(persistence.IsDirty);
             Assert.True(persistence.TrySave());
@@ -530,12 +529,12 @@ public sealed class WorkAreaPersistenceTests
         Assert.Equal(start ? expected.MinCell.X : expected.MaxCell.X,
             fixture.Read()["worlds"]!["world-a"]!["areas"]![0]![start ? "start" : "end"]!["x"]!.Value<int>());
         var committed = controller.State;
-        var committedPointer = new GizmoPointer(context, new(origin + Gizmos.PositionGizmoTests.V(100, 0, 0),
-            Gizmos.PositionGizmoTests.V(0, 0, -1)));
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, committedPointer));
+        var committedPointer = new GizmoPointer(context, new(origin + Gizmos.ComposedPositionGizmoTests.V(100, 0, 0),
+            Gizmos.ComposedPositionGizmoTests.V(0, 0, -1)));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.Center, committedPointer));
         target = target with { X = target.X + 50 };
-        gizmo.UpdateInteraction(new(context, new(origin + Gizmos.PositionGizmoTests.V(150, 0, 0),
-            Gizmos.PositionGizmoTests.V(0, 0, -1))));
+        gizmo.UpdateInteraction(new(context, new(origin + Gizmos.ComposedPositionGizmoTests.V(150, 0, 0),
+            Gizmos.ComposedPositionGizmoTests.V(0, 0, -1))));
         gizmo.CancelInteraction();
         Assert.Equal(committed, controller.State);
         Assert.Single(fixture.Writes);

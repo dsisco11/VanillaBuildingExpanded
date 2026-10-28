@@ -298,7 +298,7 @@ public sealed class GizmoHandleTests
         manager.Add(owner);
         manager.Render(pointer.Context);
         Assert.True(manager.TryBegin(pointer));
-        owner.Value = 12;
+        owner.SetInteractionValue(12);
         int cancellations = 0;
         owner.OnInteractionCanceled += _ =>
         {
@@ -343,7 +343,7 @@ public sealed class GizmoHandleTests
         manager.Add(owner);
         manager.Render(pointer.Context);
         Assert.True(manager.TryBegin(pointer));
-        owner.Value = 12;
+        owner.SetInteractionValue(12);
         handle.Configure(frame, hit, target);
         Assert.True(handle.IsSelected);
         Assert.Throws<ArgumentException>(() => handle.HitTarget = new HitTarget(foreign));
@@ -423,7 +423,7 @@ public sealed class GizmoHandleTests
         using var handle = new GizmoHandle(id, baseline);
         owner.AddHandle(handle);
         Assert.True(owner.BeginInteraction(id, pointer));
-        owner.Value = 10;
+        owner.SetInteractionValue(10);
         owner.OnInteractionCanceled += _ => throw new InvalidOperationException("Observer failed.");
         Assert.Throws<InvalidOperationException>(() => owner.RemoveHandle(handle));
         Assert.Equal(0, owner.Value);
@@ -440,7 +440,7 @@ public sealed class GizmoHandleTests
         using var handle = new GizmoHandle(id, baseline);
         owner.AddHandle(handle);
         Assert.True(owner.BeginInteraction(id, pointer));
-        owner.Value = 10;
+        owner.SetInteractionValue(10);
         if (hovered) owner.HoveredHandle = id;
         int ended = 0, canceled = 0;
         owner.InteractionEnded += _ => ended++;
@@ -468,7 +468,7 @@ public sealed class GizmoHandleTests
         using var handle = new GizmoHandle(id, baseline);
         owner.AddHandle(handle);
         Assert.True(owner.BeginInteraction(id, pointer));
-        owner.Value = 10;
+        owner.SetInteractionValue(10);
         int canceled = 0;
         owner.OnInteractionCanceled += _ =>
         {

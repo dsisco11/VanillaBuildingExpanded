@@ -78,7 +78,21 @@ public interface IGizmoFrameSource
     /// <param name="context">The camera/dimension snapshot used by geometry or measurement.</param>
     /// <returns>A valid frame in the context's dimension.</returns>
     /// <exception cref="ArgumentException">The context cannot supply the requested frame.</exception>
+    /// <exception cref="InvalidOperationException">Required source data is missing or the dimension differs.</exception>
     GizmoFrame GetFrame(GizmoContext context);
+
+    /// <summary>Reads a frame for measurement, explicitly rejecting temporarily unavailable context.</summary>
+    /// <param name="context">The current camera/dimension snapshot.</param>
+    /// <param name="frame">The usable frame on success; otherwise default and never consumed.</param>
+    /// <returns>Whether the source can supply a frame; invalid configuration still throws.</returns>
+    /// <exception cref="ArgumentException">Source coordinates or basis are invalid.</exception>
+    /// <exception cref="InvalidOperationException">Required source data is invalid or the dimension differs.</exception>
+    /// <remarks>The default implementation reads GetFrame. Context-dependent sources can reject without fabricating a frame.</remarks>
+    bool TryGetFrame(GizmoContext context, out GizmoFrame frame)
+    {
+        frame = GetFrame(context);
+        return true;
+    }
 }
 
 /// <summary>Pointer-to-parameter measurement definition, independent of hit shape and global gesture routing.</summary>

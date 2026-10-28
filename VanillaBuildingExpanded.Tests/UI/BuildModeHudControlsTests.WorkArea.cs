@@ -391,12 +391,12 @@ public sealed partial class BuildModeHudControlsTests
             receiver.SingleComposer = f.Composer(bounds);
             dialogs.Add(receiver);
         }
-        var context = Gizmos.PositionGizmoTests.Camera(1920, 1080);
+        var context = Gizmos.ComposedPositionGizmoTests.Camera(1920, 1080);
         var pointer = context.Camera!.CreatePointer(context, e.X, e.Y);
         using var manager = new GizmoManager();
         using var renderer = new GizmoRenderAdapter(f.Api.Object, manager, () => context,
             new BuildBrush.WorkAreaRenderingTests.FakeState());
-        var gizmo = new PositionGizmo(new(pointer.Ray.Origin + pointer.Ray.Direction * 20, 0), _ => { });
+        var gizmo = Gizmos.ComposedPositionGizmoTests.Create(new(pointer.Ray.Origin + pointer.Ray.Direction * 20, 0), _ => { });
         manager.Add(gizmo);
         using var input = new GizmoInputAdapter(f.Api.Object, manager, renderer, () => true, []);
         renderer.SetActive(true);

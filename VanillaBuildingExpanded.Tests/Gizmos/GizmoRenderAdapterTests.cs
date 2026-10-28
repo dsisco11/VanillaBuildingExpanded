@@ -7,7 +7,7 @@ using Vintagestory.API.Config;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Xunit;
-using static VanillaBuildingExpanded.Tests.Gizmos.PositionGizmoTests;
+using static VanillaBuildingExpanded.Tests.Gizmos.ComposedPositionGizmoTests;
 
 namespace VanillaBuildingExpanded.Tests.Gizmos;
 
@@ -39,7 +39,7 @@ public sealed partial class GizmoRenderAdapterTests
         var camera = Camera(reference: reference).Camera!;
         using var owner = new ComposedPositionGizmo(new(reference + V(0.25, 0.5, -0.75), 0), _ => { },
             g => new GizmoEditStateTarget(g, () => true, () => { }, () => { }));
-        var part = owner.GetGeometrySource(owner.Handles[PositionGizmo.X]).GetSnapshot(new(0, camera))!.Geometry;
+        var part = owner.GetGeometrySource(owner.Handles[ComposedPositionGizmo.X]).GetSnapshot(new(0, camera))!.Geometry;
         var matrix = GizmoRenderAdapter.ModelView(camera, part);
         Assert.Equal(0.25f, matrix[12]);
         Assert.Equal(0.5f, matrix[13]);
@@ -100,8 +100,8 @@ public sealed partial class GizmoRenderAdapterTests
             manager.Add(gizmo);
             manager.Render(context);
             Assert.True(manager.TryBegin(pointer));
-            Assert.Equal(PositionGizmo.Center, manager.CapturedHandle);
-            var part = drawing.Single(p => p.Geometry.Handle.Id == PositionGizmo.Center).Geometry;
+            Assert.Equal(ComposedPositionGizmo.Center, manager.CapturedHandle);
+            var part = drawing.Single(p => p.Geometry.Handle.Id == ComposedPositionGizmo.Center).Geometry;
             var model = GizmoRenderAdapter.ModelView(camera, part);
             Assert.Equal(0f, model[12]);
             Assert.Equal(0.25f, model[13]);
@@ -362,7 +362,7 @@ public sealed partial class GizmoRenderAdapterTests
         public readonly Mock<IClientEventAPI> Events = new();
         public readonly GizmoManager Manager = new();
         public readonly FakeState State = new();
-        public GizmoContext Camera = PositionGizmoTests.Camera();
+        public GizmoContext Camera = ComposedPositionGizmoTests.Camera();
         public readonly List<(IRenderer, EnumRenderStage)> Active = [];
         public readonly List<Action> Pending = [];
         public readonly List<TestMesh> Meshes = [];

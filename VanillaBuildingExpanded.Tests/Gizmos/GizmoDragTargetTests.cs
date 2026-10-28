@@ -3,7 +3,7 @@ using System.Runtime.Intrinsics;
 
 using VanillaBuildingExpanded.Gizmos;
 using Xunit;
-using static VanillaBuildingExpanded.Tests.Gizmos.PositionGizmoTests;
+using static VanillaBuildingExpanded.Tests.Gizmos.ComposedPositionGizmoTests;
 
 namespace VanillaBuildingExpanded.Tests.Gizmos;
 
@@ -423,8 +423,6 @@ public sealed class GizmoDragTargetTests
     public void Owner_ThrowingCapturePublicationUnwindsSessionWithoutSuccessfulStart()
     {
         using var owner = ComposedOwner();
-        owner.AddHandle(new(new(72), new() { Shape = GizmoShape.Arrow, Size = 64,
-            Color = new(1, 0, 0, 1), LineWidth = 1 }));
         int started = 0;
         owner.OnInteractionStarted += _ => started++;
         owner.HandleInvalidated += (_, _) =>
@@ -490,7 +488,7 @@ public sealed class GizmoDragTargetTests
             Assert.False(other.TryBegin(out _));
         });
         Assert.True(edit.TryBegin(out _));
-        owner.Value = 20;
+        owner.SetInteractionValue(20);
         owner.OnValueChanged += Changed;
         Assert.Throws<InvalidOperationException>(edit.Cancel);
         edit.Cancel();
@@ -579,9 +577,16 @@ public sealed class GizmoDragTargetTests
         private IGizmoDragSession? session;
         public List<string> Transactions { get; } = [];
         public GizmoEditStateTarget Edit { get; }
-        public PositionOwner(GizmoPosition value) : base(value) =>
+        public PositionOwner(GizmoPosition value) : base(value)
+        {
             Edit = new(this, () => { Transactions.Add("begin"); return true; },
                 () => { Transactions.Add("commit"); CommitAction?.Invoke(); }, () => Transactions.Add("cancel"));
+            foreach (int id in new[] { 37, 72, 991 })
+                AddHandle(new(new(id), new()
+                {
+                    Shape = GizmoShape.Arrow, Size = 64, Color = new(1, 0, 0, 1), LineWidth = 1
+                }));
+        }
         public override int Dimension => Value.Dimension;
         protected override IEnumerable<GizmoHit> HitTestCore(GizmoPointer pointer) => [];
         protected override void RenderCore(GizmoContext context) { }

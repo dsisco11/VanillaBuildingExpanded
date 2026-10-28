@@ -71,6 +71,22 @@ public sealed class GizmoCameraFrameSource : IGizmoFrameSource
         frame.Validate(context);
         return frame;
     }
+
+    /// <summary>Rejects missing-camera measurement context without disguising other frame failures.</summary>
+    /// <param name="context">The perspective context to read.</param>
+    /// <param name="frame">The current plane on success; otherwise default.</param>
+    /// <returns>Whether a camera is available; invalid dimensions or bases still throw.</returns>
+    /// <exception cref="ArgumentNullException">The context is null.</exception>
+    /// <exception cref="InvalidOperationException">The position belongs to another dimension.</exception>
+    /// <exception cref="ArgumentException">The position or camera basis is invalid.</exception>
+    public bool TryGetFrame(GizmoContext context, out GizmoFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        frame = default;
+        if (context.Camera is null) return false;
+        frame = GetFrame(context);
+        return true;
+    }
 }
 
 /// <summary>Reuses an immutable logical frame, for example a drag-start snapshot.</summary>

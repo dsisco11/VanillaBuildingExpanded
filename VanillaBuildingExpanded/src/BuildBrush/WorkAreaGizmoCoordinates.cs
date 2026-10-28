@@ -59,18 +59,9 @@ internal static class WorkAreaGizmoCoordinates
     {
         if (edit.Start.Dimension != edit.Candidate.Dimension) return null;
         var candidate = edit.Candidate;
-        bool center = edit.Handle == PositionGizmo.Center;
-        int component = edit.Handle.Value - 1;
-        if (!center)
-        {
-            if (component is < 0 or > 2) throw new ArgumentOutOfRangeException(nameof(edit));
-            for (int i = 0; i < 3; i++)
-                if (i != component && edit.Start.Coordinates[i] != candidate.Coordinates[i]) return null;
-        }
         var coordinates = edit.Start.Coordinates;
         for (int i = 0; i < 3; i++)
         {
-            if (!center && i != component) continue;
             double coordinate = edit.Start.Coordinates[i]
                 + Math.Round(candidate.Coordinates[i] - edit.Start.Coordinates[i],
                     MidpointRounding.AwayFromZero);

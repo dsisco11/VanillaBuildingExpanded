@@ -16,18 +16,18 @@ Replace hardcoded handle-ID interpretation with composition:
 
 This is a refactor of the existing positioning controls, not a request to ship new rotation, scaling or design-mode tools. Those are possible future consumers. Work-area persistence, HUD controls, resizing policy and wireframe rendering remain outside this change.
 
-## Current implementation and motivation
+## Pre-refactor implementation and motivation
 
-The handle concept is currently distributed across:
+At proposal approval, the handle concept was distributed across:
 
 - [Gizmo](../VanillaBuildingExpanded/src/Gizmos/Gizmo.cs): hovered/captured IDs, interaction lifecycle and a separate ID-keyed label map.
-- [PositionGizmo](../VanillaBuildingExpanded/src/Gizmos/PositionGizmo.cs): fixed Center/X/Y/Z IDs, center-versus-axis dispatch and mutable drag state.
-- [PositionGizmoGeometry](../VanillaBuildingExpanded/src/Gizmos/PositionGizmoGeometry.cs): generated shapes and transforms for those fixed parts.
+- Historical [PositionGizmo](https://github.com/dsisco11/VanillaBuildingExtended/blob/04172078d76652ec9fc5610351b926c66daf0399/VanillaBuildingExpanded/src/Gizmos/PositionGizmo.cs): fixed Center/X/Y/Z IDs, center-versus-axis dispatch and mutable drag state.
+- Historical [PositionGizmoGeometry](https://github.com/dsisco11/VanillaBuildingExtended/blob/04172078d76652ec9fc5610351b926c66daf0399/VanillaBuildingExpanded/src/Gizmos/PositionGizmoGeometry.cs): generated shapes and transforms for those fixed parts.
 - [GizmoRenderAdapter](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.cs): ID-dependent colors and hover/capture styling.
 - [GizmoLabel](../VanillaBuildingExpanded/src/Gizmos/GizmoLabel.cs) and the [label renderer](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.Labels.cs): label configuration and cached overlay resources.
 - [WorkAreaGizmoSession](../VanillaBuildingExpanded/src/BuildBrush/WorkAreaGizmoSession.cs): positioning values, work-area transactions, constraints and label content.
 
-An ID currently carries implicit assumptions about shape, color and interaction. The refactor makes these explicit properties of persistent handles without moving work-area rules into reusable infrastructure.
+Those IDs carried implicit assumptions about shape, color and interaction. The refactor makes these explicit properties of persistent handles without moving work-area rules into reusable infrastructure. The [architecture document](BuildBrushArchitecture.md#reusable-interaction-contracts) describes the implemented system; this section retains the proposal's historical motivation.
 
 ## Ownership and component model
 

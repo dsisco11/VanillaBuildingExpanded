@@ -8,22 +8,20 @@ public abstract partial class Gizmo
 {
     /// <summary>The owner's persistent handle membership.</summary>
     private readonly Dictionary<GizmoHandleId, GizmoHandle> handles = [];
-    /// <summary>Retains owned-handle semantics even after the last member is removed.</summary>
-    private bool hasHandleComposition;
-    /// <summary>The legacy/public hover identity synchronized with the actual owned reference.</summary>
+    /// <summary>The public hover identity synchronized with the actual owned reference.</summary>
     private GizmoHandleId? hoveredHandleId;
-    /// <summary>The legacy/public capture identity synchronized with the actual owned reference.</summary>
+    /// <summary>The public capture identity synchronized with the actual owned reference.</summary>
     private GizmoHandleId? capturedHandleId;
-    /// <summary>The actual hovered instance for handle-based compositions.</summary>
+    /// <summary>The actual hovered instance.</summary>
     private GizmoHandle? hoveredHandleInstance;
-    /// <summary>The actual captured instance for handle-based compositions.</summary>
+    /// <summary>The actual captured instance.</summary>
     private GizmoHandle? capturedHandleInstance;
 
     /// <summary>Gets the protected owner-local handle map.</summary>
     public IReadOnlyDictionary<GizmoHandleId, GizmoHandle> Handles { get; }
-    /// <summary>Gets the hovered owned instance, or null for no hover or an ID-only composition.</summary>
+    /// <summary>Gets the hovered owned instance, or null for no hover.</summary>
     public GizmoHandle? HoveredHandleInstance => hoveredHandleInstance;
-    /// <summary>Gets the captured owned instance, or null for no capture or an ID-only composition.</summary>
+    /// <summary>Gets the captured owned instance, or null for no capture.</summary>
     public GizmoHandle? CapturedHandleInstance => capturedHandleInstance;
     /// <summary>Includes initialization so reentrant configuration changes terminate the prepared session.</summary>
     internal bool IsInteractionHandle(GizmoHandle handle) => ReferenceEquals(capturedHandleInstance, handle)
@@ -35,7 +33,7 @@ public abstract partial class Gizmo
     /// <param name="handle">The handle whose configuration remains owned by this gizmo until detachment.</param>
     /// <exception cref="ArgumentNullException">The handle is null.</exception>
     /// <exception cref="ArgumentException">The ID is duplicated or target configuration has a foreign owner.</exception>
-    /// <exception cref="InvalidOperationException">The instance is attached or an ID-only interaction is active.</exception>
+    /// <exception cref="InvalidOperationException">The instance is already attached.</exception>
     /// <exception cref="ObjectDisposedException">The gizmo or handle is disposed.</exception>
     public void AddHandle(GizmoHandle handle)
     {
@@ -46,11 +44,7 @@ public abstract partial class Gizmo
             throw new InvalidOperationException("Detach a handle before attaching or transferring it.");
         if (handles.ContainsKey(handle.Id))
             throw new ArgumentException("Handle IDs must be unique within their owner.", nameof(handle));
-        if (!hasHandleComposition && IsInteracting)
-            throw new InvalidOperationException("Complete the ID-only interaction before attaching owned handles.");
         handle.ValidateAttachment(this);
-        if (!hasHandleComposition) HoveredHandle = null;
-        hasHandleComposition = true;
         handles.Add(handle.Id, handle);
         handle.SetOwner(this);
         handle.Invalidated += OnHandleInvalidated;
@@ -104,7 +98,7 @@ public abstract partial class Gizmo
     }
 
     /// <summary>Updates ID/reference pairs atomically before notifying affected handle state.</summary>
-    /// <param name="identity">The corresponding public/legacy identity field.</param>
+    /// <param name="identity">The corresponding public identity field.</param>
     /// <param name="instance">The corresponding actual instance field.</param>
     /// <param name="value">The new identity, or null to clear state.</param>
     /// <param name="interacting">Whether to acknowledge capture instead of hover.</param>
@@ -113,7 +107,7 @@ public abstract partial class Gizmo
     {
         if (identity == value) return;
         GizmoHandle? next = null;
-        if (value is { } id && hasHandleComposition
+        if (value is { } id
             && (!handles.TryGetValue(id, out next) || !next.IsEligible(Dimension)))
         {
             value = null;

@@ -3,7 +3,7 @@ using System.Numerics;
 
 using VanillaBuildingExpanded.Gizmos;
 using Xunit;
-using static VanillaBuildingExpanded.Tests.Gizmos.PositionGizmoTests;
+using static VanillaBuildingExpanded.Tests.Gizmos.ComposedPositionGizmoTests;
 
 namespace VanillaBuildingExpanded.Tests.Gizmos;
 

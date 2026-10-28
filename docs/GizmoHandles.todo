@@ -2,7 +2,7 @@
 
 Source proposal: [GizmoHandles.proposal.md](./GizmoHandles.proposal.md)
 
-Status: Execution in progress. Phases 1 through 6 were implemented and independently audited on 2026-10-27; Phase 7 remains unchecked. Production work-area positioning uses the composed handle architecture. Leave tasks unchecked until their stated verification gates pass.
+Status: Complete. All seven phases are complete as of 2026-10-27. Implementation and automated verification were independently audited; the user confirmed all remaining checks pass. Production work-area positioning uses the composed handle architecture.
 
 ## Goal and scope
 
@@ -259,35 +259,45 @@ Phase 6 evidence and traceability:
 Prerequisites: Phase 6.
 Outcome: The refactor is coherent, documented and qualified with separate automated/build/live evidence.
 
-    ☐ Remove obsolete numeric-ID styling/operation switches, separate label map, generated-part assumptions, solver fields and duplicate helpers.
-        ☐ Keep named ID constants only as optional identity conveniences.
-        ☐ Remove construction scaffolding/bridges and obsolete tests; replace assertions with tests of the new contracts.
-        ☐ Confirm no new global subscriptions, undo/value stores, terrain-drag path or silent error fallbacks remain.
-    ☐ Update BuildBrushArchitecture.md and directly related public API documentation for the implemented ownership and seven boundaries.
-        ☐ Document handle composition, property fallback, custom hit targets, parameter/value adapters and lifecycle ordering.
-        ☐ Verify Doxygen-compatible XML docs for all new/changed contracts and relevant lifecycle details.
-        ☐ Keep documents project-neutral and distinguish proposal/history from actual implementation.
-    ☐ Run focused current tests, then the combined affected integration regression set.
-        ☐ Cover ownership, every nullable field, snapshot consistency, arbitrary IDs, all seven contracts, composition and reentrant lifecycle.
-        ☐ Cover analytic axis/plane behavior, large coordinates, dimension checks, work-area snapping and preview persistence boundaries.
-        ☐ Cover all label modes, placement, rename/localization, style refresh and resource pruning.
-        ☐ Record command, results and scope; investigate tightly coupled failures without fixing unrelated issues.
-    ☐ Run the repository's normal Build and JSON validation; record warnings/failures separately from test results.
-        ☐ Use the normal Build target, not a packaging/cleanup target; no new package deliverable is requested.
-        ☐ Check whitespace and scope of final changes without modifying unrelated work.
-    ☐ Perform actual in-game qualification and record tested version/settings and observations.
-        ☐ Verify RGB arrows, circle/diamond centers, opacity/line-width feedback and screen-sized controls at relevant camera distances.
-        ☐ Verify overlapping-handle selection and deterministic capture through free cursor and mouse-look reticle.
-        ☐ Verify repeated endpoint/midpoint movement, fixed camera-plane behavior, grid snapping and unchanged area dimensions during whole-area translation.
-        ☐ Verify completion, cancellation, focus/dimension/lifecycle invalidation and no brush placement leakage.
-        ☐ Verify label backgrounds, offsets/anchors, hover visibility, rename updates and cleanup on area/session removal.
-        ☐ Exercise large-coordinate rendering/picking and distinguish genuine visual evidence from mocked projection tests.
+    ✔ Remove obsolete numeric-ID styling/operation switches, separate label map, generated-part assumptions, solver fields and duplicate helpers.
+        ✔ Keep named ID constants only as optional identity conveniences.
+        ✔ Remove construction scaffolding/bridges and obsolete tests; replace assertions with tests of the new contracts.
+        ✔ Confirm no new global subscriptions, undo/value stores, terrain-drag path or silent error fallbacks remain.
+    ✔ Update BuildBrushArchitecture.md and directly related public API documentation for the implemented ownership and seven boundaries.
+        ✔ Document handle composition, property fallback, custom hit targets, parameter/value adapters and lifecycle ordering.
+        ✔ Verify Doxygen-compatible XML docs for all new/changed contracts and relevant lifecycle details.
+        ✔ Keep documents project-neutral and distinguish proposal/history from actual implementation.
+    ✔ Run focused current tests, then the combined affected integration regression set.
+        ✔ Cover ownership, every nullable field, snapshot consistency, arbitrary IDs, all seven contracts, composition and reentrant lifecycle.
+        ✔ Cover analytic axis/plane behavior, large coordinates, dimension checks, work-area snapping and preview persistence boundaries.
+        ✔ Cover all label modes, placement, rename/localization, style refresh and resource pruning.
+        ✔ Record command, results and scope; investigate tightly coupled failures without fixing unrelated issues.
+    ✔ Run the repository's normal Build and JSON validation; record warnings/failures separately from test results.
+        ✔ Use the normal Build target, not a packaging/cleanup target; no new package deliverable is requested.
+        ✔ Check whitespace and scope of final changes without modifying unrelated work.
+    ✔ Perform actual in-game qualification and record tested version/settings and observations.
+        ✔ Verify RGB arrows, circle/diamond centers, opacity/line-width feedback and screen-sized controls at relevant camera distances.
+        ✔ Verify overlapping-handle selection and deterministic capture through free cursor and mouse-look reticle.
+        ✔ Verify repeated endpoint/midpoint movement, fixed camera-plane behavior, grid snapping and unchanged area dimensions during whole-area translation.
+        ✔ Verify completion, cancellation, focus/dimension/lifecycle invalidation and no brush placement leakage.
+        ✔ Verify label backgrounds, offsets/anchors, hover visibility, rename updates and cleanup on area/session removal.
+        ✔ Exercise large-coordinate rendering/picking and distinguish genuine visual evidence from mocked projection tests.
 
 Completion criteria:
 
-    ☐ No superseded production path or duplicated ownership remains; documentation reflects the implementation.
-    ☐ Relevant tests, normal build, JSON validation and whitespace checks pass with recorded evidence.
-    ☐ Required in-game checks pass, or remain explicitly blocked/unchecked; automated results are not substituted.
+    ✔ No superseded production path or duplicated ownership remains; documentation reflects the implementation.
+    ✔ Relevant tests, normal build, JSON validation and whitespace checks pass with recorded evidence.
+    ✔ Required in-game checks pass, or remain explicitly blocked/unchecked; automated results are not substituted.
+
+Phase 7 traceability and evidence (2026-10-27):
+
+- Cleanup -> proposal [migration and compatibility](GizmoHandles.proposal.md#migration-and-compatibility), [persistent handle](GizmoHandles.proposal.md#persistent-handle), and inherited input/precision/cancellation requirements at `04172078d76652ec9fc5610351b926c66daf0399` -> superseded positioning solver/generated-part carriers and ID-only ownership bridges removed; [GizmoPosition.cs](../VanillaBuildingExpanded/src/Gizmos/GizmoPosition.cs) and [GizmoShapes.cs](../VanillaBuildingExpanded/src/Gizmos/GizmoShapes.cs) retain shared contracts/primitives. [ComposedPositionGizmoTests.cs](../VanillaBuildingExpanded.Tests/Gizmos/ComposedPositionGizmoTests.cs) exercises the production composition; geometry tests assert qualified dimensions/primitives/picking directly. Work-area snapping is ID-independent, with axis restrictions enforced by typed parameter bindings.
+- Compatibility regressions -> proposal [spatial-frame sources and measurement targets](GizmoHandles.proposal.md#spatial-frame-sources-and-measurement-targets) and [capture, cancellation and mutation](GizmoHandles.proposal.md#capture-cancellation-and-mutation) -> migrated tests retain one notice per uninterrupted invalid interval and explicit missing-camera rejection. `IGizmoFrameSource.TryGetFrame` reports unavailable measurement context through the existing notice path; invalid configuration still throws. No additional subscriptions, value stores, transaction owners or terrain movement path were introduced.
+- Documentation -> proposal public API documentation and seven boundaries -> [BuildBrushArchitecture.md](BuildBrushArchitecture.md#reusable-interaction-contracts) describes current ownership, composition, fallback, custom picking, typed adapters and lifecycle; XML documentation covers changed contracts. Proposal motivation is explicitly historical, with immutable references for removed types.
+- Automated verification -> `VINTAGE_STORY=G:\Vintagestory`; `dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj --configuration Release --framework net10.0 --filter "FullyQualifiedName~Gizmos"`: 439 passed, 0 failed/skipped. Combined filter `"FullyQualifiedName~Gizmos|FullyQualifiedName~WorkArea|FullyQualifiedName~BuildModeHudControlsTests"`: 769 passed, 0 failed/skipped, including controller/persistence/HUD integration.
+- Normal `.\build.ps1 --target=Build`: Build and ValidateJson passed; `git diff --check` passed. Eight pre-existing production nullable warnings and existing CakeBuild Pkcs NU1902/NU1903 advisories remain; no warnings in changed production files.
+- Own second review and fresh independent read-only audit found no confirmed implementation, documentation or automated-evidence gaps. The audit supports the completed non-live items above.
+- User acceptance (2026-10-27): "okay all checks pass mark it done". This confirms the remaining live checks and closes the previous live-qualification blocker. Completion is based on the user's confirmation, not assistant-observed gameplay or mocked rendering. Detailed tested version/settings were not supplied; the user explicitly authorized completion without that additional record.
 
 ## Proposal coverage map
 
@@ -304,9 +314,9 @@ Completion criteria:
 
 ## Final acceptance
 
-    ☐ Every proposal requirement has implementation and evidence; any deviation requires explicit approval rather than silent deferral.
-    ☐ All seven responsibility boundaries are independently replaceable and exercised by tests.
-    ☐ Existing work-area interaction, labels, precision, rendering/resource lifecycle and transaction behavior are preserved.
-    ☐ No out-of-scope feature, legacy path, persisted format change or duplicated ownership was added.
-    ☐ Required documentation, cleanup, automated checks and live-runtime evidence are complete.
-    ☐ Only verified work is checked off; existing unrelated project tasks and historical completion records remain unchanged.
+    ✔ Every proposal requirement has implementation and evidence; any deviation requires explicit approval rather than silent deferral.
+    ✔ All seven responsibility boundaries are independently replaceable and exercised by tests.
+    ✔ Existing work-area interaction, labels, precision, rendering/resource lifecycle and transaction behavior are preserved.
+    ✔ No out-of-scope feature, legacy path, persisted format change or duplicated ownership was added.
+    ✔ Required documentation, cleanup, automated checks and live-runtime evidence are complete.
+    ✔ Only verified work is checked off; existing unrelated project tasks and historical completion records remain unchanged.

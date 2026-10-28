@@ -10,7 +10,7 @@ using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
 using Xunit;
-using static VanillaBuildingExpanded.Tests.Gizmos.PositionGizmoTests;
+using static VanillaBuildingExpanded.Tests.Gizmos.ComposedPositionGizmoTests;
 
 namespace VanillaBuildingExpanded.Tests.BuildBrush;
 
@@ -28,19 +28,19 @@ public sealed class WorkAreaGizmoSessionTests
         foreach (var gizmo in new[] { h.Session.Start!, h.Session.End!, h.Session.Center! })
         {
             Assert.Equal(4, gizmo.Handles.Count);
-            Assert.Equal("X", gizmo.Handles[PositionGizmo.X].Label!.Text);
-            Assert.Equal("Y", gizmo.Handles[PositionGizmo.Y].Label!.Text);
-            Assert.Equal("Z", gizmo.Handles[PositionGizmo.Z].Label!.Text);
+            Assert.Equal("X", gizmo.Handles[ComposedPositionGizmo.X].Label!.Text);
+            Assert.Equal("Y", gizmo.Handles[ComposedPositionGizmo.Y].Label!.Text);
+            Assert.Equal("Z", gizmo.Handles[ComposedPositionGizmo.Z].Label!.Text);
             Assert.All(gizmo.Handles.Values, handle => Assert.Equal(GizmoLabelVisibility.Hover, handle.Label!.Visibility));
         }
         var midpoint = h.Session.Center!;
         h.WorkArea.RenameArea(h.WorkArea.SelectedId!.Value, "Workshop <1>");
         Assert.Same(midpoint, h.Session.Center);
-        Assert.Equal("Workshop <1>", midpoint.Handles[PositionGizmo.Center].Label!.Text);
+        Assert.Equal("Workshop <1>", midpoint.Handles[ComposedPositionGizmo.Center].Label!.Text);
         var other = h.WorkArea.CreateArea("Garden");
         h.WorkArea.RestoreEndpoints(new(0, 65, -200, 0), new(30, 70, -200, 0));
         Assert.Equal(other, h.WorkArea.SelectedId);
-        Assert.Equal("Garden", h.Session.Center!.Handles[PositionGizmo.Center].Label!.Text);
+        Assert.Equal("Garden", h.Session.Center!.Handles[ComposedPositionGizmo.Center].Label!.Text);
     }
 
     [Theory]
@@ -108,10 +108,10 @@ public sealed class WorkAreaGizmoSessionTests
             h.Frame();
             Assert.Equal(3, h.Session.Manager.Count);
             Assert.Equal(center, h.Session.Center!.Value);
-            var geometry = PositionGizmoGeometry.Create(h.Session.Renderer.Context!.Camera!, center.Coordinates,
-                GizmoShape.Circle)!;
+            var geometry = h.Session.Center.GetGeometrySource(h.Session.Center.Handles[ComposedPositionGizmo.X])
+                .GetSnapshot(h.Session.Renderer.Context!)!.Geometry;
             var axis = handle == 0 ? V(1, 0, 0) : V(0, 0, 0).WithElement(handle - 1, 1);
-            var grab = center.Coordinates + (handle == 0 ? V(0, 0, 0) : axis * (geometry.AxisLength * 0.7));
+            var grab = center.Coordinates + (handle == 0 ? V(0, 0, 0) : axis * (geometry.Extent * 0.7));
             h.Aim(grab);
             Assert.True(h.Down().Handled);
             Assert.Same(h.Session.Center, h.Session.Manager.CapturedGizmo);
@@ -380,10 +380,11 @@ public sealed class WorkAreaGizmoSessionTests
         h.Enable();
         h.Frame();
         var anchor = h.Session.Start!.Value.Coordinates;
-        var geometry = PositionGizmoGeometry.Create(h.Session.Renderer.Context!.Camera!, anchor, GizmoShape.Circle)!;
-        h.Aim(anchor + Vector256.Create(geometry.AxisLength * 0.6, 0, 0, 0));
+        var geometry = h.Session.Start.GetGeometrySource(h.Session.Start.Handles[ComposedPositionGizmo.X])
+            .GetSnapshot(h.Session.Renderer.Context!)!.Geometry;
+        h.Aim(anchor + Vector256.Create(geometry.Extent * 0.6, 0, 0, 0));
         h.Down();
-        Assert.Equal(PositionGizmo.X, h.Session.Manager.CapturedHandle);
+        Assert.Equal(ComposedPositionGizmo.X, h.Session.Manager.CapturedHandle);
         int originalX = h.X;
         h.Move(h.X + 17, h.Y);
         h.Up();
@@ -421,7 +422,7 @@ public sealed class WorkAreaGizmoSessionTests
             var baseline = h.WorkArea.State;
             h.Aim(instance.Value.Coordinates);
             Assert.True(h.Down().Handled);
-            Assert.Equal(PositionGizmo.Center, h.Session.Manager.CapturedHandle);
+            Assert.Equal(ComposedPositionGizmo.Center, h.Session.Manager.CapturedHandle);
             for (int frame = 0; frame < 120; frame++) h.Frame();
             Assert.Equal(baseline, h.WorkArea.State);
             Assert.Equal(drag, h.Commits);
@@ -470,10 +471,10 @@ public sealed class WorkAreaGizmoSessionTests
             h.Reference = anchor - h.Capture().Camera!.ViewDirection * 20;
             h.Frame();
             var instance = start ? h.Session.Start! : h.Session.End!;
-            var geometry = PositionGizmoGeometry.Create(h.Session.Renderer.Context!.Camera!, anchor,
-                start ? GizmoShape.Circle : GizmoShape.Diamond)!;
+            var geometry = instance.GetGeometrySource(instance.Handles[new(component + 1)])
+                .GetSnapshot(h.Session.Renderer.Context!)!.Geometry;
             var axis = V(0, 0, 0).WithElement(component, 1);
-            var grab = anchor + axis * (geometry.AxisLength * 0.7);
+            var grab = anchor + axis * (geometry.Extent * 0.7);
             h.Aim(grab);
             Assert.True(h.Down().Handled);
             Assert.Same(instance, h.Session.Manager.CapturedGizmo);
@@ -1160,7 +1161,7 @@ public sealed class WorkAreaGizmoSessionTests
         {
             var captured = Session.Manager.CapturedGizmo;
             Assert.NotNull(captured);
-            Assert.Equal(PositionGizmo.Center, Session.Manager.CapturedHandle);
+            Assert.Equal(ComposedPositionGizmo.Center, Session.Manager.CapturedHandle);
             var role = ReferenceEquals(captured, Session.Start) ? WorkAreaEndpointRole.Start : WorkAreaEndpointRole.End;
             Aim(WorkAreaGizmoCoordinates.ToAnchor(cell, role).Coordinates);
             Move(X, Y);

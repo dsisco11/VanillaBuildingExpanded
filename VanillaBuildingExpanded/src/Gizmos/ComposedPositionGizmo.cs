@@ -9,6 +9,15 @@ namespace VanillaBuildingExpanded.Gizmos;
 /// <summary>Explicit positioning composition with independently replaceable visual and interaction contracts.</summary>
 public sealed class ComposedPositionGizmo : HandleGizmo<GizmoPosition>
 {
+    /// <summary>Optional conventional identity for the camera-plane control.</summary>
+    public static readonly GizmoHandleId Center = new(0);
+    /// <summary>Optional conventional identity for the world-X control.</summary>
+    public static readonly GizmoHandleId X = new(1);
+    /// <summary>Optional conventional identity for the world-Y control.</summary>
+    public static readonly GizmoHandleId Y = new(2);
+    /// <summary>Optional conventional identity for the world-Z control.</summary>
+    public static readonly GizmoHandleId Z = new(3);
+
     /// <inheritdoc />
     public override int Dimension => Value.Dimension;
 
@@ -34,8 +43,8 @@ public sealed class ComposedPositionGizmo : HandleGizmo<GizmoPosition>
         ArgumentNullException.ThrowIfNull(editState);
         if (marker is not (GizmoShape.Circle or GizmoShape.Diamond))
             throw new ArgumentOutOfRangeException(nameof(marker));
-        GizmoHandleId center = centerId ?? PositionGizmo.Center, x = xId ?? PositionGizmo.X,
-            y = yId ?? PositionGizmo.Y, z = zId ?? PositionGizmo.Z;
+        GizmoHandleId center = centerId ?? Center, x = xId ?? X,
+            y = yId ?? Y, z = zId ?? Z;
         if (center == x || center == y || center == z || x == y || x == z || y == z)
             throw new ArgumentException("Positioning handle identities must be distinct.");
         var edit = editState(this);
@@ -65,6 +74,11 @@ public sealed class ComposedPositionGizmo : HandleGizmo<GizmoPosition>
         /// <inheritdoc />
         public GizmoFrame GetFrame(GizmoContext context) => (handle.FrameSource
             ?? throw new InvalidOperationException("Positioning requires a configured frame source.")).GetFrame(context);
+
+        /// <inheritdoc />
+        public bool TryGetFrame(GizmoContext context, out GizmoFrame frame) => (handle.FrameSource
+            ?? throw new InvalidOperationException("Positioning requires a configured frame source."))
+            .TryGetFrame(context, out frame);
     }
 
     private GizmoHandle Add(GizmoHandleId id, GizmoShape shape, double size, Vector4 color,

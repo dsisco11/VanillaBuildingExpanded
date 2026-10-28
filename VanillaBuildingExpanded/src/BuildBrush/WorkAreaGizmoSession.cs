@@ -123,9 +123,9 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
                     ? WorkAreaGizmoCoordinates.Constrain(edit, endpointRole, world.BlockAccessor)
                     : ConstrainTranslation(edit),
                 role == WorkAreaEndpointRole.End ? GizmoShape.Diamond : GizmoShape.Circle);
-            instance.Handles[PositionGizmo.X].Label = new("X", visibility: GizmoLabelVisibility.Hover);
-            instance.Handles[PositionGizmo.Y].Label = new("Y", visibility: GizmoLabelVisibility.Hover);
-            instance.Handles[PositionGizmo.Z].Label = new("Z", visibility: GizmoLabelVisibility.Hover);
+            instance.Handles[ComposedPositionGizmo.X].Label = new("X", visibility: GizmoLabelVisibility.Hover);
+            instance.Handles[ComposedPositionGizmo.Y].Label = new("Y", visibility: GizmoLabelVisibility.Hover);
+            instance.Handles[ComposedPositionGizmo.Z].Label = new("Z", visibility: GizmoLabelVisibility.Hover);
             instance.OnValueChanged += value =>
             {
                 if (syncing || !workArea.IsEditing) return;
@@ -166,8 +166,8 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
         string centerLabel = role is null
             ? workArea.Areas.Single(area => area.Id == workArea.SelectedId).Name
             : Lang.Get("vanillabuildingexpanded:gizmo-label-center");
-        if (gizmo.Handles[PositionGizmo.Center].Label?.Text != centerLabel)
-            gizmo.Handles[PositionGizmo.Center].Label = new(centerLabel, 10, 10, GizmoLabelVisibility.Hover);
+        if (gizmo.Handles[ComposedPositionGizmo.Center].Label?.Text != centerLabel)
+            gizmo.Handles[ComposedPositionGizmo.Center].Label = new(centerLabel, 10, 10, GizmoLabelVisibility.Hover);
         gizmo.Visible = Eligible() && MatchesDimension();
     }
 

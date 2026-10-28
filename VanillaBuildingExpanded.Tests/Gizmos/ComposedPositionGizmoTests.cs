@@ -6,8 +6,12 @@ using Xunit;
 
 namespace VanillaBuildingExpanded.Tests.Gizmos;
 
-public sealed class PositionGizmoTests
+public sealed class ComposedPositionGizmoTests
 {
+    internal static ComposedPositionGizmo Create(GizmoPosition initialValue, Action<GizmoHandleDraw> draw,
+        Func<PositionGizmoEdit, GizmoPosition?>? constrain = null, GizmoShape marker = GizmoShape.Circle) =>
+        new(initialValue, draw, g => new GizmoEditStateTarget(g, () => true, () => { }, () => { }), constrain, marker);
+
     internal static Vector256<double> V(double x, double y, double z) => Vector256.Create(x, y, z, 0d);
     internal static GizmoContext Camera(int width = 800, int height = 600, double scale = 1,
         Vector256<double> reference = default, bool grabbed = false, double far = 1000, double[]? view = null) =>
@@ -34,7 +38,7 @@ public sealed class PositionGizmoTests
         var start = V(-2000000000.25, 30.75, -2000000000.5);
         var rayDirection = component == 2 ? V(0, 1, 0) : V(0, 0, -1);
         var context = new GizmoContext(0);
-        using var gizmo = new PositionGizmo(new(start, 0), _ => { });
+        using var gizmo = Create(new(start, 0), _ => { });
         var initialHit = start.WithElement(component, start[component] + 0.75);
         var origin = initialHit - rayDirection * 10;
         Assert.True(gizmo.BeginInteraction(new(component + 1), new(context, new(origin, rayDirection))));
@@ -55,7 +59,7 @@ public sealed class PositionGizmoTests
     public void SuppliedPolicy_SnapsDeltaBeforePublishingWithoutChangingOtherComponents(double delta, double expected)
     {
         var start = V(-10, 4.25, -5);
-        using var gizmo = new PositionGizmo(new(start, 0), _ => { }, edit =>
+        using var gizmo = Create(new(start, 0), _ => { }, edit =>
         {
             double rounded = Math.Round(edit.Candidate.Coordinates[0] - edit.Start.Coordinates[0],
                 MidpointRounding.AwayFromZero);
@@ -63,7 +67,7 @@ public sealed class PositionGizmoTests
         });
         var context = new GizmoContext(0);
         var origin = V(-9.25, 4.25, 5);
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.X, new(context, new(origin, V(0, 0, -1)))));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.X, new(context, new(origin, V(0, 0, -1)))));
         gizmo.UpdateInteraction(new(context, new(origin + V(delta, 0, 0), V(0, 0, -1))));
         Assert.Equal(start.WithElement(0, -10 + expected), gizmo.Value.Coordinates);
     }
@@ -71,12 +75,12 @@ public sealed class PositionGizmoTests
     [Fact]
     public void DegenerateBeginAndUpdates_ReportReasonsAndRetainLastValidValue()
     {
-        using var gizmo = new PositionGizmo(new(V(0, 0, 0), 0), _ => { });
-        List<PositionGizmoNotice> notices = [];
+        using var gizmo = Create(new(V(0, 0, 0), 0), _ => { });
+        List<string> notices = [];
         gizmo.NoticeRequested += notices.Add;
         var context = new GizmoContext(0);
-        Assert.False(gizmo.BeginInteraction(PositionGizmo.X, new(context, new(V(-10, 0, 0), V(1, 0, 0)))));
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.X, new(context, new(V(0, 0, 10), V(0, 0, -1)))));
+        Assert.False(gizmo.BeginInteraction(ComposedPositionGizmo.X, new(context, new(V(-10, 0, 0), V(1, 0, 0)))));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.X, new(context, new(V(0, 0, 10), V(0, 0, -1)))));
         gizmo.UpdateInteraction(new(context, new(V(1, 0, 10), V(0, 0, -1))));
         var last = gizmo.Value;
         gizmo.UpdateInteraction(new(context, new(V(1, 0, 10), V(1, 0, -0.001))));
@@ -85,8 +89,8 @@ public sealed class PositionGizmoTests
         gizmo.UpdateInteraction(new(context, new(V(1, 0, -10), V(0, 0, -1))));
         gizmo.UpdateInteraction(new(context, new(V(1, 0, 1000001), V(0, 0, -1))));
         Assert.Equal(last, gizmo.Value);
-        Assert.Contains(PositionGizmoNotice.DegenerateAxis, notices);
-        Assert.Contains(PositionGizmoNotice.ExcessiveJump, notices);
+        Assert.Contains(nameof(PositionGizmoNotice.DegenerateAxis), notices);
+        Assert.Contains(nameof(PositionGizmoNotice.ExcessiveJump), notices);
     }
 
     [Theory]
@@ -96,9 +100,9 @@ public sealed class PositionGizmoTests
     public void AxisStart_PreNormalizationSquaredThresholdIsEnforced(double perpendicular, bool accepted)
     {
         double parallel = Math.Sqrt(1 - perpendicular * perpendicular);
-        using var gizmo = new PositionGizmo(new(V(0, 0, 0), 0), _ => { });
+        using var gizmo = Create(new(V(0, 0, 0), 0), _ => { });
         var direction = V(parallel, 0, -perpendicular);
-        Assert.Equal(accepted, gizmo.BeginInteraction(PositionGizmo.X,
+        Assert.Equal(accepted, gizmo.BeginInteraction(ComposedPositionGizmo.X,
             new(new(0), new(-direction * 10, direction))));
     }
 
@@ -108,9 +112,9 @@ public sealed class PositionGizmoTests
     [InlineData(0.0101, true)]
     public void AxisUpdate_DenominatorThresholdRetainsOrPublishes(double perpendicular, bool accepted)
     {
-        using var gizmo = new PositionGizmo(new(V(0, 0, 0), 0), _ => { });
+        using var gizmo = Create(new(V(0, 0, 0), 0), _ => { });
         var context = new GizmoContext(0);
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.X, new(context, new(V(0, 0, 10), V(0, 0, -1)))));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.X, new(context, new(V(0, 0, 10), V(0, 0, -1)))));
         var direction = V(Math.Sqrt(1 - perpendicular * perpendicular), 0, -perpendicular);
         gizmo.UpdateInteraction(new(context, new(V(1, 0, 0) - direction * 10, direction)));
         Assert.Equal(accepted ? 1d : 0d, gizmo.Value.Coordinates[0], 10);
@@ -121,9 +125,9 @@ public sealed class PositionGizmoTests
     [InlineData(80.001, false)]
     public void AxisUpdate_JumpThresholdIsMeasuredFromLastAcceptedCoordinate(double jump, bool accepted)
     {
-        using var gizmo = new PositionGizmo(new(V(0, 0, 0), 0), _ => { });
+        using var gizmo = Create(new(V(0, 0, 0), 0), _ => { });
         var context = new GizmoContext(0);
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.X, new(context, new(V(0, 0, 10), V(0, 0, -1)))));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.X, new(context, new(V(0, 0, 10), V(0, 0, -1)))));
         gizmo.UpdateInteraction(new(context, new(V(jump, 0, 10), V(0, 0, -1))));
         Assert.Equal(accepted ? jump : 0, gizmo.Value.Coordinates[0], 10);
     }
@@ -133,9 +137,9 @@ public sealed class PositionGizmoTests
     [InlineData(100000.001, false)]
     public void AxisUpdate_IntersectionDistanceGuardIncludesItsBoundary(double distance, bool accepted)
     {
-        using var gizmo = new PositionGizmo(new(V(0, 0, 0), 0), _ => { });
+        using var gizmo = Create(new(V(0, 0, 0), 0), _ => { });
         var context = new GizmoContext(0);
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.X, new(context, new(V(0, 0, 10), V(0, 0, -1)))));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.X, new(context, new(V(0, 0, 10), V(0, 0, -1)))));
         gizmo.UpdateInteraction(new(context, new(V(1, 0, distance), V(0, 0, -1))));
         Assert.Equal(accepted ? 1d : 0d, gizmo.Value.Coordinates[0], 10);
     }
@@ -145,9 +149,9 @@ public sealed class PositionGizmoTests
     {
         var context = Camera();
         var start = V(1.25, 2.5, -20);
-        using var gizmo = new PositionGizmo(new(start, 0), _ => { });
+        using var gizmo = Create(new(start, 0), _ => { });
         var pointer = new GizmoPointer(context, new(V(0, 0, 0), V(2, 3, -20)));
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, pointer));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.Center, pointer));
         int notifications = 0;
         gizmo.OnValueChanged += _ => notifications++;
         for (int i = 0; i < 120; i++) gizmo.UpdateInteraction(pointer);
@@ -173,11 +177,11 @@ public sealed class PositionGizmoTests
         var normal = context.Camera!.ViewDirection;
         var right = V(Math.Cos(yaw), 0, Math.Sin(yaw));
         var anchor = normal * 20 + right * 3;
-        using var gizmo = new PositionGizmo(new(anchor, 0), _ => { });
+        using var gizmo = Create(new(anchor, 0), _ => { });
         var initialHit = anchor + right * 0.4 + V(0, 0.3, 0);
         Assert.True(context.Camera.TryProject(initialHit, out var screen));
         var pointer = context.Camera.CreatePointer(context, screen[0], screen[1]);
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, pointer));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.Center, pointer));
         gizmo.UpdateInteraction(pointer);
         AssertCoordinates(anchor, gizmo.Value.Coordinates);
         var delta = right * 1.125 + V(0, -2.375, 0);
@@ -196,9 +200,9 @@ public sealed class PositionGizmoTests
     {
         var context = Camera(grabbed: grabbed);
         var anchor = V(0, 0, -20);
-        using var gizmo = new PositionGizmo(new(anchor, 0), _ => { });
+        using var gizmo = Create(new(anchor, 0), _ => { });
         var initial = context.Camera!.CreatePointer(context, 400, 300);
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, initial));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.Center, initial));
         int changes = 0;
         gizmo.OnValueChanged += value => { changes++; gizmo.Value = value; };
         var movedContext = Camera(reference: V(1, 2, 3), grabbed: grabbed, view: Yaw(0.35));
@@ -229,10 +233,10 @@ public sealed class PositionGizmoTests
     {
         var anchor = V(x, y, z);
         var context = Camera(reference: anchor + V(0, 0, 20));
-        using var gizmo = new PositionGizmo(new(anchor, 65535), _ => { });
+        using var gizmo = Create(new(anchor, 65535), _ => { });
         var origin = anchor + V(0.375, -0.25, 20);
         var initial = new GizmoPointer(new(65535, context.Camera), new(origin, V(0, 0, -1)));
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, initial));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.Center, initial));
         for (int i = 0; i < 30; i++)
         {
             var delta = V(1.125 + i * 0.125, -2.375, 0);
@@ -252,12 +256,12 @@ public sealed class PositionGizmoTests
     {
         var context = Camera();
         var direction = V(Math.Sqrt(1 - normalComponent * normalComponent), 0, -normalComponent);
-        using var gizmo = new PositionGizmo(new(V(0, 0, -10), 0), _ => { });
+        using var gizmo = Create(new(V(0, 0, -10), 0), _ => { });
         var grazing = new GizmoPointer(context, new(V(0, 0, -10) - direction * 10, direction));
-        Assert.Equal(accepted, gizmo.BeginInteraction(PositionGizmo.Center, grazing));
+        Assert.Equal(accepted, gizmo.BeginInteraction(ComposedPositionGizmo.Center, grazing));
         if (accepted) gizmo.CancelInteraction();
         var initial = new GizmoPointer(context, new(V(0, 0, 0), V(0, 0, -1)));
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, initial));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.Center, initial));
         gizmo.UpdateInteraction(new(context, new(V(1, 0, -10) - direction * 10, direction)));
         Assert.Equal(accepted ? 1d : 0d, gizmo.Value.Coordinates[0], 8);
         gizmo.UpdateInteraction(new(context, new(V(2, 0, 0), V(0, 0, -1))));
@@ -270,8 +274,8 @@ public sealed class PositionGizmoTests
     public void Center_JumpGuardUsesLastAcceptedIntersectionAndIncludesBoundary(double jump, bool accepted)
     {
         var context = Camera();
-        using var gizmo = new PositionGizmo(new(V(0, 0, -10), 0), _ => { });
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center,
+        using var gizmo = Create(new(V(0, 0, -10), 0), _ => { });
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.Center,
             new(context, new(V(0, 0, 0), V(0, 0, -1)))));
         gizmo.UpdateInteraction(new(context, new(V(jump, 0, 0), V(0, 0, -1))));
         Assert.Equal(accepted ? jump : 0, gizmo.Value.Coordinates[0], 8);
@@ -285,8 +289,8 @@ public sealed class PositionGizmoTests
     public void Center_IntersectionDistanceGuardIncludesBoundary(double distance, bool accepted)
     {
         var context = Camera();
-        using var gizmo = new PositionGizmo(new(V(0, 0, -10), 0), _ => { });
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center,
+        using var gizmo = Create(new(V(0, 0, -10), 0), _ => { });
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.Center,
             new(context, new(V(0, 0, 0), V(0, 0, -1)))));
         gizmo.UpdateInteraction(new(context, new(V(1, 0, -10 + distance), V(0, 0, -1))));
         Assert.Equal(accepted ? 1d : 0d, gizmo.Value.Coordinates[0], 8);
@@ -296,32 +300,32 @@ public sealed class PositionGizmoTests
     public void Center_InvalidStartsAndContinuingFailuresBoundNoticesThenRecoverEvenOnUnchangedPublish()
     {
         var context = Camera();
-        using var gizmo = new PositionGizmo(new(V(0, 0, -10), 0), _ => { });
-        List<PositionGizmoNotice> notices = [];
+        using var gizmo = Create(new(V(0, 0, -10), 0), _ => { });
+        List<string> notices = [];
         gizmo.NoticeRequested += notices.Add;
-        Assert.False(gizmo.BeginInteraction(PositionGizmo.Center,
+        Assert.False(gizmo.BeginInteraction(ComposedPositionGizmo.Center,
             new(new(0), new(V(0, 0, 0), V(0, 0, -1)))));
-        Assert.False(gizmo.BeginInteraction(PositionGizmo.Center,
+        Assert.False(gizmo.BeginInteraction(ComposedPositionGizmo.Center,
             new(context, new(V(0, 0, -20), V(0, 0, -1)))));
-        Assert.False(gizmo.BeginInteraction(PositionGizmo.Center,
+        Assert.False(gizmo.BeginInteraction(ComposedPositionGizmo.Center,
             new(context, new(V(0, 0, 0), V(1, 0, 0)))));
         Assert.Equal(3, notices.Count);
-        using (var distant = new PositionGizmo(new(V(double.MaxValue, 0, -10), 0), _ => { }))
+        using (var distant = Create(new(V(double.MaxValue, 0, -10), 0), _ => { }))
         {
             distant.NoticeRequested += notices.Add;
-            Assert.False(distant.BeginInteraction(PositionGizmo.Center,
+            Assert.False(distant.BeginInteraction(ComposedPositionGizmo.Center,
                 new(context, new(V(0, 0, 0), V(0, 0, -1)))));
             Assert.False(distant.IsInteracting);
             Assert.Equal(4, notices.Count);
         }
         var initial = new GizmoPointer(context, new(V(0, 0, 0), V(0, 0, -1)));
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, initial));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.Center, initial));
         notices.Clear();
         int changes = 0;
         gizmo.OnValueChanged += _ => changes++;
         var parallel = new GizmoPointer(context, new(V(0, 0, 0), V(1, 0, 0)));
         for (int i = 0; i < 120; i++) gizmo.UpdateInteraction(parallel);
-        Assert.Equal(new[] { PositionGizmoNotice.DegeneratePlane }, notices);
+        Assert.Equal(new[] { nameof(PositionGizmoNotice.DegeneratePlane) }, notices);
         gizmo.UpdateInteraction(initial);
         Assert.Equal(0, changes);
         for (int i = 0; i < 120; i++) gizmo.UpdateInteraction(parallel);
@@ -329,7 +333,7 @@ public sealed class PositionGizmoTests
         gizmo.UpdateInteraction(initial);
         var extreme = new GizmoPointer(context, new(V(double.MaxValue, double.MaxValue, 0), V(0, 0, -1)));
         for (int i = 0; i < 120; i++) gizmo.UpdateInteraction(extreme);
-        Assert.Equal(PositionGizmoNotice.ExcessiveJump, notices[^1]);
+        Assert.Equal(nameof(PositionGizmoNotice.ExcessiveJump), notices[^1]);
         Assert.Equal(3, notices.Count);
         gizmo.UpdateInteraction(new(context, new(V(0, 0, -20), V(0, 0, -1))));
         gizmo.UpdateInteraction(new(context, new(V(0, 0, double.MaxValue), V(0, 0, -1))));
@@ -348,23 +352,23 @@ public sealed class PositionGizmoTests
         var context = Camera();
         var anchor = V(0, 0, -10);
         int mode = 0;
-        PositionGizmo? instance = null;
-        using var gizmo = new PositionGizmo(new(anchor, 0), _ => { }, edit =>
+        ComposedPositionGizmo? instance = null;
+        using var gizmo = Create(new(anchor, 0), _ => { }, edit =>
         {
             if (mode == 3) instance!.CancelInteraction();
             return mode switch { 1 => null, 2 => new(edit.Candidate.Coordinates, 1), _ => edit.Candidate };
         });
         instance = gizmo;
-        List<PositionGizmoNotice> notices = [];
+        List<string> notices = [];
         gizmo.NoticeRequested += notices.Add;
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center,
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.Center,
             new(context, new(V(0.5, 0.25, 0), V(0, 0, -1)))));
         mode = 1;
         var moved = new GizmoPointer(context, new(V(2.5, 1.25, 0), V(0, 0, -1)));
         for (int i = 0; i < 120; i++) gizmo.UpdateInteraction(moved);
         mode = 2;
         gizmo.UpdateInteraction(moved);
-        Assert.Equal(new[] { PositionGizmoNotice.InvalidValue }, notices);
+        Assert.Equal(new[] { nameof(PositionGizmoNotice.InvalidValue) }, notices);
         Assert.Equal(anchor, gizmo.Value.Coordinates);
         mode = 0;
         gizmo.UpdateInteraction(moved);
@@ -385,13 +389,13 @@ public sealed class PositionGizmoTests
     {
         var context = Camera();
         bool reject = false;
-        using var gizmo = new PositionGizmo(new(V(0, 0, -10), 0), _ => { },
+        using var gizmo = Create(new(V(0, 0, -10), 0), _ => { },
             edit => reject ? null : edit.Candidate);
-        var handle = center ? PositionGizmo.Center : PositionGizmo.X;
+        var handle = center ? ComposedPositionGizmo.Center : ComposedPositionGizmo.X;
         var valid = new GizmoPointer(context, new(V(0, 0, 0), V(0, 0, -1)));
         var degenerate = new GizmoPointer(context, new(V(0, 0, 0), V(1, 0, 0)));
         var jump = new GizmoPointer(context, new(V(1000, 0, 0), V(0, 0, -1)));
-        List<PositionGizmoNotice> notices = [];
+        List<string> notices = [];
         gizmo.NoticeRequested += notices.Add;
         Assert.True(gizmo.BeginInteraction(handle, valid));
         for (int i = 0; i < 120; i++)
@@ -401,35 +405,35 @@ public sealed class PositionGizmoTests
             reject = true;
             gizmo.UpdateInteraction(valid);
         }
-        Assert.Equal(new[] { center ? PositionGizmoNotice.DegeneratePlane : PositionGizmoNotice.DegenerateAxis },
+        Assert.Equal(new[] { center ? nameof(PositionGizmoNotice.DegeneratePlane) : nameof(PositionGizmoNotice.DegenerateAxis) },
             notices);
         Assert.Equal(V(0, 0, -10), gizmo.Value.Coordinates);
         reject = false;
         gizmo.UpdateInteraction(valid);
         gizmo.UpdateInteraction(jump);
         Assert.Equal(2, notices.Count);
-        Assert.Equal(PositionGizmoNotice.ExcessiveJump, notices[1]);
+        Assert.Equal(nameof(PositionGizmoNotice.ExcessiveJump), notices[1]);
         gizmo.CancelInteraction();
         Assert.True(gizmo.BeginInteraction(handle, valid));
         reject = true;
         gizmo.UpdateInteraction(valid);
         Assert.Equal(3, notices.Count);
-        Assert.Equal(PositionGizmoNotice.InvalidValue, notices[2]);
+        Assert.Equal(nameof(PositionGizmoNotice.InvalidValue), notices[2]);
     }
 
     [Fact]
     public void PolicyCannotModifyUnselectedComponentsAndCallbackCancellationCannotPublish()
     {
-        PositionGizmo? instance = null;
+        ComposedPositionGizmo? instance = null;
         bool cancel = false;
-        using var gizmo = new PositionGizmo(new(V(0, 0, 0), 0), _ => { }, edit =>
+        using var gizmo = Create(new(V(0, 0, 0), 0), _ => { }, edit =>
         {
             if (cancel) instance!.CancelInteraction();
             return new(edit.Candidate.Coordinates.WithElement(1, 5), 0);
         });
         instance = gizmo;
         var pointer = new GizmoPointer(new(0), new(V(0, 0, 10), V(0, 0, -1)));
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.X, pointer));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.X, pointer));
         gizmo.UpdateInteraction(pointer);
         Assert.Equal(V(0, 0, 0), gizmo.Value.Coordinates);
         cancel = true;

@@ -6,7 +6,7 @@ using VanillaBuildingExpanded.Gizmos;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Xunit;
-using static VanillaBuildingExpanded.Tests.Gizmos.PositionGizmoTests;
+using static VanillaBuildingExpanded.Tests.Gizmos.ComposedPositionGizmoTests;
 
 namespace VanillaBuildingExpanded.Tests.BuildBrush;
 
@@ -91,15 +91,15 @@ public sealed class WorkAreaTransactionTests
         var center = WorkAreaGizmoCoordinates.ToCenter(bounds);
         Assert.Equal(new GizmoPosition(V(5, 70.5, -189.5), 2), center);
         var candidate = new GizmoPosition(center.Coordinates + V(step, -step, step), 2);
-        var constrained = WorkAreaGizmoCoordinates.ConstrainTranslation(new(center, candidate, PositionGizmo.Center),
+        var constrained = WorkAreaGizmoCoordinates.ConstrainTranslation(new(center, candidate, ComposedPositionGizmo.Center),
             bounds, Accessor().Object);
         Assert.Equal(new GizmoPosition(center.Coordinates + V(snapped, -snapped, snapped), 2), constrained);
-        Assert.Null(WorkAreaGizmoCoordinates.ConstrainTranslation(new(center, candidate, PositionGizmo.X),
+        Assert.Equal(constrained, WorkAreaGizmoCoordinates.ConstrainTranslation(new(center, candidate, new(-872)),
             bounds, Accessor().Object));
         foreach (var invalid in new[] { new GizmoPosition(center.Coordinates + V(0, -66, 0), 2),
             new(center.Coordinates + V(0, 32768 - 75, 0), 2), new(center.Coordinates, 3),
             new(center.Coordinates + V(int.MaxValue, 0, 0), 2) })
-            Assert.Null(WorkAreaGizmoCoordinates.ConstrainTranslation(new(center, invalid, PositionGizmo.Center),
+            Assert.Null(WorkAreaGizmoCoordinates.ConstrainTranslation(new(center, invalid, ComposedPositionGizmo.Center),
                 bounds, Accessor().Object));
     }
 
@@ -308,12 +308,15 @@ public sealed class WorkAreaTransactionTests
         foreach (var role in new[] { WorkAreaEndpointRole.Start, WorkAreaEndpointRole.End })
         {
             var initial = WorkAreaGizmoCoordinates.ToAnchor(new(-2000000000, 65, -20, 2), role);
-            var candidate = new GizmoPosition(initial.Coordinates.WithElement(component,
-                initial.Coordinates[component] + delta), 2);
-            var accepted = WorkAreaGizmoCoordinates.Constrain(new(initial, candidate, new(component + 1)), role, Accessor().Object);
-            Assert.NotNull(accepted);
+            using var owner = Create(initial, _ => { });
+            var source = new GizmoAxisPositionParameterSource(new GizmoValueSource<GizmoPosition>(owner),
+                new(initial.Coordinates, V(0, 0, 0).WithElement(component, 1), 2), new(-872),
+                edit => WorkAreaGizmoCoordinates.Constrain(edit, role, Accessor().Object));
+            source.BeginModification();
+            Assert.True(source.TrySetParameter(delta, out var reason), reason);
             Assert.Equal(initial.Coordinates.WithElement(component, initial.Coordinates[component] + rounded),
-                accepted.Value.Coordinates);
+                owner.Value.Coordinates);
+            source.EndModification();
         }
     }
 
@@ -324,7 +327,7 @@ public sealed class WorkAreaTransactionTests
         var initial = WorkAreaGizmoCoordinates.ToAnchor(new(-10, 65, -20, 2), role);
         var target = new WorkAreaEndpoint(-40, 32767, -50, 2);
         var anchor = WorkAreaGizmoCoordinates.ToAnchor(target, role);
-        Assert.Equal(anchor, WorkAreaGizmoCoordinates.Constrain(new(initial, anchor, PositionGizmo.Center), role, Accessor().Object));
+        Assert.Equal(anchor, WorkAreaGizmoCoordinates.Constrain(new(initial, anchor, ComposedPositionGizmo.Center), role, Accessor().Object));
         foreach (var invalid in new[]
         {
             new GizmoPosition(V(2147483649d, 66, 0), 2),
@@ -332,9 +335,9 @@ public sealed class WorkAreaTransactionTests
             new GizmoPosition(V(0, 66, 0), 3),
             new GizmoPosition(V(double.MaxValue, 66, 0), 2)
         })
-            Assert.Null(WorkAreaGizmoCoordinates.Constrain(new(initial, invalid, PositionGizmo.Center), role, Accessor().Object));
+            Assert.Null(WorkAreaGizmoCoordinates.Constrain(new(initial, invalid, ComposedPositionGizmo.Center), role, Accessor().Object));
         Assert.False(WorkAreaGizmoCoordinates.TryDecode(anchor, role, Accessor(false).Object, out _));
-        Assert.Null(WorkAreaGizmoCoordinates.Constrain(new(initial, anchor, PositionGizmo.X), role, Accessor().Object));
+        Assert.Equal(anchor, WorkAreaGizmoCoordinates.Constrain(new(initial, anchor, new(876)), role, Accessor().Object));
     }
 
     [Theory]
@@ -349,7 +352,7 @@ public sealed class WorkAreaTransactionTests
         var initial = WorkAreaGizmoCoordinates.ToAnchor(new(-2000000000, 65, 2000000000, 65535), role);
         var candidate = new GizmoPosition(initial.Coordinates + V(dx, dy, dz), 65535);
         var accessor = Accessor();
-        var accepted = WorkAreaGizmoCoordinates.Constrain(new(initial, candidate, PositionGizmo.Center), role, accessor.Object);
+        var accepted = WorkAreaGizmoCoordinates.Constrain(new(initial, candidate, ComposedPositionGizmo.Center), role, accessor.Object);
         Assert.NotNull(accepted);
         Assert.Equal(initial.Coordinates + V(x, y, z), accepted.Value.Coordinates);
         Assert.True(WorkAreaGizmoCoordinates.TryDecode(accepted.Value, role, accessor.Object, out var cell));
@@ -367,12 +370,12 @@ public sealed class WorkAreaTransactionTests
         double yaw = Math.PI / 4;
         var context = new GizmoContext(2, Camera(reference: initial.Coordinates + V(-10, 0, 10),
             view: Yaw(yaw)).Camera);
-        using var gizmo = new PositionGizmo(initial, _ => { },
+        using var gizmo = Create(initial, _ => { },
             edit => WorkAreaGizmoCoordinates.Constrain(edit, role, Accessor().Object));
         var origin = initial.Coordinates - context.Camera!.ViewDirection * 20;
         var right = V(Math.Cos(yaw), 0, Math.Sin(yaw));
         var pointer = new GizmoPointer(context, new(origin, context.Camera.ViewDirection));
-        Assert.True(gizmo.BeginInteraction(PositionGizmo.Center, pointer));
+        Assert.True(gizmo.BeginInteraction(ComposedPositionGizmo.Center, pointer));
         int changes = 0;
         gizmo.OnValueChanged += value => { changes++; gizmo.Value = value; };
         foreach (double amount in new[] { 0.49, 0.51, 0.52, 1.49, 1.51, 0.49, -0.51, 0 })

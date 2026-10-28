@@ -38,10 +38,10 @@ public sealed class GizmoAxisDragTarget : IGizmoDragTarget
         [NotNullWhen(false)] out string? rejection)
     {
         pointer.Validate();
-        var captured = frame.GetFrame(pointer.Context);
-        captured.Validate(pointer.Context);
         session = null;
         rejection = nameof(PositionGizmoNotice.DegenerateAxis);
+        if (!frame.TryGetFrame(pointer.Context, out var captured)) return false;
+        captured.Validate(pointer.Context);
         var normal = pointer.Ray.Direction - captured.Direction * Vector256.Dot(pointer.Ray.Direction, captured.Direction);
         double squared = Vector256.Dot(normal, normal);
         if (squared <= 1e-4) return false;
@@ -91,12 +91,12 @@ public sealed class GizmoPlaneDragTarget : IGizmoDragTarget
         [NotNullWhen(false)] out string? rejection)
     {
         pointer.Validate();
-        var captured = frame.GetFrame(pointer.Context);
+        session = null;
+        rejection = nameof(PositionGizmoNotice.DegeneratePlane);
+        if (!frame.TryGetFrame(pointer.Context, out var captured)) return false;
         captured.Validate(pointer.Context);
         if (captured.TangentX is null)
             throw new ArgumentException("Plane measurement requires plane tangents.", nameof(frame));
-        session = null;
-        rejection = nameof(PositionGizmoNotice.DegeneratePlane);
         var measurement = new GizmoDragMeasurement(captured, captured.Direction, pointer);
         if (!measurement.TryIntersection(pointer.Ray, out var initial)) return false;
         var source = parameter(captured) ?? throw new InvalidOperationException("The parameter factory returned null.");

@@ -11,9 +11,9 @@ public abstract class HandleGizmo<TValue> : Gizmo<TValue>
     private readonly GizmoDragInputBehavior input = new();
     private readonly Dictionary<GizmoHandle, GizmoGeometrySource> geometry = [];
     private readonly Action<GizmoHandleDraw> draw;
-    private string? lastRejection;
+    private bool noticePending;
 
-    /// <summary>Reports a changed rejection reason through the consuming session's existing notice path.</summary>
+    /// <summary>Reports one rejection per uninterrupted invalid interval through the existing notice path.</summary>
     public event Action<string>? NoticeRequested;
 
     /// <summary>Creates a composition without native subscriptions or another global capture owner.</summary>
@@ -25,9 +25,6 @@ public abstract class HandleGizmo<TValue> : Gizmo<TValue>
         ArgumentNullException.ThrowIfNull(draw);
         this.draw = draw;
     }
-
-    /// <inheritdoc />
-    protected sealed override bool CancelOnExternalValueChange => true;
 
     /// <summary>Gets the shared draw/pick source for an attached handle.</summary>
     /// <param name="handle">The exact attached handle.</param>
@@ -79,7 +76,7 @@ public abstract class HandleGizmo<TValue> : Gizmo<TValue>
     /// <inheritdoc />
     protected sealed override bool BeginInteractionCore(GizmoHandleId handle, GizmoPointer pointer)
     {
-        lastRejection = null;
+        noticePending = false;
         if (!Handles.TryGetValue(handle, out var member) || member.InteractionTarget is not { } target)
             return Reject("interaction-target-missing");
         return input.TryBegin(target, pointer, out var rejection) || Reject(rejection);
@@ -88,15 +85,15 @@ public abstract class HandleGizmo<TValue> : Gizmo<TValue>
     /// <inheritdoc />
     protected sealed override void UpdateInteractionCore(GizmoPointer pointer)
     {
-        if (input.TryUpdate(pointer, out var rejection)) lastRejection = null;
+        if (input.TryUpdate(pointer, out var rejection)) noticePending = false;
         else Reject(rejection);
     }
 
     private bool Reject(string reason)
     {
-        if (lastRejection != reason)
+        if (!noticePending)
         {
-            lastRejection = reason;
+            noticePending = true;
             NoticeRequested?.Invoke(reason);
         }
         return false;

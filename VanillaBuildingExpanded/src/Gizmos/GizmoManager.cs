@@ -178,9 +178,9 @@ public sealed class GizmoManager : IDisposable
         Cancel();
     }
 
-    private (Entry Entry, GizmoHit Hit, GizmoHandle? Handle)? Select(GizmoPointer pointer)
+    private (Entry Entry, GizmoHit Hit, GizmoHandle Handle)? Select(GizmoPointer pointer)
     {
-        (Entry Entry, GizmoHit Hit, GizmoHandle? Handle)? best = null;
+        (Entry Entry, GizmoHit Hit, GizmoHandle Handle)? best = null;
         foreach (var entry in entries.ToArray())
         {
             var gizmo = entry.Gizmo;
@@ -190,15 +190,15 @@ public sealed class GizmoManager : IDisposable
             if (best is not { } previous || DepthKey(candidate) < DepthKey(previous.Hit)
                 || (DepthKey(candidate) == DepthKey(previous.Hit)
                     && entry.InsertionId < previous.Entry.InsertionId))
-                best = (entry, candidate, gizmo.Handles.GetValueOrDefault(candidate.Handle));
+                best = (entry, candidate, gizmo.Handles[candidate.Handle]);
         }
         return best is { } result && IsCurrentHit(result, pointer.Context) ? best : null;
     }
 
-    private bool IsCurrentHit((Entry Entry, GizmoHit Hit, GizmoHandle? Handle) hit, GizmoContext context) =>
-        CanHit(hit.Entry, context) && (hit.Handle is null || (hit.Handle.IsEligible(context.Dimension)
+    private bool IsCurrentHit((Entry Entry, GizmoHit Hit, GizmoHandle Handle) hit, GizmoContext context) =>
+        CanHit(hit.Entry, context) && hit.Handle.IsEligible(context.Dimension)
             && hit.Entry.Gizmo.Handles.TryGetValue(hit.Hit.Handle, out var member)
-            && ReferenceEquals(hit.Handle, member)));
+            && ReferenceEquals(hit.Handle, member);
     private static double DepthKey(GizmoHit hit) => Math.Floor(hit.Distance / 1e-6);
     private bool CanHit(Entry entry, GizmoContext context) => !IsDisposed
         && Find(entry.Gizmo) == entry && ReferenceEquals(entry.RenderedContext, context)

@@ -3,7 +3,7 @@ using System.Runtime.Intrinsics;
 
 namespace VanillaBuildingExpanded.Gizmos;
 
-/// <summary>Shared screen-space distances for legacy and persistent-handle picking.</summary>
+/// <summary>Shared screen-space distances for persistent-handle picking.</summary>
 internal static class GizmoScreenPicking
 {
     /// <summary>Measures framebuffer X/Y distance, ignoring depth and homogeneous W.</summary>

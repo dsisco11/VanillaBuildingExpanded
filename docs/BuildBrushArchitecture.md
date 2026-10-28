@@ -137,12 +137,14 @@ Metadata commits use `CommittedAreas`, substituting the original pair for the
 active preview, so a rename cannot accidentally save a drag preview. Dirty
 collection saves retain the existing staged-file promotion and retry behavior.
 
-The [analytic movement replacement](InWorldGizmos.todo#phase-7-replace-terrain-following-movement-with-analytic-translation) uses a camera-facing plane captured at drag start, retaining analytic arrows and whole-block work area snapping. Terrain targeting serves only explicit first-use/missing-endpoint creation. Automated/build evidence and outstanding live qualification are recorded separately in the plan.
+Analytic movement uses a camera-facing plane captured at drag start, analytic arrows
+and whole-block work area snapping. Terrain targeting serves only explicit
+first-use/missing-endpoint creation.
 
 Reusable [gizmo instances and typed values](../VanillaBuildingExpanded/src/Gizmos/Gizmo.cs),
 [shared context/ray/hit carriers](../VanillaBuildingExpanded/src/Gizmos/GizmoContext.cs)
-and a [session manager](../VanillaBuildingExpanded/src/Gizmos/GizmoManager.cs) are available
-implement the [in-world gizmo plan](InWorldGizmos.todo).
+and a [session manager](../VanillaBuildingExpanded/src/Gizmos/GizmoManager.cs)
+provide the shared ownership and lifecycle infrastructure.
 The work area session owns their native input/render adapters independently of HUD composition.
 The manager owns its remaining instances on disposal; removing an instance cancels and
 detaches it without disposing it. Changed `Value` assignments notify synchronously using
@@ -234,9 +236,15 @@ context dimensions. Frame normalization uses a `1e-12` floor and orthogonality a
 [GizmoHandle](../VanillaBuildingExpanded/src/Gizmos/GizmoHandle.cs) owns identity,
 local eligibility, labels and borrowed interaction configuration; removal cancels
 capture and detaches without disposal, while owner disposal releases remaining handles.
-Actual hover/capture references accompany IDs for handle-based compositions.
+Actual hover/capture references accompany diagnostic IDs. Picking and interaction
+require an actual eligible member even when the owner has no handles; there is no
+ID-only interaction path.
 [Appearance properties](../VanillaBuildingExpanded/src/Gizmos/AppearenceProperties.cs)
-resolve each nullable state override directly against a validated Default baseline.
+resolve each nullable state override independently against a validated Default baseline.
+Selected takes precedence over Hover but inherits missing fields directly from Default,
+never through Hover. Default cannot be removed, and every configured state must resolve
+all shape-required fields and, when a label is attached, all label-style fields before
+a configuration mutation is published.
 Colors are nullable `System.Numerics.Vector4` RGBA values with whole-color fallback.
 Resolved snapshots contain complete handle values and optional complete label styling.
 Invalidation distinguishes spatial geometry, visual changes and label raster/placement.
@@ -245,6 +253,9 @@ Production positioning uses these collections for drawing, picking, hover and ca
 [Frame sources](../VanillaBuildingExpanded/src/Gizmos/GizmoFrameSources.cs) adapt
 live position/axis readers, camera-facing planes or immutable captured frames.
 They validate dimension and basis without deriving movement axes from meshes.
+Measurement uses `TryGetFrame` to reject temporarily unavailable context, such as a
+missing camera, with the normal drag notice rather than a fabricated frame. Invalid
+configuration still throws through the existing logged failure path.
 [Handle geometry](../VanillaBuildingExpanded/src/Gizmos/GizmoHandleGeometry.cs)
 publishes immutable draw snapshots containing complete appearance and shared
 double-precision spatial data. Its single-handle cache keys owner, context, logical
@@ -252,7 +263,9 @@ frame, shape and size; color/style-only updates reuse spatial data. Clipped shap
 publish no draw/pick snapshot. Disabled but visible handles retain drawing geometry.
 [Hit targets](../VanillaBuildingExpanded/src/Gizmos/GizmoHitTargets.cs) provide
 geometry-backed picking from the last published drawing context, explicit custom
-padding or delegate picking, and immutable owner-local aggregates. Shared validation
+padding or delegate picking, and immutable owner-local aggregates. Custom pickers may
+deliberately differ from visible geometry without changing the configured measurement
+target. Shared validation
 rejects malformed or foreign identities, filters eligibility, deduplicates hits and
 orders them by priority, distance and ID. Hover feedback uses the existing owner
 reference; capture feedback acknowledges lifecycle state without acquiring capture.
@@ -266,6 +279,10 @@ receive the exact frozen frame, so planar interpretation cannot reread a moved c
 [Position parameter sources](../VanillaBuildingExpanded/src/Gizmos/GizmoPositionParameterSources.cs)
 map scalar or planar deltas through existing constraint delegates and notifying value
 sources; ending parameter modification does not commit or restore a transaction.
+Axis bindings enforce movement along their frozen frame, including keeping forbidden
+components unchanged; the work-area constraint rounds world-coordinate deltas and
+validates cells without interpreting handle IDs. The conventional Center/X/Y/Z IDs in
+the positioning composition are optional identity conveniences, not operation selectors.
 [Edit-state targets](../VanillaBuildingExpanded/src/Gizmos/GizmoEditStateTarget.cs)
 bind existing owner begin/complete/cancel callbacks to the gizmo's single baseline.
 Owner lifecycle and composed sessions share idempotent restoration through the normal
@@ -281,6 +298,13 @@ and disposal without solver math or input subscriptions. Handle mutations cancel
 through the owner's lifecycle, including during initialization. External authoritative
 values cancel before assignment; parameter writes retain the notifying setter without
 being mistaken for external replacements.
+Initialization publishes no successful start until measurement, parameter modification
+and the owner edit scope are ready. Failed initialization unwinds partial scopes and
+disposes capture-local resources without completion. Termination clears active
+references before callbacks, ends parameter bookkeeping, restores the baseline on
+cancellation and then notifies the owner and public lifecycle observers. Reentrant
+begins are rejected while initialization or termination is active. Shared sources
+remain borrowed; capture-local resources are released exactly once, including failures.
 [ComposedPositionGizmo](../VanillaBuildingExpanded/src/Gizmos/ComposedPositionGizmo.cs)
 explicitly configures a camera-plane center and three world-axis controls with
 replaceable frames, pickers and typed parameter/edit bindings. IDs identify controls
@@ -352,7 +376,12 @@ The installed engine's OpenTK binding supplies depth-test/depth-mask/line-width 
 
 World departure/system disposal cancel previews/creation, detach input and render observers, unregister/dispose renderers and shared meshes, retry dirty config before clearing controller ownership, and dispose the HUD binding. Late queued retirement checks disposal before touching the retired session. Repeated hide/show and teardown are idempotent.
 
-Automated registration/matrix/cleanup tests and normal publish checks are distinct from supported-game qualification. The earlier workarea-only live-check waiver does not waive the replacement's required [Phase 8](InWorldGizmos.todo#phase-8-qualify-delivery-and-update-documentation) qualification. Native input, restart/world isolation, terrain/transparent-material depth behavior, bias stability and preview/native-selection overlap remain unverified, not passed. The inspected runtime is 1.22.7; mocked services do not establish those live results.
+Automated registration/matrix/cleanup tests and normal Build/JSON checks are distinct
+from supported-game qualification. Required gizmo visual/input observations are tracked
+in [delivery qualification](GizmoHandles.todo#phase-7-remove-superseded-code-document-and-qualify-delivery).
+Native visuals/input, restart/world isolation, terrain/transparent-material depth
+behavior, bias stability and preview/native-selection overlap require actual live
+evidence; mocked services do not establish those results.
 
 ## Selection and inventory refresh
 

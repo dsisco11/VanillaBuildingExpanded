@@ -3,7 +3,7 @@ using System.Runtime.Intrinsics;
 using VanillaBuildingExpanded.Gizmos;
 using Vintagestory.API.MathTools;
 using Xunit;
-using static VanillaBuildingExpanded.Tests.Gizmos.PositionGizmoTests;
+using static VanillaBuildingExpanded.Tests.Gizmos.ComposedPositionGizmoTests;
 
 namespace VanillaBuildingExpanded.Tests.Gizmos;
 
@@ -93,24 +93,23 @@ public sealed class GizmoCameraTests
     public void GeometryUsesActualClampedSizeAndMatchingCenterAxisHits(double scale, double z, double length)
     {
         var context = Camera(scale: scale);
-        PositionGizmoDraw? drawn = null;
+        List<GizmoHandleDraw> drawn = [];
         using var manager = new GizmoManager();
-        var gizmo = new PositionGizmo(new(V(0, 0, z), 0), data => drawn = data);
+        var gizmo = Create(new(V(0, 0, z), 0), drawn.Add);
         manager.Add(gizmo);
         manager.Render(context);
-        var geometry = drawn!.Value.Geometry;
-        Assert.Equal(length, geometry.AxisLength, 8);
-        var center = geometry.Parts.Single(part => part.Handle == PositionGizmo.Center);
+        var x = drawn.Single(part => part.Geometry.Handle.Id == ComposedPositionGizmo.X).Geometry;
+        Assert.Equal(length, x.Extent, 8);
+        var center = drawn.Single(part => part.Geometry.Handle.Id == ComposedPositionGizmo.Center).Geometry;
         Assert.Equal(length * 7 / 64, Math.Sqrt(Vector256.Dot(center.BasisX, center.BasisX)), 8);
         var pointer = context.Camera!.CreatePointer(context, 400, 300);
         Assert.True(manager.TryBegin(pointer));
-        Assert.Equal(PositionGizmo.Center, manager.CapturedHandle);
+        Assert.Equal(ComposedPositionGizmo.Center, manager.CapturedHandle);
         manager.Cancel();
-        var x = geometry.Parts.Single(part => part.Handle == PositionGizmo.X);
-        Assert.True(context.Camera.TryProject(x.Origin + x.BasisX * 0.7, out var screen));
+        Assert.True(context.Camera.TryProject(x.Frame.Origin + x.BasisX * 0.7, out var screen));
         pointer = context.Camera.CreatePointer(context, screen[0], screen[1]);
         Assert.True(manager.TryBegin(pointer));
-        Assert.Equal(PositionGizmo.X, manager.CapturedHandle);
+        Assert.Equal(ComposedPositionGizmo.X, manager.CapturedHandle);
     }
 
     [Fact]
@@ -118,8 +117,8 @@ public sealed class GizmoCameraTests
     {
         var context = Camera();
         using var manager = new GizmoManager();
-        var first = new PositionGizmo(new(V(0, 0, -10), 0), _ => { });
-        var second = new PositionGizmo(new(V(0, 0, -10), 0), _ => { }, marker: GizmoShape.Diamond);
+        var first = Create(new(V(0, 0, -10), 0), _ => { });
+        var second = Create(new(V(0, 0, -10), 0), _ => { }, marker: GizmoShape.Diamond);
         manager.Add(first);
         manager.Add(second);
         manager.Render(context);

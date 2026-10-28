@@ -4,7 +4,7 @@ using System.Runtime.Intrinsics;
 
 using VanillaBuildingExpanded.Gizmos;
 using Xunit;
-using static VanillaBuildingExpanded.Tests.Gizmos.PositionGizmoTests;
+using static VanillaBuildingExpanded.Tests.Gizmos.ComposedPositionGizmoTests;
 
 namespace VanillaBuildingExpanded.Tests.Gizmos;
 
@@ -56,6 +56,10 @@ public sealed class GizmoGeometryTests
         Assert.Equal(0d, Vector256.Dot(current.Direction, current.TangentY!.Value), 10);
         Assert.Equal(0d, Vector256.Dot(current.TangentX.Value, current.TangentY.Value), 10);
         Assert.Equal(first, frozen.GetFrame(rotated));
+        Assert.False(source.TryGetFrame(new(0), out _));
+        Assert.True(source.TryGetFrame(initial, out var available));
+        Assert.Equal(first, available);
+        Assert.Throws<InvalidOperationException>(() => source.TryGetFrame(new(1, initial.Camera), out _));
         Assert.Throws<InvalidOperationException>(() => source.GetFrame(new(0)));
         Assert.Throws<InvalidOperationException>(() => source.GetFrame(new(1, initial.Camera)));
         Assert.Throws<ArgumentNullException>(() => new GizmoCameraFrameSource(null!));
@@ -80,36 +84,58 @@ public sealed class GizmoGeometryTests
         using var owner = new GeometryGizmo();
         var (handle, source, target) = Add(owner, -8521, shape, anchor);
         var draw = Assert.IsType<GizmoHandleDraw>(source.GetSnapshot(context));
-        var legacy = Assert.IsType<PositionGizmoGeometry>(
-            PositionGizmoGeometry.Create(context.Camera!, anchor, shape == GizmoShape.Arrow ? GizmoShape.Circle : shape));
-        var part = legacy.Parts.Single(p => p.Handle == (shape == GizmoShape.Arrow ? PositionGizmo.X : PositionGizmo.Center));
+        double length = Math.Clamp(64 * scale * -z / 300, 0.125, 8);
         Assert.Same(handle, draw.Geometry.Handle);
         Assert.Same(owner, draw.Geometry.Owner);
         Assert.Same(context, draw.Geometry.Context);
         Assert.Equal(shape, draw.Appearance.Shape);
         Assert.Equal(shape, draw.Geometry.Shape);
         Assert.Equal(draw.Appearance.Size, draw.Geometry.Size);
-        Assert.Equal(legacy.AxisLength * (shape == GizmoShape.Arrow ? 1 : 7d / 64), draw.Geometry.Extent, 8);
-        var oldVertices = GizmoShapes.Vertices(shape).ToArray().Select(part.Transform).ToArray();
-        foreach (var vertex in GizmoShapes.Vertices(shape))
-        {
-            var actual = draw.Geometry.Transform(vertex);
-            Assert.Contains(oldVertices, previous =>
-                Enumerable.Range(0, 3).All(axis => Math.Abs(previous[axis] - actual[axis]) <= 1e-10));
-        }
+        double extent = length * (shape == GizmoShape.Arrow ? 1 : 7d / 64);
+        Assert.Equal(extent, draw.Geometry.Extent, 8);
+        AssertCoordinates(V(extent, 0, 0), draw.Geometry.BasisX, 8);
+        AssertCoordinates(shape == GizmoShape.Arrow ? V(0, 0, extent) : V(0, extent, 0),
+            draw.Geometry.BasisY, 8);
+        AssertCoordinates(shape == GizmoShape.Arrow ? V(0, -extent, 0) : default, draw.Geometry.BasisZ, 8);
         Assert.Equal(shape == GizmoShape.Arrow ? anchor + draw.Geometry.BasisX : anchor, draw.Geometry.LabelAnchor);
-        foreach (double x in new[] { 400d, 405, 410, 411.1, 415, 430, 450, 470 })
-        foreach (double y in new[] { 300d, 303, 308, 312 })
+        var point = shape == GizmoShape.Arrow ? anchor + V(extent * 0.5, 0, 0) : anchor;
+        Assert.True(context.Camera!.TryProject(point, out var screen));
+        var pointer = context.Camera.CreatePointer(context, screen[0], screen[1]);
+        var hit = Assert.Single(target.HitTest(pointer));
+        Assert.Same(handle, hit.Handle);
+        Assert.Equal(shape == GizmoShape.Arrow ? 1 : 0, hit.Priority);
+        var nearest = shape == GizmoShape.Arrow && distant
+            ? anchor + V(extent * 0.8125, 0, extent * 0.09375) : point;
+        Assert.Equal(Vector256.Dot(nearest - pointer.Ray.Origin, pointer.Ray.Direction), hit.Distance,
+            distant ? 4 : 8);
+        foreach (var local in new[] { V(-2, 2, 0), V(2, 2, 0), V(0, -2, 0) })
         {
-            var pointer = context.Camera!.CreatePointer(context, x, y);
-            var expected = legacy.HitTest(pointer).Where(h => h.Handle == part.Handle).ToArray();
-            var actual = target.HitTest(pointer).ToArray();
-            Assert.Equal(expected.Length, actual.Length);
-            if (actual.Length != 0)
+            Assert.True(context.Camera.TryProject(anchor + local * length, out screen));
+            Assert.Empty(target.HitTest(context.Camera.CreatePointer(context, screen[0], screen[1])));
+        }
+    }
+
+    [Fact]
+    public void SharedPrimitives_HaveQualifiedArrowHeadsAndClosedMarkerLoops()
+    {
+        Assert.Equal(new[]
+        {
+            V(0, 0, 0), V(1, 0, 0), V(0.8125, 0.09375, 0), V(0.8125, -0.09375, 0),
+            V(0.8125, 0, 0.09375), V(0.8125, 0, -0.09375)
+        }, GizmoShapes.Vertices(GizmoShape.Arrow).ToArray());
+        Assert.Equal(new[] { 0, 1, 1, 2, 1, 3, 1, 4, 1, 5 }, GizmoShapes.Indices(GizmoShape.Arrow).ToArray());
+        foreach (var (shape, count) in new[] { (GizmoShape.Circle, 16), (GizmoShape.Diamond, 4) })
+        {
+            var vertices = GizmoShapes.Vertices(shape).ToArray();
+            var indices = GizmoShapes.Indices(shape).ToArray();
+            Assert.Equal(count, vertices.Length);
+            Assert.Equal(count * 2, indices.Length);
+            for (int i = 0; i < count; i++)
             {
-                Assert.Same(handle, actual[0].Handle);
-                Assert.Equal(expected[0].Distance, actual[0].Distance, distant ? 4 : 8);
-                Assert.Equal(expected[0].Priority, actual[0].Priority);
+                AssertCoordinates(V(Math.Cos(2 * Math.PI * i / count), Math.Sin(2 * Math.PI * i / count), 0),
+                    vertices[i]);
+                Assert.Equal(i, indices[2 * i]);
+                Assert.Equal((i + 1) % count, indices[2 * i + 1]);
             }
         }
     }

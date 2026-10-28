@@ -2,7 +2,7 @@ using System.Runtime.Intrinsics;
 
 using VanillaBuildingExpanded.Gizmos;
 using Xunit;
-using static VanillaBuildingExpanded.Tests.Gizmos.PositionGizmoTests;
+using static VanillaBuildingExpanded.Tests.Gizmos.ComposedPositionGizmoTests;
 
 namespace VanillaBuildingExpanded.Tests.Gizmos;
 
@@ -24,15 +24,15 @@ public sealed class GizmoLabelTests
         manager.Add(gizmo);
         manager.Render(context);
         var label = new GizmoLabel("Center", visibility: mode);
-        Assert.Equal(idle, label.IsVisible(gizmo.Handles[PositionGizmo.Center], context));
+        Assert.Equal(idle, label.IsVisible(gizmo.Handles[ComposedPositionGizmo.Center], context));
         manager.UpdateHover(context.Camera!.CreatePointer(context, 400, 300));
-        Assert.Equal(hover, label.IsVisible(gizmo.Handles[PositionGizmo.Center], context));
-        Assert.Equal(idle, label.IsVisible(gizmo.Handles[PositionGizmo.X], context));
+        Assert.Equal(hover, label.IsVisible(gizmo.Handles[ComposedPositionGizmo.Center], context));
+        Assert.Equal(idle, label.IsVisible(gizmo.Handles[ComposedPositionGizmo.X], context));
         Assert.True(manager.TryBegin(context.Camera.CreatePointer(context, 400, 300)));
-        Assert.Equal(selected, label.IsVisible(gizmo.Handles[PositionGizmo.Center], context));
-        Assert.Equal(idle, label.IsVisible(gizmo.Handles[PositionGizmo.X], context));
+        Assert.Equal(selected, label.IsVisible(gizmo.Handles[ComposedPositionGizmo.Center], context));
+        Assert.Equal(idle, label.IsVisible(gizmo.Handles[ComposedPositionGizmo.X], context));
         manager.Complete();
-        Assert.Equal(idle, label.IsVisible(gizmo.Handles[PositionGizmo.Center], context));
+        Assert.Equal(idle, label.IsVisible(gizmo.Handles[ComposedPositionGizmo.Center], context));
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public sealed class GizmoLabelTests
     {
         var context = Camera();
         using var gizmo = Create(new(V(0, 0, -10), 0));
-        var handle = gizmo.Handles[PositionGizmo.X];
+        var handle = gizmo.Handles[ComposedPositionGizmo.X];
         bool show = false;
         int calls = 0;
         var label = new GizmoLabel("Custom", visibility: GizmoLabelVisibility.Predicate, predicate: state =>
@@ -110,7 +110,7 @@ public sealed class GizmoLabelTests
         var context = Camera();
         using var manager = new GizmoManager();
         var gizmo = Create(new(V(0, 0, -10), 0));
-        var handle = gizmo.Handles[PositionGizmo.Center];
+        var handle = gizmo.Handles[ComposedPositionGizmo.Center];
         manager.Add(gizmo);
         manager.Render(context);
         handle.Label = new("First");

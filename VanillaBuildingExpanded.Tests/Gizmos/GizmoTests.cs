@@ -39,7 +39,7 @@ public sealed class GizmoTests
         {
             Assert.Equal(handle, manager.CapturedHandle);
             events.Add("begin");
-            gizmo.Value = 9;
+            gizmo.SetInteractionValue(9);
         };
         gizmo.OnInteractionCanceled += _ =>
         {
@@ -96,7 +96,6 @@ public sealed class GizmoTests
         gizmo.NextValue = 2;
         manager.Update(pointer);
 
-        gizmo.CancelInteraction();
         gizmo.Value = 20;
         manager.Cancel();
         manager.Update(pointer);
@@ -104,6 +103,16 @@ public sealed class GizmoTests
         Assert.Equal(20, gizmo.Value);
         Assert.Null(manager.CapturedGizmo);
         Assert.Equal(new[] { "value:2", "value:1", "cancel", "value:20" }, events);
+    }
+
+    [Fact]
+    public void EmptyOwnership_RejectsIdOnlyCaptureAndForeignHits()
+    {
+        using var owner = new TestGizmo(0);
+        foreach (var handle in owner.Handles.Values.ToArray()) owner.RemoveHandle(handle);
+        var pointer = Pointer(new(0));
+        Assert.False(owner.BeginInteraction(new(0), pointer));
+        Assert.Throws<InvalidOperationException>(() => owner.HitTest(pointer));
     }
 
     [Theory]
@@ -342,12 +351,22 @@ public sealed class GizmoTests
     }
 }
 
-internal sealed class TestGizmo(int value) : Gizmo<int>(value)
+internal sealed class TestGizmo : Gizmo<int>
 {
+    public TestGizmo(int value) : base(value)
+    {
+        NextValue = value;
+        for (int id = 0; id < 10; id++)
+            AddHandle(new(new(id), new()
+            {
+                Shape = GizmoShape.Circle, Size = 7, Color = System.Numerics.Vector4.One, LineWidth = 1.6f
+            }));
+    }
+
     public override int Dimension => CurrentDimension;
     public int CurrentDimension { get; set; }
     public List<GizmoHit> Hits { get; } = [new(new(0), 10)];
-    public int NextValue { get; set; } = value;
+    public int NextValue { get; set; }
     public int Updates { get; private set; }
     public int Disposals { get; private set; }
     public int Draws { get; private set; }
@@ -369,7 +388,7 @@ internal sealed class TestGizmo(int value) : Gizmo<int>(value)
     protected override void UpdateInteractionCore(GizmoPointer pointer)
     {
         Updates++;
-        Value = NextValue;
+        SetInteractionValue(NextValue);
     }
     protected override void DisposeCore()
     {
