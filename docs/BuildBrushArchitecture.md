@@ -538,7 +538,7 @@ the native tessellator has already generated the actual geometry.
 `BrushTargetBounds` records extents and validates indexed geometry; it does not
 perform a second CPU directional-coverage or triangle-facing rejection. The shader
 alone clips selected-facing outward bands. Its U/V mask is a union: a diagonal
-result can mark the mesh even when only one applied band's region intersects it.
+result can mark the mesh even when only one resolved band's region intersects it.
 Native packed normals determine facing when available, with geometric derivatives
 as the fallback for meshes without packed normals. Raycast hits can lie on native
 selection boxes rather than rendered triangles, so neither triangle membership nor
@@ -552,7 +552,7 @@ Candidate unit cubes, the base-Block `game:ethoslab` slab, and faithful static
 sloped/multi-element/recessed assets should be exercised in Phase 6, along with
 native vertical cobble/stone/wood slabs, including their native snow geometry.
 Texture-only variants do not exclude stone-brick cubes or otherwise qualified slabs.
-Centered narrow geometry without accepted tangential movement
+Centered narrow geometry without resolved tangential movement
 and surfaces outside the selected-facing directional regions are omission cases.
 Recessed geometry with an actual qualifying surface is not an
 automatic omission. All actual readable-marking claims remain pending Phase 6.
@@ -736,8 +736,41 @@ The native player fixture avoids an installed-API default-interface method that
 Castle cannot proxy. These tests are not a live shader or visual qualification.
 The user confirmed and approved the installed-game Phase 4 checks on 2026-10-29,
 closing that runtime evidence gap. This approval is user-reported, not an
-agent-captured runtime diagnostic trace. Phase 5 remains open for distributable
-verification; Phase 6 still owns artwork, overlay ordering/readability, and measured cost.
+agent-captured runtime diagnostic trace. Phase 5 records the distributable
+verification below; Phase 6 still owns artwork, overlay ordering/readability, and measured cost.
+
+### Snapping distributable verification
+
+The Phase 5 evaluation candidate is built from revision
+`7cb7cd87f10644da43f612dc3f3ee25cee3d3ff2` with .NET SDK 10.0.401 on Windows
+win-x64 against Vintage Story 1.22.7. The existing Cake `Package` dependency chain
+performs JSON validation, clean/publish, full tests, and archive creation without
+installing the mod. Focused snapping/placement/target/render-state tests passed
+2,142 cases; the full package test dependency passed 3,565 cases, with no failures.
+The [implementation plan](BuildBrushSnappingIndicator.todo#phase-5-regression-and-distributable-verification)
+records commands, results, candidate identity, and the completion review.
+
+The resulting `Releases\vanillabuildingexpanded_999.99.9.zip` has 34 entries and
+SHA256 `7E792614A8342BD5DCCDEC6580546B40487729E78D44C163A1D633CF5B7766F8`.
+Both snapping shaders are present at their domain asset paths and exactly match
+the current sources and the previously user-approved installed archive.
+The mod metadata and all other entries also match that installed archive except
+the rebuilt mod DLL and PDB. The DLL has unchanged types, method signatures/IL,
+and assembly references; its informational revision and MVID differ after the
+Phase 4 commit. This is reuse of the applicable user-reported packaged-runtime
+approval for unchanged implementation and shader bytes, not a new game/GLSL run
+or a claim that the rebuilt DLL is byte-identical.
+
+The package contains the pre-existing protobuf/service-model dependencies, not
+test frameworks, Moq/Castle, engine DLLs, or game-provided OpenTK libraries.
+No new server-side requirement or migration is introduced. Existing Cake-build
+NuGet vulnerability warnings remain separate from package contents and are not
+claimed fixed. Comprehensive geometry, artwork, overlay interaction, and measured
+rendering cost remain unqualified until Phase 6.
+The required second direct review and fresh independent completion audit found
+Phase 5 fully satisfied. The audit independently inspected the documentation,
+source/diff, TRX files, ZIPs, and PE metadata, including all 2,197 methods/constructors
+with unchanged implementation. Phase 6 and the project.todo indicator remain open.
 
 ## Update and preview flow
 

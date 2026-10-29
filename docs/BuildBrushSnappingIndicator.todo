@@ -1,10 +1,10 @@
 # Build brush snapping indicator
 
 Source proposal: [BuildBrushSnappingIndicator.proposal.md](BuildBrushSnappingIndicator.proposal.md).
-Status: Phases 1-4 complete, including target-mesh and texture-independent coverage corrections.
+Status: Phases 1-5 complete, including target-mesh and texture-independent coverage corrections.
 Phase 4 installed-game verification was confirmed and approved by the user on
-2026-10-29. Regression/distributable verification and final qualification in
-Phases 5-6 remain pending.
+2026-10-29. Phase 5 regression/distributable verification, second review, and
+independent completion audit are complete. Final qualification in Phase 6 remains pending.
 Format: Indented unchecked tasks follow the existing src\docs\project.todo convention.
 
 ## Goal and governing constraints
@@ -362,29 +362,82 @@ distributable verification and comprehensive geometry/appearance/cost qualificat
 Depends on: Phase 4.
 Outcome: A reproducible test/build/package candidate is ready for user qualification.
 
-    ☐ Run the smallest existing test selections covering changed snapping, result,
+    ✔ Run the smallest existing test selections covering changed snapping, result,
       presentation, support/cache, and client lifecycle behavior.
-        ☐ Record commands and results; broaden to affected placement/preview tests
+        ✔ Record commands and results; broaden to affected placement/preview tests
           when shared behavior changes or failures indicate regression risk.
-        ☐ Verify unchanged raycasting, thresholds, native validation call behavior,
+        ✔ Verify unchanged raycasting, thresholds, native validation call behavior,
           placement destinations, preview ownership/synchronization, and network shape.
-        ☐ Keep mocked/source evidence distinct from shader/runtime evidence.
-    ☐ Use the existing build/package workflow to create the evaluation candidate.
-        ☐ Verify custom shader assets are included at the expected asset paths
+        ✔ Keep mocked/source evidence distinct from shader/runtime evidence.
+    ✔ Use the existing build/package workflow to create the evaluation candidate.
+        ✔ Verify custom shader assets are included at the expected asset paths
           and compile/load from the packaged mod, not only the working source tree.
-        ☐ Confirm package contents introduce no unnecessary dependencies or
+        ✔ Confirm package contents introduce no unnecessary dependencies or
           server-side requirements; no migration is expected for this local feature.
-        ☐ Record package identity, game version, and relevant environment details.
-    ☐ Update directly related documentation for the implemented interfaces,
+        ✔ Record package identity, game version, and relevant environment details.
+    ✔ Update directly related documentation for the implemented interfaces,
       ownership, supported/omitted geometry, and pending visual qualification.
-        ☐ Update BuildBrushArchitecture.md and the README where behavior warrants it.
-        ☐ Keep the source proposal's implementation status accurate; do not claim
+        ✔ Update BuildBrushArchitecture.md and the README where behavior warrants it.
+        ✔ Keep the source proposal's implementation status accurate; do not claim
           visual/performance qualification before Phase 6.
-        ☐ Do not mark the existing project.todo indicator item complete yet.
+        ✔ Do not mark the existing project.todo indicator item complete yet.
 
 Completion criteria:
-    ☐ Required focused tests/builds pass and packaged assets load/compile.
+    ✔ Required focused tests/builds pass and packaged assets load/compile.
       Evidence identifies the exact candidate and lists remaining user-run checks.
+
+Verification and completion, 2026-10-29:
+Source revision: 7cb7cd87f10644da43f612dc3f3ee25cee3d3ff2.
+Environment: Windows win-x64, .NET SDK 10.0.401, runtime 10.0.14,
+VINTAGE_STORY=G:\Vintagestory, Vintage Story 1.22.7.
+Delegated focused Release verification passed 2,142 tests, 0 failed/skipped, using:
+dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj
+  --configuration Release
+  --filter "FullyQualifiedName~BrushSnapping|FullyQualifiedName~BrushPlacement|FullyQualifiedName~BrushTarget|FullyQualifiedName~BrushOverlayRenderState"
+  --blame-hang-timeout 2min --logger "trx;LogFileName=phase5-focused.trx"
+  --results-directory .\VanillaBuildingExpanded.Tests\TestResults\phase5-focused
+  -v minimal
+TRX: VanillaBuildingExpanded.Tests\TestResults\phase5-focused\phase5-focused.trx.
+The existing .\build.ps1 --target=Package --configuration=Release workflow
+completed JSON validation, clean/publish, its full test dependency (3,565 passed,
+0 failed/skipped), and package creation without installing or restarting the game.
+Full TRX: VanillaBuildingExpanded.Tests\TestResults\20261029-230934025\
+Sisco_DESKTOP-1VUS3TJ_2026-10-29_16_09_40_net10.0.trx.
+
+Candidate: Releases\vanillabuildingexpanded_999.99.9.zip,
+529,062 bytes, 34 entries, built 2026-10-29 16:10:19 -07:00.
+Archive SHA256: 7E792614A8342BD5DCCDEC6580546B40487729E78D44C163A1D633CF5B7766F8.
+Mod DLL SHA256: 258FE1BC87C2D533003E79B90BA95DF353C24D2EFB49CDC8A21B882AD8E76F85.
+The shader assets are at assets\vanillabuildingexpanded\shaders\vbe-snapping.vsh
+and vbe-snapping.fsh, with exact source/package/installed-entry hashes:
+vertex: 2028585B3AA1D173282A3C23DE36EA236941FE4AE850A90BCDDB4098B2C48710;
+fragment: D7C68539D0E91084BA4515D9078DD8613C10DA2F6BE8016027656E29AB24E663.
+All game metadata and 32 of 34 entries match the installed/prior archive
+(SHA256 27355034DADA3F0D4CE95F091B2FE756579B85271791E1461E8E8173D629A3AA).
+Only the rebuilt mod DLL/PDB differ. Comparison found the same 269 types,
+1,964 method signatures/IL, and assembly references; the informational revision
+changed from f2024423d7be77b35b4833954727a8d44730b405 to the source revision above,
+with a new MVID/debug provenance. The earlier installed-package runtime approval
+therefore applies to unchanged implementation and exact shader/modinfo bytes.
+No fresh agent-run game/GLSL smoke or byte-identical rebuilt-DLL claim is made.
+The package excludes test/Moq/Castle/xUnit, engine, and game-provided OpenTK DLLs;
+protobuf-net and System.ServiceModel assemblies are existing baseline dependencies.
+No new server-side requirement or migration is added. Existing Cake transitive
+System.Security.Cryptography.Pkcs 10.0.12 NU1902/NU1903 warnings were nonfatal,
+are not bundled mod dependencies, and are not claimed fixed by this phase.
+README and architecture now document the implemented indicator and package path;
+the existing project.todo indicator remains unchecked. Phase 6 still requires
+all-face/shape readability, outline/preview/transparency/occlusion interactions,
+and comparable live performance measurements with an explicit user decision.
+
+The required second direct implementation/documentation review checked all
+task-to-source requirements and evidence before completion markers changed.
+A fresh independent audit-stage-completion review directly inspected the
+controlling documents, source/diff, TRX files, ZIPs, and PE metadata. It found
+Phase 5 fully satisfied, with no unresolved findings or evidence gaps. Its
+independent comparison also covered all 2,197 methods/constructors, with unchanged
+implementation, supporting reuse of the earlier packaged-runtime approval.
+Phase 5 is complete. Phase 6 and the existing project.todo indicator remain unchecked.
 
 ## Phase 6: User-run geometry, appearance, and performance qualification
 

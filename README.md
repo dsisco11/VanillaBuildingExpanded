@@ -28,6 +28,7 @@ Build mode stays enabled when you change hotbar slots. Selecting a tool, an unsu
   - **Vertical Only** - Snap along the world Y axis
   - **None** - Ordinary placement adjacent to the targeted face
 - **Visual Feedback** - Invalid placement positions are highlighted in red, valid positions render normally
+- **Target-mesh Snapping Indicators** - Cyan bands mark valid tangential snaps on the targeted world block; invalid snaps keep the same directional bands in red
 - **Client-only Work area** - Measure inclusive block-cell sizes independently of your held item, with an optional wireframe
 
 #### Controls
@@ -45,6 +46,22 @@ Build mode stays enabled when you change hotbar slots. Selecting a tool, an unsu
 **NOTE:** The _"Shift placement"_ keybind includes a one-block outward offset along the targeted face normal, independently of the snapping restriction. It applies only once, including when ordinary placement already uses that offset. This is useful for roofing or stairs, for example.
 
 Snapping uses face-local U/V edge directions and an outward W direction. The selected mode filters movement in world space. When no permitted edge movement exists, the brush uses W only if its direction satisfies the selected restriction. An obstructed candidate remains invalid instead of falling back to a different position.
+
+Snapping indicators stay on the original targeted world block, not on the moving
+placement preview. Each permitted in-plane direction contributes its own band;
+centered or disabled axes, `None`, and face-normal-only placement show no band.
+Camera/head-bob movement within the same target face and snapping region does not
+clear the indicator. Rendering uses the resolved candidate directions and does not
+perform another placement check or change snapping thresholds or destinations.
+
+The indicator follows the target's captured native terrain mesh, including variants,
+transforms, snow, and decor emitted by that pipeline. It intentionally draws over
+texture holes without scanning or sampling material alpha. Pending, empty, or
+unavailable terrain geometry produces no overlay, never a substitute cube.
+GPU-only renderers and shader-only surface deformations are not reproduced.
+The [snapping indicator plan](docs/BuildBrushSnappingIndicator.todo) records the
+user-approved client-session smoke on Vintage Story **1.22.7**; comprehensive
+geometry/readability, overlay ordering, and rendering-cost qualification remain open.
 
 Keyboard and mouse-button hotkeys are rebindable in the game controls settings. Shift + mouse wheel is an additional fixed shortcut. Backtick also opens WorldEdit in creative mode; rebind one of those actions if you use both. Brush hotkeys pass through while mode is off or brush use is suspended. Rotation passes through for blocks without rotation support; these blocks still support brush placement and snapping. Shift-scroll only consumes successful rotations while the mouse is grabbed for gameplay, preserving scrolling in menus and normal hotbar scrolling otherwise.
 
@@ -171,6 +188,20 @@ dotnet run --project .\CakeBuild\CakeBuild.csproj -- --target=Test
 
 Keep the failed run's diagnostics for hang investigation. Dumps can contain
 process memory; do not commit or publicly upload them.
+
+To build the distributable through the existing JSON-validation, clean/publish,
+and full-test workflow without installing it:
+
+```powershell
+dotnet run --project .\CakeBuild\CakeBuild.csproj -- --target=Package
+```
+
+This refreshes the generated `Releases` directory and creates
+`Releases\vanillabuildingexpanded_999.99.9.zip` for the current development version.
+The archive contains the mod and its assets, including both `vbe-snapping` shaders;
+game-provided OpenTK libraries are referenced from `VINTAGE_STORY`, not bundled.
+Package identity and remaining user-run checks are tracked in Phase 5 of the
+[snapping indicator plan](docs/BuildBrushSnappingIndicator.todo).
 
 ## License
 
