@@ -36,16 +36,25 @@ public sealed class BrushPlacementValidationTests
 
     /// <summary>Rejected snapping retains its candidate, even when unrestricted adjacent placement could succeed.</summary>
     [Theory]
-    [InlineData(EBuildBrushSnapping.Horizontal)]
-    [InlineData(EBuildBrushSnapping.Vertical)]
-    [InlineData(EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical)]
-    [InlineData(EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.ApplyFaceNormalOffset)]
-    [InlineData(EBuildBrushSnapping.Vertical | EBuildBrushSnapping.ApplyFaceNormalOffset)]
-    [InlineData(EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical | EBuildBrushSnapping.ApplyFaceNormalOffset)]
-    public void ResolvePosition_RejectedSnap_RetainsInvalidCandidate(EBuildBrushSnapping mode)
+    [MemberData(nameof(BrushSnappingTests.WorldSpaceSnappingCases), MemberType = typeof(BrushSnappingTests))]
+    public void ResolvePosition_RejectedSnap_RetainsInvalidCandidate(
+        int faceIndex, int u, int v, EBuildBrushSnapping mode, bool held, int deltaX, int deltaY, int deltaZ)
     {
         Block block = new();
         BlockSelection source = CreateSelection();
+        BlockFacing face = BlockFacing.ALLFACES[faceIndex];
+        source.Face = face;
+        source.HitPosition = face.Axis switch
+        {
+            EnumAxis.X => new Vec3d((face.Normali.X + 1) * 0.5, 0.5 + v * 0.4, 0.5 + u * 0.4),
+            EnumAxis.Y => new Vec3d(0.5 + u * 0.4, (face.Normali.Y + 1) * 0.5, 0.5 + v * 0.4),
+            EnumAxis.Z => new Vec3d(0.5 + u * 0.4, 0.5 + v * 0.4, (face.Normali.Z + 1) * 0.5),
+            _ => throw new InvalidOperationException()
+        };
+        if (held)
+        {
+            mode |= EBuildBrushSnapping.ApplyFaceNormalOffset;
+        }
         BrushSnapping snapping = new(source);
         RecordingValidator validator = new(false, true);
         BrushPlacementValidation placement = new(validator);
@@ -54,10 +63,12 @@ public sealed class BrushPlacementValidationTests
 
         Assert.False(valid);
         var call = Assert.Single(validator.Calls);
-        Assert.Equal(snapping.ResolvePosition(mode), position);
+        Assert.Equal(new BlockPos(3 + deltaX, 4 + deltaY, 5 + deltaZ), position);
         Assert.Same(block, call.Block);
         AssertResolvedSelection(source, position, call.Selection);
         Assert.Equal(string.Empty, call.FailureCode);
+        Assert.Equal(new BlockPos(3, 4, 5), source.Position);
+        Assert.False(source.DidOffset);
     }
 
     /// <summary>Ordinary adjacent placement is checked once, without retrying the same rejected candidate.</summary>
