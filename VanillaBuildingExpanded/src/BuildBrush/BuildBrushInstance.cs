@@ -558,7 +558,7 @@ public class BuildBrushInstance
         }
 
         BrushSnapping snapping = new(blockSelection);
-        BrushSnappingState snappingState = new(snapping.FaceU, snapping.FaceV, Snapping);
+        BrushSnappingState snappingState = new(snapping.FaceU, snapping.FaceV, snapping.FaceW, Snapping);
         if (snappingState == lastCheckedSnappingState && blockSelection.Position == Position && !force && !IsDirty)
         {
             return false;

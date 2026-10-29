@@ -84,7 +84,8 @@ public sealed class BrushInputContractTests
         brush.OnPositionChanged += (_, _) => Assert.True(unregisteredFirst);
         pending!(0);
 
-        Assert.Equal(inputs.Selection.Position, brush.Position);
+        Assert.Equal(new BlockPos(30, 3, 3), brush.Position);
+        Assert.Equal(new BlockPos(30, 2, 3), inputs.Selection.Position);
         Assert.False(brush.IsDirty);
         world.Verify(w => w.UnregisterCallback(42), Times.Once);
     }

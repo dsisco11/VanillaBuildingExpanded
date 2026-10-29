@@ -19,7 +19,7 @@ internal sealed class BrushPlacementValidation
         this.validator = validator;
     }
 
-    /// <summary>Tries the requested snapping mode, then falls back to the unsnapped position.</summary>
+    /// <summary>Validates the resolved candidate without changing its requested snapping restrictions.</summary>
     public BlockPos ResolvePosition(Block? block, BlockSelection selection, EBuildBrushSnapping mode,
         BrushSnapping snapping, out bool isValid)
     {
@@ -29,15 +29,8 @@ internal sealed class BrushPlacementValidation
             return selection.Position;
         }
 
-        // Each attempt runs the rules independently, even when both positions coincide.
-        if (TryGetValidSnappedPosition(block, selection, snapping, mode, out BlockPos snapped))
-        {
-            isValid = true;
-            return snapped;
-        }
-
-        isValid = TryGetValidSnappedPosition(block, selection, snapping, EBuildBrushSnapping.None, out BlockPos unsnapped);
-        return unsnapped;
+        isValid = TryGetValidSnappedPosition(block, selection, snapping, mode, out BlockPos position);
+        return position;
     }
 
     /// <summary>Resolves one snapping candidate and checks its placement rules.</summary>

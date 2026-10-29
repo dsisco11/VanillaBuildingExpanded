@@ -35,6 +35,7 @@ public class BrushSnappingTests
         // Assert - all values are zeroed (Mode = 0, not EBuildBrushSnapping.None which is 1)
         Assert.Equal(0, state.FaceU);
         Assert.Equal(0, state.FaceV);
+        Assert.Equal(0, state.FaceW);
         Assert.Equal((EBuildBrushSnapping)0, state.Mode);
     }
 
@@ -47,21 +48,23 @@ public class BrushSnappingTests
         // Assert - default struct has all zero values
         Assert.Equal(0, state.FaceU);
         Assert.Equal(0, state.FaceV);
+        Assert.Equal(0, state.FaceW);
         Assert.Equal((EBuildBrushSnapping)0, state.Mode);
     }
 
     [Theory]
-    [InlineData(-1, 1, EBuildBrushSnapping.Horizontal)]
-    [InlineData(0, -1, EBuildBrushSnapping.Vertical)]
-    [InlineData(1, 0, EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical)]
-    public void BrushSnappingState_WithValues_StoresCorrectly(int faceU, int faceV, EBuildBrushSnapping mode)
+    [InlineData(-1, 1, 1, EBuildBrushSnapping.Horizontal)]
+    [InlineData(0, -1, 0, EBuildBrushSnapping.Vertical)]
+    [InlineData(1, 0, 1, EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical)]
+    public void BrushSnappingState_WithValues_StoresCorrectly(int faceU, int faceV, int faceW, EBuildBrushSnapping mode)
     {
         // Act
-        var state = new BrushSnappingState(faceU, faceV, mode);
+        var state = new BrushSnappingState(faceU, faceV, faceW, mode);
 
         // Assert
         Assert.Equal(faceU, state.FaceU);
         Assert.Equal(faceV, state.FaceV);
+        Assert.Equal(faceW, state.FaceW);
         Assert.Equal(mode, state.Mode);
     }
 
@@ -69,13 +72,15 @@ public class BrushSnappingTests
     public void BrushSnappingState_Equality_WorksCorrectly()
     {
         // Arrange
-        var state1 = new BrushSnappingState(1, -1, EBuildBrushSnapping.Horizontal);
-        var state2 = new BrushSnappingState(1, -1, EBuildBrushSnapping.Horizontal);
-        var state3 = new BrushSnappingState(0, -1, EBuildBrushSnapping.Horizontal);
+        var state1 = new BrushSnappingState(1, -1, 1, EBuildBrushSnapping.Horizontal);
+        var state2 = new BrushSnappingState(1, -1, 1, EBuildBrushSnapping.Horizontal);
+        var state3 = new BrushSnappingState(0, -1, 1, EBuildBrushSnapping.Horizontal);
+        var state4 = new BrushSnappingState(1, -1, 0, EBuildBrushSnapping.Horizontal);
 
         // Assert
         Assert.Equal(state1, state2);
         Assert.NotEqual(state1, state3);
+        Assert.NotEqual(state1, state4);
     }
 
     #endregion
@@ -402,7 +407,7 @@ public class BrushSnappingTests
     }
 
     [Fact]
-    public void ResolvePosition_VerticalMode_YAxisFace_AddsZOffset()
+    public void ResolvePosition_VerticalMode_YAxisFace_AddsOutwardYOffset()
     {
         // Arrange - Hit top of UP face
         var position = new BlockPos(5, 10, 15);
@@ -415,10 +420,10 @@ public class BrushSnappingTests
         // Act
         var resolved = snapping.ResolvePosition(EBuildBrushSnapping.Vertical);
 
-        // Assert - Vertical snapping on Y-axis adds Z offset
+        // Assert - Both face-plane axes are horizontal, so W supplies vertical placement.
         Assert.Equal(5, resolved.X);
-        Assert.Equal(10, resolved.Y);
-        Assert.Equal(16, resolved.Z); // +1 from vertical snapping
+        Assert.Equal(11, resolved.Y);
+        Assert.Equal(15, resolved.Z);
     }
 
     [Fact]
@@ -596,6 +601,95 @@ public class BrushSnappingTests
         Assert.Equal(position.Z, snapping.Selection.Position.Z);
         Assert.Equal(face, snapping.Selection.Face);
         Assert.Equal(hitPosition, snapping.Selection.HitPosition);
+    }
+
+    #endregion
+
+    #region World-space restrictions and FaceW
+
+    public static IEnumerable<object[]> WorldSpaceSnappingCases()
+    {
+        EBuildBrushSnapping[] modes =
+        [
+            EBuildBrushSnapping.Horizontal,
+            EBuildBrushSnapping.Vertical,
+            EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical,
+            EBuildBrushSnapping.None
+        ];
+
+        foreach (BlockFacing face in BlockFacing.ALLFACES)
+        {
+            foreach (int u in new[] { -1, 0, 1 })
+            {
+                foreach (int v in new[] { -1, 0, 1 })
+                {
+                    foreach (EBuildBrushSnapping mode in modes)
+                    {
+                        (int X, int Y, int Z) expected = (face.Axis, mode) switch
+                        {
+                            (_, EBuildBrushSnapping.None) => (0, 0, 0),
+                            (EnumAxis.X, EBuildBrushSnapping.Horizontal) => (0, 0, u),
+                            (EnumAxis.Y, EBuildBrushSnapping.Horizontal) => (u, 0, v),
+                            (EnumAxis.Z, EBuildBrushSnapping.Horizontal) => (u, 0, 0),
+                            (EnumAxis.X or EnumAxis.Z, EBuildBrushSnapping.Vertical) => (0, v, 0),
+                            (EnumAxis.Y, EBuildBrushSnapping.Vertical) => (0, 0, 0),
+                            (EnumAxis.X, _) => (0, v, u),
+                            (EnumAxis.Y, _) => (u, 0, v),
+                            (EnumAxis.Z, _) => (u, v, 0),
+                            _ => throw new InvalidOperationException()
+                        };
+                        bool normalAllowed = mode == EBuildBrushSnapping.None ||
+                            mode == (EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical) ||
+                            (face.Axis == EnumAxis.Y
+                                ? mode == EBuildBrushSnapping.Vertical
+                                : mode == EBuildBrushSnapping.Horizontal);
+
+                        foreach (bool held in new[] { false, true })
+                        {
+                            var delta = expected;
+                            if (held || (expected == (0, 0, 0) && normalAllowed))
+                            {
+                                delta = (delta.X + face.Normali.X, delta.Y + face.Normali.Y, delta.Z + face.Normali.Z);
+                            }
+                            yield return [face.Index, u, v, mode, held, delta.X, delta.Y, delta.Z];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(WorldSpaceSnappingCases))]
+    public void ResolvePosition_AllFaces_UsesWorldRestrictionsAndExplicitNormal(
+        int faceIndex, int u, int v, EBuildBrushSnapping mode, bool held, int deltaX, int deltaY, int deltaZ)
+    {
+        BlockFacing face = BlockFacing.ALLFACES[faceIndex];
+        Vector3 hit = face.Axis switch
+        {
+            EnumAxis.X => new((face.Normali.X + 1) * 0.5f, 0.5f + v * 0.4f, 0.5f + u * 0.4f),
+            EnumAxis.Y => new(0.5f + u * 0.4f, (face.Normali.Y + 1) * 0.5f, 0.5f + v * 0.4f),
+            EnumAxis.Z => new(0.5f + u * 0.4f, 0.5f + v * 0.4f, (face.Normali.Z + 1) * 0.5f),
+            _ => throw new InvalidOperationException()
+        };
+        BlockPos source = new(5, 10, 15);
+        BrushSnapping snapping = new(new BlockSelectionRay(source, face, hit));
+        if (held)
+        {
+            mode |= EBuildBrushSnapping.ApplyFaceNormalOffset;
+        }
+
+        BlockPos resolved = snapping.ResolvePosition(mode);
+
+        Assert.Equal(new BlockPos(5 + deltaX, 10 + deltaY, 15 + deltaZ), resolved);
+        Assert.Equal(new BlockPos(5, 10, 15), source);
+        Assert.Equal(u, snapping.FaceU);
+        Assert.Equal(v, snapping.FaceV);
+        Assert.Equal(1, snapping.FaceW);
+        FastVec3i normal = snapping.GetFaceWOffset();
+        Assert.Equal(face.Normali.X, normal.X);
+        Assert.Equal(face.Normali.Y, normal.Y);
+        Assert.Equal(face.Normali.Z, normal.Z);
     }
 
     #endregion

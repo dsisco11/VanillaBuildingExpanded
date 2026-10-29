@@ -34,36 +34,35 @@ public sealed class BrushPlacementValidationTests
         Assert.Equal(string.Empty, call.FailureCode);
     }
 
-    /// <summary>Rejected snapping checks the unsnapped candidate next and uses that candidate's result.</summary>
+    /// <summary>Rejected snapping retains its candidate, even when unrestricted adjacent placement could succeed.</summary>
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ResolvePosition_RejectedSnap_UsesFallbackResult(bool fallbackAccepted)
+    [InlineData(EBuildBrushSnapping.Horizontal)]
+    [InlineData(EBuildBrushSnapping.Vertical)]
+    [InlineData(EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical)]
+    [InlineData(EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.ApplyFaceNormalOffset)]
+    [InlineData(EBuildBrushSnapping.Vertical | EBuildBrushSnapping.ApplyFaceNormalOffset)]
+    [InlineData(EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical | EBuildBrushSnapping.ApplyFaceNormalOffset)]
+    public void ResolvePosition_RejectedSnap_RetainsInvalidCandidate(EBuildBrushSnapping mode)
     {
         Block block = new();
         BlockSelection source = CreateSelection();
         BrushSnapping snapping = new(source);
-        RecordingValidator validator = new(false, fallbackAccepted);
+        RecordingValidator validator = new(false, true);
         BrushPlacementValidation placement = new(validator);
 
-        BlockPos position = placement.ResolvePosition(block, source, EBuildBrushSnapping.Horizontal, snapping, out bool valid);
+        BlockPos position = placement.ResolvePosition(block, source, mode, snapping, out bool valid);
 
-        Assert.Equal(fallbackAccepted, valid);
-        Assert.Equal(2, validator.Calls.Count);
-        Assert.Equal(snapping.ResolvePosition(EBuildBrushSnapping.Horizontal), validator.Calls[0].Selection.Position);
-        Assert.Equal(snapping.ResolvePosition(EBuildBrushSnapping.None), position);
-        foreach (var call in validator.Calls)
-        {
-            Assert.Same(block, call.Block);
-            AssertResolvedSelection(source, call.Selection.Position, call.Selection);
-            Assert.Equal(string.Empty, call.FailureCode);
-        }
-        Assert.NotSame(validator.Calls[0].Selection, validator.Calls[1].Selection);
+        Assert.False(valid);
+        var call = Assert.Single(validator.Calls);
+        Assert.Equal(snapping.ResolvePosition(mode), position);
+        Assert.Same(block, call.Block);
+        AssertResolvedSelection(source, position, call.Selection);
+        Assert.Equal(string.Empty, call.FailureCode);
     }
 
-    /// <summary>Native rule side effects still occur twice when rejected candidates happen to coincide.</summary>
+    /// <summary>Ordinary adjacent placement is checked once, without retrying the same rejected candidate.</summary>
     [Fact]
-    public void ResolvePosition_CoincidentCandidates_AreNotDeduplicated()
+    public void ResolvePosition_RejectedAdjacentPlacement_IsValidatedOnce()
     {
         BlockSelection source = CreateSelection();
         RecordingValidator validator = new(false, true);
@@ -71,9 +70,8 @@ public sealed class BrushPlacementValidationTests
 
         placement.ResolvePosition(new Block(), source, EBuildBrushSnapping.None, new BrushSnapping(source), out bool valid);
 
-        Assert.True(valid);
-        Assert.Equal(2, validator.Calls.Count);
-        Assert.Equal(validator.Calls[0].Selection.Position, validator.Calls[1].Selection.Position);
+        Assert.False(valid);
+        Assert.Single(validator.Calls);
     }
 
     /// <summary>With no block, resolving returns the original position without invoking rules.</summary>

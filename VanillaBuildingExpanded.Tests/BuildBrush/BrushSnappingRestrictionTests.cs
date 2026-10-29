@@ -28,12 +28,17 @@ public sealed class BrushSnappingRestrictionTests
             foreach (EBuildBrushSnapping mode in new[]
             {
                 EBuildBrushSnapping.Horizontal,
-                EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical
+                EBuildBrushSnapping.Vertical,
+                EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical,
+                EBuildBrushSnapping.None
             })
             {
                 foreach (var edge in edges)
                 {
-                    yield return [topFace, mode, edge.X, edge.Z];
+                    foreach (bool held in new[] { false, true })
+                    {
+                        yield return [topFace, mode, edge.X, edge.Z, held];
+                    }
                 }
             }
         }
@@ -41,8 +46,8 @@ public sealed class BrushSnappingRestrictionTests
 
     [Theory]
     [MemberData(nameof(BottomSlabFaceEdges))]
-    public void ResolvePosition_BottomSlabFaceEdges_HorizontalSnappingDoesNotMoveVertically(
-        bool topFace, EBuildBrushSnapping mode, double hitX, double hitZ)
+    public void ResolvePosition_BottomSlabFaceEdges_RespectsRestrictionsAndFaceOffset(
+        bool topFace, EBuildBrushSnapping mode, double hitX, double hitZ, bool held)
     {
         BlockSlab slab = new()
         {
@@ -79,17 +84,22 @@ public sealed class BrushSnappingRestrictionTests
         Assert.False(slab.IsReplacableBy(slab));
         Assert.True(air.IsReplacableBy(slab));
 
+        bool edgeSnapping = mode == EBuildBrushSnapping.Horizontal ||
+            mode == (EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical);
+        int deltaX = edgeSnapping ? Math.Sign(hitX - 0.5) : 0;
+        int deltaZ = edgeSnapping ? Math.Sign(hitZ - 0.5) : 0;
+        int deltaY = held || mode == EBuildBrushSnapping.Vertical || mode == EBuildBrushSnapping.None
+            ? (topFace ? 1 : -1) : 0;
+        if (held)
+        {
+            mode |= EBuildBrushSnapping.ApplyFaceNormalOffset;
+        }
+
         BlockPos resolved = placement.ResolvePosition(slab, source, mode, new BrushSnapping(source), out bool valid);
 
-        Assert.Equal(source.Position.Y, resolved.Y);
-        if (hitX != 0.5 || mode.HasFlag(EBuildBrushSnapping.Vertical))
-        {
-            Assert.True(valid);
-        }
-        if (valid)
-        {
-            Assert.NotEqual(source.Position, resolved);
-        }
+        Assert.Equal(new BlockPos(5 + deltaX, 10 + deltaY, 15 + deltaZ), resolved);
+        Assert.True(valid);
+        Assert.NotEqual(source.Position, resolved);
         Assert.Equal(new BlockPos(5, 10, 15), source.Position);
         Assert.False(source.DidOffset);
     }

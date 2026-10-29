@@ -19,9 +19,9 @@ This approach avoids dependence on the block's texture UV layout. The overlay re
 ## Existing behavior that defines the indicator
 
 - [BrushSnapping](../VanillaBuildingExpanded/src/BuildBrush/BrushSnapping.cs) projects the raycast hit into two coordinates determined by the selected face's axis. Each coordinate selects a negative, centered, or positive direction using a threshold of `0.15` around the block-cell center. For ordinary cell-local coordinates, the boundaries are `0.35` and `0.65`.
-- Horizontal and vertical snapping are independently enabled. On top and bottom faces, those names refer to the existing in-plane X and Z directions, rather than screen-horizontal and screen-vertical directions.
-- The face-normal offset is a separate flag. The `None` snapping mode also resolves to ordinary face-adjacent placement.
-- [BrushPlacementValidation](../VanillaBuildingExpanded/src/BuildBrush/Placement/BrushPlacementValidation.cs) first tries the requested snapping candidate, then tries ordinary face-adjacent placement if that candidate is rejected.
+- Face-local U/V directions are converted to world-space offsets. Horizontal snapping permits X/Z movement; vertical snapping permits Y movement. On top/bottom faces, both U and V are horizontal.
+- Face-local W supplies outward placement when no permitted U/V movement exists, provided W satisfies the selected restriction. The explicit face-offset flag includes W independently of the restriction, without doubling it. `None` resolves to ordinary face-adjacent placement.
+- [BrushPlacementValidation](../VanillaBuildingExpanded/src/BuildBrush/Placement/BrushPlacementValidation.cs) validates the resolved candidate once. A rejected candidate remains invalid without an unrestricted fallback.
 - [BuildBrushInstance](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushInstance.cs) stores a resolved selection whose position has already been replaced with the placement destination. The overlay's world anchor must use the original target selection instead.
 
 The proposal preserves these placement rules. Rendering markers against mesh bounds must not silently redefine snapping around those bounds.
@@ -34,7 +34,7 @@ Draw directional bands or chevrons on the selected-facing part of the target mes
 
 Use the same face-coordinate convention as `BrushSnapping`, including opposite faces and top/bottom faces. A marker must communicate the world-space direction used by placement even when the camera orientation changes.
 
-The recommended initial visual describes the applied tangential snap. When resolution falls back to ordinary face-adjacent placement, suppress the tangential indicators. If placement is invalid, suppress them as well; the existing preview continues to communicate placement validity. No directional markings are shown for `None`, or when both enabled coordinates are centered.
+The recommended initial visual describes the applied tangential snap. When resolution uses only W, suppress the tangential indicators. If placement is invalid, suppress them as well; the existing preview continues to communicate placement validity. No directional markings are shown for `None`, or when neither U nor V contributes permitted movement.
 
 These rules intentionally leave face-normal offset without its own glyph. It changes placement depth while the tangential markings continue to describe horizontal and vertical snapping. A separate face-normal glyph can be considered if visual evaluation shows that it is needed.
 

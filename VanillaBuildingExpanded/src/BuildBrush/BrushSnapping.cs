@@ -9,10 +9,10 @@ namespace VanillaBuildingExpanded;
 /// <summary>
 /// Used to track and compare snapping state changes.
 /// </summary>
-public readonly record struct BrushSnappingState(int FaceU = 0, int FaceV = 0, EBuildBrushSnapping Mode = EBuildBrushSnapping.None);
+public readonly record struct BrushSnappingState(int FaceU = 0, int FaceV = 0, int FaceW = 0, EBuildBrushSnapping Mode = EBuildBrushSnapping.None);
 
 /// <summary>
-/// Represents face-local snapping directions resolved from the block face quadrants hit by a ray-trace.
+/// Represents face-local snapping directions, with U/V in the face plane and W along its outward normal.
 /// </summary>
 public readonly record struct BrushSnapping
 {
@@ -25,12 +25,15 @@ public readonly record struct BrushSnapping
     public readonly int FaceU;
     /// <summary> The face-local V snapping direction: -1, 0, or 1. Maps to Z on Y-normal faces, otherwise Y. </summary>
     public readonly int FaceV;
+    /// <summary> The outward face-local W direction. Raycast selections use 1, including on negative-facing normals. </summary>
+    public readonly int FaceW;
     #endregion
 
     #region Constructors
     public BrushSnapping(in BlockSelectionRay selectionRay)
     {
         this.Selection = selectionRay;
+        this.FaceW = 1;
 
         // Use System Vectors for better performance.
         Vector3 faceNormal = selectionRay.Face.Normalf.ToSNT();
@@ -58,31 +61,30 @@ public readonly record struct BrushSnapping
 
     #region Methods
     /// <summary>
-    /// Resolves the final block position based on the snapping directions and the provided snapping mode flags.
+    /// Resolves a candidate using world-space restrictions. W supplies outward placement when no permitted
+    /// U/V movement exists; the explicit face-offset modifier adds W independently of those restrictions.
     /// </summary>
     /// <param name="snappingMode"></param>
     /// <returns></returns>
     public readonly BlockPos ResolvePosition(EBuildBrushSnapping snappingMode)
     {
-        BlockPos resolved = Selection.Position.Copy();
-        if (snappingMode == EBuildBrushSnapping.None || snappingMode.HasFlag(EBuildBrushSnapping.ApplyFaceNormalOffset))
+        bool noSnapping = snappingMode.HasFlag(EBuildBrushSnapping.None);
+        bool horizontal = !noSnapping && snappingMode.HasFlag(EBuildBrushSnapping.Horizontal);
+        bool vertical = !noSnapping && snappingMode.HasFlag(EBuildBrushSnapping.Vertical);
+        bool explicitFaceOffset = snappingMode.HasFlag(EBuildBrushSnapping.ApplyFaceNormalOffset);
+        FastVec3i u = GetFaceUOffset(Selection.Face.Axis);
+        FastVec3i v = GetFaceVOffset(Selection.Face.Axis);
+        FastVec3i offset = new(horizontal ? u.X + v.X : 0, vertical ? u.Y + v.Y : 0, horizontal ? u.Z + v.Z : 0);
+
+        if (explicitFaceOffset || ((noSnapping || horizontal || vertical) && offset.X == 0 && offset.Y == 0 && offset.Z == 0))
         {
-            resolved.Add(Selection.Face.Normali);
+            FastVec3i w = GetFaceWOffset();
+            offset.X += explicitFaceOffset || noSnapping || horizontal ? w.X : 0;
+            offset.Y += explicitFaceOffset || noSnapping || vertical ? w.Y : 0;
+            offset.Z += explicitFaceOffset || noSnapping || horizontal ? w.Z : 0;
         }
 
-        if (snappingMode.HasFlag(EBuildBrushSnapping.Horizontal))
-        {
-            FastVec3i faceUOffset = GetFaceUOffset(Selection.Face.Axis);
-            resolved.Add(faceUOffset);
-        }
-
-        if (snappingMode.HasFlag(EBuildBrushSnapping.Vertical))
-        {
-            FastVec3i faceVOffset = GetFaceVOffset(Selection.Face.Axis);
-            resolved.Add(faceVOffset);
-        }
-
-        return resolved;
+        return Selection.Position.Copy().Add(offset);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -107,6 +109,13 @@ public readonly record struct BrushSnapping
             EnumAxis.Z => new(0, FaceV, 0),
             _ => new FastVec3i(0, 0, 0),
         };
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly FastVec3i GetFaceWOffset()
+    {
+        Vec3i normal = Selection.Face.Normali;
+        return new(normal.X * FaceW, normal.Y * FaceW, normal.Z * FaceW);
     }
     #endregion
 }

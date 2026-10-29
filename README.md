@@ -24,9 +24,9 @@ Build mode stays enabled when you change hotbar slots. Selecting a tool, an unsu
 - **Orientation Control** - Cycle through available block orientations to place blocks exactly how you want them
 - **Snapping Modes** - Multiple snapping modes to help align blocks precisely:
   - **Horizontal & Vertical** - Full grid snapping for maximum precision
-  - **Horizontal Only** - Snap to horizontal planes
-  - **Vertical Only** - Snap to vertical planes
-  - **None** - Free placement without snapping constraints
+  - **Horizontal Only** - Snap along the world X/Z plane
+  - **Vertical Only** - Snap along the world Y axis
+  - **None** - Ordinary placement adjacent to the targeted face
 - **Visual Feedback** - Invalid placement positions are highlighted in red, valid positions render normally
 - **Client-only Work area** - Measure inclusive block-cell sizes independently of your held item, with an optional wireframe
 
@@ -42,7 +42,9 @@ Build mode stays enabled when you change hotbar slots. Selecting a tool, an unsu
 | Cycle Snapping Mode Backward | `Shift + Middle Mouse` |
 | Shift Placement              | `Shift`                |
 
-**NOTE:** The _"Shift placement"_ keybind will offset the block placement position by 1 block in the direction of the block face you are targeting, this is useful for placing roofing or stairs, for example.
+**NOTE:** The _"Shift placement"_ keybind includes a one-block outward offset along the targeted face normal, independently of the snapping restriction. It applies only once, including when ordinary placement already uses that offset. This is useful for roofing or stairs, for example.
+
+Snapping uses face-local U/V edge directions and an outward W direction. The selected mode filters movement in world space. When no permitted edge movement exists, the brush uses W only if its direction satisfies the selected restriction. An obstructed candidate remains invalid instead of falling back to a different position.
 
 Keyboard and mouse-button hotkeys are rebindable in the game controls settings. Shift + mouse wheel is an additional fixed shortcut. Backtick also opens WorldEdit in creative mode; rebind one of those actions if you use both. Brush hotkeys pass through while mode is off or brush use is suspended. Rotation passes through for blocks without rotation support; these blocks still support brush placement and snapping. Shift-scroll only consumes successful rotations while the mouse is grabbed for gameplay, preserving scrolling in menus and normal hotbar scrolling otherwise.
 
