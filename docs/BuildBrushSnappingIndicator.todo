@@ -1,0 +1,311 @@
+# Build brush snapping indicator
+
+Source proposal: [BuildBrushSnappingIndicator.proposal.md](BuildBrushSnappingIndicator.proposal.md).
+Status: Planning only. All implementation and qualification tasks remain pending.
+Format: Indented unchecked tasks follow the existing src\docs\project.todo convention.
+
+## Goal and governing constraints
+
+Deliver a client-owned, mesh-projected directional overlay on the original targeted
+world block, not on the resolved placement preview. Communicate only accepted
+tangential snapping using the existing face-coordinate and world-axis rules.
+
+The approved proposal remains authoritative. This plan does not authorize implementation.
+Preserve snapping thresholds, selection raycasting, placement destinations, native
+validation behavior, preview synchronization, and network packets. Add no controls
+or input capture, no authored indicator texture per block, and no server renderer
+ownership of the overlay.
+
+Non-goals: arbitrary mesh-edge discovery, shape-boundary snapping, universal custom
+renderer support, and a face-normal glyph. W-only/ordinary fallback, invalid placement,
+None, and outcomes with no permitted U/V movement show no tangential marking.
+
+## Assumptions and decisions still requiring evidence
+
+- Exact glyphs, color, width, opacity, and any combined corner cue are not approved
+  artwork. Bands or chevrons are candidates for user evaluation in Phase 6.
+- Initial support is ordinary static geometry whose world mesh and transform can
+  be reproduced accurately and whose markings remain meaningful under cell-based
+  snapping. Evaluate cubes and non-cubic shapes; do not assume either category's
+  coverage from a default or inventory mesh API alone.
+- Position-dependent variants, block-entity geometry, chiseled blocks,
+  animated/custom renderers, texture cutouts, and transparent materials remain
+  unsupported unless explicitly qualified. Omission is the fallback, not a cube.
+- Exact cache identity, world-transform acquisition, surface-facing data,
+  render stage/order, and depth bias require investigation and evidence before
+  their dependent behavior is accepted. These are implementation decisions, not
+  permission to broaden geometry support.
+- Component names below identify existing integration points or responsibilities;
+  final names for new types should follow repository conventions.
+- Use the existing .NET 10/xUnit project and installed game references through
+  VINTAGE_STORY. Do not add a test framework or dependencies by default.
+- Automated tests and C# builds cannot qualify appearance, overlay ordering,
+  non-cubic readability, or rendering cost. User-run in-game checks remain required.
+  The proposal sets no numeric performance budget; record measured cost and obtain
+  an explicit acceptance decision rather than inventing a threshold.
+
+## Phase 1: Applied outcome reporting and presentation contract
+
+Depends on: No implementation phase; confirm implementation authorization first.
+Outcome: Local placement resolution supplies a coherent, testable presentation
+contract without changing placement or networking. No rendering is required yet.
+
+    ☐ Confirm implementation authorization and inspect existing integration seams.
+        ☐ Trace BrushSnapping, BrushPlacementValidation, BuildBrushInstance,
+          BuildBrushControllerClient, and BuildBrushSystem_Client.
+        ☐ Identify where the original world selection is available before its
+          position becomes the placement destination, and where the final local
+          placement outcome is known.
+        ☐ Reuse existing result/mapping helpers where possible; record the
+          chosen local result and presentation ownership in implementation documentation.
+    ☐ Extend local outcome reporting in the placement-resolution path.
+        ☐ Distinguish requested snapping, accepted snapping, ordinary fallback,
+          and invalid placement even when their candidate positions coincide.
+        ☐ Preserve U/V projection around the block-cell center and the existing
+          0.15 threshold, with ordinary local boundaries at 0.35 and 0.65.
+        ☐ Preserve horizontal X/Z and vertical Y filtering, both horizontal
+          in-plane axes on top/bottom faces, restricted W fallback, independent
+          explicit face offset without doubling W, and None face-adjacent placement.
+        ☐ Keep rejected candidates invalid without an unrestricted retry.
+          Presentation must not invoke native validation a second time.
+    ☐ Define a coherent local presentation snapshot and visibility decision.
+        ☐ Pair original target identity and face with their corresponding
+          resolved outcome; include enough identity/version information to reject
+          stale face, hit-region, snapping-mode, held-item, or target results.
+        ☐ Carry each applied in-plane direction independently; do not collapse
+          top/bottom U and V into one value merely because both are horizontal.
+        ☐ Require local build mode, an eligible held block, a current target,
+          supported geometry, and accepted permitted tangential movement.
+        ☐ Suppress centered/disabled-axis markings, None, W-only/ordinary fallback,
+          invalid placement, and results not yet matched to the current target.
+    ☐ Add focused tests in VanillaBuildingExpanded.Tests.
+        ☐ Extend BrushSnappingTests/BrushSnappingRestrictionTests as appropriate
+          for all six faces, opposite-face signs, each snapping mode, and both
+          top/bottom horizontal directions.
+        ☐ Exercise values just below, exactly at, and just above both thresholds;
+          assert existing boundary behavior rather than choosing new inclusivity.
+        ☐ Cover explicit face offset with and without U/V or existing W movement,
+          equal-position outcomes with different meanings, and invalid candidates.
+        ☐ Verify presentation does not add native validation calls, and mismatched
+          or newly observed targets/faces cannot reuse an old successful outcome.
+
+Completion criteria:
+    ☐ Focused tests pass and demonstrate unchanged placement results and validation
+      behavior, plus coherent presentation data independent of renderer/network changes.
+
+## Phase 2: Supported target geometry and owned cache
+
+Depends on: Phase 1 presentation contract.
+Outcome: Supported original targets yield reproducible mesh/transform data;
+unsupported targets are explicitly omitted. This does not yet qualify visual quality.
+
+    ☐ Establish target-mesh acquisition and an initial support decision.
+        ☐ Investigate ITesselatorManager.GetDefaultBlockMesh as a static-geometry
+          starting point; verify selected-world-instance mesh and transform fidelity.
+        ☐ Do not treat GetDefaultBlockMeshRef inventory geometry or
+          MiniDimensionTessellator preview output as proof of world-target fidelity.
+        ☐ Identify candidate cubes and non-cubic static shapes for qualification,
+          including narrow/recessed surfaces that may not intersect a procedural mask.
+        ☐ Explicitly reject unqualified categories listed in the assumptions.
+          If cutouts are intentionally qualified, include UV/alpha data and matching
+          alpha sampling; position-only rendering is insufficient for their silhouette.
+        ☐ Omit geometry that cannot be reproduced accurately or carry meaningful
+          markings. Never substitute a generic cube.
+    ☐ Implement clearly separated target-mesh handling and cache ownership.
+        ☐ Define geometry identity separately from target transform/presentation,
+          including all qualified variant inputs needed to avoid incorrect reuse.
+        ☐ Keep engine-cached mesh data borrowed; copy before mutation and dispose
+          only overlay-owned resources.
+        ☐ Reuse valid geometry for face, hit-region, and snapping-mode changes.
+          Equivalent supported instances may reuse geometry and change only transform.
+        ☐ Invalidate relevant resources on geometry/world/resource changes and
+          shader reload; rebuild/upload only when required on the proper engine thread.
+        ☐ Make owned resource replacement and disposal testable for later lifecycle
+          wiring without introducing a general-purpose cache redesign.
+    ☐ Add focused support/cache tests.
+        ☐ Assert unsupported targets yield no overlay mesh rather than cube fallback.
+        ☐ Assert repeated face/hit/mode changes do not retessellate; equivalent
+          instance reuse updates the transform without stale target identity.
+        ☐ Assert geometry/lifecycle invalidation cannot reuse obsolete data,
+          borrowed meshes are unchanged/not disposed, and owned replacements are released.
+
+Completion criteria:
+    ☐ Support decisions, cache identity, transforms, and resource ownership are
+      documented and covered by focused tests. Runtime fidelity/readability of
+      candidate shapes remains explicitly pending Phase 6.
+
+## Phase 3: Procedural shader and isolated drawing responsibility
+
+Depends on: Phases 1 and 2.
+Outcome: A buildable overlay drawing path consumes the presentation contract and
+supported geometry. Live registration and shader compatibility are gated in Phase 4.
+
+    ☐ Add custom shader assets using the repository's existing asset conventions.
+        ☐ Supply target positions/indices, target transform, camera matrices,
+          selected face/in-plane axes, independent applied directions, color,
+          opacity, width, and appropriate surface-facing information.
+        ☐ Preserve block-local coordinates through vertex transformation; project
+          into the selected face plane in the fragment shader.
+        ☐ Evaluate procedural directional masks on selected-facing surfaces and
+          discard fragments outside markings; use derivative softening as appropriate.
+        ☐ Anchor meaning to existing snapping rules, not texture UV layout,
+          arbitrary shape bounds, camera-relative directions, or triangle edges.
+        ☐ Keep face-normal offset without its own glyph and avoid per-block artwork.
+    ☐ Implement the clearly named overlay drawing responsibility.
+        ☐ Draw the target mesh a second time at the original world target, never
+          at BuildBrushInstance's substituted placement destination.
+        ☐ Keep depth testing enabled, disable overlay depth writes, and restore
+          all changed render state even if drawing fails.
+        ☐ Provide a candidate render stage/order and small depth bias for Phase 4/6
+          validation; do not assume bias alone orders the native selection outline,
+          brush preview, or transparent surfaces.
+        ☐ Handle shader compilation/replacement failure explicitly through
+          repository-standard diagnostics and safe resource ownership. Disable the
+          failed overlay without disabling ordinary brush operation.
+    ☐ Build the changed C# project and test parameter/drawing-state decisions where
+      existing test seams permit; do not report a C# build as shader compilation proof.
+
+Completion criteria:
+    ☐ Shader sources and drawing code exist, C# compilation succeeds, and source/test
+      evidence covers correct inputs, target transform, masking intent, and state
+      restoration. Live shader compilation and visual qualification remain pending.
+
+## Phase 4: Client-session integration and lifecycle verification
+
+Depends on: Phases 1 through 3.
+Outcome: The overlay runs with the local brush session, follows current resolved
+targets, and safely clears/retires resources. It is ready for final regression checks.
+
+    ☐ Compose and retire the client-owned overlay through BuildBrushSystem_Client
+      and the existing local controller/session lifecycle.
+        ☐ Keep the server preview entity renderer responsible only for the existing
+          preview; add no network fields, preview synchronization, or new input.
+        ☐ Feed matching snapshots and supported geometry into drawing; clear/replace
+          stale presentation immediately when a newly observed target lacks its result.
+        ☐ Keep markings attached to the original target as preview destinations move.
+    ☐ Wire presentation clearing and resource invalidation/disposal distinctly.
+        ☐ Clear on target loss, build-mode disable, unsupported held items, death,
+          world departure, and any invalid/mismatched/suppressed presentation.
+        ☐ Refresh supported item/target changes without carrying prior outcomes.
+          Snapping-mode changes may retain valid cached geometry.
+        ☐ Invalidate relevant geometry/resources on geometry changes, resource
+          reload, and shader reload; compile and replace shader resources safely.
+        ☐ Release owned GPU resources and subscriptions on world departure and
+          system disposal. Ensure other transitions leave no stale overlay or
+          obsolete/leaked resources without indiscriminately discarding valid caches.
+        ☐ Keep ordinary selection, placement, and preview usable after overlay
+          compilation/drawing failure; surface failures through existing diagnostics.
+    ☐ Verify integration with focused tests and a local runtime smoke check.
+        ☐ Test rapid target/face/hit/mode/item changes and delayed/mismatched results.
+        ☐ Test mode toggles, suspension/resumption, death, world exit, disposal,
+          geometry changes, resource/shader reload, and shader failure.
+        ☐ Check rebuild/upload counts and disposal/subscription ownership; ensure
+          repeated retirement/replacement does not dispose borrowed resources.
+        ☐ Compile shaders in the installed game runtime and record version and
+          diagnostics; exercise reload/failure recovery without breaking the brush.
+        ☐ Confirm the chosen render stage registers/deregisters correctly and
+          leaves native render state intact; visual ordering still needs Phase 6.
+
+Completion criteria:
+    ☐ Focused integration/lifecycle tests pass, shaders compile in the intended
+      runtime, failure leaves brush operation available, and no stale presentation
+      or obsolete/leaked resources remain after the tested lifecycle transitions.
+
+## Phase 5: Regression and distributable verification
+
+Depends on: Phase 4.
+Outcome: A reproducible test/build/package candidate is ready for user qualification.
+
+    ☐ Run the smallest existing test selections covering changed snapping, result,
+      presentation, support/cache, and client lifecycle behavior.
+        ☐ Record commands and results; broaden to affected placement/preview tests
+          when shared behavior changes or failures indicate regression risk.
+        ☐ Verify unchanged raycasting, thresholds, native validation call behavior,
+          placement destinations, preview ownership/synchronization, and network shape.
+        ☐ Keep mocked/source evidence distinct from shader/runtime evidence.
+    ☐ Use the existing build/package workflow to create the evaluation candidate.
+        ☐ Verify custom shader assets are included at the expected asset paths
+          and compile/load from the packaged mod, not only the working source tree.
+        ☐ Confirm package contents introduce no unnecessary dependencies or
+          server-side requirements; no migration is expected for this local feature.
+        ☐ Record package identity, game version, and relevant environment details.
+    ☐ Update directly related documentation for the implemented interfaces,
+      ownership, supported/omitted geometry, and pending visual qualification.
+        ☐ Update BuildBrushArchitecture.md and the README where behavior warrants it.
+        ☐ Keep the source proposal's implementation status accurate; do not claim
+          visual/performance qualification before Phase 6.
+        ☐ Do not mark the existing project.todo indicator item complete yet.
+
+Completion criteria:
+    ☐ Required focused tests/builds pass and packaged assets load/compile.
+      Evidence identifies the exact candidate and lists remaining user-run checks.
+
+## Phase 6: User-run geometry, appearance, and performance qualification
+
+Depends on: Phase 5 evaluation candidate and user access to an in-game session.
+Outcome: The initial support set and presentation are accepted on live evidence,
+or unresolved deficiencies remain explicitly open rather than declared complete.
+
+    ☐ Have the user evaluate concrete glyph/color/width/opacity candidates.
+        ☐ Verify all six faces, opposite-face signs, top/bottom dual horizontal
+          directions, horizontal-only, vertical-only, combined, and None modes.
+        ☐ Cross both center thresholds, including centered/disabled axes and
+          two-axis corner situations, while changing camera orientation.
+        ☐ Verify explicit W offset does not mislabel tangential movement and
+          W-only/ordinary fallback/invalid outcomes never imply successful U/V snapping.
+    ☐ Qualify the initial geometry set in the packaged runtime.
+        ☐ Compare candidate cube/non-cubic meshes and transforms with actual world
+          instances, not the placement preview or inventory appearance.
+        ☐ Check narrow/recessed surfaces, readability, selected-facing coverage,
+          and lack of misleading shape-boundary cues; omit failed targets/categories.
+        ☐ Verify every unqualified category omits the overlay without affecting
+          selection, placement, or normal preview behavior.
+        ☐ Record qualified examples and excluded categories with reasons;
+          any support expansion must meet the same fidelity and readability checks.
+    ☐ Validate rendering interaction and lifecycle with live evidence.
+        ☐ Move the camera, target face, and preview destination independently;
+          verify target anchoring, no stale markings, no surface fighting/flicker,
+          and occlusion by intervening blocks.
+        ☐ Check native selection outline, preview readability, transparent-scene
+          interactions, surface-facing filtering, render order, and depth bias.
+        ☐ Exercise build/snapping-mode transitions, supported/unsupported items,
+          death, world departure/re-entry, resource reload, and shader failure.
+    ☐ Measure rendering cost and confirm the cache behavior in the live runtime.
+        ☐ Record comparable overlay-on/off timings, scene, hardware/runtime, and
+          sampling method; do not substitute unit tests for GPU/frame evidence.
+        ☐ Confirm repeated face/hit-region/mode changes do not rebuild geometry
+          and required invalidation does rebuild on the appropriate thread.
+        ☐ Obtain the user's explicit appearance/readability/performance decision.
+          Fix failed criteria and repeat affected checks before accepting the feature.
+    ☐ Finalize documentation and remove temporary qualification scaffolding.
+        ☐ Record user verdicts, measured results, final support boundary, and any
+          still-open checks in the implementation evidence; do not invent approval.
+        ☐ Remove temporary forced failures, diagnostic rendering, and candidate-only
+          hooks not needed by the supported feature; retain standard error reporting.
+        ☐ Re-run affected focused checks/package validation after final adjustments.
+        ☐ Update the README, architecture notes, proposal implementation status,
+          and existing project.todo indicator item only to the extent proven complete.
+
+Completion criteria:
+    ☐ User evidence establishes appearance, all-face direction/readability,
+      supported shape fidelity, overlay interaction, lifecycle behavior, and measured
+      rendering cost for the final packaged candidate.
+    ☐ Any deliberately excluded geometry is documented; unresolved required
+      qualification prevents final acceptance, rather than becoming an implicit waiver.
+
+## Final acceptance
+
+    ☐ Every proposal requirement maps to implemented behavior and evidence;
+      exclusions/deferred optional extensions have explicit rationale.
+    ☐ All six faces and existing snapping/placement rules are preserved, with no
+      successful tangential indication for ordinary fallback, invalid, None, or W-only.
+    ☐ Overlay geometry remains on the original target, supported shapes are
+      qualified, and unsupported targets omit it without placement/selection changes.
+    ☐ Geometry reuse, snapshot coherence, render-state restoration, resource
+      ownership, reload/failure handling, and session cleanup are verified.
+    ☐ Focused automated checks, C# build, shader compilation, packaged runtime
+      checks, and user-run visual/performance evidence are separately recorded.
+    ☐ No unapproved controls, server/network changes, shape-based snapping,
+      universal custom-renderer claims, or face-normal glyph entered the implementation.
+    ☐ Final documentation and packaging match the qualified implementation, and
+      no temporary qualification scaffolding or obsolete/leaked owned resources remain.
