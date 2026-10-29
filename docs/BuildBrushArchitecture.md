@@ -402,9 +402,10 @@ Resolved selections preserve the source face, hit position and other raycast dat
 
 Phase 1 of the [snapping indicator plan](BuildBrushSnappingIndicator.todo) implements
 local result reporting. Phase 2 adds the isolated target-geometry/cache substrate
-described below. Phase 3 adds isolated shader drawing. Client-session registration,
-resource lifecycle integration, and in-game appearance/performance qualification
-remain later phases under the
+described below. Phase 3 adds shader drawing; Phase 4 wires the client session and
+resource lifecycle. The user confirmed and approved Phase 4 installed-game smoke
+verification on 2026-10-29. Later distributable verification and comprehensive
+in-game appearance/performance qualification remain open under the
 [approved proposal](BuildBrushSnappingIndicator.proposal.md).
 
 `BrushSnapping.ResolvePosition` has an overload that reports the resolved U/V/W
@@ -425,7 +426,9 @@ outcomes. Existing position-only wrappers retain their null-block and validation
 contracts, and rejected candidates are never retried unrestricted.
 
 `BuildBrushInstance.TryUpdate` captures the original target before native validation
-and before replacing `Selection.Position` with the destination. It clears prior
+and before replacing `Selection.Position` with the destination. Native selection cloning
+omits `Block`, so the original-target copy explicitly retains that reference for
+capturing target identity. It clears prior
 presentation during resolution and publishes a `BrushSnappingPresentation` only if
 its input revision remains current. The snapshot owns copies of target coordinates,
 face, hit and selection-box context, captures the target block ID, and retains an
@@ -437,14 +440,33 @@ Consumers read `BuildBrushControllerClient.GetSnappingPresentation` with the cur
 world selection and an explicit supported-geometry decision. They must use this
 guarded read rather than caching a previously returned snapshot across context
 changes. Reads require active mode, a supported held source, a current matching
-target/face/hit/selection box/block, matching mode/revision and resolved destination,
-and valid accepted U/V movement. Live hotbar slot, block, stack count and source
+target/face/block, matching mode/revision and resolved destination,
+and resolved permitted U/V movement, whether placement is valid or invalid.
+Live hotbar slot, block, stack count and source
 attributes are checked against the resolved source without refreshing or validating.
 The geometry argument is a gate, not a Phase 1 claim that any shape is qualified.
 
+One shared matcher compares the live hit's permitted U/V directions, not its exact
+floating-point coordinates. Camera smoothing/head bob can move the raycast hit
+between placement updates without changing the displayed snap; that must not
+hide the indicator. `BrushSnapping.GetTangentialDirections` shares the placement
+resolver's axis mapping and mode restrictions without resolving a destination or
+calling validation. Changes on disabled axes likewise do not hide an unchanged
+marking. Nonfinite hits, changed permitted regions, targets, faces, modes,
+revisions, and source contexts still suppress immediately. Selection-box index
+alone is not part of this key when block position, face, and snapping data match.
+The same matcher is used for presentation reads, the placement update shortcut,
+and validity refresh, including ordinary zero-tangent results. There is no
+exact-hit fallback, special-case matching policy, hysteresis, or delayed
+invalidation. The existing validity refresh still performs its one rule call on
+the fresh hit; subsequent unchanged updates can reuse that outcome.
+
 Mode/source changes, dirty refreshes and target loss invalidate presentation.
 Centered/disabled axes contribute no marking; None, ordinary/W-only placement,
-invalidity, unsupported geometry and stale contexts yield no presentation.
+unsupported geometry and stale contexts yield no presentation. Invalid placement
+retains its resolved tangential directions for a red indicator; accepted snapping
+remains cyan. Applied directions remain zero for invalid placement, so rendering
+uses the resolved directions without changing placement semantics.
 The existing slow validity check may update the matching snapshot's validity using
 its one existing rule call, but cannot attach an old result to a new target or face.
 The controller/system still own their existing update cadence; no rendering, new
@@ -455,6 +477,9 @@ Automated coverage resides in `BrushSnappingTests`, `BrushPlacementResultTests`,
 tests. It covers all six faces/modes, independent top/bottom directions, exact and
 adjacent float thresholds, explicit W offsets, equal-position outcome distinctions,
 single validation calls, source/context invalidation, and snapshot ownership.
+Decaying 120-frame camera/hit-motion regressions cover all six faces and the
+client drawing path, requiring uninterrupted drawing with no extra validation or
+upload while directions stay unchanged; actual direction changes still suppress.
 These checks do not qualify geometry, shader compatibility, appearance, or cost.
 
 ### Snapping target geometry and owned cache
@@ -463,144 +488,256 @@ Phase 2 introduces `BrushTargetMeshSource`, `BrushTargetBounds`,
 `BrushTargetMeshCache`, and `BrushTargetGeometry`; these types do not register or draw
 an overlay. Consumers must still obtain a current guarded presentation from the
 controller, then ask the cache to qualify that original target. The cache's live
-block-ID/entity/decor checks supplement, not replace, the controller's context guard.
-An unsupported or rejected target returns no geometry, never a generic cube.
+block-ID check supplements, not replaces, the controller's context guard.
+An unsupported or unavailable target returns no geometry, never a generic cube.
 
-The initial source boundary deliberately accepts only the exact engine base `Block`
-class, without block/collectible behaviors, entity geometry, decors, positional
-randomization, alternate/tiled textures or shapes, overlays, or LOD substitutions.
-Cube/JSON drawing with an ordinary Vintage Story composite shape is considered.
-Derived/custom/chiseled blocks, animations/custom rendering, voxelized shapes, wind
-and depth-offset geometry remain excluded. Static Opaque, OpaqueNoCull, BlendNoCull,
-and Transparent passes are admitted: material alpha and texture holes intentionally
-do not clip the indicator or disqualify geometry. No texture bitmap is acquired or
-scanned; texture availability, baking, and pixel alpha are not qualification inputs.
-The shader must use the mesh and procedural marking mask without material-alpha
-sampling. Animated liquid and other special, unqualified render paths remain
-excluded for geometry fidelity, not for texture opacity. Upload failures remain
-explicit errors.
+Phase 4 replaces default-mesh qualification with `BrushTargetWorldMeshSource`.
+There is no block-class, behavior, shape, snow, render-pass, or texture whitelist.
+An original-target request schedules native chunk tessellation once, not every
+frame. Harmony observers copy only the target's newly emitted triangle indices
+and referenced positions from the actual native terrain pools. The engine itself
+chooses world-position variants, invokes block-entity/custom tessellation and
+snow hooks, applies transforms, and tessellates attached decors and native draw
+types. Close-range pools 0, 1, and 2 are all retained; only the far replacement
+pool 3 is excluded. Decor ownership follows the native decor-emission scope,
+including the alternate-Z-offset branch that does not set `isDecorTesselate`.
+Edge-only chunk rebuilds do not clear interior captures.
+The acquisition request's own synchronous `BlockChanged` notification from
+`MarkBlockDirty` is ignored only for that in-flight request and position, preventing
+an invalidate/re-request loop; real edits and subsequent notifications still invalidate.
 
-The borrowed default JSON mesh is retained as actual indexed triangle geometry:
+The observer never substitutes geometry, changes native output, or calls placement
+validation. Copied positions are converted from chunk-local to original-block-local
+coordinates; native transforms are not applied twice. Main-thread publication is
+guarded by request identity, so old-target, invalidated, and departed-session results
+are discarded. Missing/pending or empty native output produces no overlay, with
+diagnostics for requests, empty output, and capture failures. A renderer that emits
+no terrain triangles has no captured mesh; this is not inferred from its class.
+GPU-only material deformation is not reproduced by copying CPU positions and is
+not claimed as verified animated-surface fidelity.
+
+Material alpha and texture holes intentionally do not clip the indicator. No
+texture bitmap is acquired or scanned, and the shader has no material-alpha sampling.
+Native material/custom attributes are not eligibility tests. Positions, indices,
+packed face normals, and native Z offsets are copied. The flags' low byte carries
+the native render-pass ID instead of material glow, allowing the vertex shader to
+match opaque, transparent/meta, liquid, and topsoil depth conventions without
+sampling materials. Capture equality includes these flags. Upload failures remain explicit.
+The native uploader assigns consecutive attribute slots, not the fixed material
+layout: this position/flags-only mesh uses position slot 0 and integer flags slot 1.
+The snapping vertex shader must use those slots; there are no UV/color/normal
+buffers between them.
+
+Captured geometry is checked as indexed triangles:
 finite positions, valid complete triangle indices, and nondegenerate triangles.
 There is no cuboid, vertex-count, axis-alignment, closed-volume, or unit-cell-bounds
 requirement. Slopes, multi-element shapes, and recessed surfaces are not excluded
-merely by their topology. Custom/wind/depth-offset attributes, extra transform bits
-and special unqualified per-face passes remain excluded. The four static material
-passes above and native inherited passes (`-1`) are allowed. Cube drawtype alone
-still requires the borrowed mesh to match native unit
-cube faces, because native cube drawing does not generally consume an arbitrary
-JSON shape. This is a world-path fidelity check, not replacement geometry.
+merely by their topology. Declared draw type does not impose a separate cube test:
+the native tessellator has already generated the actual geometry.
 
-Surface suitability is separate from source fidelity. `BrushTargetBounds` records
-extents but tests the actual triangles for selected-facing directional opportunity.
-A triangle faces the selection when its oriented geometric normal has a positive
-dot product with the selected outward
-axis; it need not be axis-aligned. Raycast hits can lie on native selection boxes
-rather than rendered triangles, so neither triangle membership nor an outer
-bounding plane is required of the hit. This does not change raycasting: it uses the
-accepted result's directions and supplies the actual mesh for shader clipping.
-Holes and absent/back-facing surfaces never become generated indicator geometry.
-Selected-facing triangles must have projected surface area reaching each applied
-direction's existing cell region (`0.35`/`0.65`); independent U/V opportunities may
-occur on different triangles. Bounds never redefine snapping or generate a surface.
-The cached/uploaded positions and indices remain the actual engine mesh unchanged.
-The Phase 3 shader uses matching selected-facing logic and outward cell-region
-bands, so the opportunity check also covers the concrete mask's nonzero area.
-This does not establish readable opacity or final visual quality.
+`BrushTargetBounds` records extents and validates indexed geometry; it does not
+perform a second CPU directional-coverage or triangle-facing rejection. The shader
+alone clips selected-facing outward bands. Its U/V mask is a union: a diagonal
+result can mark the mesh even when only one applied band's region intersects it.
+Native packed normals determine facing when available, with geometric derivatives
+as the fallback for meshes without packed normals. Raycast hits can lie on native
+selection boxes rather than rendered triangles, so neither triangle membership nor
+an outer bounding plane is required of the hit. This does not change raycasting or
+snapping. Holes and absent surfaces never become generated indicator geometry.
+Bounds never redefine snapping or generate a surface. Cached/uploaded positions
+and indices remain the actual engine mesh unchanged. Shader clipping alone does
+not establish readable opacity or final visual quality.
 
 Candidate unit cubes, the base-Block `game:ethoslab` slab, and faithful static
-sloped/multi-element/recessed assets should be exercised in Phase 6. Many ordinary
-stone-brick cubes may be excluded by texture variants; custom-class cobble slabs
-remain excluded. Centered narrow geometry without accepted tangential movement
+sloped/multi-element/recessed assets should be exercised in Phase 6, along with
+native vertical cobble/stone/wood slabs, including their native snow geometry.
+Texture-only variants do not exclude stone-brick cubes or otherwise qualified slabs.
+Centered narrow geometry without accepted tangential movement
 and surfaces outside the selected-facing directional regions are omission cases.
 Recessed geometry with an actual qualifying surface is not an
 automatic omission. All actual readable-marking claims remain pending Phase 6.
 
 Acquisition/transform evidence is from the installed **1.22.7.0** engine
 (`G:\Vintagestory\VintagestoryLib.dll`) and the local API source, not a live rendered
-qualification. `ITesselatorManager.GetDefaultBlockMesh` returns borrowed default
-chunk geometry; its manager tessellates composite transforms into those positions.
-Native `JsonTesselator` can replace it through block entities, custom hooks,
-position-selected alternates, LODs, or random transforms, which is why those paths
-are excluded. Native `CubeTesselator` uses unit-cell cube faces. Inventory
-`GetDefaultBlockMeshRef` and `MiniDimensionTessellator` preview output are not used
-as world-fidelity proof. After qualification, only original-target translation is
+qualification. The capture observes `ChunkTesselator.NowProcessChunk` and its
+per-block emission into terrain pools, rather than asking for a default or
+inventory mesh. `MiniDimensionTessellator` preview output is not world-fidelity
+proof. After capture, only original-target translation is
 applied, including encoded dimension Y and double-precision camera subtraction
 before float conversion. Shape rotation/scale/offset must not be applied twice.
 
-The one-entry cache keys on the live `Block` object and borrowed default `MeshData`
-reference. No admitted variant depends on position, face, hit, mode, or revision;
-those remain in a fresh presentation/transform descriptor, so equivalent instances
-reuse geometry. Looking up the engine's default mesh does not request independent
-retessellation. Positive and negative qualification are cached. In-place geometry
-or resource edits require explicit invalidation even if references survive.
+The one-entry render cache keys on the live `Block` object and captured `MeshData`
+reference. Acquisition is position/dimension-specific; moving to another instance
+requires its native output, not an assumption that its default mesh is equivalent.
+Face, hit, and mode changes reuse the existing capture and upload. Repeated native
+captures with identical positions/indices/render flags keep the existing reference. Target and
+neighbor edits invalidate acquisition; subsequent native rebuilds also refresh the
+current capture. Resource edits explicitly invalidate requests and render resources.
 Texture-alpha changes alone do not invalidate or requalify geometry.
 `InvalidateGeometry(blockId)` retires only that entry; `Invalidate()` retires all
 owned resources for world/resource/shader changes; replacement and `Dispose()`
-also retire them. Missing default geometry releases the old entry. Unsupported
+also retire them. Missing captured geometry releases the old entry. Suppressed
 targets never expose the previous descriptor, but may retain valid cached geometry.
-Phase 4 must wire these hooks to actual lifecycle/reload events; no subscriptions
-or client-system lifetime integration are claimed here.
+`BrushSnappingRenderBinding` wires these hooks to actual target-edit, shape,
+texture/atlas, shader, and session lifecycle events as described below.
 
-Engine mesh arrays remain borrowed and unchanged. The cache clones qualifying CPU
+Engine mesh arrays remain borrowed and unchanged. The observer copies them during
+native tessellation and never retains or disposes native pool data. The cache clones captured CPU
 data, uploads its owned copy lazily once, and disposes only its owned GPU/CPU data.
 Replacement/disposal are idempotent and clear ownership before release; failed GPU
 initialization disposes that failed reference and remains retryable. Acquisition,
 qualification, upload, invalidation, and disposal enforce the creating client-main
-thread (and the engine main-thread ID when initialized). Tests use synthetic native
+thread (and the engine main-thread ID when initialized). The capture observer runs
+on the native tessellation thread, with stale-safe publication to the main thread.
+Tests install the Harmony observers against the installed engine, exercise pool
+deltas, baked transforms, LOD choice, request identity/dimensions, and late disposal.
+Other tests use synthetic native
 cube/slab data plus wedge, alternate-triangulation, multi-element and recessed
 meshes with mocked acquisition/upload boundaries. Atlas mocks assert that no
 texture loading occurs, including transparent pixels and unavailable bitmaps.
 Tests cover actual-mesh
-preservation, surface-facing opportunity, selection-box hits, reuse, translation,
+preservation, shader-owned directional clipping, selection-box hits, reuse, translation,
 invalidation, failures and disposal. They do not prove live asset support, shader
 compatibility, appearance, ordering, or rendering cost.
 
 ### Isolated snapping shader drawing
 
-Phase 3 adds `BrushSnappingRenderer`, `BrushSnappingShader`, and
+Phase 3 adds `BrushSnappingRenderer`, `BrushSnappingShader`, `BrushSnappingShaderOwner`, and
 `BrushOverlayRenderState`, with the `vbe-snapping` vertex/fragment assets.
-Nothing registers this renderer yet. Phase 4 must supply current guarded geometry
-on each callback, wire session/reload lifetimes, and test live shader compilation.
+`BrushSnappingShader` derives from the game's `ShaderProgram` (and therefore
+`ShaderProgramBase`), matching native file-shader registration and compilation.
+All nine uniforms are exposed as typed property setters on that subclass; only
+the subclass maps those setters to GLSL names. The renderer assigns matrices,
+vectors, color, width, and depth bias through that typed contract, without raw
+uniform or texture-binding calls. `BrushSnappingShaderOwner` retains lazy creation,
+registration, compile failure cleanup, replacement/reload, and disposal.
+Its default factory creates the actual native subclass; the typed factory seam
+keeps lifecycle and renderer tests independent of an OpenGL context.
+The session binding registers this renderer and supplies current guarded geometry
+on each callback. The user confirmed and approved the Phase 4 installed-game smoke
+on 2026-10-29, covering shader loading, visibility/stability, validity colors,
+depth quality, and reload/lifecycle behavior. Comprehensive appearance, ordering,
+and performance qualification remain in Phase 6.
 The renderer never retains a target between callbacks or owns the cache's mesh.
 
-The provisional visual is cyan outward bands covering the applied U/V cell regions
+The visual is outward bands covering the resolved U/V cell regions, cyan for valid
+placement and red for invalid placement,
 past the existing centered threshold (`0.15` around `0.5`), with no W glyph.
 Independent positive/negative directions use Z/Y on X faces, X/Z on Y faces, and
 X/Y on Z faces; opposite faces never reverse the axes. Positions remain block-local
-through interpolation. Triangle derivatives reconstruct geometric normals, corrected
-for back faces, and retain only normals with positive selected-face dot product.
+through interpolation. Native packed normals, or triangle derivatives corrected
+for back faces when those normals are absent, supply the selected-face dot test.
 No texture UV, atlas, bitmap, material alpha, shape bounds, or triangle-edge artwork
 is involved. Mesh triangles clip the bands, including over texture holes.
 The width parameter (`0.025` block units) controls the band's inward-to-outward
 opacity ramp, widened by screen derivatives for softening. Coverage is strictly
-outside the centered region; each applied direction with projected triangle area
+outside the centered region; each resolved direction with projected triangle area
 in that region has nonzero mask area. Narrow coverage may still be unreadable.
-Color, opacity (`0.7`), and width are candidates, not approved artwork.
+Validity colors are user-directed; opacity (`0.7`) and width remain candidates.
 
 The candidate stage is OIT, order `0.52`, using the native OIT shader include and
 preserving indexed blending. The owned mesh is drawn once with the original-target
-camera-relative/dimension-aware transform. A provisional clip-depth bias of
-`0.00001 * w` moves depth toward the camera without moving local/world geometry.
+camera-relative/dimension-aware transform. The vertex shader first matches the
+captured pass's native depth offset. A provisional clip-depth bias of
+`0.00001 * w` and polygon offset factor/units `-1/-1` then move depth toward the
+camera without moving local/world geometry; the polygon factor handles slope.
 Depth testing uses LEQUAL, depth writes are disabled, and culling is disabled to
-support qualified no-cull surfaces. Counterclockwise front winding makes derivative
-normal orientation match CPU indexed-triangle qualification independently of the
+support no-cull surfaces. Counterclockwise front winding makes derivative
+normal fallback independent of the
 previous renderer's winding state. Capture/apply/restore isolates depth enable,
-depth mask, depth function, culling, and front winding. Shader stop, state restoration, and the
+depth mask, depth function, culling, front winding, and polygon-offset enable/factor/units.
+Shader stop, state restoration, and the
 previous active shader's reactivation run through nested cleanup even on failure.
-Bias, stage ordering versus selection/preview/transparency, and actual occlusion
-still need runtime qualification in Phases 4/6.
+The Phase 4 runtime smoke is user-approved. Comprehensive bias, stage ordering
+versus selection/preview/transparency, and occlusion qualification remain in Phase 6.
+
+The latest correction passed 1,361 rebuilt managed tests and Release publish.
+An isolated native OpenGL 4.6 context on the RTX 4090 compiled/linked the actual
+shader assets and exercised the production render-state implementation in 1,728
+cases: orthographic/perspective/grazing views, two surface heights, all nine native
+passes, axis/diagonal directions, and native/fallback normals. Visible cases
+required nonzero rasterized coverage; foreground-occluded cases required zero.
+Depth buffers remained bit-identical, and all captured GL state was restored,
+including both prior polygon-offset enable states and nondefault factor/units.
+This is not installed-game scene, asset, ordering, lifecycle, or performance evidence.
+That earlier harness manually assigned the flags slot and missed an uploader/shader
+layout mismatch. The subsequent live test still showed the block texture cutting
+through the band. Native `ClientPlatformWindows.UploadMesh` inspection established
+that flags are uploaded at slot 1 for the stripped capture, while the shader read
+slot 3. Correcting that binding restores the captured normals, pass IDs, and native
+Z offsets without increasing the bias or disabling depth testing.
+The corrected check invokes the installed engine's actual `UploadMesh` and
+`RenderMesh` on both full material meshes and production-captured stripped meshes,
+using the native opaque vertex shader for terrain depth. On RTX 4090/OpenGL 4.6,
+384 coverage/occlusion/depth-preservation cases passed across orthographic,
+perspective, and grazing views, two heights, offsets 0/1/2/7, and all eight U/V
+direction combinations. Reverting only the shader slot reproduced 48 missing-band
+failures; the corrected slot passed those same cases with the original bias.
+Rebuilt managed verification again passed all 1,361 tests and Release publish.
+The user subsequently confirmed the z-fighting correction and, on 2026-10-29,
+approved all remaining Phase 4 runtime checks.
 
 Shader creation/registration/compilation failures dispose failed candidates and
 retire replaced owned programs. Drawing failures restore state and disable only
 the overlay, with a `[BuildBrush]` logger error, until an explicit successful
 `ReloadShader`. Native-disposed programs are recreated before use. Disposal is
 idempotent and releases only the renderer's shader, never the geometry cache or
-borrowed engine meshes. Phase 4 owns event subscriptions and cache invalidation.
+borrowed engine meshes. The session binding owns subscriptions and cache invalidation.
 `BrushSnappingRendererTests` cover all face/mode/direction inputs, actual mesh and
 original-target transform, source masking intent, state-cleanup failure paths,
 shader replacement/recovery, and ownership. C# compilation and these tests are
 not GLSL compilation, live state/ordering, visual, or performance proof.
+
+### Snapping overlay client-session lifecycle
+
+`BuildBrushSystem_Client` creates one `BrushSnappingRenderBinding` on the local
+player's join and disposes/clears it on world departure and system disposal.
+The binding owns one geometry cache and one renderer, registered in OIT at order
+`0.52` for that session. Disabled, suspended, targetless, or failed overlays leave an
+idle callback, not a separately cached presentation or repeated registration churn.
+The server preview renderer, network packets, input handlers, and placement
+validation cadence are unchanged.
+
+Each frame reads the live local selection through the controller's presentation
+guard before qualifying geometry. World identity, player life, and dimension are
+also checked. New faces/hits/targets/items/modes without matching resolved outcomes
+are omitted immediately, including between placement ticks. Drawing never invokes
+placement validation. Death disables mode through the existing system event and
+is independently gated by the player's live state. Target loss, mode disable,
+unsupported inventory, or a stale/suppressed presentation clears drawing without
+releasing valid reusable mesh data; subsequent matching outcomes can reuse it.
+Placement-validity changes update red/cyan without rebuilding or reuploading geometry.
+
+The binding subscribes to target-position `BlockChanged`, `ReloadShapes`,
+`ReloadTextures`, `BlockTexturesLoaded`, `ReloadShader`, and `LeaveWorld`.
+World edits elsewhere do not invalidate the cache. An edit at the original target,
+shape reload, or resource reload invalidates owned geometry; shader reload also
+compiles/replaces the owned program and returns its success to the event caller.
+The installed 1.22.7.0 `ShaderAPI.ReloadShaders` retires native programs before
+triggering mod reload handlers. Failed compilation/replacement/drawing/registration
+is explicitly logged and disables only the overlay; a successful explicit shader
+reload restores drawing and can retry a failed renderer registration.
+Successful compilation logs `[BuildBrush] Snapping indicator shader compiled.`
+
+Resources and render-list membership are not retired within the overlay callback:
+invalidation/disposal during drawing is queued on the client main thread.
+Pending invalidation/disposal suppresses new target reads immediately. A deferred
+shader-reload event returns false rather than claiming compilation already succeeded.
+Departure/disposal detaches all six subscriptions synchronously, then unregisters
+the renderer and disposes owned shader and CPU/GPU meshes (after the callback, if
+necessary). Disposal is idempotent and never disposes borrowed engine geometry.
+
+`BrushSnappingRenderBindingTests` use the real brush/controller with installed
+native player/selection access and mocked rendering. They cover rapid unmatched
+contexts, source suspension/resumption, modes, invalidity, death/world/dimension
+guards, geometry replacement, targeted and global invalidation, shader failures
+and recovery, deferred retirement, subscriptions, and system session ownership.
+The native player fixture avoids an installed-API default-interface method that
+Castle cannot proxy. These tests are not a live shader or visual qualification.
+The user confirmed and approved the installed-game Phase 4 checks on 2026-10-29,
+closing that runtime evidence gap. This approval is user-reported, not an
+agent-captured runtime diagnostic trace. Phase 5 remains open for distributable
+verification; Phase 6 still owns artwork, overlay ordering/readability, and measured cost.
 
 ## Update and preview flow
 

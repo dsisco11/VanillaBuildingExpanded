@@ -38,6 +38,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(VINTAGE_STORY)\Lib\0Harmony.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="OpenTK.Mathematics">
+      <HintPath>$(VINTAGE_STORY)\Lib\OpenTK.Mathematics.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
     <Reference Include="OpenTK.Graphics">
       <HintPath>$(VINTAGE_STORY)\Lib\OpenTK.Graphics.dll</HintPath>
       <Private>true</Private>

@@ -96,12 +96,21 @@ namespace CakeBuild
     {
         public override void Run(BuildContext context)
         {
+            string resultsDirectory = $"../VanillaBuildingExpanded.Tests/TestResults/{DateTime.UtcNow:yyyyMMdd-HHmmssfff}";
+            context.EnsureDirectoryExists(resultsDirectory);
+            Console.WriteLine($"Test diagnostics: {Path.GetFullPath(resultsDirectory)}");
             context.DotNetTest($"../{BuildContext.ProjectName}.Tests/{BuildContext.ProjectName}.Tests.csproj",
                 new DotNetTestSettings
                 {
                     Configuration = context.BuildConfiguration,
                     NoBuild = false,
-                    NoRestore = false
+                    NoRestore = false,
+                    ResultsDirectory = resultsDirectory,
+                    DiagnosticFile = Path.Combine(resultsDirectory, "vstest.log"),
+                    Loggers = new[] { "trx" },
+                    ArgumentCustomization = args => args
+                        .Append("--blame-hang-timeout").Append("2m")
+                        .Append("--blame-hang-dump-type").Append("mini")
                 });
         }
     }

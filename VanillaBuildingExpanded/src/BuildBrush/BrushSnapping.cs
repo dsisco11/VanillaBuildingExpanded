@@ -60,6 +60,16 @@ public readonly record struct BrushSnapping
     #endregion
 
     #region Methods
+    internal readonly (int U, int V) GetTangentialDirections(EBuildBrushSnapping mode)
+    {
+        bool noSnapping = mode.HasFlag(EBuildBrushSnapping.None);
+        return GetTangentialDirections(!noSnapping && mode.HasFlag(EBuildBrushSnapping.Horizontal),
+            !noSnapping && mode.HasFlag(EBuildBrushSnapping.Vertical));
+    }
+
+    private readonly (int U, int V) GetTangentialDirections(bool horizontal, bool vertical) =>
+        (horizontal ? FaceU : 0, (Selection.Face.Axis == EnumAxis.Y ? horizontal : vertical) ? FaceV : 0);
+
     /// <summary>
     /// Resolves a candidate using world-space restrictions. W supplies outward placement when no permitted
     /// U/V movement exists; the explicit face-offset modifier adds W independently of those restrictions.
@@ -78,8 +88,7 @@ public readonly record struct BrushSnapping
         FastVec3i u = GetFaceUOffset(Selection.Face.Axis);
         FastVec3i v = GetFaceVOffset(Selection.Face.Axis);
         FastVec3i offset = new(horizontal ? u.X + v.X : 0, vertical ? u.Y + v.Y : 0, horizontal ? u.Z + v.Z : 0);
-        int appliedU = horizontal ? FaceU : 0;
-        int appliedV = (Selection.Face.Axis == EnumAxis.Y ? horizontal : vertical) ? FaceV : 0;
+        (int appliedU, int appliedV) = GetTangentialDirections(horizontal, vertical);
         int appliedW = 0;
 
         if (explicitFaceOffset || ((noSnapping || horizontal || vertical) && offset.X == 0 && offset.Y == 0 && offset.Z == 0))

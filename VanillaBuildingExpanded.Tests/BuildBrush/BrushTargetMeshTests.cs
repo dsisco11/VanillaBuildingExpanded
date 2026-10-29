@@ -7,6 +7,8 @@ using VanillaBuildingExpanded.BuildBrush;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
+using Vintagestory.GameContent;
+using Vintagestory.ServerMods;
 
 using Xunit;
 
@@ -38,6 +40,98 @@ public sealed class BrushTargetMeshTests
         f.Api.Verify(x => x.TesselatorManager.GetDefaultBlockMeshRef(It.IsAny<Block>()), Times.Never);
         f.Api.Verify(x => x.Tesselator.TesselateBlock(It.IsAny<Block>(), out It.Ref<MeshData>.IsAny), Times.Never);
         Assert.Equal(0, f.Uploads);
+    }
+
+    [Theory]
+    [InlineData("north")]
+    [InlineData("east")]
+    [InlineData("south")]
+    [InlineData("west")]
+    [InlineData("up")]
+    [InlineData("down")]
+    public void NativeSlabs_WithStaticRotationBehaviors_KeepTheActualMesh(string facing)
+    {
+        using Fixture f = new();
+        Block slab = f.UseNativeSlab(facing);
+        BlockPos position = f.Position.Copy();
+        var target = Assert.IsType<BrushTargetGeometry>(f.Cache.GetTarget(f.Presentation(u: facing == "west" ? 0.1 : 0.9)));
+        Assert.Equal(f.Borrowed.xyz, target.Mesh.Data.xyz);
+        Assert.Equal(f.Borrowed.Indices, target.Mesh.Data.Indices);
+        Assert.NotSame(f.Borrowed, target.Mesh.Data);
+        Assert.Equal(position, f.Position);
+        f.Api.Verify(x => x.TesselatorManager.GetDefaultBlockMesh(slab), Times.Once);
+        f.Api.Verify(x => x.Tesselator.TesselateBlock(It.IsAny<Block>(), out It.Ref<MeshData>.IsAny), Times.Never);
+        f.Api.VerifyGet(x => x.BlockTextureAtlas, Times.Never);
+    }
+
+    [Fact]
+    public void NativeOrdinarySlab_UsesItsStaticMesh()
+    {
+        using Fixture f = new();
+        f.UseNativeSlab(snowAware: false);
+        var target = Assert.IsType<BrushTargetGeometry>(f.Cache.GetTarget(f.Presentation()));
+        Assert.Equal(f.Borrowed.xyz, target.Mesh.Data.xyz);
+        Assert.Equal(f.Borrowed.Indices, target.Mesh.Data.Indices);
+    }
+
+    [Theory]
+    [InlineData("snow")]
+    [InlineData("snow-neighbor")]
+    [InlineData("unknown-neighbor")]
+    [InlineData("unknown-rotation")]
+    [InlineData("custom-rotation")]
+    [InlineData("custom-wrench")]
+    public void NativeSlab_MetadataDoesNotRejectCapturedGeometry(string category)
+    {
+        using Fixture f = new();
+        Block slab = f.UseNativeSlab();
+        switch (category)
+        {
+            case "snow": slab.VariantStrict["cover"] = "snow"; break;
+            case "snow-neighbor":
+                f.Blocks.Setup(x => x.GetBlock(f.Position.AddCopy(BlockFacing.SOUTH)))
+                    .Returns(new Block { BlockMaterial = EnumBlockMaterial.Snow });
+                break;
+            case "unknown-neighbor":
+                f.Blocks.Setup(x => x.GetBlock(f.Position.AddCopy(BlockFacing.SOUTH))).Returns((Block)null!);
+                break;
+            case "unknown-rotation": slab.VariantStrict["rot"] = "unknown"; break;
+            case "custom-rotation": slab.BlockBehaviors = [new CustomRotatable(slab)]; break;
+            case "custom-wrench": slab.CollectibleBehaviors = [new CustomWrenchOrientable(slab)]; break;
+            default: throw new InvalidOperationException();
+        }
+        Assert.NotNull(f.Cache.GetTarget(f.Presentation()));
+        Assert.Equal(0, f.Uploads);
+        f.Api.Verify(x => x.TesselatorManager.GetDefaultBlockMesh(slab), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("north")]
+    [InlineData("east")]
+    [InlineData("south")]
+    [InlineData("west")]
+    public void NativeVerticalSlab_NewCapturedSnowGeometryReplacesTheOldGeometry(string facing)
+    {
+        using Fixture f = new();
+        f.UseNativeSlab(facing);
+        BlockPos neighborPosition = f.Position.AddCopy(BlockFacing.FromCode(facing).Opposite);
+        Block neighbor = new();
+        f.Blocks.Setup(x => x.GetBlock(neighborPosition)).Returns(() => neighbor);
+        BrushSnappingPresentation presentation = f.Presentation(u: facing == "west" ? 0.1 : 0.9);
+        var first = Assert.IsType<BrushTargetGeometry>(f.Cache.GetTarget(presentation));
+        MeshRef upload = first.Mesh.GetOrUpload();
+        neighbor = new Block { BlockMaterial = EnumBlockMaterial.Snow };
+        f.Borrowed = CreateCuboid(Vector3.Zero, Vector3.One);
+        var snow = Assert.IsType<BrushTargetGeometry>(f.Cache.GetTarget(presentation));
+        Assert.NotSame(first.Mesh, snow.Mesh);
+        Assert.True(upload.Disposed);
+        neighbor = new Block();
+        var resumed = Assert.IsType<BrushTargetGeometry>(f.Cache.GetTarget(presentation));
+        Assert.Same(snow.Mesh, resumed.Mesh);
+        resumed.Mesh.GetOrUpload();
+        Assert.Equal(2, f.Uploads);
+        f.Inputs.Validator.Verify(x => x.CanPlace(It.IsAny<Block>(), It.IsAny<BlockSelection>(), ref It.Ref<string>.IsAny),
+            Times.Once);
     }
 
     [Fact]
@@ -83,8 +177,6 @@ public sealed class BrushTargetMeshTests
     [InlineData("random-offset")]
     [InlineData("random-rotation")]
     [InlineData("random-size")]
-    [InlineData("alternates")]
-    [InlineData("tiles")]
     [InlineData("shape-alternates")]
     [InlineData("baked-alternates")]
     [InlineData("overlay")]
@@ -98,7 +190,7 @@ public sealed class BrushTargetMeshTests
     [InlineData("format")]
     [InlineData("voxelized")]
     [InlineData("stale-block")]
-    public void UnqualifiedWorldTargets_AreOmittedWithoutMeshAcquisitionOrCubeSubstitution(string category)
+    public void NativeGeometryIsNotRejectedByBlockMetadata(string category)
     {
         using Fixture f = new();
         BrushSnappingPresentation original = f.Presentation();
@@ -116,8 +208,6 @@ public sealed class BrushTargetMeshTests
             case "random-offset": f.Block.RandomDrawOffset = 1; break;
             case "random-rotation": f.Block.RandomizeRotations = true; break;
             case "random-size": f.Block.RandomSizeAdjust = 0.1f; break;
-            case "alternates": f.Block.HasAlternates = true; break;
-            case "tiles": f.Block.HasTiles = true; break;
             case "shape-alternates": f.Block.Shape.Alternates = [new CompositeShape()]; break;
             case "baked-alternates": f.Block.Shape.BakedAlternates = [new CompositeShape()]; break;
             case "overlay": f.Block.Shape.Overlays = [new CompositeShape()]; break;
@@ -134,9 +224,18 @@ public sealed class BrushTargetMeshTests
             default: throw new InvalidOperationException();
         }
 
-        Assert.Null(f.Cache.GetTarget(original));
+        if (category is "air" or "stale-block")
+        {
+            Assert.Null(f.Cache.GetTarget(original));
+            f.Api.Verify(x => x.TesselatorManager.GetDefaultBlockMesh(It.IsAny<Block>()), Times.Never);
+        }
+        else
+        {
+            var target = Assert.IsType<BrushTargetGeometry>(f.Cache.GetTarget(original));
+            Assert.Equal(f.Borrowed.xyz, target.Mesh.Data.xyz);
+            Assert.Equal(f.Borrowed.Indices, target.Mesh.Data.Indices);
+        }
         Assert.Equal(0, f.Uploads);
-        f.Api.Verify(x => x.TesselatorManager.GetDefaultBlockMesh(It.IsAny<Block>()), Times.Never);
     }
 
     [Theory]
@@ -145,6 +244,8 @@ public sealed class BrushTargetMeshTests
     [InlineData("composite-alpha")]
     [InlineData("alternate-texture")]
     [InlineData("tiled-texture")]
+    [InlineData("alternate-flag")]
+    [InlineData("tiled-flag")]
     [InlineData("unbaked")]
     [InlineData("missing-textures")]
     public void TextureAlphaAndTextureAvailability_DoNotRestrictMeshIndicators(string category)
@@ -157,6 +258,8 @@ public sealed class BrushTargetMeshTests
             case "composite-alpha": f.Texture.Alpha = 128; break;
             case "alternate-texture": f.Texture.Baked.BakedVariants = [new BakedCompositeTexture()]; break;
             case "tiled-texture": f.Texture.Baked.BakedTiles = [new BakedCompositeTexture()]; break;
+            case "alternate-flag": f.Block.HasAlternates = true; break;
+            case "tiled-flag": f.Block.HasTiles = true; break;
             case "unbaked": f.Texture.Baked = null; break;
             case "missing-textures": f.Block.Textures = null; break;
             default: throw new InvalidOperationException();
@@ -173,8 +276,7 @@ public sealed class BrushTargetMeshTests
     [Theory]
     [InlineData("narrow")]
     [InlineData("recessed")]
-    [InlineData("cube-draw-slab-mesh")]
-    public void NonCubicGeometryRequiresFaithfulMeshAndASelectedSurfaceWithDirectionalRoom(string category)
+    public void NonCubicGeometry_ReachesShaderClippingWithoutASecondDirectionalGate(string category)
     {
         using Fixture f = new();
         double plane = 1;
@@ -190,17 +292,16 @@ public sealed class BrushTargetMeshTests
             plane = 0.5;
         }
 
-        Assert.Null(f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.9, 0.1, plane)));
+        var target = Assert.IsType<BrushTargetGeometry>(
+            f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.9, 0.1, plane)));
+        Assert.Equal(f.Borrowed.xyz, target.Mesh.Data.xyz);
+        Assert.Equal(f.Borrowed.Indices, target.Mesh.Data.Indices);
         Assert.Equal(0, f.Uploads);
     }
 
     [Theory]
     [InlineData("nan")]
     [InlineData("indices")]
-    [InlineData("wind")]
-    [InlineData("offset")]
-    [InlineData("pass")]
-    [InlineData("pass-extra-bits")]
     [InlineData("count")]
     [InlineData("degenerate")]
     public void UnsupportedMeshData_IsOmittedRatherThanUploaded(string change)
@@ -215,7 +316,7 @@ public sealed class BrushTargetMeshTests
             case "pass": f.Borrowed.RenderPassesAndExtraBits = [(short)EnumChunkRenderPass.Liquid]; break;
             case "pass-extra-bits": f.Borrowed.RenderPassesAndExtraBits = [1024]; break;
             case "count": f.Borrowed.VerticesCount = 0; break;
-            case "degenerate": f.Borrowed = CreateCuboid(Vector3.Zero, new Vector3(1, 0, 1)); break;
+            case "degenerate": Array.Fill(f.Borrowed.Indices, 0); break;
             default: throw new InvalidOperationException();
         }
         Assert.Null(f.Cache.GetTarget(f.Presentation()));
@@ -329,6 +430,8 @@ public sealed class BrushTargetMeshTests
     }
 
     private sealed class CustomBlock : Block { }
+    private sealed class CustomRotatable(Block block) : BlockBehaviorOmniRotatable(block) { }
+    private sealed class CustomWrenchOrientable(Block block) : BlockBehaviorWrenchOrientable(block) { }
 
     internal sealed class Fixture : IDisposable
     {
@@ -375,8 +478,11 @@ public sealed class BrushTargetMeshTests
                 Uploaded.Add(mesh);
                 return mesh;
             });
-            Cache = new BrushTargetMeshCache(Api.Object);
+            Cache = new BrushTargetMeshCache(Api.Object, GetCapturedMesh);
         }
+
+        public MeshData? GetCapturedMesh(Block block, BlockPos position) =>
+            Api.Object.TesselatorManager.GetDefaultBlockMesh(block);
 
         public BrushSnappingPresentation Presentation(BlockFacing? face = null, double u = 0.9, double v = 0.5,
             double? plane = null, EBuildBrushSnapping mode = EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical)
@@ -396,6 +502,26 @@ public sealed class BrushTargetMeshTests
             BrushPlacementResult result = new BrushPlacementValidation(Inputs.Validator.Object)
                 .Resolve(Block, selection, mode, new BrushSnapping(selection));
             return new BrushSnappingPresentation(selection, result, ++revision);
+        }
+
+        public Block UseNativeSlab(string facing = "north", bool snowAware = true)
+        {
+            Block slab = snowAware ? new BlockSlabSnowRemove() : new BlockSlab();
+            slab.BlockId = Block.Id;
+            slab.Code = new AssetLocation("game:native-test-slab");
+            slab.DrawType = EnumDrawType.JSON;
+            slab.Shape = new CompositeShape { Base = new AssetLocation($"game:block/basic/slab/slab-{facing}") };
+            slab.VariantStrict["cover"] = "free";
+            slab.VariantStrict["rot"] = facing;
+            slab.BlockBehaviors = [new BlockBehaviorOmniRotatable(slab), new BlockBehaviorWrenchOrientable(slab)];
+            slab.CollectibleBehaviors = slab.BlockBehaviors;
+            Vector3 min = Vector3.Zero, max = Vector3.One;
+            BlockFacing rotation = BlockFacing.FromCode(facing);
+            if (rotation.Negative) max[(int)rotation.Axis] = 0.5f;
+            else min[(int)rotation.Axis] = 0.5f;
+            Borrowed = CreateCuboid(min, max);
+            WorldBlock = slab;
+            return slab;
         }
 
         public void Dispose() => Cache.Dispose();

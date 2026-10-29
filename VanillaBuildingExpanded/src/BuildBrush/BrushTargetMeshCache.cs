@@ -2,6 +2,7 @@ using System;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
@@ -13,14 +14,15 @@ internal sealed class BrushTargetMeshCache : IDisposable
     private BrushTargetMesh? ownedMesh;
     private bool disposed;
 
-    public BrushTargetMeshCache(ICoreClientAPI api) => source = new BrushTargetMeshSource(api);
+    public BrushTargetMeshCache(ICoreClientAPI api, System.Func<Block, BlockPos, MeshData?>? getMesh = null) =>
+        source = new BrushTargetMeshSource(api, getMesh);
 
     public BrushTargetGeometry? GetTarget(BrushSnappingPresentation presentation)
     {
         EnsureAvailable();
-        Block? block = source.GetSupportedBlock(presentation);
+        Block? block = source.GetTargetBlock(presentation);
         if (block is null) return null;
-        MeshData? borrowed = source.GetBorrowedMesh(block);
+        MeshData? borrowed = source.GetCapturedMesh(block);
         if (borrowed is null)
         {
             Release();
@@ -30,25 +32,28 @@ internal sealed class BrushTargetMeshCache : IDisposable
         if (!ReferenceEquals(block, cachedBlock) || !ReferenceEquals(borrowed, borrowedMesh))
         {
             Release();
-            if (BrushTargetBounds.TryRead(borrowed, block.DrawType == EnumDrawType.Cube, out var bounds))
+            if (BrushTargetBounds.TryRead(borrowed, out var bounds))
                 ownedMesh = new BrushTargetMesh(source, borrowed.Clone(), bounds);
             cachedBlock = block;
             borrowedMesh = borrowed;
         }
 
-        if (ownedMesh is null || !ownedMesh.Bounds.CanMark(presentation, ownedMesh.Data)) return null;
+        if (ownedMesh is null) return null;
         return new BrushTargetGeometry(presentation, ownedMesh);
     }
 
     public void InvalidateGeometry(int blockId)
     {
         EnsureAvailable();
-        if (cachedBlock?.Id == blockId) Release();
+        if (cachedBlock?.Id == blockId) Invalidate();
     }
+
+    public bool IsRequestingNativeMeshAt(BlockPos position) => source.IsRequestingNativeMeshAt(position);
 
     public void Invalidate()
     {
         EnsureAvailable();
+        source.Invalidate();
         Release();
     }
 
@@ -72,7 +77,8 @@ internal sealed class BrushTargetMeshCache : IDisposable
         source.EnsureMainThread();
         if (disposed) return;
         disposed = true;
-        Release();
+        try { Release(); }
+        finally { source.Dispose(); }
     }
 }
 

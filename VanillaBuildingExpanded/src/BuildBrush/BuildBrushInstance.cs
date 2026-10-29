@@ -579,6 +579,8 @@ public class BuildBrushInstance
         InvalidateSnappingPresentation();
         long revision = snappingPresentationRevision;
         BlockSelection originalTarget = blockSelection.Clone();
+        // Native Clone copies selection coordinates but omits the selected block.
+        originalTarget.Block = blockSelection.Block;
         BrushPlacementResult placement = placementValidation.Resolve(_blockUntransformed, blockSelection, Snapping, snapping);
         BlockPos resolvedPos = placement.Position;
         bool result = resolvedPos != Position;
@@ -602,10 +604,10 @@ public class BuildBrushInstance
     {
         BrushSnappingPresentation? presentation = snappingPresentation;
         ItemStack? heldStack = inventory.ActiveHotbarSlot?.Itemstack;
-        if (!IsActive || !_isValidPlacementBlock || IsDirty || !IsValidPlacement || !supportedGeometry
+        if (!IsActive || !_isValidPlacementBlock || IsDirty || !supportedGeometry
             || currentSelection is null || presentation is null
             || !presentation.Matches(currentSelection, Snapping, snappingPresentationRevision)
-            || presentation.Result.Outcome != BrushPlacementOutcome.AcceptedSnapping
+            || !presentation.HasTangentialSnapping
             || presentation.Result.Position != Position
             || heldStack is null || heldStack.Block?.Id != BlockId || heldStack.StackSize <= 0
             || SourceHotbarSlotNumber != inventory.ActiveHotbarSlotNumber

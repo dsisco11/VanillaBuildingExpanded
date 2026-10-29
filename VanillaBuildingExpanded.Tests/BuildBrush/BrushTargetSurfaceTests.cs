@@ -87,23 +87,27 @@ public sealed class BrushTargetSurfaceTests
     }
 
     [Fact]
-    public void BackFacingTriangles_DoNotSupplySelectedFacingDirectionalArea()
+    public void ReversedWinding_IsPassedToTheShaderRatherThanRejectingTheTarget()
     {
         using Fixture f = new();
         f.Borrowed = Shape("wedge");
         for (int i = 0; i < 6; i += 3)
             (f.Borrowed.Indices[i + 1], f.Borrowed.Indices[i + 2]) =
                 (f.Borrowed.Indices[i + 2], f.Borrowed.Indices[i + 1]);
-        Assert.Null(f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.9, 0.1, 0.9)));
+        var target = Assert.IsType<BrushTargetGeometry>(
+            f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.9, 0.1, 0.9)));
+        Assert.Equal(f.Borrowed.Indices, target.Mesh.Data.Indices);
         Assert.Equal(0, f.Uploads);
     }
 
     [Fact]
-    public void UnusedVertexBounds_DoNotInventDirectionalSurfaceCoverage()
+    public void DirectionalCoverage_IsClippedByTheShaderWithoutInventingGeometry()
     {
         using Fixture f = new();
         f.Borrowed = Mesh([0, 0, 0, 0, 0, 0.2f, 0.2f, 0, 0, 1, 1, 1], [0, 1, 2]);
-        Assert.Null(f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.9, 0.1, 1)));
+        var target = Assert.IsType<BrushTargetGeometry>(
+            f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.9, 0.1, 1)));
+        Assert.Equal(f.Borrowed.Indices, target.Mesh.Data.Indices);
         Assert.NotNull(f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.1, 0.1, 1)));
     }
 
@@ -122,6 +126,39 @@ public sealed class BrushTargetSurfaceTests
     }
 
     [Theory]
+    [InlineData(0.1, 0.1)]
+    [InlineData(0.1, 0.5)]
+    [InlineData(0.1, 0.9)]
+    [InlineData(0.5, 0.1)]
+    [InlineData(0.5, 0.9)]
+    [InlineData(0.9, 0.1)]
+    [InlineData(0.9, 0.5)]
+    [InlineData(0.9, 0.9)]
+    public void TopSlab_AxisAndDiagonalSnappingBothReachTheShader(double u, double v)
+    {
+        using Fixture f = new();
+        f.Borrowed = BrushTargetMeshTests.CreateCuboid(new Vector3(0, 0.5f, 0), Vector3.One);
+        var target = Assert.IsType<BrushTargetGeometry>(
+            f.Cache.GetTarget(f.Presentation(BlockFacing.UP, u, v, 1)));
+        Assert.Equal(f.Borrowed.xyz, target.Mesh.Data.xyz);
+        Assert.Equal(f.Borrowed.Indices, target.Mesh.Data.Indices);
+        target.Mesh.GetOrUpload();
+        Assert.Equal(1, f.Uploads);
+    }
+
+    [Fact]
+    public void DiagonalSnapping_DoesNotRequireBothBandsToIntersectTheMesh()
+    {
+        using Fixture f = new();
+        f.Borrowed = Mesh([0.7f, 0, 0.45f, 0.7f, 0, 0.55f, 1, 0, 0.45f], [0, 1, 2]);
+        var target = Assert.IsType<BrushTargetGeometry>(
+            f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.9, 0.9, 1)));
+        Assert.Equal(1, target.Presentation.Result.AppliedSnapping.FaceU);
+        Assert.Equal(1, target.Presentation.Result.AppliedSnapping.FaceV);
+        Assert.Equal(f.Borrowed.Indices, target.Mesh.Data.Indices);
+    }
+
+    [Theory]
     [InlineData("negative-index")]
     [InlineData("incomplete-triangle")]
     [InlineData("short-positions")]
@@ -136,7 +173,7 @@ public sealed class BrushTargetSurfaceTests
             case "negative-index": f.Borrowed.Indices[0] = -1; break;
             case "incomplete-triangle": f.Borrowed.IndicesCount--; break;
             case "short-positions": f.Borrowed.xyz = [0, 0, 0]; break;
-            case "degenerate": f.Borrowed.Indices[1] = f.Borrowed.Indices[0]; break;
+            case "degenerate": Array.Fill(f.Borrowed.Indices, 0); break;
             case "nonfinite": f.Borrowed.xyz[0] = float.PositiveInfinity; break;
             default: throw new InvalidOperationException();
         }
@@ -145,12 +182,20 @@ public sealed class BrushTargetSurfaceTests
     }
 
     [Fact]
-    public void NativeCubeDrawPath_StillRequiresGeometryMatchingItsUnitFaces()
+    public void NativeCapturedGeometry_IsAuthoritativeRegardlessOfDeclaredDrawType()
     {
         using Fixture f = new();
         f.Block.DrawType = EnumDrawType.Cube;
         f.Borrowed = Shape("wedge");
-        Assert.Null(f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.9, 0.1, 0.9)));
+        Assert.NotNull(f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.9, 0.1, 0.9)));
+    }
+
+    [Fact]
+    public void HarmlessDegenerateTriangles_DoNotRejectOtherRenderedSurfaces()
+    {
+        using Fixture f = new();
+        f.Borrowed.Indices[1] = f.Borrowed.Indices[0];
+        Assert.NotNull(f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.9, 0.1)));
     }
 
     [Fact]

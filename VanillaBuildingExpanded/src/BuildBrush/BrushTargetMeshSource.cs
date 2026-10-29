@@ -7,16 +7,25 @@ using Vintagestory.API.MathTools;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-internal sealed class BrushTargetMeshSource
+internal sealed class BrushTargetMeshSource : IDisposable
 {
     private readonly ICoreClientAPI api;
     private readonly int ownerThreadId = Environment.CurrentManagedThreadId;
+    private readonly System.Func<Block, BlockPos, MeshData?> getMesh;
+    private readonly BrushTargetWorldMeshSource? worldMeshes;
+    private BlockPos? targetPosition;
 
-    public BrushTargetMeshSource(ICoreClientAPI api)
+    public BrushTargetMeshSource(ICoreClientAPI api, System.Func<Block, BlockPos, MeshData?>? getMesh = null)
     {
         ArgumentNullException.ThrowIfNull(api);
         this.api = api;
         EnsureMainThread();
+        if (getMesh is null)
+        {
+            worldMeshes = new BrushTargetWorldMeshSource(api);
+            this.getMesh = worldMeshes.GetMesh;
+        }
+        else this.getMesh = getMesh;
     }
 
     public void EnsureMainThread()
@@ -26,52 +35,28 @@ internal sealed class BrushTargetMeshSource
             throw new InvalidOperationException("Brush target mesh resources require the client main thread.");
     }
 
-    public Block? GetSupportedBlock(BrushSnappingPresentation presentation)
+    public Block? GetTargetBlock(BrushSnappingPresentation presentation)
     {
         EnsureMainThread();
-        if (presentation.Result.Outcome != BrushPlacementOutcome.AcceptedSnapping)
-            return null;
-
+        if (!presentation.HasTangentialSnapping) return null;
+        Vec3d hit = presentation.TargetHitPosition;
+        if (!double.IsFinite(hit.X) || !double.IsFinite(hit.Y) || !double.IsFinite(hit.Z)) return null;
         BlockPos position = presentation.TargetPosition;
-        IBlockAccessor blocks = api.World.BlockAccessor;
-        Block? block = blocks.GetBlock(position);
-        if (block is null || block.Id == 0 || block.IsMissing || block.Id != presentation.TargetBlockId
-            || block.GetType() != typeof(Block) || block.EntityClass is not null
-            || block.BlockBehaviors.Length != 0 || block.CollectibleBehaviors.Length != 0
-            || blocks.GetBlockEntity(position) is not null
-            || !IsSupportedRenderPass(block.RenderPass)
-            || block.DrawType is not (EnumDrawType.Cube or EnumDrawType.JSON)
-            || block.RandomDrawOffset != 0 || block.RandomizeRotations || block.RandomSizeAdjust != 0
-            || block.HasAlternates || block.HasTiles
-            || block.Lod0Shape is not null || block.Lod2Shape is not null
-            || block.Lod0Mesh is not null || block.Lod2Mesh is not null || block.DoNotRenderAtLod2
-            || (block.VertexFlags is not null && (block.VertexFlags.WindMode != EnumWindBitMode.NoWind
-                || block.VertexFlags.ZOffset != 0)))
-            return null;
-
-        CompositeShape? shape = block.Shape;
-        if (shape?.Base is null || shape.Format != EnumShapeFormat.VintageStory || shape.VoxelizeTexture
-            || shape.Alternates?.Length > 0 || shape.BakedAlternates?.Length > 0 || shape.Overlays?.Length > 0)
-            return null;
-
-        var decors = blocks.GetSubDecors(position);
-        if (decors is not null)
-        {
-            foreach (Block? decor in decors.Values)
-                if (decor is not null && decor.Id != 0) return null;
-        }
+        Block? block = api.World.BlockAccessor.GetBlock(position);
+        if (block is null || block.Id == 0 || block.Id != presentation.TargetBlockId) return null;
+        targetPosition = position;
         return block;
     }
 
-    public MeshData? GetBorrowedMesh(Block block)
+    public MeshData? GetCapturedMesh(Block block)
     {
         EnsureMainThread();
-        return api.TesselatorManager.GetDefaultBlockMesh(block);
+        return getMesh(block, targetPosition
+            ?? throw new InvalidOperationException("No current snapping target."));
     }
 
-    internal static bool IsSupportedRenderPass(EnumChunkRenderPass pass) =>
-        pass is EnumChunkRenderPass.Opaque or EnumChunkRenderPass.OpaqueNoCull
-            or EnumChunkRenderPass.BlendNoCull or EnumChunkRenderPass.Transparent;
+    public void Invalidate() => worldMeshes?.Invalidate();
+    public bool IsRequestingNativeMeshAt(BlockPos position) => worldMeshes?.IsRequestingMeshAt(position) == true;
 
     public MeshRef Upload(MeshData data)
     {
@@ -79,4 +64,6 @@ internal sealed class BrushTargetMeshSource
         return api.Render.UploadMesh(data)
             ?? throw new InvalidOperationException("Brush target mesh upload returned no mesh.");
     }
+
+    public void Dispose() => worldMeshes?.Dispose();
 }

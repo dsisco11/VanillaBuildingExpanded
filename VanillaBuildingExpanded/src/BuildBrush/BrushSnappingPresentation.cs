@@ -14,6 +14,8 @@ internal sealed class BrushSnappingPresentation
     public BlockFacing Face => target.Face;
     public int? TargetBlockId => targetBlockId;
     public BrushPlacementResult Result { get; }
+    public bool HasTangentialSnapping => Result.Outcome != BrushPlacementOutcome.NoBlock
+        && (Result.ResolvedSnapping.FaceU != 0 || Result.ResolvedSnapping.FaceV != 0);
 
     public BrushSnappingPresentation(BlockSelection target, BrushPlacementResult result, long revision)
     {
@@ -23,10 +25,14 @@ internal sealed class BrushSnappingPresentation
         Revision = revision;
     }
 
-    public bool Matches(BlockSelection selection, EBuildBrushSnapping mode, long revision) =>
-        Revision == revision && Result.RequestedSnapping.Mode == mode &&
-        target.Position == selection.Position && target.Face == selection.Face &&
-        target.HitPosition.Equals(selection.HitPosition) &&
-        target.SelectionBoxIndex == selection.SelectionBoxIndex &&
-        targetBlockId == selection.Block?.Id;
+    public bool Matches(BlockSelection selection, EBuildBrushSnapping mode, long revision)
+    {
+        if (Revision != revision || Result.RequestedSnapping.Mode != mode
+            || target.Position != selection.Position || target.Face != selection.Face
+            || targetBlockId != selection.Block?.Id) return false;
+        Vec3d hit = selection.HitPosition;
+        if (!double.IsFinite(hit.X) || !double.IsFinite(hit.Y) || !double.IsFinite(hit.Z)) return false;
+        var directions = new BrushSnapping(selection).GetTangentialDirections(mode);
+        return directions.U == Result.ResolvedSnapping.FaceU && directions.V == Result.ResolvedSnapping.FaceV;
+    }
 }

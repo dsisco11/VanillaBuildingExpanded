@@ -1,7 +1,8 @@
 # Build brush snapping indicator proposal
 
-Status: Approved. The isolated geometry and shader drawing path is implemented;
-client-session integration and live visual qualification remain pending.
+Status: Approved. Phases 1-4 are complete, with installed-game smoke verification
+confirmed and approved by the user on 2026-10-29. Distributable verification and
+comprehensive geometry, appearance, and performance qualification remain pending.
 
 ## Purpose
 
@@ -35,13 +36,13 @@ Draw directional bands or chevrons on the selected-facing part of the target mes
 
 Use the same face-coordinate convention as `BrushSnapping`, including opposite faces and top/bottom faces. A marker must communicate the world-space direction used by placement even when the camera orientation changes.
 
-The recommended initial visual describes the applied tangential snap. When resolution uses only W, suppress the tangential indicators. If placement is invalid, suppress them as well; the existing preview continues to communicate placement validity. No directional markings are shown for `None`, or when neither U nor V contributes permitted movement.
+The visual describes the resolved tangential snap. Valid snapping positions use cyan; invalid snapping positions retain the same directional markings in red. This user-directed behavior supersedes the earlier invalid-placement suppression. Rejected placement remains invalid, and its applied directions remain zero; rendering uses the resolved candidate directions without retrying validation. When resolution uses only W, suppress the tangential indicators. No directional markings are shown for `None`, or when neither U nor V contributes permitted movement.
 
 These rules intentionally leave face-normal offset without its own glyph. It changes placement depth while the tangential markings continue to describe horizontal and vertical snapping. A separate face-normal glyph can be considered if visual evaluation shows that it is needed.
 
 Keep the overlay attached to the target while the brush preview moves to its destination. Clear it when the target is lost, mode is disabled, the held item becomes unsupported, or the player leaves the world. It should not take input or introduce another control.
 
-Exact glyphs, color, width, and opacity remain visual design decisions. Bands and chevrons are suggested candidates, rather than approved artwork.
+Validity colors are cyan for valid placement and red for invalid placement. Exact glyphs, width, and opacity remain visual design decisions. Bands and chevrons are suggested candidates, rather than approved artwork.
 
 ## Shader and drawing model
 
@@ -52,7 +53,7 @@ The proposed shader inputs are:
 | Target mesh vertex positions and triangle indices | Supply the overlay surface. |
 | Target transform and camera matrices | Place that surface at the original world target. |
 | Selected face and in-plane axes | Orient the markings consistently with snapping. |
-| Applied horizontal and vertical directions | Select the directional markings to draw. |
+| Resolved horizontal and vertical directions | Select the directional markings to draw, including rejected candidates. |
 | Color, opacity, and width parameters | Control readability. |
 | Surface-facing information | Restrict markings to appropriate parts of the mesh. This may come from mesh attributes or triangle derivatives. |
 
@@ -71,11 +72,25 @@ user-approved clarification supersedes the earlier visible-silhouette requiremen
 
 ## Mesh acquisition and support boundary
 
-The engine's `ITesselatorManager.GetDefaultBlockMesh` is a starting point for ordinary static blocks. Its API describes a default mesh and distinguishes alternate versions; it does not promise the exact geometry rendered at every world position. `GetDefaultBlockMeshRef` is documented as an inventory-rendering mesh reference and should not be assumed to represent the selected world instance.
+The engine's `ITesselatorManager.GetDefaultBlockMesh` does not promise the geometry
+rendered at a particular world position. Following the user's implementation
+correction, acquire target-instance geometry from native world tessellation instead
+of qualifying default meshes through a block-class/behavior whitelist.
+`GetDefaultBlockMeshRef` is an inventory mesh, not a world-instance source.
 
-The recommended initial support boundary is ordinary static block geometry whose mesh and world transform can be reproduced accurately. Cubes and non-cubic static shapes should both be evaluated. Non-cubic support requires that the markings remain meaningful under the existing block-cell snapping rules; matching the shape alone is insufficient.
+Use the target's actual terrain triangles and baked world transforms, regardless
+of its class, behaviors, snow, shape variants, or declared draw type. Cubes and
+non-cubic shapes should both be evaluated. Non-cubic support requires that the
+markings remain meaningful under existing block-cell snapping rules; matching the
+shape alone is insufficient.
 
-Position-dependent variants, block-entity geometry, chiseled blocks, and animated/custom renderers need explicit geometry qualification. Texture cutouts or material transparency alone do not disqualify an otherwise faithful static mesh; animated liquids and other unhandled geometry transformations still require qualification. The existing mini-dimension tessellator is useful reference material, but it produces preview geometry and does not establish exact world-target coverage.
+Let native world tessellation resolve position-dependent variants, block entities,
+chiseled geometry, and custom tessellation. Do not reject those categories before
+acquisition. Texture cutouts and material transparency do not disqualify a mesh.
+GPU-only/custom renderers that emit no terrain geometry, and material-shader
+deformations not represented by CPU positions, remain concrete acquisition/fidelity
+limitations rather than a class blacklist. The mini-dimension tessellator produces
+preview geometry and does not establish exact world-target coverage.
 
 When accurate geometry or meaningful markings cannot be supplied, omit the overlay for that target. Do not substitute a cube that implies unsupported shape fidelity. Unqualified categories remain outside the initial support claim.
 
@@ -103,7 +118,7 @@ The design is acceptable when supported targets demonstrate all of the following
 
 - Markings remain attached to the existing world block as the camera, target face, and preview destination change.
 - All six faces agree with the existing snapping directions and center thresholds, including horizontal-only, vertical-only, combined, and `None` modes.
-- Ordinary placement fallback and invalid placement never display a successful tangential snap indication.
+- Ordinary placement fallback shows no tangential marking. Invalid tangential placement shows red, never the successful cyan indication.
 - Non-cubic supported shapes carry readable markings without implying shape-based placement rules.
 - Unsupported targets omit the overlay without affecting selection or placement.
 - The native selection outline and preview remain readable; markings do not flicker against the surface or show through intervening blocks.

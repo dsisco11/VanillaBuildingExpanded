@@ -13,7 +13,8 @@ internal interface IBrushOverlayRenderState
 
 internal sealed class BrushOverlayRenderState(IRenderAPI render) : IBrushOverlayRenderState
 {
-    private bool depthTest, depthWrite, cullFace;
+    private bool depthTest, depthWrite, cullFace, polygonOffset;
+    private float offsetFactor, offsetUnits;
     private DepthFunction depthFunction;
     private FrontFaceDirection frontFace;
 
@@ -24,6 +25,9 @@ internal sealed class BrushOverlayRenderState(IRenderAPI render) : IBrushOverlay
         cullFace = GL.IsEnabled(EnableCap.CullFace);
         depthFunction = (DepthFunction)GL.GetInteger(GetPName.DepthFunc);
         frontFace = (FrontFaceDirection)GL.GetInteger(GetPName.FrontFace);
+        polygonOffset = GL.IsEnabled(EnableCap.PolygonOffsetFill);
+        offsetFactor = GL.GetFloat(GetPName.PolygonOffsetFactor);
+        offsetUnits = GL.GetFloat(GetPName.PolygonOffsetUnits);
     }
 
     public void Apply()
@@ -31,10 +35,11 @@ internal sealed class BrushOverlayRenderState(IRenderAPI render) : IBrushOverlay
         render.GLEnableDepthTest();
         render.GLDepthMask(false);
         GL.DepthFunc(DepthFunction.Lequal);
-        // gl_FrontFacing must recover the same indexed winding as CPU qualification.
+        // Keep derivative-normal fallback independent of the previous renderer's winding.
         GL.FrontFace(FrontFaceDirection.Ccw);
-        // Geometry qualification includes static no-cull surfaces.
         GL.Disable(EnableCap.CullFace);
+        GL.Enable(EnableCap.PolygonOffsetFill);
+        GL.PolygonOffset(-1f, -1f);
     }
 
     public void Restore()
@@ -42,21 +47,33 @@ internal sealed class BrushOverlayRenderState(IRenderAPI render) : IBrushOverlay
         try { GL.DepthFunc(depthFunction); }
         finally
         {
-            try { GL.FrontFace(frontFace); }
+            try
+            {
+                GL.PolygonOffset(offsetFactor, offsetUnits);
+                if (polygonOffset) GL.Enable(EnableCap.PolygonOffsetFill);
+                else GL.Disable(EnableCap.PolygonOffsetFill);
+            }
             finally
             {
                 try
                 {
-                    if (cullFace) GL.Enable(EnableCap.CullFace);
-                    else GL.Disable(EnableCap.CullFace);
+                    GL.FrontFace(frontFace);
                 }
                 finally
                 {
-                    try { render.GLDepthMask(depthWrite); }
+                    try
+                    {
+                        if (cullFace) GL.Enable(EnableCap.CullFace);
+                        else GL.Disable(EnableCap.CullFace);
+                    }
                     finally
                     {
-                        if (depthTest) render.GLEnableDepthTest();
-                        else render.GLDisableDepthTest();
+                        try { render.GLDepthMask(depthWrite); }
+                        finally
+                        {
+                            if (depthTest) render.GLEnableDepthTest();
+                            else render.GLDisableDepthTest();
+                        }
                     }
                 }
             }

@@ -9,9 +9,14 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="VanillaBuildingExpanded.Tests" />
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="OpenTK.Mathematics">
+      <HintPath>$(VINTAGE_STORY)\Lib\OpenTK.Mathematics.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="OpenTK.Graphics">
       <HintPath>$(VINTAGE_STORY)\Lib\OpenTK.Graphics.dll</HintPath>
       <Private>false</Private>

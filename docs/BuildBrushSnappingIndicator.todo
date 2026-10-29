@@ -1,15 +1,20 @@
 # Build brush snapping indicator
 
 Source proposal: [BuildBrushSnappingIndicator.proposal.md](BuildBrushSnappingIndicator.proposal.md).
-Status: Phases 1-3 complete, including target-mesh and texture-independent coverage corrections.
-Integration and qualification in Phases 4-6 remain pending.
+Status: Phases 1-4 complete, including target-mesh and texture-independent coverage corrections.
+Phase 4 installed-game verification was confirmed and approved by the user on
+2026-10-29. Regression/distributable verification and final qualification in
+Phases 5-6 remain pending.
 Format: Indented unchecked tasks follow the existing src\docs\project.todo convention.
 
 ## Goal and governing constraints
 
 Deliver a client-owned, mesh-projected directional overlay on the original targeted
-world block, not on the resolved placement preview. Communicate only accepted
-tangential snapping using the existing face-coordinate and world-axis rules.
+world block, not on the resolved placement preview. Communicate resolved
+tangential snapping using the existing face-coordinate and world-axis rules:
+cyan for valid placement and red for invalid placement. This user-directed
+clarification supersedes the earlier suppression of invalid snapping positions.
+Applied directions and placement validation semantics remain unchanged.
 
 The approved proposal remains authoritative. This plan does not authorize implementation.
 Preserve snapping thresholds, selection raycasting, placement destinations, native
@@ -18,26 +23,28 @@ or input capture, no authored indicator texture per block, and no server rendere
 ownership of the overlay.
 
 Non-goals: arbitrary mesh-edge discovery, shape-boundary snapping, universal custom
-renderer support, and a face-normal glyph. W-only/ordinary fallback, invalid placement,
+renderer support, and a face-normal glyph. W-only/ordinary fallback,
 None, and outcomes with no permitted U/V movement show no tangential marking.
 
 ## Assumptions and decisions still requiring evidence
 
-- Exact glyphs, color, width, opacity, and any combined corner cue are not approved
+- Exact glyphs, width, opacity, and any combined corner cue are not approved
   artwork. Bands or chevrons are candidates for user evaluation in Phase 6.
-- Initial support is ordinary static geometry whose world mesh and transform can
-  be reproduced accurately and whose markings remain meaningful under cell-based
-  snapping. Evaluate cubes and non-cubic shapes; do not assume either category's
-  coverage from a default or inventory mesh API alone.
-- Position-dependent variants, block-entity geometry, chiseled blocks, and
-  animated/custom renderers remain unsupported unless explicitly qualified.
+  Validity colors are user-directed: valid cyan, invalid red.
+- The user's Phase 4 correction replaces category-based default-mesh qualification
+  with acquisition from actual native terrain tessellation. Do not reject block
+  classes, behaviors, snow, variants, block entities, or draw types before acquisition.
+  Evaluate cubes and non-cubic shapes using their captured positions/triangles.
+- Native tessellation resolves world-instance geometry and transforms. Missing
+  terrain output and GPU-only renderer/material deformation remain concrete
+  acquisition/fidelity limitations, not a class/behavior whitelist.
   Texture holes/material alpha do not clip or disqualify the indicator: it
   intentionally covers the full eligible mesh, without bitmap scans or alpha
-  sampling. Omission for unqualified geometry is the fallback, not a cube.
+  sampling. Missing geometry is not replaced with a cube.
 - Exact cache identity, world-transform acquisition, surface-facing data,
   render stage/order, and depth bias require investigation and evidence before
   their dependent behavior is accepted. These are implementation decisions, not
-  permission to broaden geometry support.
+  permission to claim unverified visual fidelity.
 - Component names below identify existing integration points or responsibilities;
   final names for new types should follow repository conventions.
 - Use the existing .NET 10/xUnit project and installed game references through
@@ -75,12 +82,13 @@ contract without changing placement or networking. No rendering is required yet.
         ✔ Pair original target identity and face with their corresponding
           resolved outcome; include enough identity/version information to reject
           stale face, hit-region, snapping-mode, held-item, or target results.
-        ✔ Carry each applied in-plane direction independently; do not collapse
+        ✔ Carry each resolved in-plane direction independently; do not collapse
           top/bottom U and V into one value merely because both are horizontal.
         ✔ Require local build mode, an eligible held block, a current target,
-          supported geometry, and accepted permitted tangential movement.
+          supported geometry, and resolved permitted tangential movement.
         ✔ Suppress centered/disabled-axis markings, None, W-only/ordinary fallback,
-          invalid placement, and results not yet matched to the current target.
+          and results not yet matched to the current target. Invalid snapping
+          remains visible in red; accepted snapping remains cyan.
     ✔ Add focused tests in VanillaBuildingExpanded.Tests.
         ✔ Extend BrushSnappingTests/BrushSnappingRestrictionTests as appropriate
           for all six faces, opposite-face signs, each snapping mode, and both
@@ -149,6 +157,8 @@ Corrected verification: The earlier cuboid-only and texture-alpha eligibility
 decisions and completion reviews are superseded. Phase 2 was corrected to preserve general
 faithful static target meshes and evaluate actual selected-facing triangle
 opportunity, including slopes, multi-element shapes, and recessed surfaces.
+The later live-rendering correction supersedes the CPU opportunity gate as well:
+the shader alone performs selected-facing U/V union clipping on captured geometry.
 Selection-box hits need not touch a rendered triangle or its outer bounds.
 Delegated focused VSTest verification rebuilt the mod and tests with .NET SDK
 10.0.401 and VINTAGE_STORY=G:\Vintagestory: 1,839 passed, 0 failed, 0 skipped.
@@ -159,7 +169,9 @@ required findings or evidence gaps. This includes the user-approved
 texture-independent coverage correction: no bitmap acquisition/scanning,
 alpha-based clipping/rejection, or required material-alpha shader sampling.
 All four static material passes and inherited per-face passes are tested;
-unqualified liquid/extra-transform paths remain omitted for geometry fidelity.
+liquid/extra-transform paths were omitted by the historical Phase 2 source gate.
+Those source restrictions and class qualifications are superseded by the user's
+Phase 4 native target-instance acquisition correction below.
 Support limits, installed 1.22.7 engine-source evidence, identity, transforms,
 ownership, and invalidation hooks are documented in
 [BuildBrushArchitecture.md](BuildBrushArchitecture.md#snapping-target-geometry-and-owned-cache).
@@ -218,40 +230,132 @@ Depends on: Phases 1 through 3.
 Outcome: The overlay runs with the local brush session, follows current resolved
 targets, and safely clears/retires resources. It is ready for final regression checks.
 
-    ☐ Compose and retire the client-owned overlay through BuildBrushSystem_Client
+    ✔ Compose and retire the client-owned overlay through BuildBrushSystem_Client
       and the existing local controller/session lifecycle.
-        ☐ Keep the server preview entity renderer responsible only for the existing
+        ✔ Keep the server preview entity renderer responsible only for the existing
           preview; add no network fields, preview synchronization, or new input.
-        ☐ Feed matching snapshots and supported geometry into drawing; clear/replace
+        ✔ Feed matching snapshots and supported geometry into drawing; clear/replace
           stale presentation immediately when a newly observed target lacks its result.
-        ☐ Keep markings attached to the original target as preview destinations move.
-    ☐ Wire presentation clearing and resource invalidation/disposal distinctly.
-        ☐ Clear on target loss, build-mode disable, unsupported held items, death,
-          world departure, and any invalid/mismatched/suppressed presentation.
-        ☐ Refresh supported item/target changes without carrying prior outcomes.
+        ✔ Keep markings attached to the original target as preview destinations move.
+    ✔ Wire presentation clearing and resource invalidation/disposal distinctly.
+        ✔ Clear on target loss, build-mode disable, unsupported held items, death,
+          world departure, and any stale/mismatched/suppressed presentation.
+          Invalid tangential placement remains visible in red.
+        ✔ Refresh supported item/target changes without carrying prior outcomes.
           Snapping-mode changes may retain valid cached geometry.
-        ☐ Invalidate relevant geometry/resources on geometry changes, resource
+        ✔ Invalidate relevant geometry/resources on geometry changes, resource
           reload, and shader reload; compile and replace shader resources safely.
-        ☐ Release owned GPU resources and subscriptions on world departure and
+        ✔ Release owned GPU resources and subscriptions on world departure and
           system disposal. Ensure other transitions leave no stale overlay or
           obsolete/leaked resources without indiscriminately discarding valid caches.
-        ☐ Keep ordinary selection, placement, and preview usable after overlay
+        ✔ Keep ordinary selection, placement, and preview usable after overlay
           compilation/drawing failure; surface failures through existing diagnostics.
-    ☐ Verify integration with focused tests and a local runtime smoke check.
-        ☐ Test rapid target/face/hit/mode/item changes and delayed/mismatched results.
-        ☐ Test mode toggles, suspension/resumption, death, world exit, disposal,
+    ✔ Verify integration with focused tests and a local runtime smoke check.
+        ✔ Test rapid target/face/hit/mode/item changes and delayed/mismatched results.
+        ✔ Test mode toggles, suspension/resumption, death, world exit, disposal,
           geometry changes, resource/shader reload, and shader failure.
-        ☐ Check rebuild/upload counts and disposal/subscription ownership; ensure
+        ✔ Check rebuild/upload counts and disposal/subscription ownership; ensure
           repeated retirement/replacement does not dispose borrowed resources.
-        ☐ Compile shaders in the installed game runtime and record version and
+        ✔ Compile shaders in the installed game runtime and record version and
           diagnostics; exercise reload/failure recovery without breaking the brush.
-        ☐ Confirm the chosen render stage registers/deregisters correctly and
+        ✔ Confirm the chosen render stage registers/deregisters correctly and
           leaves native render state intact; visual ordering still needs Phase 6.
 
 Completion criteria:
-    ☐ Focused integration/lifecycle tests pass, shaders compile in the intended
+    ✔ Focused integration/lifecycle tests pass, shaders compile in the intended
       runtime, failure leaves brush operation available, and no stale presentation
       or obsolete/leaked resources remain after the tested lifecycle transitions.
+
+Implementation and verification history (before final runtime approval):
+Client-session wiring and focused tests are implemented.
+Delegated rebuilt verification passed 2,109 tests, 0 failed, 0 skipped; Release
+publish succeeded with existing unrelated nullable/analyzer warnings only.
+The installed engine file version is 1.22.7. The first live smoke failed: no
+indicator appeared on a vertical slab despite accepted tangential snapping, and
+the logs showed no snapping shader compilation attempt. The source gate rejected
+the native slab class/rotation behaviors. The user's subsequent correction removes
+the default-mesh whitelist entirely: acquisition now observes the original target's
+actual native terrain tessellation, including block entities, variants, transforms,
+and snow geometry. Pending/empty native output is not replaced with guessed shapes.
+Delegated focused Release verification passed 1,050 tests, with 0 failed/skipped;
+293 additional session/UI regressions also passed. Release publish succeeded.
+This includes installation of the capture observers against installed 1.22.7
+engine signatures, all close-range LOD pools, decor parity, and the native
+MarkBlockDirty/BlockChanged feedback guard. Independent review findings were fixed
+and affected-requirements rechecks are clean. The refactored candidate still
+needs installed-game verification. The subsequent live smoke compiled the shader
+successfully but failed visibility/depth qualification: top slabs were absent,
+full blocks appeared only with axis-aligned offsets, and visible bands z-fought.
+The correction removes redundant CPU surface rejection, retains native packed
+normals/Z offsets and pass-specific depth conventions, and adds restored
+slope-aware polygon offset. Updated automated verification does not substitute
+for repeating those failed installed-game cases. Reload/failure recovery and
+native-state smoke evidence also remain outstanding.
+The corrected candidate passed 1,361 rebuilt managed tests, 0 failed/skipped,
+and Release publish. A real, isolated OpenGL 4.6/RTX 4090 smoke compiled the shader
+assets and exercised production render-state capture/apply/restore across 1,728
+coverage/foreground-occlusion/depth-preservation/state-restoration cases, including
+perspective and grazing views, native/fallback normals, all nine pass IDs, two
+surface heights, and axis/diagonal directions. This does not qualify the failed
+installed-game scene or complete Phase 4.
+The next live smoke still showed the target texture cutting through cyan bands;
+installed DLL/shader identity matched the published candidate. Investigation found
+a native upload binding mismatch: the stripped position/flags mesh puts flags at
+attribute 1, but the shader read attribute 3. The shader now reads attribute 1,
+with regression checks coupling the captured attribute layout to the shader.
+The earlier isolated harness manually bound attribute 3 and therefore did not
+validate this production upload path. Its results are not evidence against this bug.
+Rebuilt managed verification passed all 1,361 tests and Release publish.
+The replacement real-GPU smoke uses actual native UploadMesh/RenderMesh, the
+production capture/state/shaders, and native opaque vertex shader for terrain:
+384 coverage/occlusion/depth-preservation cases passed. Switching only the flags
+slot back to 3 reproduced 48 failures, all corrected at slot 1 without bias changes.
+Installed-game retesting remains pending; Phase 4 is still incomplete.
+The user subsequently confirmed the slot correction fixed z-fighting, but reported
+camera-dependent on/off strobing during smoothed head-bob decay. The exact-hit
+presentation identity gate rejected otherwise unchanged snapping directions between
+placement updates. Render matching now compares permitted U/V regions using shared
+snapping classification, retains strict target/face/box/mode/revision/source guards,
+and preserves exact-hit matching in the placement update shortcut. The existing
+validity refresh retains equivalent directions after its one fresh-hit rule check.
+Ordinary zero-tangent results retain strict validity-refresh matching as well,
+preserving their subsequent placement validation counts.
+No extra placement resolution, validation, smoothing delay, or hysteresis is added.
+New tests reproduced ten failures before the fix and exercise decaying camera/hit
+motion, all faces, disabled axes, genuine region transitions, validity refresh,
+nonfinite hits, and unchanged upload/validation counts.
+The final stability candidate passed 1,378 rebuilt tests, 0 failed/skipped, and
+Release publish, including ordinary-placement validation-count preservation.
+Installed-game confirmation of the camera-strobing correction remains pending.
+The user's subsequent clarification supersedes the separate strict/render
+matching policies and ordinary-result exception above: use one semantic match
+for target block position, face, and snapping data across all consumers. Exact
+hit coordinates and selection-box index alone are not memoization keys.
+Block identity, source eligibility, input revision, and mode invalidation remain
+guards. Tests now require the same matcher to accept within-region motion and
+ordinary-result reuse, without the prior exact-hit revalidation exception.
+The second direct implementation review is complete. At that point all Phase 4
+markers remained unchecked because the independent audit retained the runtime
+evidence gap, subsequently closed by the user's approval below.
+See [BuildBrushArchitecture.md](BuildBrushArchitecture.md#snapping-overlay-client-session-lifecycle)
+for ownership, invalidation, diagnostics, and test coverage.
+
+Final verification and acceptance, 2026-10-29:
+The subsequent invalid-placement correction retains resolved tangential markings
+in red, with valid markings cyan; 1,092 focused tests passed and Release publish
+succeeded. The dedicated BrushSnappingShader now subclasses the game's ShaderProgram
+and exposes all nine uniforms through typed property setters. Its 395 focused
+shader/renderer/binding tests passed, including exact native setter mappings,
+complete uniform coverage, lifecycle/failure recovery, and property-only renderer
+access; Release publish succeeded.
+After the remaining runtime checks were listed, the user confirmed
+"yes its all fixed, approved." This accepts the Phase 4 installed-game smoke,
+including camera/head-bob stability, red/cyan validity feedback, native shader
+loading, lifecycle transitions, reload/failure recovery, and intact brush operation.
+The installed engine version was previously identified as 1.22.7. This is
+user-reported runtime acceptance, not a new agent-run diagnostic capture or
+performance measurement. Phase 4 is complete; Phases 5 and 6 remain open for
+distributable verification and comprehensive geometry/appearance/cost qualification.
 
 ## Phase 5: Regression and distributable verification
 
@@ -294,14 +398,15 @@ or unresolved deficiencies remain explicitly open rather than declared complete.
         ☐ Cross both center thresholds, including centered/disabled axes and
           two-axis corner situations, while changing camera orientation.
         ☐ Verify explicit W offset does not mislabel tangential movement and
-          W-only/ordinary fallback/invalid outcomes never imply successful U/V snapping.
+          W-only/ordinary fallback never shows U/V marking, while invalid U/V
+          snapping remains visible in red rather than successful cyan.
     ☐ Qualify the initial geometry set in the packaged runtime.
         ☐ Compare candidate cube/non-cubic meshes and transforms with actual world
           instances, not the placement preview or inventory appearance.
         ☐ Check narrow/recessed surfaces, readability, selected-facing coverage,
           and lack of misleading shape-boundary cues; omit failed targets/categories.
-        ☐ Verify every unqualified category omits the overlay without affecting
-          selection, placement, or normal preview behavior.
+        ☐ Verify missing/empty native geometry omits the overlay without affecting
+          selection, placement, or normal preview behavior, with no class blacklist.
         ☐ Record qualified examples and excluded categories with reasons;
           any support expansion must meet the same fidelity and readability checks.
     ☐ Validate rendering interaction and lifecycle with live evidence.
@@ -340,7 +445,8 @@ Completion criteria:
     ☐ Every proposal requirement maps to implemented behavior and evidence;
       exclusions/deferred optional extensions have explicit rationale.
     ☐ All six faces and existing snapping/placement rules are preserved, with no
-      successful tangential indication for ordinary fallback, invalid, None, or W-only.
+      tangential indication for ordinary fallback, None, or W-only; invalid
+      tangential snapping is red and valid tangential snapping is cyan.
     ☐ Overlay geometry remains on the original target, supported shapes are
       qualified, and unsupported targets omit it without placement/selection changes.
     ☐ Geometry reuse, snapshot coherence, render-state restoration, resource

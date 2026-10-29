@@ -157,6 +157,21 @@ dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj
 
 On Windows, the test project copies the installed game's native Cairo and Skia libraries into the test output directory. GUI tests therefore run from the command line and VS Code without adding the game's `Lib` directory to `PATH`. These tests use real Cairo rasterization with mocked GPU services; they do not replace in-game visual and input acceptance checks.
 
+The Cake package/install workflow runs the full Release test suite before packaging.
+Its test step prints a timestamped diagnostics directory under
+`VanillaBuildingExpanded.Tests/TestResults`, containing TRX results and VSTest logs.
+If test activity stalls for two minutes, VSTest collects a mini hang dump and test
+sequence, aborts the run, and fails the build; the watchdog is not a two-minute
+limit on the entire suite. These generated diagnostics are ignored by Git.
+To reproduce the same clean/publish/test path without packaging or installing:
+
+```powershell
+dotnet run --project .\CakeBuild\CakeBuild.csproj -- --target=Test
+```
+
+Keep the failed run's diagnostics for hang investigation. Dumps can contain
+process memory; do not commit or publicly upload them.
+
 ## License
 
 See [LICENSE.txt](LICENSE.txt) for details.

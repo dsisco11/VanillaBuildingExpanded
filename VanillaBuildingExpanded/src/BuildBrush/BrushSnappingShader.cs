@@ -1,58 +1,67 @@
-using System;
+using System.Numerics;
 
 using Vintagestory.API.Client;
+using Vintagestory.Client.NoObf;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-internal sealed class BrushSnappingShader(ICoreClientAPI api) : IDisposable
+internal interface IBrushSnappingShader : IShaderProgram
 {
-    private IShaderProgram? program;
-    private bool disposed;
+    float[] ProjectionMatrix { set; }
+    float[] ModelViewMatrix { set; }
+    Vector3 SelectedNormal { set; }
+    Vector3 AxisU { set; }
+    Vector3 AxisV { set; }
+    Vector2 ResolvedDirections { set; }
+    Vector4 ColorIn { set; }
+    float MarkingWidth { set; }
+    float DepthBias { set; }
+}
 
-    public IShaderProgram GetProgram()
+internal sealed class BrushSnappingShader : ShaderProgram, IBrushSnappingShader
+{
+    public float[] ProjectionMatrix
     {
-        ObjectDisposedException.ThrowIf(disposed, this);
-        if (program is null || program.Disposed) Replace();
-        return program!;
+        set => UniformMatrix("projectionMatrix", value);
     }
 
-    public void Replace()
+    public float[] ModelViewMatrix
     {
-        ObjectDisposedException.ThrowIf(disposed, this);
-        var previous = program;
-        program = null;
-        IShaderProgram? candidate = null;
-        try
-        {
-            candidate = api.Shader.NewShaderProgram()
-                ?? throw new InvalidOperationException("Snapping shader creation returned no program.");
-            candidate.AssetDomain = "vanillabuildingexpanded";
-            candidate.Oit = true;
-            api.Shader.RegisterFileShaderProgram("vbe-snapping", candidate);
-            if (candidate.LoadError || !candidate.Compile())
-                throw new InvalidOperationException("The snapping indicator shader failed to compile.");
-            program = candidate;
-            candidate = null;
-        }
-        finally
-        {
-            try
-            {
-                if (candidate is { Disposed: false }) candidate.Dispose();
-            }
-            finally
-            {
-                if (previous is { Disposed: false }) previous.Dispose();
-            }
-        }
+        set => UniformMatrix("modelViewMatrix", value);
     }
 
-    public void Dispose()
+    public Vector3 SelectedNormal
     {
-        if (disposed) return;
-        disposed = true;
-        var previous = program;
-        program = null;
-        if (previous is { Disposed: false }) previous.Dispose();
+        set => Uniform("selectedNormal", value.X, value.Y, value.Z);
+    }
+
+    public Vector3 AxisU
+    {
+        set => Uniform("axisU", value.X, value.Y, value.Z);
+    }
+
+    public Vector3 AxisV
+    {
+        set => Uniform("axisV", value.X, value.Y, value.Z);
+    }
+
+    public Vector2 ResolvedDirections
+    {
+        set => Uniform("resolvedDirections", value.X, value.Y);
+    }
+
+    public Vector4 ColorIn
+    {
+        set => Uniform("colorIn", value.X, value.Y, value.Z, value.W);
+    }
+
+    public float MarkingWidth
+    {
+        set => Uniform("markingWidth", value);
+    }
+
+    public float DepthBias
+    {
+        set => Uniform("depthBias", value);
     }
 }

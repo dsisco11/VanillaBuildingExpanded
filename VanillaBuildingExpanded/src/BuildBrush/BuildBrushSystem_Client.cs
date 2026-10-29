@@ -30,6 +30,7 @@ public class BuildBrushSystem_Client : ModSystem
     private WorkAreaPersistence? workAreaPersistence;
     private WorkAreaGizmoSession? workAreaGizmos;
     private WorkAreaRenderBinding? workAreaRendering;
+    private BrushSnappingRenderBinding? snappingRendering;
     private IInventory? subscribedHotbar;
     private long fastTickId;
     private long slowTickId;
@@ -188,6 +189,7 @@ public class BuildBrushSystem_Client : ModSystem
 
         // New sessions start with mode disabled, regardless of equipment.
         controller!.SetBuildMode(false, null);
+        snappingRendering ??= new BrushSnappingRenderBinding(api!, controller);
         RefreshWorkAreaContext();
         modeIndicator ??= new BuildModeIndicatorBinding(controller, CreateModeHud);
         Logger.Audit("[BuildBrush][OnPlayerJoin]: Initializing build brush for player.");
@@ -203,6 +205,8 @@ public class BuildBrushSystem_Client : ModSystem
     /// <summary>Retires session artwork before clearing mode, without sending to a departing server.</summary>
     private void Event_LeaveWorld()
     {
+        snappingRendering?.Dispose();
+        snappingRendering = null;
         workArea?.CancelEndpointEdit();
         workAreaGizmos?.Dispose();
         workAreaRendering?.Dispose();

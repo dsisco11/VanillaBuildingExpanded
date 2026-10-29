@@ -41,7 +41,6 @@ public sealed class BrushSnappingPresentationTests
     [InlineData("dimension")]
     [InlineData("face")]
     [InlineData("hit")]
-    [InlineData("box")]
     [InlineData("block")]
     [InlineData("mode")]
     [InlineData("offset")]
@@ -62,8 +61,7 @@ public sealed class BrushSnappingPresentationTests
             case "target": context.Selection.Position.X++; break;
             case "dimension": context.Selection.Position.SetDimension(1); break;
             case "face": context.Selection.Face = BlockFacing.SOUTH; break;
-            case "hit": context.Selection.HitPosition.X = 0.8; break;
-            case "box": context.Selection.SelectionBoxIndex++; break;
+            case "hit": context.Selection.HitPosition.X = 0.1; break;
             case "block": context.Selection.Block = new Block { BlockId = 200 }; break;
             case "mode": context.Brush.Snapping = EBuildBrushSnapping.Vertical; break;
             case "offset": context.Brush.Snapping |= EBuildBrushSnapping.ApplyFaceNormalOffset; break;
@@ -80,6 +78,20 @@ public sealed class BrushSnappingPresentationTests
         Assert.Null(context.Presentation);
         Assert.Equal(1, before.Result.AppliedSnapping.FaceU);
         context.VerifyValidationCount(1);
+    }
+
+    [Fact]
+    public void ResolutionPreservesLiveTargetBlockIdentityOmittedByNativeSelectionClone()
+    {
+        Context context = new();
+        context.Selection.Block = new Block { BlockId = 200 };
+        context.Client.TryUpdate(context.Selection);
+        var snapshot = Assert.IsType<BrushSnappingPresentation>(context.Presentation);
+        Assert.Equal(200, snapshot.TargetBlockId);
+        context.VerifyValidationCount(2);
+        context.Selection.Block = new Block { BlockId = 201 };
+        Assert.Null(context.Presentation);
+        context.VerifyValidationCount(2);
     }
 
     [Fact]
@@ -102,6 +114,125 @@ public sealed class BrushSnappingPresentationTests
         context.Client.SetBuildMode(false, context.Selection);
         Assert.Null(context.Presentation);
         context.VerifyValidationCount(2);
+    }
+
+    [Theory]
+    [InlineData("north")]
+    [InlineData("east")]
+    [InlineData("south")]
+    [InlineData("west")]
+    [InlineData("up")]
+    [InlineData("down")]
+    public void Presentation_SmoothedHitMovementWithinSnapRegions_RemainsVisibleWithoutValidation(string faceCode)
+    {
+        Context context = new(BlockFacing.FromCode(faceCode), 1, -1,
+            EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical);
+        BrushSnappingPresentation snapshot = Assert.IsType<BrushSnappingPresentation>(context.Presentation);
+        Vec3d original = context.Selection.HitPosition.Clone();
+        for (int frame = 0; frame < 120; frame++)
+        {
+            double bob = 0.04 * Math.Sin((frame + 1) * 0.8) * Math.Exp(-frame / 30.0);
+            context.Selection.HitPosition.Set(original.X + bob, original.Y + bob / 2, original.Z - bob / 3);
+            Assert.Same(snapshot, context.Presentation);
+            Assert.True(snapshot.Matches(context.Selection, context.Brush.Snapping, snapshot.Revision));
+            Assert.Equal(original, snapshot.TargetHitPosition);
+        }
+        context.VerifyValidationCount(1);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Presentation_IgnoredAxisMovement_DoesNotHideTheAppliedDirection(bool verticalOnly)
+    {
+        Context context = new(BlockFacing.NORTH, verticalOnly ? 0 : 1, verticalOnly ? 1 : 0,
+            verticalOnly ? EBuildBrushSnapping.Vertical : EBuildBrushSnapping.Horizontal);
+        BrushSnappingPresentation snapshot = Assert.IsType<BrushSnappingPresentation>(context.Presentation);
+        foreach (double coordinate in new[] { 0.1, 0.5, 0.9 })
+        {
+            if (verticalOnly) context.Selection.HitPosition.X = coordinate;
+            else context.Selection.HitPosition.Y = coordinate;
+            Assert.Same(snapshot, context.Presentation);
+        }
+        context.VerifyValidationCount(1);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Presentation_TopAndBottomBothHorizontalRegions_StillInvalidateOnDirectionChange(bool top)
+    {
+        Context context = new(top ? BlockFacing.UP : BlockFacing.DOWN, 1, -1,
+            EBuildBrushSnapping.Horizontal);
+        Assert.NotNull(context.Presentation);
+        context.Selection.HitPosition.Z = 0.9;
+        Assert.Null(context.Presentation);
+        context.VerifyValidationCount(1);
+    }
+
+    [Fact]
+    public void Presentation_ValidityRefreshRetainsWithinRegionMovement_WithItsSingleValidation()
+    {
+        Context context = new();
+        BrushSnappingPresentation before = Assert.IsType<BrushSnappingPresentation>(context.Presentation);
+        context.Selection.HitPosition.X = 0.85;
+        context.Selection.HitPosition.Y = 0.6;
+        context.Client.TryUpdatePlacementValidity(context.Selection);
+        Assert.True(context.Brush.IsValidPlacement);
+        BrushSnappingPresentation refreshed = Assert.IsType<BrushSnappingPresentation>(context.Presentation);
+        Assert.Equal(before.Result.Position, refreshed.Result.Position);
+        Assert.Equal(before.Result.AppliedSnapping, refreshed.Result.AppliedSnapping);
+        Assert.Equal(context.Selection.HitPosition, refreshed.TargetHitPosition);
+        context.VerifyValidationCount(2);
+    }
+
+    [Fact]
+    public void Presentation_WithinRegionMovementStillReceivesNormalPlacementRevalidation()
+    {
+        Context context = new();
+        BrushSnappingPresentation before = Assert.IsType<BrushSnappingPresentation>(context.Presentation);
+        context.Selection.HitPosition.X = 0.85;
+        context.Client.TryUpdate(context.Selection);
+        BrushSnappingPresentation refreshed = Assert.IsType<BrushSnappingPresentation>(context.Presentation);
+        Assert.True(refreshed.Revision > before.Revision);
+        Assert.Equal(context.Selection.HitPosition, refreshed.TargetHitPosition);
+        Assert.Equal(before.Result.Position, refreshed.Result.Position);
+        context.VerifyValidationCount(2);
+    }
+
+    [Fact]
+    public void Presentation_OrdinaryValidityRefreshReusesTheSameSemanticState()
+    {
+        Context context = new(BlockFacing.NORTH, 1, 0, EBuildBrushSnapping.Vertical);
+        Assert.Null(context.Presentation);
+        Assert.Equal(context.Selection.Position, context.Brush.Position);
+        context.Selection.HitPosition.X = 0.85;
+        context.Client.TryUpdatePlacementValidity(context.Selection);
+        context.VerifyValidationCount(2);
+        context.Client.TryUpdate(context.Selection);
+        context.VerifyValidationCount(2);
+    }
+
+    [Fact]
+    public void Presentation_SelectionBoxChangeDoesNotInvalidateTheSameFacePositionAndSnapping()
+    {
+        Context context = new();
+        BrushSnappingPresentation snapshot = Assert.IsType<BrushSnappingPresentation>(context.Presentation);
+        context.Selection.SelectionBoxIndex++;
+        Assert.Same(snapshot, context.Presentation);
+        context.VerifyValidationCount(1);
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void Presentation_NonfiniteHit_CannotReuseDirectionsOnAnIgnoredAxis(double coordinate)
+    {
+        Context context = new();
+        context.Selection.HitPosition.Y = coordinate;
+        Assert.Null(context.Presentation);
+        context.VerifyValidationCount(1);
     }
 
     [Theory]
@@ -129,7 +260,7 @@ public sealed class BrushSnappingPresentationTests
     }
 
     [Fact]
-    public void Presentation_ValidityRefresh_UsesItsExistingSingleCheckAndSuppressesRejection()
+    public void Presentation_ValidityRefresh_UsesItsExistingSingleCheckAndRetainsRejectedSnapping()
     {
         Context context = new();
         bool valid = false;
@@ -137,11 +268,14 @@ public sealed class BrushSnappingPresentationTests
             .Returns(() => valid);
 
         context.Client.TryUpdatePlacementValidity(context.Selection);
-        Assert.Null(context.Presentation);
+        BrushSnappingPresentation rejected = Assert.IsType<BrushSnappingPresentation>(context.Presentation);
+        Assert.False(rejected.Result.IsValid);
+        Assert.Equal(1, rejected.Result.ResolvedSnapping.FaceU);
+        Assert.Equal(0, rejected.Result.AppliedSnapping.FaceU);
         context.VerifyValidationCount(2);
         valid = true;
         context.Client.TryUpdatePlacementValidity(context.Selection);
-        Assert.NotNull(context.Presentation);
+        Assert.True(Assert.IsType<BrushSnappingPresentation>(context.Presentation).Result.IsValid);
         context.VerifyValidationCount(3);
 
         context.Selection.Face = BlockFacing.SOUTH;
@@ -151,7 +285,7 @@ public sealed class BrushSnappingPresentationTests
     }
 
     [Fact]
-    public void Presentation_RejectedResolution_DoesNotRetryOrShowPreviouslyAcceptedDirections()
+    public void Presentation_RejectedResolution_DoesNotRetryAndRetainsResolvedDirections()
     {
         Context context = new();
         context.Inputs.Validator.Setup(x => x.CanPlace(It.IsAny<Block>(), It.IsAny<BlockSelection>(), ref It.Ref<string>.IsAny))
@@ -162,7 +296,11 @@ public sealed class BrushSnappingPresentationTests
 
         Assert.Equal(previous, context.Brush.Position);
         Assert.False(context.Brush.IsValidPlacement);
-        Assert.Null(context.Presentation);
+        BrushSnappingPresentation rejected = Assert.IsType<BrushSnappingPresentation>(context.Presentation);
+        Assert.False(rejected.Result.IsValid);
+        Assert.Equal(BrushPlacementOutcome.InvalidPlacement, rejected.Result.Outcome);
+        Assert.Equal(1, rejected.Result.ResolvedSnapping.FaceU);
+        Assert.Equal(0, rejected.Result.AppliedSnapping.FaceU);
         context.VerifyValidationCount(2);
     }
 

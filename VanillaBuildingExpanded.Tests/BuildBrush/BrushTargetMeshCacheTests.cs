@@ -84,12 +84,11 @@ public sealed class BrushTargetMeshCacheTests
     {
         using Fixture f = new();
         var original = Assert.IsType<BrushTargetGeometry>(f.Cache.GetTarget(f.Presentation()));
-        f.Blocks.Setup(x => x.GetSubDecors(It.IsAny<BlockPos>()))
-            .Returns(new Dictionary<int, Block> { [17] = new Block { BlockId = 99 } });
+        f.Api.Setup(x => x.TesselatorManager.GetDefaultBlockMesh(f.Block)).Returns((MeshData)null!);
         Assert.Null(f.Cache.GetTarget(f.Presentation()));
-        f.Blocks.Setup(x => x.GetSubDecors(It.IsAny<BlockPos>())).Returns((Dictionary<int, Block>)null!);
+        f.Api.Setup(x => x.TesselatorManager.GetDefaultBlockMesh(f.Block)).Returns(() => f.Borrowed);
         var next = Assert.IsType<BrushTargetGeometry>(f.Cache.GetTarget(f.Presentation()));
-        Assert.Same(original.Mesh, next.Mesh);
+        Assert.NotSame(original.Mesh, next.Mesh);
         Assert.NotSame(original.Presentation, next.Presentation);
     }
 
@@ -141,17 +140,18 @@ public sealed class BrushTargetMeshCacheTests
     [Theory]
     [InlineData("none")]
     [InlineData("w-only")]
-    [InlineData("invalid")]
-    public void NonTangentialOrRejectedOutcomes_DoNotAcquireGeometry(string reason)
+    [InlineData("invalid-none")]
+    [InlineData("invalid-w-only")]
+    public void NonTangentialOutcomes_DoNotAcquireGeometryRegardlessOfValidity(string reason)
     {
         using Fixture f = new();
-        if (reason == "invalid")
+        if (reason is "invalid-none" or "invalid-w-only")
             f.Inputs.Validator.Setup(x => x.CanPlace(It.IsAny<Block>(), It.IsAny<BlockSelection>(),
                 ref It.Ref<string>.IsAny)).Returns(false);
         var presentation = reason switch
         {
-            "none" => f.Presentation(mode: EBuildBrushSnapping.None),
-            "w-only" => f.Presentation(u: 0.5, v: 0.5),
+            "none" or "invalid-none" => f.Presentation(mode: EBuildBrushSnapping.None),
+            "w-only" or "invalid-w-only" => f.Presentation(u: 0.5, v: 0.5),
             _ => f.Presentation()
         };
         Assert.Null(f.Cache.GetTarget(presentation));
