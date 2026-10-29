@@ -1,6 +1,6 @@
 # Build brush snapping indicator proposal
 
-Status: Proposed. The overlay is not implemented.
+Status: Approved. The overlay is not implemented.
 
 ## Purpose
 
@@ -102,10 +102,10 @@ The design is acceptable when supported targets demonstrate all of the following
 - Unsupported targets omit the overlay without affecting selection or placement.
 - The native selection outline and preview remain readable; markings do not flicker against the surface or show through intervening blocks.
 - Repeated face/hit-region changes do not rebuild geometry, and target changes do not retain stale indicators.
-- Mode changes, item changes, death, world departure, resource reload, and shader failure leave no stale overlay or retained owned resources.
+- Build-mode transitions, snapping-mode changes, item changes, death, world departure, resource reload, and shader failure leave no stale overlay or obsolete or leaked owned resources. Snapping-mode changes may retain valid cached geometry; resource invalidation and release follow Ownership and update behavior.
 
 Focused automated checks can establish direction mapping, visibility decisions, coherent result reporting, and cache invalidation. Shader compilation can establish shader compatibility. In-game evaluation by the user is required to establish appearance, selection-overlay interaction, supported shape readability, and measured rendering cost. No such visual or performance qualification is claimed by this document.
 
-## Decision requested
+## Decision
 
-Approve or revise the mesh-projected directional-overlay approach, including the recommended fallback behavior and initial geometry support boundary. Glyph appearance can then be evaluated with concrete visual candidates. This document is a proposal only; it does not authorize or define an implementation checklist.
+The mesh-projected directional-overlay approach is approved, including the recommended fallback behavior and initial geometry support boundary. Glyph appearance remains subject to evaluation with concrete visual candidates. Approval records the design decision only; this document does not authorize implementation or define an implementation checklist.
