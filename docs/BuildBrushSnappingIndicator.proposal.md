@@ -1,6 +1,7 @@
 # Build brush snapping indicator proposal
 
-Status: Approved. The overlay is not implemented.
+Status: Approved. The isolated geometry and shader drawing path is implemented;
+client-session integration and live visual qualification remain pending.
 
 ## Purpose
 

@@ -1,8 +1,8 @@
 # Build brush snapping indicator
 
 Source proposal: [BuildBrushSnappingIndicator.proposal.md](BuildBrushSnappingIndicator.proposal.md).
-Status: Phases 1-2 complete, including target-mesh and texture-independent coverage corrections.
-Implementation and qualification in Phases 3-6 remain pending.
+Status: Phases 1-3 complete, including target-mesh and texture-independent coverage corrections.
+Integration and qualification in Phases 4-6 remain pending.
 Format: Indented unchecked tasks follow the existing src\docs\project.todo convention.
 
 ## Goal and governing constraints
@@ -172,35 +172,45 @@ Depends on: Phases 1 and 2.
 Outcome: A buildable overlay drawing path consumes the presentation contract and
 supported geometry. Live registration and shader compatibility are gated in Phase 4.
 
-    ☐ Add custom shader assets using the repository's existing asset conventions.
-        ☐ Supply target positions/indices, target transform, camera matrices,
+    ✔ Add custom shader assets using the repository's existing asset conventions.
+        ✔ Supply target positions/indices, target transform, camera matrices,
           selected face/in-plane axes, independent applied directions, color,
           opacity, width, and appropriate surface-facing information.
-        ☐ Preserve block-local coordinates through vertex transformation; project
+        ✔ Preserve block-local coordinates through vertex transformation; project
           into the selected face plane in the fragment shader.
-        ☐ Evaluate procedural directional masks on selected-facing surfaces and
+        ✔ Evaluate procedural directional masks on selected-facing surfaces and
           discard fragments outside markings; use derivative softening as appropriate.
-        ☐ Anchor meaning to existing snapping rules, not texture UV layout,
+        ✔ Anchor meaning to existing snapping rules, not texture UV layout,
           arbitrary shape bounds, camera-relative directions, or triangle edges.
-        ☐ Keep face-normal offset without its own glyph and avoid per-block artwork.
-    ☐ Implement the clearly named overlay drawing responsibility.
-        ☐ Draw the target mesh a second time at the original world target, never
+        ✔ Keep face-normal offset without its own glyph and avoid per-block artwork.
+    ✔ Implement the clearly named overlay drawing responsibility.
+        ✔ Draw the target mesh a second time at the original world target, never
           at BuildBrushInstance's substituted placement destination.
-        ☐ Keep depth testing enabled, disable overlay depth writes, and restore
+        ✔ Keep depth testing enabled, disable overlay depth writes, and restore
           all changed render state even if drawing fails.
-        ☐ Provide a candidate render stage/order and small depth bias for Phase 4/6
+        ✔ Provide a candidate render stage/order and small depth bias for Phase 4/6
           validation; do not assume bias alone orders the native selection outline,
           brush preview, or transparent surfaces.
-        ☐ Handle shader compilation/replacement failure explicitly through
+        ✔ Handle shader compilation/replacement failure explicitly through
           repository-standard diagnostics and safe resource ownership. Disable the
           failed overlay without disabling ordinary brush operation.
-    ☐ Build the changed C# project and test parameter/drawing-state decisions where
+    ✔ Build the changed C# project and test parameter/drawing-state decisions where
       existing test seams permit; do not report a C# build as shader compilation proof.
 
 Completion criteria:
-    ☐ Shader sources and drawing code exist, C# compilation succeeds, and source/test
+    ✔ Shader sources and drawing code exist, C# compilation succeeds, and source/test
       evidence covers correct inputs, target transform, masking intent, and state
       restoration. Live shader compilation and visual qualification remain pending.
+
+Verification: Delegated focused VSTest execution rebuilt production and tests:
+2,021 passed, 0 failed, 0 skipped. Both shader assets are copied to test output;
+no affected-file compiler warnings were emitted. The second direct implementation
+review and fresh independent audit-stage-completion audit found Phase 3 fully
+satisfied. The isolated renderer, provisional bands, OIT order 0.52, depth bias,
+state restoration, failure handling, and remaining runtime obligations are documented
+in [BuildBrushArchitecture.md](BuildBrushArchitecture.md#isolated-snapping-shader-drawing).
+No live GLSL compilation, client registration, visual ordering/readability,
+occlusion, depth-bias acceptance, or performance qualification is claimed.
 
 ## Phase 4: Client-session integration and lifecycle verification
 

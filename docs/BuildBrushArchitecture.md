@@ -402,8 +402,9 @@ Resolved selections preserve the source face, hit position and other raycast dat
 
 Phase 1 of the [snapping indicator plan](BuildBrushSnappingIndicator.todo) implements
 local result reporting. Phase 2 adds the isolated target-geometry/cache substrate
-described below. Shaders, rendering, resource lifecycle integration, and in-game
-appearance/performance qualification remain later phases under the
+described below. Phase 3 adds isolated shader drawing. Client-session registration,
+resource lifecycle integration, and in-game appearance/performance qualification
+remain later phases under the
 [approved proposal](BuildBrushSnappingIndicator.proposal.md).
 
 `BrushSnapping.ResolvePosition` has an overload that reports the resolved U/V/W
@@ -459,8 +460,8 @@ These checks do not qualify geometry, shader compatibility, appearance, or cost.
 ### Snapping target geometry and owned cache
 
 Phase 2 introduces `BrushTargetMeshSource`, `BrushTargetBounds`,
-`BrushTargetMeshCache`, and `BrushTargetGeometry`; nothing registers or draws an
-overlay yet. Consumers must still obtain a current guarded presentation from the
+`BrushTargetMeshCache`, and `BrushTargetGeometry`; these types do not register or draw
+an overlay. Consumers must still obtain a current guarded presentation from the
 controller, then ask the cache to qualify that original target. The cache's live
 block-ID/entity/decor checks supplement, not replace, the controller's context guard.
 An unsupported or rejected target returns no geometry, never a generic cube.
@@ -503,9 +504,9 @@ Selected-facing triangles must have projected surface area reaching each applied
 direction's existing cell region (`0.35`/`0.65`); independent U/V opportunities may
 occur on different triangles. Bounds never redefine snapping or generate a surface.
 The cached/uploaded positions and indices remain the actual engine mesh unchanged.
-Phase 3 must use matching selected-facing logic in the shader and assess coverage
-of its concrete procedural mask; this opportunity check does not establish final
-glyph coverage or readability.
+The Phase 3 shader uses matching selected-facing logic and outward cell-region
+bands, so the opportunity check also covers the concrete mask's nonzero area.
+This does not establish readable opacity or final visual quality.
 
 Candidate unit cubes, the base-Block `game:ethoslab` slab, and faithful static
 sloped/multi-element/recessed assets should be exercised in Phase 6. Many ordinary
@@ -554,6 +555,52 @@ Tests cover actual-mesh
 preservation, surface-facing opportunity, selection-box hits, reuse, translation,
 invalidation, failures and disposal. They do not prove live asset support, shader
 compatibility, appearance, ordering, or rendering cost.
+
+### Isolated snapping shader drawing
+
+Phase 3 adds `BrushSnappingRenderer`, `BrushSnappingShader`, and
+`BrushOverlayRenderState`, with the `vbe-snapping` vertex/fragment assets.
+Nothing registers this renderer yet. Phase 4 must supply current guarded geometry
+on each callback, wire session/reload lifetimes, and test live shader compilation.
+The renderer never retains a target between callbacks or owns the cache's mesh.
+
+The provisional visual is cyan outward bands covering the applied U/V cell regions
+past the existing centered threshold (`0.15` around `0.5`), with no W glyph.
+Independent positive/negative directions use Z/Y on X faces, X/Z on Y faces, and
+X/Y on Z faces; opposite faces never reverse the axes. Positions remain block-local
+through interpolation. Triangle derivatives reconstruct geometric normals, corrected
+for back faces, and retain only normals with positive selected-face dot product.
+No texture UV, atlas, bitmap, material alpha, shape bounds, or triangle-edge artwork
+is involved. Mesh triangles clip the bands, including over texture holes.
+The width parameter (`0.025` block units) controls the band's inward-to-outward
+opacity ramp, widened by screen derivatives for softening. Coverage is strictly
+outside the centered region; each applied direction with projected triangle area
+in that region has nonzero mask area. Narrow coverage may still be unreadable.
+Color, opacity (`0.7`), and width are candidates, not approved artwork.
+
+The candidate stage is OIT, order `0.52`, using the native OIT shader include and
+preserving indexed blending. The owned mesh is drawn once with the original-target
+camera-relative/dimension-aware transform. A provisional clip-depth bias of
+`0.00001 * w` moves depth toward the camera without moving local/world geometry.
+Depth testing uses LEQUAL, depth writes are disabled, and culling is disabled to
+support qualified no-cull surfaces. Counterclockwise front winding makes derivative
+normal orientation match CPU indexed-triangle qualification independently of the
+previous renderer's winding state. Capture/apply/restore isolates depth enable,
+depth mask, depth function, culling, and front winding. Shader stop, state restoration, and the
+previous active shader's reactivation run through nested cleanup even on failure.
+Bias, stage ordering versus selection/preview/transparency, and actual occlusion
+still need runtime qualification in Phases 4/6.
+
+Shader creation/registration/compilation failures dispose failed candidates and
+retire replaced owned programs. Drawing failures restore state and disable only
+the overlay, with a `[BuildBrush]` logger error, until an explicit successful
+`ReloadShader`. Native-disposed programs are recreated before use. Disposal is
+idempotent and releases only the renderer's shader, never the geometry cache or
+borrowed engine meshes. Phase 4 owns event subscriptions and cache invalidation.
+`BrushSnappingRendererTests` cover all face/mode/direction inputs, actual mesh and
+original-target transform, source masking intent, state-cleanup failure paths,
+shader replacement/recovery, and ownership. C# compilation and these tests are
+not GLSL compilation, live state/ordering, visual, or performance proof.
 
 ## Update and preview flow
 
