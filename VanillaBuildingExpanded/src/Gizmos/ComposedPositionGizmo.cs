@@ -61,7 +61,7 @@ public sealed class ComposedPositionGizmo : HandleGizmo<GizmoPosition>
         void AddAxis(GizmoHandleId id, Vector256<double> direction, Vector4 color)
         {
             var frame = new GizmoAxisFrameSource(() => Value, () => direction);
-            var handle = Add(id, GizmoShape.Arrow, 64, color, frame);
+            var handle = Add(id, GizmoShape.Arrow, 32, color, frame);
             handle.InteractionTarget = new GizmoAxisDragTarget(new HandleFrameSource(handle),
                 frozen => new GizmoAxisPositionParameterSource(value, frozen, id, constrain), edit);
         }

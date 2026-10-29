@@ -87,9 +87,10 @@ public sealed class GizmoCameraTests
     }
 
     [Theory]
-    [InlineData(1, -0.2, 0.125)]
-    [InlineData(2, -10, 4.266666666666667)]
-    [InlineData(1, -200, 8)]
+    [InlineData(1, -0.2, 0.0625)]
+    [InlineData(1, -10, 1.0666666666666667)]
+    [InlineData(2, -10, 2.1333333333333333)]
+    [InlineData(1, -200, 4)]
     public void GeometryUsesActualClampedSizeAndMatchingCenterAxisHits(double scale, double z, double length)
     {
         var context = Camera(scale: scale);
@@ -101,15 +102,23 @@ public sealed class GizmoCameraTests
         var x = drawn.Single(part => part.Geometry.Handle.Id == ComposedPositionGizmo.X).Geometry;
         Assert.Equal(length, x.Extent, 8);
         var center = drawn.Single(part => part.Geometry.Handle.Id == ComposedPositionGizmo.Center).Geometry;
-        Assert.Equal(length * 7 / 64, Math.Sqrt(Vector256.Dot(center.BasisX, center.BasisX)), 8);
+        Assert.Equal(length * 7 / 32, Math.Sqrt(Vector256.Dot(center.BasisX, center.BasisX)), 8);
         var pointer = context.Camera!.CreatePointer(context, 400, 300);
         Assert.True(manager.TryBegin(pointer));
         Assert.Equal(ComposedPositionGizmo.Center, manager.CapturedHandle);
         manager.Cancel();
-        Assert.True(context.Camera.TryProject(x.Frame.Origin + x.BasisX * 0.7, out var screen));
+        Assert.True(context.Camera.TryProject(x.Frame.Origin + x.BasisX, out var screen));
+        // At long range the shorter shaft overlaps the center's hit padding; use the exposed tip padding.
+        screen = screen.WithElement(0, screen[0] + 3);
         pointer = context.Camera.CreatePointer(context, screen[0], screen[1]);
         Assert.True(manager.TryBegin(pointer));
         Assert.Equal(ComposedPositionGizmo.X, manager.CapturedHandle);
+        manager.Cancel();
+        if (z == -10)
+        {
+            Assert.True(context.Camera.TryProject(x.Frame.Origin + x.BasisX * 1.75, out screen));
+            Assert.False(manager.TryBegin(context.Camera.CreatePointer(context, screen[0], screen[1])));
+        }
     }
 
     [Fact]

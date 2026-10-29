@@ -216,6 +216,8 @@ releases all remaining textures, the shared quad and shader. Labels do not
 participate in hit testing or input capture.
 
 Work-area handles use hover labels for X/Y/Z and endpoint Center markers.
+Axis arrows use a nominal size of 32 (half their previous length), with the same
+geometry used for rendering and picking; center-marker sizes are unchanged.
 The whole-area midpoint's center label is always visible with its eligible handle
 and uses the selected work area's name, including renames; all names are rendered
 as literal text rather than markup.

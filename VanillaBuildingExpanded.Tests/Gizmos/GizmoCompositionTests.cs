@@ -38,7 +38,7 @@ public sealed class GizmoCompositionTests
         {
             var handle = f.Gizmo.Handles[id];
             Assert.Equal(GizmoShape.Arrow, handle.Appearance.Shape);
-            Assert.Equal(64, handle.Appearance.Size);
+            Assert.Equal(32, handle.Appearance.Size);
             Assert.Equal(color, handle.Appearance.Color);
             Assert.Equal(direction, handle.FrameSource!.GetFrame(f.Context).Direction);
         }
