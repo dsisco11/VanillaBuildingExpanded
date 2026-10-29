@@ -13,7 +13,8 @@ BuildBrush resolves placement intent locally and applies native block rules on b
 | [Client controller](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushControllerClient.cs) | Lazily obtains one brush from a supplied factory, handles brush operations and publishes its state. Accepts explicit selections for ordinary updates and post-placement refreshes. |
 | [Server controller](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushControllerServer.cs) | Applies accepted state and subscribes to brush activation/dimension changes to manage preview lifecycle and dirty counters. Receives a constructed brush; disposal removes its subscriptions. |
 | [State](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushState.cs) | Copies brush values without game side effects. |
-| [Placement validation](../VanillaBuildingExpanded/src/BuildBrush/Placement/BrushPlacementValidation.cs) | Resolves requested snapping and, upon rejection, an unsnapped fallback. Clones raycast selection data, changes resolved position/offset, and invokes the rule dependency separately for each candidate, even if positions coincide. |
+| [Placement validation](../VanillaBuildingExpanded/src/BuildBrush/Placement/BrushPlacementValidation.cs) | Resolves one requested candidate and validates it once, retaining rejection without an unrestricted fallback. Reports requested, resolved and accepted directions separately from candidate position. Clones raycast selection data before invoking the rule dependency. |
+| [Placement result](../VanillaBuildingExpanded/src/BuildBrush/Placement/BrushPlacementResult.cs) and [snapping presentation](../VanillaBuildingExpanded/src/BuildBrush/BrushSnappingPresentation.cs) | Retain local outcome meaning and a copied original-target snapshot. The brush instance publishes the snapshot after resolution; the client controller exposes a guarded read without validation, drawing, or transport changes. |
 | [Validation contract](../VanillaBuildingExpanded/src/BuildBrush/Placement/IBrushPlacementValidator.cs) and [native adapter](../VanillaBuildingExpanded/src/BuildBrush/Placement/PlayerBrushPlacementValidator.cs) | The adapter retains the actual world/player and directly calls the selected block's virtual `CanPlaceBlock`, forwarding the failure-code reference. Native claims, collision and block behaviors retain their side effects. |
 | [Preview dimension](../VanillaBuildingExpanded/src/BuildBrush/BrushDimension.cs) | Owns preview contents and native chunk synchronization. |
 | [Preview entity](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushEntity.cs) and [renderer](../VanillaBuildingExpanded/src/BuildBrush/BuildBrushEntityRenderer.cs) | Publish/render watched validity, ownership, bounds and dirty state with mini-dimension contents. Local entity association checks the owner UID; rendering uses the local camera's real player context. |
@@ -396,6 +397,63 @@ Ordinary updates receive the current `BlockSelection?` explicitly. An absent sel
 Placement stacks retain the selected orientation's block ID and deep-clone all held-stack attributes before applying brush rotation. This preserves attribute-based properties such as lantern material, lining and glass without modifying the inventory stack. Source refreshes detect attribute changes even when the block ID is unchanged, replacing stale attributes while retaining the selected orientation. They also track the selected hotbar slot number: switching slots recreates the preview block and entity even for identical stacks, while retaining brush orientation. Unchanged sources in the same slot do not recreate the preview.
 
 Resolved selections preserve the source face, hit position and other raycast data. Placement validation and placement requests use the same cloning rule. Missing block/position paths retain their own early-return semantics; native rules run only when there is a placement candidate.
+
+### Local snapping outcome and presentation contract
+
+Phase 1 of the [snapping indicator plan](BuildBrushSnappingIndicator.todo) implements
+local result reporting only. Target geometry support, shaders, rendering, resource
+lifecycle integration, and in-game appearance/performance qualification remain later
+phases under the [approved proposal](BuildBrushSnappingIndicator.proposal.md).
+
+`BrushSnapping.ResolvePosition` has an overload that reports the resolved U/V/W
+directions using the same calculation as candidate placement. Its original overload
+remains available. Thresholds retain the existing float projection and strict
+comparisons against `0.15f`; exact ordinary `0.35f` and `0.65f` boundaries are centered.
+U is horizontal on every face; V is horizontal on top/bottom faces and vertical
+on side faces. Opposite faces do not reverse world-axis U/V signs. W follows the
+outward normal and is applied at most once, including explicit face offset.
+
+`BrushPlacementValidation.Resolve` owns the detailed result and invokes native rules
+once for a non-null block. `BrushPlacementResult` distinguishes no block, invalid
+placement, ordinary placement (including W-only or no permitted movement), and
+accepted tangential snapping. Requested directions retain the hit's U/V/W and mode;
+resolved directions describe the candidate; applied directions are zero when no
+block is present or validation rejected it. Equal positions do not imply equal
+outcomes. Existing position-only wrappers retain their null-block and validation
+contracts, and rejected candidates are never retried unrestricted.
+
+`BuildBrushInstance.TryUpdate` captures the original target before native validation
+and before replacing `Selection.Position` with the destination. It clears prior
+presentation during resolution and publishes a `BrushSnappingPresentation` only if
+its input revision remains current. The snapshot owns copies of target coordinates,
+face, hit and selection-box context, captures the target block ID, and retains an
+immutable result with independent U/V directions and copied position accessors.
+The existing update shortcut additionally requires matching original target context,
+so aiming at the previous destination cannot incorrectly reuse the previous outcome.
+
+Consumers read `BuildBrushControllerClient.GetSnappingPresentation` with the current
+world selection and an explicit supported-geometry decision. They must use this
+guarded read rather than caching a previously returned snapshot across context
+changes. Reads require active mode, a supported held source, a current matching
+target/face/hit/selection box/block, matching mode/revision and resolved destination,
+and valid accepted U/V movement. Live hotbar slot, block, stack count and source
+attributes are checked against the resolved source without refreshing or validating.
+The geometry argument is a gate, not a Phase 1 claim that any shape is qualified.
+
+Mode/source changes, dirty refreshes and target loss invalidate presentation.
+Centered/disabled axes contribute no marking; None, ordinary/W-only placement,
+invalidity, unsupported geometry and stale contexts yield no presentation.
+The existing slow validity check may update the matching snapshot's validity using
+its one existing rule call, but cannot attach an old result to a new target or face.
+The controller/system still own their existing update cadence; no rendering, new
+input, preview synchronization, or network fields are introduced by this contract.
+
+Automated coverage resides in `BrushSnappingTests`, `BrushPlacementResultTests`,
+`BrushSnappingPresentationTests`, and the existing placement-validation/restriction
+tests. It covers all six faces/modes, independent top/bottom directions, exact and
+adjacent float thresholds, explicit W offsets, equal-position outcome distinctions,
+single validation calls, source/context invalidation, and snapshot ownership.
+These checks do not qualify geometry, shader compatibility, appearance, or cost.
 
 ## Update and preview flow
 

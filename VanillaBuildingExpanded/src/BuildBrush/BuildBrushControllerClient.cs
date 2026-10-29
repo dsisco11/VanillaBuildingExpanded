@@ -57,6 +57,9 @@ public sealed class BuildBrushControllerClient
         return localBrush.TryUpdate(CanUseBrushControls ? selection : null);
     }
 
+    internal BrushSnappingPresentation? GetSnappingPresentation(BlockSelection? selection, bool supportedGeometry) =>
+        GetBrush().GetSnappingPresentation(selection, supportedGeometry);
+
     /// <summary>Rechecks the resolved preview placement against the supplied selection.</summary>
     public void TryUpdatePlacementValidity(BlockSelection selection)
     {

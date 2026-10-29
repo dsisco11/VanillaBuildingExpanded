@@ -29,22 +29,30 @@ internal sealed class BrushPlacementValidation
             return selection.Position;
         }
 
-        isValid = TryGetValidSnappedPosition(block, selection, snapping, mode, out BlockPos position);
-        return position;
+        BrushPlacementResult result = Resolve(block, selection, mode, snapping);
+        isValid = result.IsValid;
+        return result.Position;
+    }
+
+    internal BrushPlacementResult Resolve(Block? block, BlockSelection selection, EBuildBrushSnapping mode,
+        BrushSnapping snapping)
+    {
+        BrushSnappingState requested = new(snapping.FaceU, snapping.FaceV, snapping.FaceW, mode);
+        if (block is null)
+            return new BrushPlacementResult(selection.Position, requested, new BrushSnappingState(0, 0, 0, mode), false, true);
+
+        BlockPos position = snapping.ResolvePosition(mode, out BrushSnappingState resolved);
+        bool isValid = CanPlaceAtPosition(block, selection, position);
+        return new BrushPlacementResult(position, requested, resolved, true, isValid);
     }
 
     /// <summary>Resolves one snapping candidate and checks its placement rules.</summary>
     public bool TryGetValidSnappedPosition(Block? block, BlockSelection selection, BrushSnapping snapping,
         EBuildBrushSnapping mode, out BlockPos position)
     {
-        if (block is null)
-        {
-            position = selection.Position.Copy();
-            return true;
-        }
-
-        position = snapping.ResolvePosition(mode);
-        return CanPlaceAtPosition(block, selection, position);
+        BrushPlacementResult result = Resolve(block, selection, mode, snapping);
+        position = result.Position;
+        return result.IsValid;
     }
 
     /// <summary>Checks a resolved preview position using a cloned selection and a fresh failure code.</summary>

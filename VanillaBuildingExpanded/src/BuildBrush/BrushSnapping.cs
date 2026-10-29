@@ -67,6 +67,9 @@ public readonly record struct BrushSnapping
     /// <param name="snappingMode"></param>
     /// <returns></returns>
     public readonly BlockPos ResolvePosition(EBuildBrushSnapping snappingMode)
+        => ResolvePosition(snappingMode, out _);
+
+    public readonly BlockPos ResolvePosition(EBuildBrushSnapping snappingMode, out BrushSnappingState applied)
     {
         bool noSnapping = snappingMode.HasFlag(EBuildBrushSnapping.None);
         bool horizontal = !noSnapping && snappingMode.HasFlag(EBuildBrushSnapping.Horizontal);
@@ -75,6 +78,9 @@ public readonly record struct BrushSnapping
         FastVec3i u = GetFaceUOffset(Selection.Face.Axis);
         FastVec3i v = GetFaceVOffset(Selection.Face.Axis);
         FastVec3i offset = new(horizontal ? u.X + v.X : 0, vertical ? u.Y + v.Y : 0, horizontal ? u.Z + v.Z : 0);
+        int appliedU = horizontal ? FaceU : 0;
+        int appliedV = (Selection.Face.Axis == EnumAxis.Y ? horizontal : vertical) ? FaceV : 0;
+        int appliedW = 0;
 
         if (explicitFaceOffset || ((noSnapping || horizontal || vertical) && offset.X == 0 && offset.Y == 0 && offset.Z == 0))
         {
@@ -82,8 +88,11 @@ public readonly record struct BrushSnapping
             offset.X += explicitFaceOffset || noSnapping || horizontal ? w.X : 0;
             offset.Y += explicitFaceOffset || noSnapping || vertical ? w.Y : 0;
             offset.Z += explicitFaceOffset || noSnapping || horizontal ? w.Z : 0;
+            bool normalPermitted = Selection.Face.Axis == EnumAxis.Y ? vertical : horizontal;
+            appliedW = explicitFaceOffset || noSnapping || normalPermitted ? FaceW : 0;
         }
 
+        applied = new BrushSnappingState(appliedU, appliedV, appliedW, snappingMode);
         return Selection.Position.Copy().Add(offset);
     }
 

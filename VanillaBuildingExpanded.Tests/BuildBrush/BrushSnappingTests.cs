@@ -679,7 +679,7 @@ public class BrushSnappingTests
             mode |= EBuildBrushSnapping.ApplyFaceNormalOffset;
         }
 
-        BlockPos resolved = snapping.ResolvePosition(mode);
+        BlockPos resolved = snapping.ResolvePosition(mode, out BrushSnappingState applied);
 
         Assert.Equal(new BlockPos(5 + deltaX, 10 + deltaY, 15 + deltaZ), resolved);
         Assert.Equal(new BlockPos(5, 10, 15), source);
@@ -690,6 +690,53 @@ public class BrushSnappingTests
         Assert.Equal(face.Normali.X, normal.X);
         Assert.Equal(face.Normali.Y, normal.Y);
         Assert.Equal(face.Normali.Z, normal.Z);
+        bool horizontal = !mode.HasFlag(EBuildBrushSnapping.None) && mode.HasFlag(EBuildBrushSnapping.Horizontal);
+        bool vertical = !mode.HasFlag(EBuildBrushSnapping.None) && mode.HasFlag(EBuildBrushSnapping.Vertical);
+        int appliedU = horizontal ? u : 0;
+        int appliedV = (face.Axis == EnumAxis.Y ? horizontal : vertical) ? v : 0;
+        bool normalAllowed = mode.HasFlag(EBuildBrushSnapping.None) ||
+            (face.Axis == EnumAxis.Y ? vertical : horizontal);
+        Assert.Equal(new BrushSnappingState(appliedU, appliedV,
+            held || (appliedU == 0 && appliedV == 0 && normalAllowed) ? 1 : 0, mode), applied);
+        Assert.Equal(resolved, snapping.ResolvePosition(mode));
+    }
+
+    public static IEnumerable<object[]> ExactThresholdCases()
+    {
+        (float Hit, int Direction)[] boundaries =
+        [
+            (MathF.BitDecrement(0.35f), -1), (0.35f, 0), (MathF.BitIncrement(0.35f), 0),
+            (MathF.BitDecrement(0.65f), 0), (0.65f, 0), (MathF.BitIncrement(0.65f), 1)
+        ];
+        foreach (BlockFacing face in BlockFacing.ALLFACES)
+        {
+            foreach (var boundary in boundaries)
+            {
+                foreach (bool testU in new[] { true, false })
+                    yield return [face.Index, boundary.Hit, boundary.Direction, testU];
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(ExactThresholdCases))]
+    public void Constructor_ExactThresholdAndAdjacentFloats_PreservesExistingInclusivity(
+        int faceIndex, float hit, int direction, bool testU)
+    {
+        BlockFacing face = BlockFacing.ALLFACES[faceIndex];
+        float u = testU ? hit : 0.5f;
+        float v = testU ? 0.5f : hit;
+        Vector3 position = face.Axis switch
+        {
+            EnumAxis.X => new((face.Normali.X + 1) * 0.5f, v, u),
+            EnumAxis.Y => new(u, (face.Normali.Y + 1) * 0.5f, v),
+            EnumAxis.Z => new(u, v, (face.Normali.Z + 1) * 0.5f),
+            _ => throw new InvalidOperationException()
+        };
+        BrushSnapping snapping = new(new BlockSelectionRay(new BlockPos(0), face, position));
+
+        Assert.Equal(testU ? direction : 0, snapping.FaceU);
+        Assert.Equal(testU ? 0 : direction, snapping.FaceV);
     }
 
     #endregion

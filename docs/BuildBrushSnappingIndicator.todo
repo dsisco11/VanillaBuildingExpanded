@@ -1,7 +1,7 @@
 # Build brush snapping indicator
 
 Source proposal: [BuildBrushSnappingIndicator.proposal.md](BuildBrushSnappingIndicator.proposal.md).
-Status: Planning only. All implementation and qualification tasks remain pending.
+Status: Phase 1 complete. Implementation and qualification in Phases 2-6 remain pending.
 Format: Indented unchecked tasks follow the existing src\docs\project.todo convention.
 
 ## Goal and governing constraints
@@ -50,48 +50,56 @@ Depends on: No implementation phase; confirm implementation authorization first.
 Outcome: Local placement resolution supplies a coherent, testable presentation
 contract without changing placement or networking. No rendering is required yet.
 
-    ☐ Confirm implementation authorization and inspect existing integration seams.
-        ☐ Trace BrushSnapping, BrushPlacementValidation, BuildBrushInstance,
+    ✔ Confirm implementation authorization and inspect existing integration seams.
+        ✔ Trace BrushSnapping, BrushPlacementValidation, BuildBrushInstance,
           BuildBrushControllerClient, and BuildBrushSystem_Client.
-        ☐ Identify where the original world selection is available before its
+        ✔ Identify where the original world selection is available before its
           position becomes the placement destination, and where the final local
           placement outcome is known.
-        ☐ Reuse existing result/mapping helpers where possible; record the
+        ✔ Reuse existing result/mapping helpers where possible; record the
           chosen local result and presentation ownership in implementation documentation.
-    ☐ Extend local outcome reporting in the placement-resolution path.
-        ☐ Distinguish requested snapping, accepted snapping, ordinary fallback,
+    ✔ Extend local outcome reporting in the placement-resolution path.
+        ✔ Distinguish requested snapping, accepted snapping, ordinary fallback,
           and invalid placement even when their candidate positions coincide.
-        ☐ Preserve U/V projection around the block-cell center and the existing
+        ✔ Preserve U/V projection around the block-cell center and the existing
           0.15 threshold, with ordinary local boundaries at 0.35 and 0.65.
-        ☐ Preserve horizontal X/Z and vertical Y filtering, both horizontal
+        ✔ Preserve horizontal X/Z and vertical Y filtering, both horizontal
           in-plane axes on top/bottom faces, restricted W fallback, independent
           explicit face offset without doubling W, and None face-adjacent placement.
-        ☐ Keep rejected candidates invalid without an unrestricted retry.
+        ✔ Keep rejected candidates invalid without an unrestricted retry.
           Presentation must not invoke native validation a second time.
-    ☐ Define a coherent local presentation snapshot and visibility decision.
-        ☐ Pair original target identity and face with their corresponding
+    ✔ Define a coherent local presentation snapshot and visibility decision.
+        ✔ Pair original target identity and face with their corresponding
           resolved outcome; include enough identity/version information to reject
           stale face, hit-region, snapping-mode, held-item, or target results.
-        ☐ Carry each applied in-plane direction independently; do not collapse
+        ✔ Carry each applied in-plane direction independently; do not collapse
           top/bottom U and V into one value merely because both are horizontal.
-        ☐ Require local build mode, an eligible held block, a current target,
+        ✔ Require local build mode, an eligible held block, a current target,
           supported geometry, and accepted permitted tangential movement.
-        ☐ Suppress centered/disabled-axis markings, None, W-only/ordinary fallback,
+        ✔ Suppress centered/disabled-axis markings, None, W-only/ordinary fallback,
           invalid placement, and results not yet matched to the current target.
-    ☐ Add focused tests in VanillaBuildingExpanded.Tests.
-        ☐ Extend BrushSnappingTests/BrushSnappingRestrictionTests as appropriate
+    ✔ Add focused tests in VanillaBuildingExpanded.Tests.
+        ✔ Extend BrushSnappingTests/BrushSnappingRestrictionTests as appropriate
           for all six faces, opposite-face signs, each snapping mode, and both
           top/bottom horizontal directions.
-        ☐ Exercise values just below, exactly at, and just above both thresholds;
+        ✔ Exercise values just below, exactly at, and just above both thresholds;
           assert existing boundary behavior rather than choosing new inclusivity.
-        ☐ Cover explicit face offset with and without U/V or existing W movement,
+        ✔ Cover explicit face offset with and without U/V or existing W movement,
           equal-position outcomes with different meanings, and invalid candidates.
-        ☐ Verify presentation does not add native validation calls, and mismatched
+        ✔ Verify presentation does not add native validation calls, and mismatched
           or newly observed targets/faces cannot reuse an old successful outcome.
 
 Completion criteria:
-    ☐ Focused tests pass and demonstrate unchanged placement results and validation
+    ✔ Focused tests pass and demonstrate unchanged placement results and validation
       behavior, plus coherent presentation data independent of renderer/network changes.
+
+Verification: Delegated focused VSTest run rebuilt the mod and tests using .NET SDK
+10.0.401 and VINTAGE_STORY=G:\Vintagestory: 1,734 passed, 0 failed, 0 skipped.
+The second implementation review and independent audit-stage-completion review
+both found Phase 1 fully satisfied. The local contract and ownership are documented
+in [BuildBrushArchitecture.md](BuildBrushArchitecture.md#local-snapping-outcome-and-presentation-contract).
+No geometry, shader, rendering, packaging, or live visual/performance qualification
+is claimed by this phase.
 
 ## Phase 2: Supported target geometry and owned cache
 

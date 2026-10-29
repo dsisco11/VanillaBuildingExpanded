@@ -44,6 +44,8 @@ public class BuildBrushInstance
     private BrushSnappingState lastCheckedSnappingState = new();
     private bool _isValidPlacementBlock;
     private bool _isActive = false;
+    private BrushSnappingPresentation? snappingPresentation;
+    private long snappingPresentationRevision;
 
     /// <summary>
     /// The mini-dimension wrapper for this brush.
@@ -140,6 +142,7 @@ public class BuildBrushInstance
 
             bool wasActive = _isActive;
             _isActive = value;
+            InvalidateSnappingPresentation();
             IsDirty = true;
             UpdatePreviewVisibility();
 
@@ -221,6 +224,7 @@ public class BuildBrushInstance
                 return;
 
             BlockPos? previousPosition = _position?.Copy();
+            snappingPresentation = null;
             _position = value;
             UpdatePreviewVisibility();
 
@@ -291,6 +295,7 @@ public class BuildBrushInstance
         {
             if (value is null)
             {
+                InvalidateSnappingPresentation();
                 _blockId = null;
                 _isValidPlacementBlock = false;
                 BlockUntransformed = null;
@@ -304,6 +309,7 @@ public class BuildBrushInstance
             }
 
             _blockId = value;
+            InvalidateSnappingPresentation();
             MarkDirty();
             Block block = World.GetBlock(value.Value);
             _isValidPlacementBlock = IsValidPlacementBlock(block);
@@ -333,6 +339,7 @@ public class BuildBrushInstance
 
             EBuildBrushSnapping previousMode = _snapping;
             _snapping = value;
+            InvalidateSnappingPresentation();
             IsDirty = true;
 
             // Raise snapping mode changed event with previous state
@@ -444,6 +451,7 @@ public class BuildBrushInstance
 
     private void RebuildPlacementItemStackAndNotify()
     {
+        InvalidateSnappingPresentation();
         Block? newBlock = CurrentPlacementBlock;
         int? newId = newBlock?.BlockId;
         if (newId is 0 || newBlock?.IsMissing == true)
@@ -527,6 +535,7 @@ public class BuildBrushInstance
     #region Update Logic
     public void MarkDirty()
     {
+        InvalidateSnappingPresentation();
         if (IsDirty)
         {
             return;
@@ -550,6 +559,7 @@ public class BuildBrushInstance
     {
         if (blockSelection is null)
         {// Player currently has no block selection
+            InvalidateSnappingPresentation();
             IsValidPlacement = false;
             Position = null;
             Selection = new BlockSelection();
@@ -559,20 +569,50 @@ public class BuildBrushInstance
 
         BrushSnapping snapping = new(blockSelection);
         BrushSnappingState snappingState = new(snapping.FaceU, snapping.FaceV, snapping.FaceW, Snapping);
-        if (snappingState == lastCheckedSnappingState && blockSelection.Position == Position && !force && !IsDirty)
+        if (snappingState == lastCheckedSnappingState && blockSelection.Position == Position && !force && !IsDirty
+            && snappingPresentation?.Matches(blockSelection, Snapping, snappingPresentationRevision) == true)
         {
             return false;
         }
         lastCheckedSnappingState = snappingState;
 
-        BlockPos? resolvedPos = ResolveFinalSelectionPosition(_blockUntransformed, blockSelection, Snapping, snapping, out bool isValidPlacement);
+        InvalidateSnappingPresentation();
+        long revision = snappingPresentationRevision;
+        BlockSelection originalTarget = blockSelection.Clone();
+        BrushPlacementResult placement = placementValidation.Resolve(_blockUntransformed, blockSelection, Snapping, snapping);
+        BlockPos resolvedPos = placement.Position;
         bool result = resolvedPos != Position;
 
         IsDirty = false;
-        IsValidPlacement = isValidPlacement;
+        IsValidPlacement = placement.IsValid;
         Position = resolvedPos;
         Selection = BrushPlacementValidation.BuildResolvedSelection(blockSelection, resolvedPos);
+        if (revision == snappingPresentationRevision)
+            snappingPresentation = new BrushSnappingPresentation(originalTarget, placement, revision);
         return result;
+    }
+
+    private void InvalidateSnappingPresentation()
+    {
+        snappingPresentation = null;
+        snappingPresentationRevision++;
+    }
+
+    internal BrushSnappingPresentation? GetSnappingPresentation(BlockSelection? currentSelection, bool supportedGeometry)
+    {
+        BrushSnappingPresentation? presentation = snappingPresentation;
+        ItemStack? heldStack = inventory.ActiveHotbarSlot?.Itemstack;
+        if (!IsActive || !_isValidPlacementBlock || IsDirty || !IsValidPlacement || !supportedGeometry
+            || currentSelection is null || presentation is null
+            || !presentation.Matches(currentSelection, Snapping, snappingPresentationRevision)
+            || presentation.Result.Outcome != BrushPlacementOutcome.AcceptedSnapping
+            || presentation.Result.Position != Position
+            || heldStack is null || heldStack.Block?.Id != BlockId || heldStack.StackSize <= 0
+            || SourceHotbarSlotNumber != inventory.ActiveHotbarSlotNumber
+            || _sourceItemStack is null || !heldStack.Attributes.Equals(World, _sourceItemStack.Attributes))
+            return null;
+
+        return presentation;
     }
 
     /// <summary>
@@ -669,12 +709,22 @@ public class BuildBrushInstance
     /// <summary>Updates preview validity at the current brush position using the selected placement block.</summary>
     public bool TryUpdatePlacementValidity(in BlockSelection blockSelection)
     {
+        BrushSnappingPresentation? previousPresentation = snappingPresentation;
+        snappingPresentation = null;
         Block? placingBlock = CurrentPlacementBlock;
         if (placingBlock is null || Position is null)
         {
             return false;
         }
+        long revision = snappingPresentationRevision;
         IsValidPlacement = placementValidation.CanPlaceAtPosition(placingBlock, blockSelection, Position);
+        if (revision == snappingPresentationRevision
+            && previousPresentation?.Matches(blockSelection, Snapping, revision) == true
+            && previousPresentation.Result.Position == Position)
+        {
+            snappingPresentation = new BrushSnappingPresentation(blockSelection,
+                previousPresentation.Result.WithValidity(IsValidPlacement), revision);
+        }
         return IsValidPlacement;
     }
 
