@@ -401,9 +401,10 @@ Resolved selections preserve the source face, hit position and other raycast dat
 ### Local snapping outcome and presentation contract
 
 Phase 1 of the [snapping indicator plan](BuildBrushSnappingIndicator.todo) implements
-local result reporting only. Target geometry support, shaders, rendering, resource
-lifecycle integration, and in-game appearance/performance qualification remain later
-phases under the [approved proposal](BuildBrushSnappingIndicator.proposal.md).
+local result reporting. Phase 2 adds the isolated target-geometry/cache substrate
+described below. Shaders, rendering, resource lifecycle integration, and in-game
+appearance/performance qualification remain later phases under the
+[approved proposal](BuildBrushSnappingIndicator.proposal.md).
 
 `BrushSnapping.ResolvePosition` has an overload that reports the resolved U/V/W
 directions using the same calculation as candidate placement. Its original overload
@@ -454,6 +455,105 @@ tests. It covers all six faces/modes, independent top/bottom directions, exact a
 adjacent float thresholds, explicit W offsets, equal-position outcome distinctions,
 single validation calls, source/context invalidation, and snapshot ownership.
 These checks do not qualify geometry, shader compatibility, appearance, or cost.
+
+### Snapping target geometry and owned cache
+
+Phase 2 introduces `BrushTargetMeshSource`, `BrushTargetBounds`,
+`BrushTargetMeshCache`, and `BrushTargetGeometry`; nothing registers or draws an
+overlay yet. Consumers must still obtain a current guarded presentation from the
+controller, then ask the cache to qualify that original target. The cache's live
+block-ID/entity/decor checks supplement, not replace, the controller's context guard.
+An unsupported or rejected target returns no geometry, never a generic cube.
+
+The initial source boundary deliberately accepts only the exact engine base `Block`
+class, without block/collectible behaviors, entity geometry, decors, positional
+randomization, alternate/tiled textures or shapes, overlays, or LOD substitutions.
+Cube/JSON drawing with an ordinary Vintage Story composite shape is considered.
+Derived/custom/chiseled blocks, animations/custom rendering, voxelized shapes, wind
+and depth-offset geometry remain excluded. Static Opaque, OpaqueNoCull, BlendNoCull,
+and Transparent passes are admitted: material alpha and texture holes intentionally
+do not clip the indicator or disqualify geometry. No texture bitmap is acquired or
+scanned; texture availability, baking, and pixel alpha are not qualification inputs.
+The shader must use the mesh and procedural marking mask without material-alpha
+sampling. Animated liquid and other special, unqualified render paths remain
+excluded for geometry fidelity, not for texture opacity. Upload failures remain
+explicit errors.
+
+The borrowed default JSON mesh is retained as actual indexed triangle geometry:
+finite positions, valid complete triangle indices, and nondegenerate triangles.
+There is no cuboid, vertex-count, axis-alignment, closed-volume, or unit-cell-bounds
+requirement. Slopes, multi-element shapes, and recessed surfaces are not excluded
+merely by their topology. Custom/wind/depth-offset attributes, extra transform bits
+and special unqualified per-face passes remain excluded. The four static material
+passes above and native inherited passes (`-1`) are allowed. Cube drawtype alone
+still requires the borrowed mesh to match native unit
+cube faces, because native cube drawing does not generally consume an arbitrary
+JSON shape. This is a world-path fidelity check, not replacement geometry.
+
+Surface suitability is separate from source fidelity. `BrushTargetBounds` records
+extents but tests the actual triangles for selected-facing directional opportunity.
+A triangle faces the selection when its oriented geometric normal has a positive
+dot product with the selected outward
+axis; it need not be axis-aligned. Raycast hits can lie on native selection boxes
+rather than rendered triangles, so neither triangle membership nor an outer
+bounding plane is required of the hit. This does not change raycasting: it uses the
+accepted result's directions and supplies the actual mesh for shader clipping.
+Holes and absent/back-facing surfaces never become generated indicator geometry.
+Selected-facing triangles must have projected surface area reaching each applied
+direction's existing cell region (`0.35`/`0.65`); independent U/V opportunities may
+occur on different triangles. Bounds never redefine snapping or generate a surface.
+The cached/uploaded positions and indices remain the actual engine mesh unchanged.
+Phase 3 must use matching selected-facing logic in the shader and assess coverage
+of its concrete procedural mask; this opportunity check does not establish final
+glyph coverage or readability.
+
+Candidate unit cubes, the base-Block `game:ethoslab` slab, and faithful static
+sloped/multi-element/recessed assets should be exercised in Phase 6. Many ordinary
+stone-brick cubes may be excluded by texture variants; custom-class cobble slabs
+remain excluded. Centered narrow geometry without accepted tangential movement
+and surfaces outside the selected-facing directional regions are omission cases.
+Recessed geometry with an actual qualifying surface is not an
+automatic omission. All actual readable-marking claims remain pending Phase 6.
+
+Acquisition/transform evidence is from the installed **1.22.7.0** engine
+(`G:\Vintagestory\VintagestoryLib.dll`) and the local API source, not a live rendered
+qualification. `ITesselatorManager.GetDefaultBlockMesh` returns borrowed default
+chunk geometry; its manager tessellates composite transforms into those positions.
+Native `JsonTesselator` can replace it through block entities, custom hooks,
+position-selected alternates, LODs, or random transforms, which is why those paths
+are excluded. Native `CubeTesselator` uses unit-cell cube faces. Inventory
+`GetDefaultBlockMeshRef` and `MiniDimensionTessellator` preview output are not used
+as world-fidelity proof. After qualification, only original-target translation is
+applied, including encoded dimension Y and double-precision camera subtraction
+before float conversion. Shape rotation/scale/offset must not be applied twice.
+
+The one-entry cache keys on the live `Block` object and borrowed default `MeshData`
+reference. No admitted variant depends on position, face, hit, mode, or revision;
+those remain in a fresh presentation/transform descriptor, so equivalent instances
+reuse geometry. Looking up the engine's default mesh does not request independent
+retessellation. Positive and negative qualification are cached. In-place geometry
+or resource edits require explicit invalidation even if references survive.
+Texture-alpha changes alone do not invalidate or requalify geometry.
+`InvalidateGeometry(blockId)` retires only that entry; `Invalidate()` retires all
+owned resources for world/resource/shader changes; replacement and `Dispose()`
+also retire them. Missing default geometry releases the old entry. Unsupported
+targets never expose the previous descriptor, but may retain valid cached geometry.
+Phase 4 must wire these hooks to actual lifecycle/reload events; no subscriptions
+or client-system lifetime integration are claimed here.
+
+Engine mesh arrays remain borrowed and unchanged. The cache clones qualifying CPU
+data, uploads its owned copy lazily once, and disposes only its owned GPU/CPU data.
+Replacement/disposal are idempotent and clear ownership before release; failed GPU
+initialization disposes that failed reference and remains retryable. Acquisition,
+qualification, upload, invalidation, and disposal enforce the creating client-main
+thread (and the engine main-thread ID when initialized). Tests use synthetic native
+cube/slab data plus wedge, alternate-triangulation, multi-element and recessed
+meshes with mocked acquisition/upload boundaries. Atlas mocks assert that no
+texture loading occurs, including transparent pixels and unavailable bitmaps.
+Tests cover actual-mesh
+preservation, surface-facing opportunity, selection-box hits, reuse, translation,
+invalidation, failures and disposal. They do not prove live asset support, shader
+compatibility, appearance, ordering, or rendering cost.
 
 ## Update and preview flow
 

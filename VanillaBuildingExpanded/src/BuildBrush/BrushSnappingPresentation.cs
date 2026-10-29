@@ -10,6 +10,7 @@ internal sealed class BrushSnappingPresentation
 
     public long Revision { get; }
     public BlockPos TargetPosition => target.Position.Copy();
+    public Vec3d TargetHitPosition => target.HitPosition.Clone();
     public BlockFacing Face => target.Face;
     public int? TargetBlockId => targetBlockId;
     public BrushPlacementResult Result { get; }

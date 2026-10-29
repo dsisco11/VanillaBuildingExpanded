@@ -1,7 +1,8 @@
 # Build brush snapping indicator
 
 Source proposal: [BuildBrushSnappingIndicator.proposal.md](BuildBrushSnappingIndicator.proposal.md).
-Status: Phase 1 complete. Implementation and qualification in Phases 2-6 remain pending.
+Status: Phases 1-2 complete, including target-mesh and texture-independent coverage corrections.
+Implementation and qualification in Phases 3-6 remain pending.
 Format: Indented unchecked tasks follow the existing src\docs\project.todo convention.
 
 ## Goal and governing constraints
@@ -28,9 +29,11 @@ None, and outcomes with no permitted U/V movement show no tangential marking.
   be reproduced accurately and whose markings remain meaningful under cell-based
   snapping. Evaluate cubes and non-cubic shapes; do not assume either category's
   coverage from a default or inventory mesh API alone.
-- Position-dependent variants, block-entity geometry, chiseled blocks,
-  animated/custom renderers, texture cutouts, and transparent materials remain
-  unsupported unless explicitly qualified. Omission is the fallback, not a cube.
+- Position-dependent variants, block-entity geometry, chiseled blocks, and
+  animated/custom renderers remain unsupported unless explicitly qualified.
+  Texture holes/material alpha do not clip or disqualify the indicator: it
+  intentionally covers the full eligible mesh, without bitmap scans or alpha
+  sampling. Omission for unqualified geometry is the fallback, not a cube.
 - Exact cache identity, world-transform acquisition, surface-facing data,
   render stage/order, and depth bias require investigation and evidence before
   their dependent behavior is accepted. These are implementation decisions, not
@@ -107,40 +110,61 @@ Depends on: Phase 1 presentation contract.
 Outcome: Supported original targets yield reproducible mesh/transform data;
 unsupported targets are explicitly omitted. This does not yet qualify visual quality.
 
-    ☐ Establish target-mesh acquisition and an initial support decision.
-        ☐ Investigate ITesselatorManager.GetDefaultBlockMesh as a static-geometry
+    ✔ Establish target-mesh acquisition and an initial support decision.
+        ✔ Investigate ITesselatorManager.GetDefaultBlockMesh as a static-geometry
           starting point; verify selected-world-instance mesh and transform fidelity.
-        ☐ Do not treat GetDefaultBlockMeshRef inventory geometry or
+        ✔ Do not treat GetDefaultBlockMeshRef inventory geometry or
           MiniDimensionTessellator preview output as proof of world-target fidelity.
-        ☐ Identify candidate cubes and non-cubic static shapes for qualification,
+        ✔ Identify candidate cubes and non-cubic static shapes for qualification,
           including narrow/recessed surfaces that may not intersect a procedural mask.
-        ☐ Explicitly reject unqualified categories listed in the assumptions.
-          If cutouts are intentionally qualified, include UV/alpha data and matching
-          alpha sampling; position-only rendering is insufficient for their silhouette.
-        ☐ Omit geometry that cannot be reproduced accurately or carry meaningful
+        ✔ Explicitly reject unqualified geometry categories listed in the assumptions.
+          Texture holes and material alpha must not restrict mesh eligibility or
+          require bitmap analysis/alpha sampling; markings intentionally cover them.
+        ✔ Omit geometry that cannot be reproduced accurately or carry meaningful
           markings. Never substitute a generic cube.
-    ☐ Implement clearly separated target-mesh handling and cache ownership.
-        ☐ Define geometry identity separately from target transform/presentation,
+    ✔ Implement clearly separated target-mesh handling and cache ownership.
+        ✔ Define geometry identity separately from target transform/presentation,
           including all qualified variant inputs needed to avoid incorrect reuse.
-        ☐ Keep engine-cached mesh data borrowed; copy before mutation and dispose
+        ✔ Keep engine-cached mesh data borrowed; copy before mutation and dispose
           only overlay-owned resources.
-        ☐ Reuse valid geometry for face, hit-region, and snapping-mode changes.
+        ✔ Reuse valid geometry for face, hit-region, and snapping-mode changes.
           Equivalent supported instances may reuse geometry and change only transform.
-        ☐ Invalidate relevant resources on geometry/world/resource changes and
+        ✔ Invalidate relevant resources on geometry/world/resource changes and
           shader reload; rebuild/upload only when required on the proper engine thread.
-        ☐ Make owned resource replacement and disposal testable for later lifecycle
+        ✔ Make owned resource replacement and disposal testable for later lifecycle
           wiring without introducing a general-purpose cache redesign.
-    ☐ Add focused support/cache tests.
-        ☐ Assert unsupported targets yield no overlay mesh rather than cube fallback.
-        ☐ Assert repeated face/hit/mode changes do not retessellate; equivalent
+    ✔ Add focused support/cache tests.
+        ✔ Assert unsupported targets yield no overlay mesh rather than cube fallback.
+        ✔ Assert repeated face/hit/mode changes do not retessellate; equivalent
           instance reuse updates the transform without stale target identity.
-        ☐ Assert geometry/lifecycle invalidation cannot reuse obsolete data,
+        ✔ Assert geometry/lifecycle invalidation cannot reuse obsolete data,
           borrowed meshes are unchanged/not disposed, and owned replacements are released.
 
 Completion criteria:
-    ☐ Support decisions, cache identity, transforms, and resource ownership are
+    ✔ Support decisions, cache identity, transforms, and resource ownership are
       documented and covered by focused tests. Runtime fidelity/readability of
       candidate shapes remains explicitly pending Phase 6.
+
+Corrected verification: The earlier cuboid-only and texture-alpha eligibility
+decisions and completion reviews are superseded. Phase 2 was corrected to preserve general
+faithful static target meshes and evaluate actual selected-facing triangle
+opportunity, including slopes, multi-element shapes, and recessed surfaces.
+Selection-box hits need not touch a rendered triangle or its outer bounds.
+Delegated focused VSTest verification rebuilt the mod and tests with .NET SDK
+10.0.401 and VINTAGE_STORY=G:\Vintagestory: 1,839 passed, 0 failed, 0 skipped.
+No warnings were reported in target-geometry/cache or presentation files;
+unrelated existing warnings remain. The second direct correction review and fresh
+independent audit-stage-completion audit found Phase 2 fully satisfied with no
+required findings or evidence gaps. This includes the user-approved
+texture-independent coverage correction: no bitmap acquisition/scanning,
+alpha-based clipping/rejection, or required material-alpha shader sampling.
+All four static material passes and inherited per-face passes are tested;
+unqualified liquid/extra-transform paths remain omitted for geometry fidelity.
+Support limits, installed 1.22.7 engine-source evidence, identity, transforms,
+ownership, and invalidation hooks are documented in
+[BuildBrushArchitecture.md](BuildBrushArchitecture.md#snapping-target-geometry-and-owned-cache).
+Actual lifecycle-event wiring remains Phase 4; live fidelity/readability and
+performance qualification remain Phase 6. No drawing or shader support is claimed.
 
 ## Phase 3: Procedural shader and isolated drawing responsibility
 

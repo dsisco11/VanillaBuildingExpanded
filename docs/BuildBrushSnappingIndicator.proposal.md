@@ -61,7 +61,12 @@ The mesh clips the markings to its surfaces. A simple procedural mask does not a
 
 Keep depth testing enabled so intervening geometry occludes the indicator. Use a small, validated depth bias to avoid fighting the target surface, disable depth writes for the overlay, and restore changed render state after drawing. Select a render stage and ordering compatible with the native selection outline, brush preview, and transparency handling. A depth bias alone does not establish ordering over other overlays.
 
-If support includes textures with transparent cutouts, matching their visible silhouette also requires the relevant texture coordinates and alpha sampling. A position-only shader would otherwise draw markings into transparent portions of the mesh.
+The indicator intentionally covers the target mesh even where its material texture
+has transparent holes. Texture alpha does not clip the indicator or determine
+target eligibility. Do not scan texture bitmaps or add material-alpha sampling to
+the indicator shader. The procedural marking mask and the mesh geometry define
+coverage; ordinary depth testing still handles intervening geometry. This
+user-approved clarification supersedes the earlier visible-silhouette requirement.
 
 ## Mesh acquisition and support boundary
 
@@ -69,7 +74,7 @@ The engine's `ITesselatorManager.GetDefaultBlockMesh` is a starting point for or
 
 The recommended initial support boundary is ordinary static block geometry whose mesh and world transform can be reproduced accurately. Cubes and non-cubic static shapes should both be evaluated. Non-cubic support requires that the markings remain meaningful under the existing block-cell snapping rules; matching the shape alone is insufficient.
 
-Position-dependent variants, block-entity geometry, chiseled blocks, animated/custom renderers, texture cutouts, and transparent materials need explicit qualification. The existing mini-dimension tessellator is useful reference material, but it produces preview geometry and does not establish exact world-target coverage.
+Position-dependent variants, block-entity geometry, chiseled blocks, and animated/custom renderers need explicit geometry qualification. Texture cutouts or material transparency alone do not disqualify an otherwise faithful static mesh; animated liquids and other unhandled geometry transformations still require qualification. The existing mini-dimension tessellator is useful reference material, but it produces preview geometry and does not establish exact world-target coverage.
 
 When accurate geometry or meaningful markings cannot be supplied, omit the overlay for that target. Do not substitute a cube that implies unsupported shape fidelity. Unqualified categories remain outside the initial support claim.
 
