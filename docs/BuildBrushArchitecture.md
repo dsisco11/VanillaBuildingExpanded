@@ -205,6 +205,9 @@ The [label overlay](../VanillaBuildingExpanded/src/Gizmos/GizmoRenderAdapter.Lab
 uses the same double-precision projection snapshot and AfterBlit state guard as
 the handle lines. A lazily created textured quad shader maps pixels directly to
 clip space without relying on ambient GUI matrices. Label text is rasterized
+with grayscale font antialiasing, retaining Cairo's premultiplied alpha and using
+`One, OneMinusSrcAlpha` blending without pixel conversion. This preserves
+translucent backgrounds without RGB fringes at glyph edges. It is rasterized
 only on first visibility or text/GUI-scale/resolved-style changes; changing visibility,
 moving, or replacing offsets reuses textures. Caches use owner and actual handle
 identity, not numeric IDs. Removing/replacing a label, detaching/disposing its handle
@@ -213,8 +216,9 @@ releases all remaining textures, the shared quad and shader. Labels do not
 participate in hit testing or input capture.
 
 Work-area handles use hover labels for X/Y/Z and endpoint Center markers.
-The whole-area midpoint's center label uses the selected work area's name,
-including renames; all names are rendered as literal text rather than markup.
+The whole-area midpoint's center label is always visible with its eligible handle
+and uses the selected work area's name, including renames; all names are rendered
+as literal text rather than markup.
 
 ### Reusable interaction contracts
 

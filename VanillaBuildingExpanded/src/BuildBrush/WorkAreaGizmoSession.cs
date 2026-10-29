@@ -168,7 +168,8 @@ internal sealed class WorkAreaGizmoSession : IDisposable, IGizmoCreationInput
             ? workArea.Areas.Single(area => area.Id == workArea.SelectedId).Name
             : Lang.Get("vanillabuildingexpanded:gizmo-label-center");
         if (gizmo.Handles[ComposedPositionGizmo.Center].Label?.Text != centerLabel)
-            gizmo.Handles[ComposedPositionGizmo.Center].Label = new(centerLabel, 10, 10, GizmoLabelVisibility.Hover);
+            gizmo.Handles[ComposedPositionGizmo.Center].Label = new(centerLabel, 10, 10,
+                role is null ? GizmoLabelVisibility.Always : GizmoLabelVisibility.Hover);
         gizmo.Visible = Eligible() && MatchesDimension();
     }
 

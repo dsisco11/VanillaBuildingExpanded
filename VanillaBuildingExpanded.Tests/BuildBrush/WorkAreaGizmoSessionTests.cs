@@ -49,7 +49,7 @@ public sealed class WorkAreaGizmoSessionTests
     }
 
     [Fact]
-    public void WorkAreaLabelsUseHoverVisibilityAndMidpointTracksTheAreaName()
+    public void WorkAreaTitleIsAlwaysVisibleWhileOtherLabelsUseHoverAndMidpointTracksTheAreaName()
     {
         using var f = new Fixture();
         var h = f.H;
@@ -62,16 +62,23 @@ public sealed class WorkAreaGizmoSessionTests
             Assert.Equal("X", gizmo.Handles[ComposedPositionGizmo.X].Label!.Text);
             Assert.Equal("Y", gizmo.Handles[ComposedPositionGizmo.Y].Label!.Text);
             Assert.Equal("Z", gizmo.Handles[ComposedPositionGizmo.Z].Label!.Text);
-            Assert.All(gizmo.Handles.Values, handle => Assert.Equal(GizmoLabelVisibility.Hover, handle.Label!.Visibility));
+            Assert.All(gizmo.Handles.Values, handle => Assert.Equal(
+                ReferenceEquals(gizmo, h.Session.Center) && handle.Id == ComposedPositionGizmo.Center
+                    ? GizmoLabelVisibility.Always : GizmoLabelVisibility.Hover, handle.Label!.Visibility));
         }
         var midpoint = h.Session.Center!;
+        Assert.False(midpoint.Handles[ComposedPositionGizmo.Center].IsHovered);
+        Assert.True(midpoint.Handles[ComposedPositionGizmo.Center].Label!
+            .IsVisible(midpoint.Handles[ComposedPositionGizmo.Center], h.Session.Renderer.Context!));
         h.WorkArea.RenameArea(h.WorkArea.SelectedId!.Value, "Workshop <1>");
         Assert.Same(midpoint, h.Session.Center);
         Assert.Equal("Workshop <1>", midpoint.Handles[ComposedPositionGizmo.Center].Label!.Text);
+        Assert.Equal(GizmoLabelVisibility.Always, midpoint.Handles[ComposedPositionGizmo.Center].Label!.Visibility);
         var other = h.WorkArea.CreateArea("Garden");
         h.WorkArea.RestoreEndpoints(new(0, 65, -200, 0), new(30, 70, -200, 0));
         Assert.Equal(other, h.WorkArea.SelectedId);
         Assert.Equal("Garden", h.Session.Center!.Handles[ComposedPositionGizmo.Center].Label!.Text);
+        Assert.Equal(GizmoLabelVisibility.Always, h.Session.Center.Handles[ComposedPositionGizmo.Center].Label!.Visibility);
     }
 
     [Theory]

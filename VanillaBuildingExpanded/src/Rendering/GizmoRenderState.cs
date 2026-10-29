@@ -26,7 +26,8 @@ internal sealed class GizmoRenderState(IRenderAPI render) : ILineRenderState
             // Only the overlay's color output is affected; other MRT blend state stays untouched.
             GL.Enable(IndexedEnableCap.Blend, 0);
             GL.BlendEquationSeparate(0, BlendEquationMode.FuncAdd, BlendEquationMode.FuncAdd);
-            GL.BlendFuncSeparate(0, BlendingFactorSrc.SrcAlpha, BlendingFactorDest.OneMinusSrcAlpha,
+            // Label textures retain Cairo's premultiplied alpha.
+            GL.BlendFuncSeparate(0, BlendingFactorSrc.One, BlendingFactorDest.OneMinusSrcAlpha,
                 BlendingFactorSrc.One, BlendingFactorDest.OneMinusSrcAlpha);
         }
         catch

@@ -110,6 +110,7 @@ internal sealed partial class GizmoRenderAdapter
         if (!double.IsFinite(fontSize) || !double.IsFinite(padding)
             || fontSize > int.MaxValue || padding > int.MaxValue / 2)
             throw new InvalidOperationException("The resolved label style exceeds supported raster dimensions.");
+        using var fontOptions = new FontOptions { Antialias = Antialias.Gray };
         using var measureSurface = new ImageSurface(Format.Argb32, 1, 1);
         using var measure = new Context(measureSurface);
         Configure(measure);
@@ -126,13 +127,14 @@ internal sealed partial class GizmoRenderAdapter
         ctx.SetSourceRGBA(color.X, color.Y, color.Z, color.W);
         ctx.MoveTo(padding - extents.XBearing, padding + ctx.FontExtents.Ascent);
         ctx.ShowText(text);
-        surface.DemulAlpha();
+        surface.Flush();
         int id = api.Gui.LoadCairoTexture(surface, true);
         if (id <= 0) throw new InvalidOperationException("Gizmo label texture upload failed.");
         return new LoadedTexture(api) { TextureId = id, Width = width, Height = height };
 
         void Configure(Context context)
         {
+            context.FontOptions = fontOptions;
             context.SelectFontFace(style.FontFamily, FontSlant.Normal, style.Bold ? FontWeight.Bold : FontWeight.Normal);
             context.SetFontSize(fontSize);
         }
