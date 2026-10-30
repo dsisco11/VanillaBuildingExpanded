@@ -67,9 +67,11 @@ or validity changes shader inputs without rebuilding the chevrons.
 The fill and chevrons use separate shader programs with their own typed shader
 classes; their native depth-position calculation is shared through an include.
 `None` mode hides the visualization.
-Camera/head-bob movement within the same target face and snapping region does not
-clear the indicator. Rendering uses the resolved candidate directions and does not
-perform another placement check or change snapping thresholds or destinations.
+Movement within the same target face, including crossing snapping regions, does
+not clear the indicator. Between the existing 50 ms placement updates, it keeps
+showing the current resolved preview; the highlight changes when that preview
+updates. Rendering does not perform another placement check or change snapping
+thresholds or destinations.
 
 The indicator follows the target's captured native terrain mesh, including variants,
 transforms, snow, and decor emitted by that pipeline. It intentionally draws over

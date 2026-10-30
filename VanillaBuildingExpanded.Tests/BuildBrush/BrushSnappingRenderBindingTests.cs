@@ -62,7 +62,6 @@ public sealed class BrushSnappingRenderBindingTests
     [Theory]
     [InlineData("target")]
     [InlineData("face")]
-    [InlineData("hit")]
     [InlineData("mode")]
     [InlineData("item")]
     [InlineData("attributes")]
@@ -84,7 +83,6 @@ public sealed class BrushSnappingRenderBindingTests
         {
             case "target": f.Selection!.Position.X++; break;
             case "face": f.Selection!.Face = BlockFacing.SOUTH; break;
-            case "hit": f.Selection!.HitPosition.X = 0.1; break;
             case "mode": f.Brush.Snapping = EBuildBrushSnapping.Vertical; break;
             case "item": f.Slot.Itemstack = new ItemStack(new Item { ItemId = 20 }); break;
             case "attributes": f.Slot.Itemstack!.Attributes.SetString("lining", "new"); break;
@@ -155,10 +153,10 @@ public sealed class BrushSnappingRenderBindingTests
         }
         f.Selection!.HitPosition.X = 0.1;
         f.Draw();
-        Assert.Equal(120, f.Draws);
+        Assert.Equal(121, f.Draws);
         f.Selection.HitPosition.X = 0.9;
         f.Draw();
-        Assert.Equal(121, f.Draws);
+        Assert.Equal(122, f.Draws);
         Assert.Equal(validations, f.ValidationCount);
     }
 
@@ -181,6 +179,68 @@ public sealed class BrushSnappingRenderBindingTests
             Assert.Equal(1, f.Geometry.Uploads);
         }
         f.Program.VerifySet(p => p.ResolvedDirections = Vector2.Zero, Times.Exactly(120));
+    }
+
+    [Theory]
+    [InlineData("north")]
+    [InlineData("east")]
+    [InlineData("south")]
+    [InlineData("west")]
+    [InlineData("up")]
+    [InlineData("down")]
+    public void CrossingAllRegionsRendersBothPassesEveryFrameBetweenPlacementTicks(string faceCode)
+    {
+        using var f = new Fixture();
+        BlockFacing face = BlockFacing.FromCode(faceCode);
+        f.Selection!.Face = face;
+        f.Brush.Snapping = EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical;
+        f.Resolve();
+        var fillDirections = new List<Vector2>();
+        var chevronDirections = new List<Vector2>();
+        f.Program.SetupSet(p => p.ResolvedDirections = It.IsAny<Vector2>())
+            .Callback<Vector2>(value => fillDirections.Add(value));
+        f.ChevronProgram.SetupSet(p => p.ResolvedDirections = It.IsAny<Vector2>())
+            .Callback<Vector2>(value => chevronDirections.Add(value));
+        var initial = Assert.IsType<BrushSnappingPresentation>(f.Client.GetSnappingPresentation(f.Selection, true));
+        Vector2 expected = new(initial.Result.ResolvedSnapping.FaceU, initial.Result.ResolvedSnapping.FaceV);
+        int frames = 0;
+        foreach (int u in new[] { -1, 0, 1 })
+        foreach (int v in new[] { -1, 0, 1 })
+        {
+            f.Selection.HitPosition = BrushPlacementResultTests.CreateSelection(face, u, v).HitPosition;
+            int validations = f.ValidationCount;
+            for (int frame = 0; frame < 3; frame++)
+            {
+                f.Draw();
+                Assert.Equal(++frames, f.Draws);
+                Assert.Equal(frames, f.ChevronDraws);
+                Assert.Equal(expected, fillDirections.Last());
+                Assert.Equal(expected, chevronDirections.Last());
+                Assert.Equal(validations, f.ValidationCount);
+            }
+            f.Client.TryUpdatePlacementValidity(f.Selection);
+            Assert.Equal(validations + 1, f.ValidationCount);
+            f.Draw();
+            Assert.Equal(++frames, f.Draws);
+            Assert.Equal(frames, f.ChevronDraws);
+            Assert.Equal(expected, fillDirections.Last());
+            Assert.Equal(expected, chevronDirections.Last());
+            Assert.Equal(validations + 1, f.ValidationCount);
+
+            f.Resolve();
+            validations = f.ValidationCount;
+            expected = new(u, v);
+            f.Draw();
+            Assert.Equal(++frames, f.Draws);
+            Assert.Equal(frames, f.ChevronDraws);
+            Assert.Equal(expected, fillDirections.Last());
+            Assert.Equal(expected, chevronDirections.Last());
+            Assert.Equal(validations, f.ValidationCount);
+            Assert.Equal(1, f.Geometry.Uploads);
+            Assert.Single(f.Geometry.ChevronUploaded);
+            Assert.Equal(0, f.Geometry.Uploaded[0].DisposeCount);
+            Assert.Equal(0, f.Geometry.ChevronUploaded[0].DisposeCount);
+        }
     }
 
     [Fact]
@@ -529,6 +589,7 @@ public sealed class BrushSnappingRenderBindingTests
         }
         public int SlotNumber;
         public int Draws;
+        public int ChevronDraws;
         public int Captures, Restores;
         public float[]? LastModel;
         public Action? OnDraw;
@@ -551,7 +612,11 @@ public sealed class BrushSnappingRenderBindingTests
             Geometry.Render.SetupGet(r => r.CurrentProjectionMatrix).Returns(new Matrixf().Values);
             Geometry.Render.Setup(r => r.RenderMesh(It.IsAny<MeshRef>())).Callback<MeshRef>(mesh =>
             {
-                if (Geometry.ChevronUploaded.Any(glyph => ReferenceEquals(glyph, mesh))) return;
+                if (Geometry.ChevronUploaded.Any(glyph => ReferenceEquals(glyph, mesh)))
+                {
+                    ChevronDraws++;
+                    return;
+                }
                 Draws++;
                 OnDraw?.Invoke();
             });

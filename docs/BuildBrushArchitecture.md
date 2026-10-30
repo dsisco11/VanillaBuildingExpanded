@@ -443,25 +443,28 @@ world selection and an explicit supported-geometry decision. They must use this
 guarded read rather than caching a previously returned snapshot across context
 changes. Reads require active mode, a supported held source, a current matching
 target/face/block, matching mode/revision and resolved destination,
-and resolved permitted U/V movement, whether placement is valid or invalid.
+whether placement is valid or invalid.
 Live hotbar slot, block, stack count and source
 attributes are checked against the resolved source without refreshing or validating.
 The geometry argument is a gate, not a Phase 1 claim that any shape is qualified.
 
-One shared matcher compares the live hit's permitted U/V directions, not its exact
-floating-point coordinates. Camera smoothing/head bob can move the raycast hit
-between placement updates without changing the displayed snap; that must not
-hide the indicator. `BrushSnapping.GetTangentialDirections` shares the placement
-resolver's axis mapping and mode restrictions without resolving a destination or
-calling validation. Changes on disabled axes likewise do not hide an unchanged
-marking. Nonfinite hits, changed permitted regions, targets, faces, modes,
-revisions, and source contexts still suppress immediately. Selection-box index
-alone is not part of this key when block position, face, and snapping data match.
-The same matcher is used for presentation reads, the placement update shortcut,
-and validity refresh, including ordinary zero-tangent results. There is no
-exact-hit fallback, special-case matching policy, hysteresis, or delayed
-invalidation. The existing validity refresh still performs its one rule call on
-the fresh hit; subsequent unchanged updates can reuse that outcome.
+`MatchesTarget` checks the shared target/mode/revision identity and finite live
+hit coordinates. Presentation reads and validity refresh use that context check:
+when the hit crosses a region boundary on the same face, the indicator continues
+showing the current resolved preview until the existing 50 ms placement update
+publishes its replacement. Neither fill nor inactive guides disappear during
+that interval. A slow validity refresh likewise retains that preview's directions
+and destination while updating its validity with the existing single rule call.
+
+The stricter `Matches` builds on the same target check and compares permitted
+U/V directions through `BrushSnapping.GetTangentialDirections`. The placement
+update shortcut still requires it, so a region change cannot accidentally reuse
+the old outcome instead of resolving the new candidate. This separates preview
+display lifetime from placement-update eligibility without extra rendering-time
+validation, a new timer, changed thresholds, or hysteresis.
+Nonfinite hits, changed targets, faces, modes, revisions, and source contexts
+still suppress immediately. Selection-box index alone does not invalidate the
+same target context. Movement on disabled axes also remains stable.
 
 Mode/source changes, dirty refreshes and target loss invalidate presentation.
 `ShowsSnappingRegions` permits centered and ordinary/W-only results whenever a
@@ -484,7 +487,14 @@ adjacent float thresholds, explicit W offsets, equal-position outcome distinctio
 single validation calls, source/context invalidation, and snapshot ownership.
 Decaying 120-frame camera/hit-motion regressions cover all six faces and the
 client drawing path, requiring uninterrupted drawing with no extra validation or
-upload while directions stay unchanged; actual direction changes still suppress.
+upload while directions stay unchanged. Region-transition regressions traverse all
+nine regions on all six faces, requiring both mesh passes on all 270 simulated
+frames before and after placement updates, including intervening slow validity
+refreshes. They assert unchanged resolved directions until the placement update,
+correct new directions afterward, no rendering-time validation, and no mesh
+reupload or disposal. All 2,177 focused Release snapping, target, placement, and
+overlay-state tests passed after this correction. The 12 new transition cases
+first reproduced the missing-presentation/draw gap before the production fix.
 These checks do not qualify geometry, shader compatibility, appearance, or cost.
 
 ### Snapping target geometry and owned cache

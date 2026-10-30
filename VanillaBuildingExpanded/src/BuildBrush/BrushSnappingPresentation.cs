@@ -28,12 +28,17 @@ internal sealed class BrushSnappingPresentation
 
     public bool Matches(BlockSelection selection, EBuildBrushSnapping mode, long revision)
     {
+        if (!MatchesTarget(selection, mode, revision)) return false;
+        var directions = new BrushSnapping(selection).GetTangentialDirections(mode);
+        return directions.U == Result.ResolvedSnapping.FaceU && directions.V == Result.ResolvedSnapping.FaceV;
+    }
+
+    public bool MatchesTarget(BlockSelection selection, EBuildBrushSnapping mode, long revision)
+    {
         if (Revision != revision || Result.RequestedSnapping.Mode != mode
             || target.Position != selection.Position || target.Face != selection.Face
             || targetBlockId != selection.Block?.Id) return false;
         Vec3d hit = selection.HitPosition;
-        if (!double.IsFinite(hit.X) || !double.IsFinite(hit.Y) || !double.IsFinite(hit.Z)) return false;
-        var directions = new BrushSnapping(selection).GetTangentialDirections(mode);
-        return directions.U == Result.ResolvedSnapping.FaceU && directions.V == Result.ResolvedSnapping.FaceV;
+        return double.IsFinite(hit.X) && double.IsFinite(hit.Y) && double.IsFinite(hit.Z);
     }
 }

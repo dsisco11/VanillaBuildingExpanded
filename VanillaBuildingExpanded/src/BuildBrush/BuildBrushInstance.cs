@@ -606,7 +606,7 @@ public class BuildBrushInstance
         ItemStack? heldStack = inventory.ActiveHotbarSlot?.Itemstack;
         if (!IsActive || !_isValidPlacementBlock || IsDirty || !supportedGeometry
             || currentSelection is null || presentation is null
-            || !presentation.Matches(currentSelection, Snapping, snappingPresentationRevision)
+            || !presentation.MatchesTarget(currentSelection, Snapping, snappingPresentationRevision)
             || !presentation.ShowsSnappingRegions
             || presentation.Result.Position != Position
             || heldStack is null || heldStack.Block?.Id != BlockId || heldStack.StackSize <= 0
@@ -721,7 +721,7 @@ public class BuildBrushInstance
         long revision = snappingPresentationRevision;
         IsValidPlacement = placementValidation.CanPlaceAtPosition(placingBlock, blockSelection, Position);
         if (revision == snappingPresentationRevision
-            && previousPresentation?.Matches(blockSelection, Snapping, revision) == true
+            && previousPresentation?.MatchesTarget(blockSelection, Snapping, revision) == true
             && previousPresentation.Result.Position == Position)
         {
             snappingPresentation = new BrushSnappingPresentation(blockSelection,
