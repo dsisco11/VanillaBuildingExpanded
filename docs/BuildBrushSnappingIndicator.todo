@@ -1,11 +1,13 @@
 # Build brush snapping indicator
 
 Source proposal: [BuildBrushSnappingIndicator.proposal.md](BuildBrushSnappingIndicator.proposal.md).
-Status: Phases 1-5 complete, including target-mesh and texture-independent coverage corrections.
+Status: Phases 1-6 complete, including target-mesh and texture-independent coverage corrections.
 Phase 4 installed-game verification was confirmed and approved by the user on
 2026-10-29. Phase 5 regression/distributable verification, second review, and
-independent completion audit are complete. Final qualification in Phase 6 remains pending.
+independent completion audit are complete. Phase 6 is closed under the user's
+explicit qualification waiver, with second review and independent closure audit complete.
 Format: Indented unchecked tasks follow the existing src\docs\project.todo convention.
+WAIVED entries are closed by user direction, not successful verification.
 
 ## Goal and governing constraints
 
@@ -28,9 +30,9 @@ None, and outcomes with no permitted U/V movement show no tangential marking.
 
 ## Assumptions and decisions still requiring evidence
 
-- Exact glyphs, width, opacity, and any combined corner cue are not approved
-  artwork. Bands or chevrons are candidates for user evaluation in Phase 6.
-  Validity colors are user-directed: valid cyan, invalid red.
+- The user accepted the implemented bands, width, and opacity on 2026-10-29.
+  Validity colors are user-directed: valid cyan, invalid red. Further candidate
+  comparisons are waived under the Phase 6 closure decision.
 - The user's Phase 4 correction replaces category-based default-mesh qualification
   with acquisition from actual native terrain tessellation. Do not reject block
   classes, behaviors, snow, variants, block entities, or draw types before acquisition.
@@ -50,9 +52,9 @@ None, and outcomes with no permitted U/V movement show no tangential marking.
 - Use the existing .NET 10/xUnit project and installed game references through
   VINTAGE_STORY. Do not add a test framework or dependencies by default.
 - Automated tests and C# builds cannot qualify appearance, overlay ordering,
-  non-cubic readability, or rendering cost. User-run in-game checks remain required.
-  The proposal sets no numeric performance budget; record measured cost and obtain
-  an explicit acceptance decision rather than inventing a threshold.
+  non-cubic readability, or rendering cost. The user explicitly waived outstanding
+  Phase 6 qualification requirements; no measured cost or comprehensive geometry
+  qualification is claimed. The proposal sets no numeric performance budget.
 
 ## Phase 1: Applied outcome reporting and presentation contract
 
@@ -425,8 +427,9 @@ protobuf-net and System.ServiceModel assemblies are existing baseline dependenci
 No new server-side requirement or migration is added. Existing Cake transitive
 System.Security.Cryptography.Pkcs 10.0.12 NU1902/NU1903 warnings were nonfatal,
 are not bundled mod dependencies, and are not claimed fixed by this phase.
-README and architecture now document the implemented indicator and package path;
-the existing project.todo indicator remains unchecked. Phase 6 still requires
+README and architecture documented the implemented indicator and package path;
+at Phase 5 completion the existing project.todo indicator remained unchecked.
+The original Phase 6 contract required
 all-face/shape readability, outline/preview/transparency/occlusion interactions,
 and comparable live performance measurements with an explicit user decision.
 
@@ -437,76 +440,109 @@ controlling documents, source/diff, TRX files, ZIPs, and PE metadata. It found
 Phase 5 fully satisfied, with no unresolved findings or evidence gaps. Its
 independent comparison also covered all 2,197 methods/constructors, with unchanged
 implementation, supporting reuse of the earlier packaged-runtime approval.
-Phase 5 is complete. Phase 6 and the existing project.todo indicator remain unchecked.
+Phase 5 is complete. Phase 6 and the existing project.todo indicator were left
+unchecked at that review; the later user-directed closure is recorded below.
 
 ## Phase 6: User-run geometry, appearance, and performance qualification
 
 Depends on: Phase 5 evaluation candidate and user access to an in-game session.
-Outcome: The initial support set and presentation are accepted on live evidence,
-or unresolved deficiencies remain explicitly open rather than declared complete.
+Outcome: User acceptance with explicit waiver of outstanding qualification,
+without claiming skipped checks passed or expanding geometry/performance claims.
 
-    ☐ Have the user evaluate concrete glyph/color/width/opacity candidates.
-        ☐ Verify all six faces, opposite-face signs, top/bottom dual horizontal
+Qualification evidence (2026-10-29): The user described the visual result as
+"its fine" and explicitly approved appearance, readability, and performance.
+No named geometry results, comparable overlay-on/off measurements, or live cache
+observations were supplied. This records the user's verdict, not measured results.
+
+Closure decision (2026-10-29): The user then explicitly directed, "we are skipping
+those requirements, close out the phase". This supersedes the outstanding Phase 6
+user-run qualification/evidence gates and their corresponding proposal and final
+acceptance obligations. Existing Phase 4 runtime approval, Phase 5 verification,
+and the user's current visual acceptance are retained. The additional structured
+visual/interaction checks, named geometry qualification, comparative performance
+measurements, and live cache observations below are WAIVED, not passed.
+Implementation behavior, automated regression obligations, resource ownership,
+and the documented native-mesh fidelity limitations are unchanged.
+
+The current release and installed ZIP on disk match SHA256
+`A359C738D543C6EC5EC9FF4C7EC22FC05DE463901E359DD41EFAB87923F8F51F`
+(529,080 bytes, rebuilt 2026-10-29 16:26:39). Both snapping shaders and mod metadata
+still match the Phase 5 candidate, but the DLL bytes differ. This identifies the
+current evaluation archive, not a fresh packaged-runtime or performance test.
+
+Closure review: The direct second review and fresh independent completion audit
+found Phase 6 fully satisfied under the revised user-authorized contract, with no
+unresolved findings. The auditor independently inspected the governing documents,
+diff, existing TRX results, and archive identities. Closure changes only documentation;
+no new build, runtime test, geometry qualification, or performance measurement is
+claimed. Phase 6, final acceptance, and the project.todo indicator are complete
+under the explicit waiver; the WAIVED entries below remain distinct from passed checks.
+
+    WAIVED: Further structured glyph/color/width/opacity evaluation after user acceptance.
+        - Verify all six faces, opposite-face signs, top/bottom dual horizontal
           directions, horizontal-only, vertical-only, combined, and None modes.
-        ☐ Cross both center thresholds, including centered/disabled axes and
+        - Cross both center thresholds, including centered/disabled axes and
           two-axis corner situations, while changing camera orientation.
-        ☐ Verify explicit W offset does not mislabel tangential movement and
+        - Verify explicit W offset does not mislabel tangential movement and
           W-only/ordinary fallback never shows U/V marking, while invalid U/V
           snapping remains visible in red rather than successful cyan.
-    ☐ Qualify the initial geometry set in the packaged runtime.
-        ☐ Compare candidate cube/non-cubic meshes and transforms with actual world
+    WAIVED: Additional geometry qualification in the packaged runtime.
+        - Compare candidate cube/non-cubic meshes and transforms with actual world
           instances, not the placement preview or inventory appearance.
-        ☐ Check narrow/recessed surfaces, readability, selected-facing coverage,
+        - Check narrow/recessed surfaces, readability, selected-facing coverage,
           and lack of misleading shape-boundary cues; omit failed targets/categories.
-        ☐ Verify missing/empty native geometry omits the overlay without affecting
+        - Verify missing/empty native geometry omits the overlay without affecting
           selection, placement, or normal preview behavior, with no class blacklist.
-        ☐ Record qualified examples and excluded categories with reasons;
+        - Record qualified examples and excluded categories with reasons;
           any support expansion must meet the same fidelity and readability checks.
-    ☐ Validate rendering interaction and lifecycle with live evidence.
-        ☐ Move the camera, target face, and preview destination independently;
+    WAIVED: Additional structured rendering/lifecycle checks beyond Phase 4 approval.
+        - Move the camera, target face, and preview destination independently;
           verify target anchoring, no stale markings, no surface fighting/flicker,
           and occlusion by intervening blocks.
-        ☐ Check native selection outline, preview readability, transparent-scene
+        - Check native selection outline, preview readability, transparent-scene
           interactions, surface-facing filtering, render order, and depth bias.
-        ☐ Exercise build/snapping-mode transitions, supported/unsupported items,
+        - Exercise build/snapping-mode transitions, supported/unsupported items,
           death, world departure/re-entry, resource reload, and shader failure.
-    ☐ Measure rendering cost and confirm the cache behavior in the live runtime.
-        ☐ Record comparable overlay-on/off timings, scene, hardware/runtime, and
+    WAIVED: Measured rendering cost and live cache qualification.
+        - Record comparable overlay-on/off timings, scene, hardware/runtime, and
           sampling method; do not substitute unit tests for GPU/frame evidence.
-        ☐ Confirm repeated face/hit-region/mode changes do not rebuild geometry
+        - Confirm repeated face/hit-region/mode changes do not rebuild geometry
           and required invalidation does rebuild on the appropriate thread.
-        ☐ Obtain the user's explicit appearance/readability/performance decision.
-          Fix failed criteria and repeat affected checks before accepting the feature.
-    ☐ Finalize documentation and remove temporary qualification scaffolding.
-        ☐ Record user verdicts, measured results, final support boundary, and any
-          still-open checks in the implementation evidence; do not invent approval.
-        ☐ Remove temporary forced failures, diagnostic rendering, and candidate-only
+        - User appearance/readability/performance acceptance was obtained above;
+          no timing data or live cache observations accompany that verdict.
+    ✔ Finalize documentation and remove temporary qualification scaffolding.
+        ✔ Record user verdicts, explicit waivers, and the final support boundary;
+          no measurements or additional qualified examples were supplied.
+        ✔ Remove temporary forced failures, diagnostic rendering, and candidate-only
           hooks not needed by the supported feature; retain standard error reporting.
-        ☐ Re-run affected focused checks/package validation after final adjustments.
-        ☐ Update the README, architecture notes, proposal implementation status,
+        ✔ Reuse applicable Phase 5 checks/package evidence: closure changes only
+          documentation, not implementation, shaders, or packaging inputs.
+        ✔ Update the README, architecture notes, proposal implementation status,
           and existing project.todo indicator item only to the extent proven complete.
 
 Completion criteria:
-    ☐ User evidence establishes appearance, all-face direction/readability,
-      supported shape fidelity, overlay interaction, lifecycle behavior, and measured
-      rendering cost for the final packaged candidate.
-    ☐ Any deliberately excluded geometry is documented; unresolved required
-      qualification prevents final acceptance, rather than becoming an implicit waiver.
+    ✔ User acceptance and explicit waiver of outstanding qualification are recorded,
+      with prior verification distinguished from skipped checks and measurements.
+    ✔ Native-mesh limitations remain documented; no new qualified geometry set or
+      measured performance claim is inferred from this user-authorized closure.
 
 ## Final acceptance
 
-    ☐ Every proposal requirement maps to implemented behavior and evidence;
-      exclusions/deferred optional extensions have explicit rationale.
-    ☐ All six faces and existing snapping/placement rules are preserved, with no
+    ✔ Every proposal requirement maps to implemented behavior and evidence or the
+      explicit qualification waiver above; exclusions retain their rationale.
+    ✔ All six faces and existing snapping/placement rules are preserved, with no
       tangential indication for ordinary fallback, None, or W-only; invalid
       tangential snapping is red and valid tangential snapping is cyan.
-    ☐ Overlay geometry remains on the original target, supported shapes are
-      qualified, and unsupported targets omit it without placement/selection changes.
-    ☐ Geometry reuse, snapshot coherence, render-state restoration, resource
-      ownership, reload/failure handling, and session cleanup are verified.
-    ☐ Focused automated checks, C# build, shader compilation, packaged runtime
-      checks, and user-run visual/performance evidence are separately recorded.
-    ☐ No unapproved controls, server/network changes, shape-based snapping,
+    ✔ Overlay geometry remains on the original target; native-mesh limitations and
+      waived shape qualification are documented without placement/selection changes.
+    ✔ Geometry reuse, snapshot coherence, render-state restoration, resource
+      ownership, reload/failure handling, and session cleanup retain their automated
+      and Phase 4 evidence; additional live cache qualification is explicitly waived.
+    ✔ Focused automated checks, C# build, shader compilation, packaged runtime
+      checks, user acceptance, and waived visual/performance checks are separately
+      recorded; no new runtime test or performance measurement is claimed.
+    ✔ No unapproved controls, server/network changes, shape-based snapping,
       universal custom-renderer claims, or face-normal glyph entered the implementation.
-    ☐ Final documentation and packaging match the qualified implementation, and
+    ✔ Final documentation records the implementation, candidate identity, and waiver;
+      packaging inputs are unchanged, and
       no temporary qualification scaffolding or obsolete/leaked owned resources remain.

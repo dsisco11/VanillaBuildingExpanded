@@ -60,8 +60,11 @@ texture holes without scanning or sampling material alpha. Pending, empty, or
 unavailable terrain geometry produces no overlay, never a substitute cube.
 GPU-only renderers and shader-only surface deformations are not reproduced.
 The [snapping indicator plan](docs/BuildBrushSnappingIndicator.todo) records the
-user-approved client-session smoke on Vintage Story **1.22.7**; comprehensive
-geometry/readability, overlay ordering, and rendering-cost qualification remain open.
+user-approved client-session smoke on Vintage Story **1.22.7** and the user's
+acceptance of the implemented appearance. Outstanding geometry/readability,
+overlay-interaction, measured rendering-cost, and live-cache qualification was
+explicitly waived for Phase 6 closure, not passed. No comprehensive shape
+qualification or measured-performance claim is made.
 
 Keyboard and mouse-button hotkeys are rebindable in the game controls settings. Shift + mouse wheel is an additional fixed shortcut. Backtick also opens WorldEdit in creative mode; rebind one of those actions if you use both. Brush hotkeys pass through while mode is off or brush use is suspended. Rotation passes through for blocks without rotation support; these blocks still support brush placement and snapping. Shift-scroll only consumes successful rotations while the mouse is grabbed for gameplay, preserving scrolling in menus and normal hotbar scrolling otherwise.
 

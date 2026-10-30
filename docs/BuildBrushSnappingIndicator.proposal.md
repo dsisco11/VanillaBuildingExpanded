@@ -1,9 +1,12 @@
 # Build brush snapping indicator proposal
 
-Status: Approved. Phases 1-5 are complete, with installed-game smoke verification
+Status: Approved. Phases 1-6 are complete, with installed-game smoke verification
 confirmed and approved by the user on 2026-10-29 and distributable verification
-accepted by the independent completion audit. Comprehensive geometry, appearance,
-and performance qualification remain pending in Phase 6.
+accepted by the independent completion audit. On 2026-10-29 the user accepted
+the implemented appearance/readability/performance and explicitly directed Phase 6
+closure while skipping outstanding qualification requirements. The independent
+closure audit accepted this revised contract. These checks are
+waived, not passed; no comprehensive geometry or measured-performance claim is made.
 
 ## Purpose
 
@@ -43,7 +46,9 @@ These rules intentionally leave face-normal offset without its own glyph. It cha
 
 Keep the overlay attached to the target while the brush preview moves to its destination. Clear it when the target is lost, mode is disabled, the held item becomes unsupported, or the player leaves the world. It should not take input or introduce another control.
 
-Validity colors are cyan for valid placement and red for invalid placement. Exact glyphs, width, and opacity remain visual design decisions. Bands and chevrons are suggested candidates, rather than approved artwork.
+Validity colors are cyan for valid placement and red for invalid placement. The
+user accepted the implemented bands, width, and opacity on 2026-10-29; further
+candidate comparison is waived under the Phase 6 closure decision.
 
 ## Shader and drawing model
 
@@ -126,8 +131,19 @@ The design is acceptable when supported targets demonstrate all of the following
 - Repeated face/hit-region changes do not rebuild geometry, and target changes do not retain stale indicators.
 - Build-mode transitions, snapping-mode changes, item changes, death, world departure, resource reload, and shader failure leave no stale overlay or obsolete or leaked owned resources. Snapping-mode changes may retain valid cached geometry; resource invalidation and release follow Ownership and update behavior.
 
-Focused automated checks can establish direction mapping, visibility decisions, coherent result reporting, and cache invalidation. Shader compilation can establish shader compatibility. In-game evaluation by the user is required to establish appearance, selection-overlay interaction, supported shape readability, and measured rendering cost. No such visual or performance qualification is claimed by this document.
+Focused automated checks can establish direction mapping, visibility decisions,
+coherent result reporting, and cache invalidation. Shader compilation can establish
+shader compatibility. In-game evaluation is needed to establish supported shape
+readability and measured rendering cost; automated results cannot substitute for it.
+The user's explicit Phase 6 closure decision waives the remaining structured
+visual/interaction, named geometry, comparative timing, and live cache evidence
+requirements. Prior runtime approval and current visual acceptance are retained,
+but no comprehensive geometry qualification or measured rendering cost is claimed.
 
 ## Decision
 
-The mesh-projected directional-overlay approach is approved, including the recommended fallback behavior and initial geometry support boundary. Glyph appearance remains subject to evaluation with concrete visual candidates. Approval records the design decision only; this document does not authorize implementation or define an implementation checklist.
+The mesh-projected directional-overlay approach and implemented appearance are
+user-approved, including the recommended fallback behavior and native-mesh support
+boundary. Outstanding Phase 6 qualification was explicitly waived, not implicitly
+satisfied. This document does not define an implementation checklist; the linked
+implementation plan records verification and the user-authorized closure.

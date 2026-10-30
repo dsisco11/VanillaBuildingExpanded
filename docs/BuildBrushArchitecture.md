@@ -404,8 +404,10 @@ Phase 1 of the [snapping indicator plan](BuildBrushSnappingIndicator.todo) imple
 local result reporting. Phase 2 adds the isolated target-geometry/cache substrate
 described below. Phase 3 adds shader drawing; Phase 4 wires the client session and
 resource lifecycle. The user confirmed and approved Phase 4 installed-game smoke
-verification on 2026-10-29. Later distributable verification and comprehensive
-in-game appearance/performance qualification remain open under the
+verification on 2026-10-29. Phase 5 distributable verification is complete;
+the user accepted the appearance and explicitly waived outstanding Phase 6
+qualification for closure, without establishing measured cost or broad shape fidelity.
+The implementation remains governed by the
 [approved proposal](BuildBrushSnappingIndicator.proposal.md).
 
 `BrushSnapping.ResolvePosition` has an overload that reports the resolved U/V/W
@@ -549,13 +551,14 @@ and indices remain the actual engine mesh unchanged. Shader clipping alone does
 not establish readable opacity or final visual quality.
 
 Candidate unit cubes, the base-Block `game:ethoslab` slab, and faithful static
-sloped/multi-element/recessed assets should be exercised in Phase 6, along with
+sloped/multi-element/recessed assets were proposed for Phase 6, along with
 native vertical cobble/stone/wood slabs, including their native snow geometry.
 Texture-only variants do not exclude stone-brick cubes or otherwise qualified slabs.
 Centered narrow geometry without resolved tangential movement
 and surfaces outside the selected-facing directional regions are omission cases.
 Recessed geometry with an actual qualifying surface is not an
-automatic omission. All actual readable-marking claims remain pending Phase 6.
+automatic omission. The user waived the additional Phase 6 geometry checks;
+these examples are not a newly qualified support set.
 
 Acquisition/transform evidence is from the installed **1.22.7.0** engine
 (`G:\Vintagestory\VintagestoryLib.dll`) and the local API source, not a live rendered
@@ -616,8 +619,9 @@ keeps lifecycle and renderer tests independent of an OpenGL context.
 The session binding registers this renderer and supplies current guarded geometry
 on each callback. The user confirmed and approved the Phase 4 installed-game smoke
 on 2026-10-29, covering shader loading, visibility/stability, validity colors,
-depth quality, and reload/lifecycle behavior. Comprehensive appearance, ordering,
-and performance qualification remain in Phase 6.
+depth quality, and reload/lifecycle behavior. The user later accepted the appearance
+and waived additional Phase 6 appearance/ordering/performance qualification;
+no comprehensive qualification or measured performance is claimed.
 The renderer never retains a target between callbacks or owns the cache's mesh.
 
 The visual is outward bands covering the resolved U/V cell regions, cyan for valid
@@ -633,12 +637,13 @@ The width parameter (`0.025` block units) controls the band's inward-to-outward
 opacity ramp, widened by screen derivatives for softening. Coverage is strictly
 outside the centered region; each resolved direction with projected triangle area
 in that region has nonzero mask area. Narrow coverage may still be unreadable.
-Validity colors are user-directed; opacity (`0.7`) and width remain candidates.
+Validity colors are user-directed; opacity (`0.7`) and width were accepted with
+the implemented bands in the user's Phase 6 appearance approval.
 
-The candidate stage is OIT, order `0.52`, using the native OIT shader include and
+The render stage is OIT, order `0.52`, using the native OIT shader include and
 preserving indexed blending. The owned mesh is drawn once with the original-target
 camera-relative/dimension-aware transform. The vertex shader first matches the
-captured pass's native depth offset. A provisional clip-depth bias of
+captured pass's native depth offset. A clip-depth bias of
 `0.00001 * w` and polygon offset factor/units `-1/-1` then move depth toward the
 camera without moving local/world geometry; the polygon factor handles slope.
 Depth testing uses LEQUAL, depth writes are disabled, and culling is disabled to
@@ -649,7 +654,8 @@ depth mask, depth function, culling, front winding, and polygon-offset enable/fa
 Shader stop, state restoration, and the
 previous active shader's reactivation run through nested cleanup even on failure.
 The Phase 4 runtime smoke is user-approved. Comprehensive bias, stage ordering
-versus selection/preview/transparency, and occlusion qualification remain in Phase 6.
+versus selection/preview/transparency, and occlusion qualification was explicitly
+waived at Phase 6 closure rather than newly established.
 
 The latest correction passed 1,361 rebuilt managed tests and Release publish.
 An isolated native OpenGL 4.6 context on the RTX 4090 compiled/linked the actual
@@ -737,7 +743,8 @@ Castle cannot proxy. These tests are not a live shader or visual qualification.
 The user confirmed and approved the installed-game Phase 4 checks on 2026-10-29,
 closing that runtime evidence gap. This approval is user-reported, not an
 agent-captured runtime diagnostic trace. Phase 5 records the distributable
-verification below; Phase 6 still owns artwork, overlay ordering/readability, and measured cost.
+verification below; Phase 6 records current appearance acceptance and the explicit
+waiver of outstanding qualification, not measured cost.
 
 ### Snapping distributable verification
 
@@ -765,12 +772,36 @@ The package contains the pre-existing protobuf/service-model dependencies, not
 test frameworks, Moq/Castle, engine DLLs, or game-provided OpenTK libraries.
 No new server-side requirement or migration is introduced. Existing Cake-build
 NuGet vulnerability warnings remain separate from package contents and are not
-claimed fixed. Comprehensive geometry, artwork, overlay interaction, and measured
-rendering cost remain unqualified until Phase 6.
+claimed fixed. Comprehensive geometry, overlay interaction, and measured rendering
+cost were not established by Phase 5 and are not inferred from Phase 6 acceptance.
 The required second direct review and fresh independent completion audit found
 Phase 5 fully satisfied. The audit independently inspected the documentation,
 source/diff, TRX files, ZIPs, and PE metadata, including all 2,197 methods/constructors
-with unchanged implementation. Phase 6 and the project.todo indicator remain open.
+with unchanged implementation.
+
+### Snapping user acceptance and qualification waiver
+
+On 2026-10-29 the user accepted appearance/readability/performance and then
+explicitly directed closure of Phase 6 while skipping outstanding qualification.
+Additional structured visual/interaction checks, named geometry qualification,
+comparable overlay-on/off timing measurements, and live cache observations are
+waived, not successful tests. Existing Phase 4 runtime acceptance and Phase 5
+automated/package evidence remain distinct from that decision. No additional
+geometry categories are claimed qualified, and no timing numbers are invented.
+Native terrain capture, missing-output omission, and GPU-only/material-deformation
+limitations above remain unchanged.
+
+The current release and installed ZIP on disk match SHA256
+`A359C738D543C6EC5EC9FF4C7EC22FC05DE463901E359DD41EFAB87923F8F51F`
+(529,080 bytes, rebuilt 2026-10-29 16:26:39). Shader and modinfo bytes still match
+the Phase 5 candidate; the DLL bytes differ. This is archive identity, not proof
+of a fresh runtime or performance test. Closure changes only documentation;
+implementation, shader, and packaging inputs are unchanged. The
+[implementation plan](BuildBrushSnappingIndicator.todo#phase-6-user-run-geometry-appearance-and-performance-qualification)
+tracks the closure review and final acceptance under this user-authorized contract.
+The direct second review and fresh independent completion audit found the revised
+contract fully satisfied, with no unresolved findings. Phase 6, final acceptance,
+and the existing project.todo indicator are complete under the explicit waiver.
 
 ## Update and preview flow
 
