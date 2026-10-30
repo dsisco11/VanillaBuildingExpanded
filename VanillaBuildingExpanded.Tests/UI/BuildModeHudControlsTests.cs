@@ -197,12 +197,12 @@ public sealed partial class BuildModeHudControlsTests
         using var fixture = new Fixture();
         using var hud = new BuildModeHud(fixture.Api.Object, () => new(RoomInfoStatus.Complete,
             RoomQualifications.Room | RoomQualifications.Shelter, 7, 4, 6, 50, 80));
-        fixture.FailOnUploadNumber = 5;
+        fixture.FailPreparation = true;
         Assert.Throws<InvalidOperationException>(() => hud.SetVisible(true));
         Assert.Null(hud.SingleComposer);
         Assert.Empty(Assert.IsType<GuiElementTable>(fixture.CreatedComposers.Single().GetElement("room-table")).Bounds.ChildBounds);
-        Assert.All(fixture.Uploads, upload => Assert.True(upload.Texture.Disposed));
-        fixture.FailOnUploadNumber = null;
+        Assert.Empty(fixture.Uploads);
+        fixture.FailPreparation = false;
         hud.SetVisible(true);
         Assert.True(hud.IsOpened());
     }
@@ -361,15 +361,12 @@ public sealed partial class BuildModeHudControlsTests
         Assert.Same(collapsed, hud.SingleComposer.GetElement("information-table"));
     }
 
-    [Theory]
-    [InlineData(2)]
-    [InlineData(3)]
-    [InlineData(4)]
-    public void InformationCompositionFailure_ReleasesComposerAndNativeValueTexturesBeforeRetry(int failedUpload)
+    [Fact]
+    public void InformationPreparationFailure_ReleasesComposerAndRegisteredChildrenBeforeRetry()
     {
         using var fixture = new Fixture();
         using var hud = new BuildModeHud(fixture.Api.Object);
-        fixture.FailOnUploadNumber = failedUpload;
+        fixture.FailPreparation = true;
         Assert.Throws<InvalidOperationException>(() => hud.SetVisible(true));
         var failed = Assert.Single(fixture.CreatedComposers);
         Assert.Null(hud.SingleComposer);
@@ -377,9 +374,9 @@ public sealed partial class BuildModeHudControlsTests
         Assert.False(hud.IsOpened());
         Assert.Empty(Assert.IsType<GuiElementTable>(failed.GetElement("information-table")).Bounds.ChildBounds);
         Assert.Null(failed.GetElement("controls-table"));
-        Assert.All(fixture.Uploads, upload => Assert.True(upload.Texture.Disposed));
-        Assert.Equal(failedUpload, fixture.Deleted.Count);
-        fixture.FailOnUploadNumber = null;
+        Assert.Empty(fixture.Uploads);
+        Assert.Empty(fixture.Deleted);
+        fixture.FailPreparation = false;
         hud.SetVisible(true);
         hud.Update(new(false, EBuildBrushSnapping.Horizontal, 1, 4, null));
         Assert.True(hud.IsOpened());
@@ -630,7 +627,7 @@ public sealed partial class BuildModeHudControlsTests
     {
         using var fixture = new Fixture();
         using var hud = new BuildModeHud(fixture.Api.Object);
-        fixture.FailUpload = true;
+        fixture.FailPreparation = true;
         Assert.Throws<InvalidOperationException>(() => hud.SetVisible(true));
         var failed = Assert.Single(fixture.CreatedComposers);
         var table = Assert.IsType<GuiElementTable>(failed.GetElement("information-table"));
@@ -638,7 +635,8 @@ public sealed partial class BuildModeHudControlsTests
         Assert.Null(hud.SingleComposer);
         Assert.Null(PendingTable(hud));
         Assert.False(hud.IsOpened());
-        fixture.FailUpload = false;
+        Assert.Empty(fixture.Uploads);
+        fixture.FailPreparation = false;
         hud.SetVisible(true);
         Assert.Equal(2, fixture.CreatedComposers.Count);
         Assert.True(hud.IsOpened());
@@ -653,12 +651,14 @@ public sealed partial class BuildModeHudControlsTests
         hud.ClearComposers();
         GuiElementTable? pending = null;
         fixture.OnCreate = () => pending = PendingTable(hud);
-        fixture.FailUpload = true;
+        int uploads = fixture.Uploads.Count;
+        fixture.FailPreparation = true;
         Assert.Throws<InvalidOperationException>(() => hud.SetVisible(true));
         Assert.NotNull(pending);
         Assert.False(pending.IsRegistered);
         Assert.Empty(pending.Bounds.ChildBounds);
         Assert.Null(PendingTable(hud));
+        Assert.Equal(uploads, fixture.Uploads.Count);
     }
 
     [Fact]
@@ -741,8 +741,7 @@ public sealed partial class BuildModeHudControlsTests
         public List<int> Deleted { get; } = [];
         public OnSettingsChanged<float>? ScaleWatcher { get; private set; }
         public Action? OnCreate { get; set; }
-        public bool FailUpload { get; set; }
-        public int? FailOnUploadNumber { get; set; }
+        public bool FailPreparation { get; set; }
         public int MouseX { get; set; }
         public int MouseY { get; set; }
         public bool MouseGrabbed { get; set; }
@@ -795,11 +794,17 @@ public sealed partial class BuildModeHudControlsTests
                 .Returns((string code) => Hotkeys[code]);
         }
 
-        public GuiComposer Composer(ElementBounds? bounds = null) =>
-            Assert.IsType<GuiComposer>(Activator.CreateInstance(typeof(GuiComposer),
+        public GuiComposer Composer(ElementBounds? bounds = null)
+        {
+            var composer = Assert.IsType<GuiComposer>(Activator.CreateInstance(typeof(GuiComposer),
                 BindingFlags.Instance | BindingFlags.NonPublic, binder: null,
                 [Api.Object, bounds ?? ElementBounds.Fixed(0, 0, 800, 600).WithEmptyParent(), "controls-tests"],
                 culture: null));
+            // Fail before native Compose allocates Cairo resources; upload failures belong in standalone table tests.
+            if (FailPreparation)
+                composer.AddStaticElement(new PreparationFailureElement(Api.Object), "preparation-failure");
+            return composer;
+        }
 
         public void Attach(GuiElementTable table)
         {
@@ -823,8 +828,6 @@ public sealed partial class BuildModeHudControlsTests
             texture.Width = surface.Width;
             texture.Height = surface.Height;
             Uploads.Add(new UploadSnapshot(texture, surface.Width, surface.Height));
-            if (FailUpload || Uploads.Count == FailOnUploadNumber)
-                throw new InvalidOperationException("Test upload failure.");
         }
 
         public void Dispose()
@@ -833,6 +836,12 @@ public sealed partial class BuildModeHudControlsTests
             Lang.ChangeLanguage(previousLocale);
             Lang.AvailableLanguages.Remove(Locale);
             foreach (string locale in extraLocales) Lang.AvailableLanguages.Remove(locale);
+        }
+
+        private sealed class PreparationFailureElement(ICoreClientAPI api)
+            : GuiElement(api, ElementBounds.Fixed(0, 0, 1, 1))
+        {
+            public override void BeforeCalcBounds() => throw new InvalidOperationException("Test preparation failure.");
         }
     }
 }

@@ -196,6 +196,11 @@ dotnet test .\VanillaBuildingExpanded.Tests\VanillaBuildingExpanded.Tests.csproj
 
 On Windows, the test project copies the installed game's native Cairo and Skia libraries into the test output directory. GUI tests therefore run from the command line and VS Code without adding the game's `Lib` directory to `PATH`. These tests use real Cairo rasterization with mocked GPU services; they do not replace in-game visual and input acceptance checks.
 
+Fault injection is limited to mod-owned boundaries. HUD cleanup tests fail during
+element preparation, before the native composer allocates Cairo resources.
+Texture-upload failures are tested directly on the mod's standalone table, not
+through native dynamic text or the native composer's rendering path.
+
 The Cake package/install workflow runs the full Release test suite before packaging.
 Its test step prints a timestamped diagnostics directory under
 `VanillaBuildingExpanded.Tests/TestResults`, containing TRX results and VSTest logs.

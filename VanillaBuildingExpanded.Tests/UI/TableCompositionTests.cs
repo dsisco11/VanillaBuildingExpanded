@@ -687,11 +687,18 @@ public sealed class TableCompositionTests
     {
         using var fixture = new Fixture();
         using var table = fixture.Table();
-        table.AddRow(fixture.Cell("child"));
+        Context? context = null;
+        ImageSurface? surface = null;
+        var child = fixture.Cell("child");
+        child.Paint = (ctx, image) => { context = ctx; surface = image; };
+        table.AddRow(child);
         fixture.Attach(table);
         fixture.ThrowAfterUpload = true;
         Assert.Throws<InvalidOperationException>(() => table.RenderInteractiveElements(0.1f));
         Assert.True(table.IsArtworkDirty);
+        Assert.Single(fixture.Uploads);
+        Assert.Equal(IntPtr.Zero, Assert.IsType<Context>(context).Handle);
+        Assert.Equal(IntPtr.Zero, Assert.IsType<ImageSurface>(surface).Handle);
         table.Dispose();
         Assert.Single(fixture.Deleted);
     }
