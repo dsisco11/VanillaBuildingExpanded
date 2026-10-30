@@ -18,7 +18,7 @@ public readonly record struct BrushSnapping
 {
     #region Fields
     /// <summary> The threshold value to determine if the hit position is considered centered or towards an edge. </summary>
-    private const float CenterThreshold = 0.15f;
+    internal const float CenterThreshold = 0.15f;
     /// <summary> The original block selection ray used to determine the snapping directions. </summary>
     public readonly BlockSelectionRay Selection;
     /// <summary> The face-local U snapping direction: -1, 0, or 1. Maps to Z on X-normal faces, otherwise X. </summary>

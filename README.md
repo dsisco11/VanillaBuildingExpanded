@@ -28,7 +28,7 @@ Build mode stays enabled when you change hotbar slots. Selecting a tool, an unsu
   - **Vertical Only** - Snap along the world Y axis
   - **None** - Ordinary placement adjacent to the targeted face
 - **Visual Feedback** - Invalid placement positions are highlighted in red, valid positions render normally
-- **Target-mesh Snapping Indicators** - Cyan bands mark valid tangential snaps on the targeted world block; invalid snaps keep the same directional bands in red
+- **Target-mesh Snapping Indicators** - Separate chevron geometry shows the snapping directions over a faint white patch; the active chevron turns red for invalid placement
 - **Client-only Work area** - Measure inclusive block-cell sizes independently of your held item, with an optional wireframe
 
 #### Controls
@@ -48,8 +48,25 @@ Build mode stays enabled when you change hotbar slots. Selecting a tool, an unsu
 Snapping uses face-local U/V edge directions and an outward W direction. The selected mode filters movement in world space. When no permitted edge movement exists, the brush uses W only if its direction satisfies the selected restriction. An obstructed candidate remains invalid instead of falling back to a different position.
 
 Snapping indicators stay on the original targeted world block, not on the moving
-placement preview. Each permitted in-plane direction contributes its own band;
-centered or disabled axes, `None`, and face-normal-only placement show no band.
+placement preview. Each directional region has one large orange chevron, rotated
+to point in its face-local U/V direction, including a single diagonal chevron in
+each corner. Chevrons span their rounded fill area's full width and height.
+The active chevron is orange for valid placement and red for invalid placement;
+inactive chevrons stay orange at 20% opacity before
+antialiasing and edge fading. The center region has no chevron.
+There are no grid lines. The underlying snapping regions still use the
+existing `0.35` and `0.65` thresholds.
+Only the selected region contains a white rounded-square patch, with 8%
+peak opacity and softly feathered edges fading to transparent. Chevrons fade
+toward the block-cell face perimeter. Centered and disabled axes select their
+center slot; centered/W-only placement shows the soft patch with only the
+surrounding inactive chevrons.
+Chevrons are separate cached triangle geometry clipped onto the captured native
+surface, not shapes evaluated in the fragment shader. Switching active regions
+or validity changes shader inputs without rebuilding the chevrons.
+The fill and chevrons use separate shader programs with their own typed shader
+classes; their native depth-position calculation is shared through an include.
+`None` mode hides the visualization.
 Camera/head-bob movement within the same target face and snapping region does not
 clear the indicator. Rendering uses the resolved candidate directions and does not
 perform another placement check or change snapping thresholds or destinations.
@@ -59,9 +76,9 @@ transforms, snow, and decor emitted by that pipeline. It intentionally draws ove
 texture holes without scanning or sampling material alpha. Pending, empty, or
 unavailable terrain geometry produces no overlay, never a substitute cube.
 GPU-only renderers and shader-only surface deformations are not reproduced.
-The [snapping indicator plan](docs/BuildBrushSnappingIndicator.todo) records the
-user-approved client-session smoke on Vintage Story **1.22.7** and the user's
-acceptance of the implemented appearance. Outstanding geometry/readability,
+The [snapping architecture](docs/BuildBrushArchitecture.md) records the
+earlier user-approved client-session smoke on Vintage Story **1.22.7**.
+That approval preceded the later appearance revisions. Outstanding geometry/readability,
 overlay-interaction, measured rendering-cost, and live-cache qualification was
 explicitly waived for Phase 6 closure, not passed. No comprehensive shape
 qualification or measured-performance claim is made.
@@ -201,7 +218,8 @@ dotnet run --project .\CakeBuild\CakeBuild.csproj -- --target=Package
 
 This refreshes the generated `Releases` directory and creates
 `Releases\vanillabuildingexpanded_999.99.9.zip` for the current development version.
-The archive contains the mod and its assets, including both `vbe-snapping` shaders;
+The archive contains the mod and its assets, including the `vbe-snapping` fill and
+`vbe-snapping-chevron` vertex/fragment programs and their shared depth include;
 game-provided OpenTK libraries are referenced from `VINTAGE_STORY`, not bundled.
 Package identity and remaining user-run checks are tracked in Phase 5 of the
 [snapping indicator plan](docs/BuildBrushSnappingIndicator.todo).

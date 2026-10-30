@@ -457,6 +457,7 @@ public sealed class BrushTargetMeshTests
         public BrushTargetMeshCache Cache { get; }
         public int Uploads { get; private set; }
         public List<TestMeshRef> Uploaded { get; } = [];
+        public List<TestMeshRef> ChevronUploaded { get; } = [];
         private long revision;
 
         public Fixture()
@@ -471,11 +472,15 @@ public sealed class BrushTargetMeshTests
             Api.Setup(x => x.TesselatorManager.GetDefaultBlockMesh(It.IsAny<Block>())).Returns(() => Borrowed);
             Blocks.Setup(x => x.GetBlock(It.IsAny<BlockPos>())).Returns(() => WorldBlock);
             Atlas.Setup(x => x.LoadCompositeBitmap(It.IsAny<AssetLocationAndSource>())).Returns(Bitmap);
-            Render.Setup(x => x.UploadMesh(It.IsAny<MeshData>())).Returns(() =>
+            Render.Setup(x => x.UploadMesh(It.IsAny<MeshData>())).Returns<MeshData>(data =>
             {
-                Uploads++;
                 TestMeshRef mesh = new();
-                Uploaded.Add(mesh);
+                if (data.CustomFloats is null)
+                {
+                    Uploads++;
+                    Uploaded.Add(mesh);
+                }
+                else ChevronUploaded.Add(mesh);
                 return mesh;
             });
             Cache = new BrushTargetMeshCache(Api.Object, GetCapturedMesh);

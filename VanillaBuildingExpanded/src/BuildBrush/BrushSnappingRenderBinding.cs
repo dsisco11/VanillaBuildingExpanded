@@ -19,13 +19,14 @@ internal sealed class BrushSnappingRenderBinding : IDisposable
 
     public BrushSnappingRenderBinding(ICoreClientAPI api, BuildBrushControllerClient controller,
         IBrushOverlayRenderState? state = null, System.Func<Block, BlockPos, MeshData?>? getMesh = null,
-        Func<IBrushSnappingShader>? createShader = null)
+        Func<IBrushSnappingShader>? createShader = null,
+        Func<IBrushSnappingChevronShader>? createChevronShader = null)
     {
         this.api = api;
         world = api.World;
         this.controller = controller;
         cache = new BrushTargetMeshCache(api, getMesh);
-        Renderer = new BrushSnappingRenderer(api, GetTarget, state, createShader);
+        Renderer = new BrushSnappingRenderer(api, GetTarget, state, createShader, createChevronShader);
         api.Event.BlockChanged += OnBlockChanged;
         api.Event.ReloadShapes += OnGeometryReload;
         api.Event.ReloadTextures += OnGeometryReload;

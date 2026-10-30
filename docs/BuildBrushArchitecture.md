@@ -464,10 +464,13 @@ invalidation. The existing validity refresh still performs its one rule call on
 the fresh hit; subsequent unchanged updates can reuse that outcome.
 
 Mode/source changes, dirty refreshes and target loss invalidate presentation.
-Centered/disabled axes contribute no marking; None, ordinary/W-only placement,
-unsupported geometry and stale contexts yield no presentation. Invalid placement
-retains its resolved tangential directions for a red indicator; accepted snapping
-remains cyan. Applied directions remain zero for invalid placement, so rendering
+`ShowsSnappingRegions` permits centered and ordinary/W-only results whenever a
+horizontal or vertical snapping mode is enabled. `None`, unsupported geometry,
+and stale contexts yield no presentation. Centered/disabled axes select the center
+slot of the face-local 3x3 partition. Invalid placement retains its resolved directions
+and turns the active chevron red; valid placement uses orange. The active patch
+remains faint white in either state. Applied directions remain zero for
+invalid placement, so rendering
 uses the resolved directions without changing placement semantics.
 The existing slow validity check may update the matching snapshot's validity using
 its one existing rule call, but cannot attach an old result to a new target or face.
@@ -538,9 +541,10 @@ merely by their topology. Declared draw type does not impose a separate cube tes
 the native tessellator has already generated the actual geometry.
 
 `BrushTargetBounds` records extents and validates indexed geometry; it does not
-perform a second CPU directional-coverage or triangle-facing rejection. The shader
-alone clips selected-facing outward bands. Its U/V mask is a union: a diagonal
-result can mark the mesh even when only one resolved band's region intersects it.
+perform a second CPU directional-coverage or triangle-facing rejection.
+Separate chevron geometry is clipped onto the captured triangles; shader-facing
+filtering applies to both draw passes. The U/V fill mask is an
+intersection: only the single resolved cell is filled, not a union of axis bands.
 Native packed normals determine facing when available, with geometric derivatives
 as the fallback for meshes without packed normals. Raycast hits can lie on native
 selection boxes rather than rendered triangles, so neither triangle membership nor
@@ -605,17 +609,24 @@ compatibility, appearance, ordering, or rendering cost.
 
 ### Isolated snapping shader drawing
 
-Phase 3 adds `BrushSnappingRenderer`, `BrushSnappingShader`, `BrushSnappingShaderOwner`, and
-`BrushOverlayRenderState`, with the `vbe-snapping` vertex/fragment assets.
-`BrushSnappingShader` derives from the game's `ShaderProgram` (and therefore
-`ShaderProgramBase`), matching native file-shader registration and compilation.
-All nine uniforms are exposed as typed property setters on that subclass; only
-the subclass maps those setters to GLSL names. The renderer assigns matrices,
-vectors, color, width, and depth bias through that typed contract, without raw
-uniform or texture-binding calls. `BrushSnappingShaderOwner` retains lazy creation,
-registration, compile failure cleanup, replacement/reload, and disposal.
-Its default factory creates the actual native subclass; the typed factory seam
-keeps lifecycle and renderer tests independent of an OpenGL context.
+`BrushSnappingRenderer` draws the fill with `BrushSnappingShader` and the
+`vbe-snapping` vertex/fragment assets, then switches to `BrushSnappingChevronShader`
+and the independent `vbe-snapping-chevron` assets for glyph geometry.
+Both dedicated classes derive from the game's `ShaderProgram` through
+`BrushSnappingSurfaceShader`, matching native file-shader registration and
+compilation. The shared typed base exposes the seven common uniform setters.
+The fill adds color/center-threshold setters (nine uniforms total); the chevron
+class adds its active-color setter (eight total). No pass-selection uniform or
+fill/glyph branch exists in either program. Only shader classes map property
+setters to GLSL names; the renderer never makes raw uniform or texture-binding calls.
+Each program has its own typed `BrushSnappingShaderOwner<TShader>`, retaining lazy
+creation, registration, compile failure cleanup, replacement/reload, and disposal.
+Default factories create the actual native subclasses; typed factory seams
+keep lifecycle and renderer tests independent of an OpenGL context.
+Both draws share a single `BrushOverlayRenderState` capture/restore scope, but
+each program is used/stopped around its own draw. Failure in either program
+disables the overlay until explicit reload. Reload replaces both programs;
+renderer disposal attempts to retire both even if one disposal fails.
 The session binding registers this renderer and supplies current guarded geometry
 on each callback. The user confirmed and approved the Phase 4 installed-game smoke
 on 2026-10-29, covering shader loading, visibility/stability, validity colors,
@@ -624,21 +635,156 @@ and waived additional Phase 6 appearance/ordering/performance qualification;
 no comprehensive qualification or measured performance is claimed.
 The renderer never retains a target between callbacks or owns the cache's mesh.
 
-The visual is outward bands covering the resolved U/V cell regions, cyan for valid
-placement and red for invalid placement,
-past the existing centered threshold (`0.15` around `0.5`), with no W glyph.
+The user-directed chevron revision replaces the earlier bands and region-grid lines.
+Face-local thresholds remain `0.35` and `0.65`, but no grid lines are drawn.
+Only the intersection of the resolved U/V slots carries the faint white rounded
+patch. The active chevron is orange for valid placement and red for invalid
+placement; inactive guides remain faint orange. Zero
+directions select the center slot, including centered/W-only placements; a disabled
+axis also resolves to that slot. `None` suppresses the entire visualization.
+There is no separate W glyph and placement semantics remain unchanged.
 Independent positive/negative directions use Z/Y on X faces, X/Z on Y faces, and
 X/Y on Z faces; opposite faces never reverse the axes. Positions remain block-local
 through interpolation. Native packed normals, or triangle derivatives corrected
 for back faces when those normals are absent, supply the selected-face dot test.
 No texture UV, atlas, bitmap, material alpha, shape bounds, or triangle-edge artwork
-is involved. Mesh triangles clip the bands, including over texture holes.
-The width parameter (`0.025` block units) controls the band's inward-to-outward
-opacity ramp, widened by screen derivatives for softening. Coverage is strictly
-outside the centered region; each resolved direction with projected triangle area
-in that region has nonzero mask area. Narrow coverage may still be unreadable.
-Validity colors are user-directed; opacity (`0.7`) and width were accepted with
-the implemented bands in the user's Phase 6 appearance approval.
+is involved. Mesh triangles clip the chevrons and fill, including over texture holes.
+The renderer passes the actual `BrushSnapping.CenterThreshold` (`0.15`) through
+the typed shader property, avoiding a separate shader threshold. Outer slots use
+strict comparisons; exact thresholds belong to the center slot. The fill is an
+inset rounded square centered within the resolved cell, sized to its smaller
+dimension so rectangular cells do not stretch it. A signed-distance mask supplies
+`0.045`-block corner radii and an inward `0.05`-block feather, widened to at least
+one pixel, with `0.015`-block inset. Fill opacity reaches `0.08` in the interior
+and falls to zero at its rounded boundary; the original region mask prevents
+leakage into neighboring CPU regions. White fill is independent of validity.
+Chevrons use stroke width `0.01` block units with a geometry-based feathered edge.
+Their opacity fades smoothly to zero
+over the outer `0.15` block units of the face-local `[0, 1]` perimeter. This is a
+block-cell edge fade, not arbitrary native-mesh contour detection; the captured
+triangles still clip the overlay. `BrushSnappingChevronMesh` builds the eight
+directional glyphs on the CPU using the shared snapping thresholds.
+Every noncenter region draws exactly one
+chevron, oriented by its normalized two-component direction; corner regions use
+one diagonally rotated V, not separate U/V glyphs. The center has no chevron.
+A canonical tip and two arms are rotated, centered by their bounds, and uniformly
+scaled so their centerline bounds span the rounded fill's full width and height.
+Stroke coverage extends slightly beyond those bounds but remains within its region.
+This sizing applies to all eight orientations, not just cardinal arrows.
+
+Each V consists of miter-joined quad strips with a feathered perimeter: vertex
+coverage is `1` in the core and `0` at the outside, interpolated across the edge.
+The strips are triangulated and intersected with the captured native triangles
+in the selected face's projection. Barycentric reconstruction puts generated
+vertices on the actual source surface, including slopes and recessed geometry;
+missing surfaces do not produce a replacement plane. The target mesh lazily
+owns one combined glyph mesh per face (at most six); region, mode, validity, and
+camera changes reuse these meshes. Replacement/invalidation/disposal of the
+target releases all derived CPU/GPU meshes on the client main thread.
+
+Native position/flags remain at attribute locations `0`/`1`. Glyph-only custom
+float attributes occupy `2` through `8`: region/coverage, interpolated native
+normal, the three original triangle positions, barycentric weights, and original
+Z offsets. The installed native uploader was inspected to confirm that custom
+float groups follow flags consecutively. Stride is `84` bytes, seven `vec3`
+groups, without UV/color/normal arrays inserted before flags.
+
+`nativePosition` preserves the existing pass-specific offset and depth bias.
+Glyph vertices interpolate the three original *clip-space* positions after that
+calculation; recomputing nonlinear native offsets at subdivided vertices could
+otherwise reintroduce surface fighting. Normal interpolation retains the source
+values without repacking/quantization. The renderer draws the faint fill on the
+original mesh, then the combined chevrons on their own mesh, within one owned
+render-state scope, switching between separate fill and chevron programs.
+Both vertex shaders include `vbesnappingposition.ash` from the mod's
+`shaderincludes` category, sharing the native offset/bias calculation without
+duplicating it. The fill vertex layout has only native position/flags; the
+chevron program alone consumes the additional glyph metadata. Its fragment
+shader only colors/fades rasterized glyph triangles; it contains no procedural
+chevron or line-segment-distance function, and no rounded-fill calculation.
+
+The former combined program's `GlyphPass` uniform/property has been removed.
+Vintage Story 1.22.7's `collectUniformNames` scanner does not recognize GLSL
+`bool` uniforms, even though OpenGL accepts them. The uniform-contract regression
+test expands the shared depth include and invokes the installed game's actual
+scanner for every declared uniform in each program, independently.
+
+The split-program revision passed all 414 focused Release renderer, render-binding,
+and native mesh-source tests. Coverage includes each program's uniform contract,
+registration, compile/replacement failure cleanup and reload recovery, disposed
+program replacement, shared transforms, and render-state restoration across both
+draws. An isolated OpenGL 4.6/NVIDIA 610.88 check compiled all four actual shader
+stages and linked both programs, expanding the actual native/shared includes and
+stubbing only OIT output. It verified all 17 active uniform bindings and 11
+attribute slots across the two programs, with no `glyphPass` binding and no GL
+errors. This compile/link check is not a new live-game visual or depth qualification.
+
+The resolved directions select which region is active. Its chevron uses the
+configured validity color; every other directional region uses orange at `0.2`
+opacity. Vertex coverage and the existing face-edge fade multiply both. Only the
+active region receives faint white fill; inactive regions have no fill.
+Disabled axes still resolve to their center slot, but inactive guides remain
+visible. Centered/W-only placement shows its patch and the eight faint surrounding
+chevrons. `None` suppresses the entire visualization. No grid lines are restored.
+Narrow coverage may still be unreadable. Earlier Phase 6 appearance acceptance
+applies to the prior bands, not a new in-game acceptance of this chevron revision.
+
+The separate-geometry revision passed all 2,157 focused Release snapping,
+target-mesh, placement, and overlay-state tests, with no failures or skips.
+An isolated RTX 4090/OpenGL 4.6 run exercised actual builder output with the
+21-float layout and both shader assets, expanding the native include and replacing
+only the OIT output with straight RGBA. All 4,512 draws and 13,942,730 checks passed,
+including 672 depth cases covering native passes `0` through `7` and offsets
+`0`, `1`, `2`, and `7`. Checks covered single-V/full-span geometry, surface clipping,
+white fill independent of validity, active orange/red and inactive orange opacity,
+foreground occlusion, and a bit-identical depth buffer after overlay rendering.
+No GL errors occurred; scratch files and GPU resources were released. Geometry
+inputs were synthetic native-format fixtures, not fresh live terrain captures.
+The native uploader's attribute layout was checked against its implementation,
+not executed in that harness. This is not new installed-game visual or performance
+qualification.
+
+The earlier fragment-rendered enlarged-chevron revision passed all 345 focused Release renderer
+tests, with no failures or skips. An isolated RTX 4090/OpenGL 4.6 check compiled
+the actual fragment asset with only the OIT include replaced by straight-RGBA
+output: 55,890 renders and 702,834 checks passed across six faces and five
+viewports. All 96 measured glyph bounds at 640x640 met the full-fill-span target:
+cardinal width/height `0.28125` versus target `0.27` and measured fill `0.265625`;
+diagonal width/height `0.33125` versus target `0.32` and measured fill `0.315625`.
+Checks also covered single-V connectivity/orientation, the inactive `0.2` opacity
+ratio, no center arrow, active-only feathered fill, threshold ties, clipping,
+face fade, source-over composition, and back-facing rejection. No GL errors
+occurred. This is fragment verification, not new installed-game or performance
+qualification.
+
+The earlier small-chevron revision passed all 385 focused Release renderer/session-binding
+tests, with no failures or skips. An isolated RTX 4090/OpenGL 4.6 check compiled
+the actual fragment asset with only the OIT include replaced by straight-RGBA
+output. All 432 face/cell/color/viewport combinations passed: 75,168 renders and
+2,390,568 checks covered signed zero/one/two-chevron output, removal of grid lines,
+cell isolation, softened fill, face fade, source-over composition, and back-facing
+rejection. No GL errors occurred. At very small viewports, antialiased chevrons can
+overlap the patch center and increase composited opacity; isolated fill remains
+`0.35`. This is not new installed-game or performance qualification.
+
+The earlier softened grid style passed all 345 focused Release renderer tests, with no failures
+or skips. An isolated RTX 4090/OpenGL 4.6 check compiled the actual fragment asset
+with only the OIT include replaced by straight-RGBA output. All 432 combinations
+of face, active cell, validity color, and viewport passed: 37,152 renders and
+354,816 checks covered rounded-square symmetry, feathering, no cell leakage,
+opaque divider cores, monotonic fade at all four block-cell edges, intersections,
+source-over composition, and back-facing rejection. No GL errors occurred.
+This is fragment verification, not new installed-game or performance qualification.
+
+The initial hard-cell region-grid verification passed 2,148 focused Release snapping/placement/target/
+render-state tests, with no failures or skips. An isolated RTX 4090/OpenGL 4.6
+check compiled the actual fragment asset, replacing only the OIT include with
+straight-RGBA output: 2,916 renders and 151,632 pixel checks passed across six
+faces, nine cells, both validity colors, and three viewport sizes. Checks covered
+single-cell fill, orange dividers/intersections, antialiasing and bounded widths,
+back-facing rejection, source-over composition, and strict threshold boundaries.
+No GL errors occurred. This validates the fragment visualization, not a new
+installed-game scene, native vertex/depth regression, or performance measurement.
 
 The render stage is OIT, order `0.52`, using the native OIT shader include and
 preserving indexed blending. The owned mesh is drawn once with the original-target
@@ -657,7 +803,7 @@ The Phase 4 runtime smoke is user-approved. Comprehensive bias, stage ordering
 versus selection/preview/transparency, and occlusion qualification was explicitly
 waived at Phase 6 closure rather than newly established.
 
-The latest correction passed 1,361 rebuilt managed tests and Release publish.
+The earlier band-rendering depth correction passed 1,361 rebuilt managed tests and Release publish.
 An isolated native OpenGL 4.6 context on the RTX 4090 compiled/linked the actual
 shader assets and exercised the production render-state implementation in 1,728
 cases: orthographic/perspective/grazing views, two surface heights, all nine native
@@ -712,18 +858,21 @@ placement validation. Death disables mode through the existing system event and
 is independently gated by the player's live state. Target loss, mode disable,
 unsupported inventory, or a stale/suppressed presentation clears drawing without
 releasing valid reusable mesh data; subsequent matching outcomes can reuse it.
-Placement-validity changes update red/cyan without rebuilding or reuploading geometry.
+Placement-validity changes update the active chevron's orange/red color without
+rebuilding or reuploading geometry; the fill stays faint white.
 
 The binding subscribes to target-position `BlockChanged`, `ReloadShapes`,
 `ReloadTextures`, `BlockTexturesLoaded`, `ReloadShader`, and `LeaveWorld`.
 World edits elsewhere do not invalidate the cache. An edit at the original target,
 shape reload, or resource reload invalidates owned geometry; shader reload also
-compiles/replaces the owned program and returns its success to the event caller.
+compiles/replaces both owned programs and returns its success to the event caller.
 The installed 1.22.7.0 `ShaderAPI.ReloadShaders` retires native programs before
 triggering mod reload handlers. Failed compilation/replacement/drawing/registration
 is explicitly logged and disables only the overlay; a successful explicit shader
 reload restores drawing and can retry a failed renderer registration.
-Successful compilation logs `[BuildBrush] Snapping indicator shader compiled.`
+Successful compilation logs
+`[BuildBrush] Snapping indicator shader vbe-snapping compiled.` and
+`[BuildBrush] Snapping indicator shader vbe-snapping-chevron compiled.`
 
 Resources and render-list membership are not retired within the overlay callback:
 invalidation/disposal during drawing is queued on the client main thread.

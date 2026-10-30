@@ -163,6 +163,27 @@ public sealed class BrushSnappingRenderBindingTests
     }
 
     [Fact]
+    public void CenterRegionStaysVisibleThroughCameraSmoothingWithoutValidationOrReupload()
+    {
+        using var f = new Fixture();
+        f.Selection!.HitPosition.X = 0.5;
+        f.Selection.HitPosition.Y = 0.5;
+        f.Resolve();
+        int validations = f.ValidationCount;
+        for (int frame = 0; frame < 120; frame++)
+        {
+            double bob = 0.04 * Math.Sin((frame + 1) * 0.8) * Math.Exp(-frame / 30.0);
+            f.Selection.HitPosition.X = 0.5 + bob;
+            f.Selection.HitPosition.Y = 0.5 - bob;
+            f.Draw();
+            Assert.Equal(frame + 1, f.Draws);
+            Assert.Equal(validations, f.ValidationCount);
+            Assert.Equal(1, f.Geometry.Uploads);
+        }
+        f.Program.VerifySet(p => p.ResolvedDirections = Vector2.Zero, Times.Exactly(120));
+    }
+
+    [Fact]
     public void SuspensionResumptionAndModeTogglesRetainValidGeometryButNotOutcomes()
     {
         using var f = new Fixture();
@@ -194,14 +215,14 @@ public sealed class BrushSnappingRenderBindingTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ValidityChangesDrawResolvedSnappingInRedOrCyanWithoutValidationOrReupload(bool initiallyValid)
+    public void ValidityChangesOnlyTheActiveChevronColorWithoutValidationOrReupload(bool initiallyValid)
     {
         using var f = new Fixture();
         bool valid = initiallyValid;
         f.Geometry.Inputs.Validator.Setup(x => x.CanPlace(It.IsAny<Block>(), It.IsAny<BlockSelection>(),
             ref It.Ref<string>.IsAny)).Returns(() => valid);
         var colors = new List<(float R, float G, float B, float A)>();
-        f.Program.SetupSet(p => p.ColorIn = It.IsAny<Vector4>())
+        f.ChevronProgram.SetupSet(p => p.ChevronColor = It.IsAny<Vector4>())
             .Callback<Vector4>(color => colors.Add((color.X, color.Y, color.Z, color.W)));
         f.Selection!.HitPosition.X = 0.1;
         f.Resolve();
@@ -220,10 +241,11 @@ public sealed class BrushSnappingRenderBindingTests
                 f.Selection!.HitPosition.X = 0.1 + 0.02 * Math.Sin(frame);
                 f.Draw();
                 Assert.Equal(phase * 10 + frame + 1, f.Draws);
-                Assert.Equal(valid ? (0.2f, 0.85f, 1f, 0.7f) : (1f, 0f, 0f, 0.7f), colors.Last());
+                Assert.Equal(valid ? (1f, 0.5f, 0f, 1f) : (1f, 0f, 0f, 1f), colors.Last());
                 Assert.Equal(validations, f.ValidationCount);
                 Assert.Equal(valid, f.Brush.IsValidPlacement);
                 Assert.Equal(1, f.Geometry.Uploads);
+                Assert.Single(f.Geometry.ChevronUploaded);
                 Assert.Equal(0, f.Geometry.Uploaded[0].DisposeCount);
             }
         }
@@ -284,7 +306,8 @@ public sealed class BrushSnappingRenderBindingTests
         f.Draw();
         Assert.Equal(validations, f.ValidationCount);
         Assert.Equal(2, f.Draws);
-        f.Program.VerifySet(p => p.ColorIn = new Vector4(1f, 0f, 0f, 0.7f), Times.Once);
+        f.ChevronProgram.VerifySet(p => p.ChevronColor = new Vector4(1f, 0f, 0f, 1f), Times.Once);
+        f.Program.VerifySet(p => p.ColorIn = new Vector4(1f, 1f, 1f, 0.08f), Times.Exactly(2));
         f.Geometry.Inputs.Validator.Setup(v => v.CanPlace(It.IsAny<Block>(), It.IsAny<BlockSelection>(),
             ref It.Ref<string>.IsAny)).Returns(true);
         f.Brush.Snapping = EBuildBrushSnapping.None;
@@ -491,6 +514,8 @@ public sealed class BrushSnappingRenderBindingTests
         public readonly Mock<IShaderAPI> Shaders = new();
         public readonly Mock<IBrushSnappingShader> Program = new();
         public readonly Mock<Func<IBrushSnappingShader>> Factory = new();
+        public readonly Mock<IBrushSnappingChevronShader> ChevronProgram = new();
+        public readonly Mock<Func<IBrushSnappingChevronShader>> ChevronFactory = new();
         public readonly HashSet<IRenderer> Active = [];
         public readonly Queue<Action> Pending = new();
         public readonly DummySlot Slot;
@@ -524,8 +549,20 @@ public sealed class BrushSnappingRenderBindingTests
             Geometry.Api.SetupGet(a => a.Shader).Returns(Shaders.Object);
             Geometry.Render.SetupGet(r => r.CameraMatrixOriginf).Returns(new Matrixf().Values);
             Geometry.Render.SetupGet(r => r.CurrentProjectionMatrix).Returns(new Matrixf().Values);
-            Geometry.Render.Setup(r => r.RenderMesh(It.IsAny<MeshRef>())).Callback(() => { Draws++; OnDraw?.Invoke(); });
+            Geometry.Render.Setup(r => r.RenderMesh(It.IsAny<MeshRef>())).Callback<MeshRef>(mesh =>
+            {
+                if (Geometry.ChevronUploaded.Any(glyph => ReferenceEquals(glyph, mesh))) return;
+                Draws++;
+                OnDraw?.Invoke();
+            });
             Program.Setup(p => p.Compile()).Returns(true);
+            int chevronCount = 0;
+            ChevronFactory.Setup(create => create()).Returns(() =>
+            {
+                var candidate = chevronCount++ == 0 ? ChevronProgram : new Mock<IBrushSnappingChevronShader>();
+                candidate.Setup(p => p.Compile()).Returns(true);
+                return candidate.Object;
+            });
             Program.SetupSet(p => p.ModelViewMatrix = It.IsAny<float[]>())
                 .Callback<float[]>(matrix => LastModel = (float[])matrix.Clone());
             int programCount = 0;
@@ -568,7 +605,7 @@ public sealed class BrushSnappingRenderBindingTests
             Assert.False(Brush.IsDirty);
             Assert.NotNull(Client.GetSnappingPresentation(Selection, true));
             Binding = new BrushSnappingRenderBinding(Geometry.Api.Object, Client, new State(this),
-                captureNative ? null : Geometry.GetCapturedMesh, Factory.Object);
+                captureNative ? null : Geometry.GetCapturedMesh, Factory.Object, ChevronFactory.Object);
         }
 
         public BlockSelection CreateSelection() => new()

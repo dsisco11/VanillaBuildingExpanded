@@ -1,5 +1,6 @@
 # Short-Term:
     ✔ Snapping indicators to visualize which edges the "build brush" is snapping to.
+    ☐ UI: combine build-menu collapsible section collapse buttons into the actual section title. so the entire section title acts as the toggle for collapsing and expanding the section, and has the up/down arrow indicator integrated into the title itself.
     ☐ Placement restriction modes (e.g. only placing blocks along a specific plane, such as when you are building a long straight wall or flooring).
     ☐ ISSUE: cant place doors with the build-brush.
     ☐ ISSUE: build-brush cant handle ground-storage item placement, which means certai items like small lanterns cannot be placed via the build-brush.

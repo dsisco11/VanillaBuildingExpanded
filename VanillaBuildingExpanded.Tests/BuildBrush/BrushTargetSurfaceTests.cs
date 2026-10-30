@@ -211,11 +211,13 @@ public sealed class BrushTargetSurfaceTests
     }
 
     [Fact]
-    public void CenteredNarrowSurface_HasNoAcceptedTangentialMarking()
+    public void CenteredNarrowSurface_RetainsActualGeometryForTheCenterRegionFill()
     {
         using Fixture f = new();
         f.Borrowed = BrushTargetMeshTests.CreateCuboid(new Vector3(0.45f, 0, 0.45f), new Vector3(0.55f, 1, 0.55f));
-        Assert.Null(f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.5, 0.5, 1)));
+        var target = Assert.IsType<BrushTargetGeometry>(
+            f.Cache.GetTarget(f.Presentation(BlockFacing.UP, 0.5, 0.5, 1)));
+        Assert.Equal(f.Borrowed.xyz, target.Mesh.Data.xyz);
     }
 
     private static MeshData Shape(string name)

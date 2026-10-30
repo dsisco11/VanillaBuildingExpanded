@@ -142,7 +142,7 @@ public sealed class BrushTargetMeshCacheTests
     [InlineData("w-only")]
     [InlineData("invalid-none")]
     [InlineData("invalid-w-only")]
-    public void NonTangentialOutcomes_DoNotAcquireGeometryRegardlessOfValidity(string reason)
+    public void CenteredRegionsAcquireGeometryButNoneDoesNotRegardlessOfValidity(string reason)
     {
         using Fixture f = new();
         if (reason is "invalid-none" or "invalid-w-only")
@@ -154,8 +154,10 @@ public sealed class BrushTargetMeshCacheTests
             "w-only" or "invalid-w-only" => f.Presentation(u: 0.5, v: 0.5),
             _ => f.Presentation()
         };
-        Assert.Null(f.Cache.GetTarget(presentation));
-        f.Api.Verify(x => x.TesselatorManager.GetDefaultBlockMesh(It.IsAny<Block>()), Times.Never);
+        bool visible = reason is "w-only" or "invalid-w-only";
+        Assert.Equal(visible, f.Cache.GetTarget(presentation) is not null);
+        f.Api.Verify(x => x.TesselatorManager.GetDefaultBlockMesh(It.IsAny<Block>()),
+            visible ? Times.Once() : Times.Never());
     }
 
     [Theory]

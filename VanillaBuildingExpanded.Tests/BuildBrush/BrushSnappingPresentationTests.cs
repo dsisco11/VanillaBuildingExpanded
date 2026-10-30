@@ -204,7 +204,7 @@ public sealed class BrushSnappingPresentationTests
     public void Presentation_OrdinaryValidityRefreshReusesTheSameSemanticState()
     {
         Context context = new(BlockFacing.NORTH, 1, 0, EBuildBrushSnapping.Vertical);
-        Assert.Null(context.Presentation);
+        Assert.NotNull(context.Presentation);
         Assert.Equal(context.Selection.Position, context.Brush.Position);
         context.Selection.HitPosition.X = 0.85;
         context.Client.TryUpdatePlacementValidity(context.Selection);
@@ -236,14 +236,26 @@ public sealed class BrushSnappingPresentationTests
     }
 
     [Theory]
-    [InlineData(0, 0, EBuildBrushSnapping.Horizontal)]
-    [InlineData(1, 0, EBuildBrushSnapping.None)]
-    [InlineData(1, 0, EBuildBrushSnapping.Vertical)]
-    [InlineData(0, 0, EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.ApplyFaceNormalOffset)]
-    public void Presentation_NoPermittedTangentialSnap_IsSuppressed(int u, int v, EBuildBrushSnapping mode)
+    [InlineData(0, 0, EBuildBrushSnapping.Horizontal, true)]
+    [InlineData(1, 0, EBuildBrushSnapping.None, false)]
+    [InlineData(1, 0, EBuildBrushSnapping.None | EBuildBrushSnapping.Horizontal, false)]
+    [InlineData(1, 0, EBuildBrushSnapping.None | EBuildBrushSnapping.ApplyFaceNormalOffset, false)]
+    [InlineData(1, 0, (EBuildBrushSnapping)0, false)]
+    [InlineData(1, 0, EBuildBrushSnapping.ApplyFaceNormalOffset, false)]
+    [InlineData(1, 0, EBuildBrushSnapping.Vertical, true)]
+    [InlineData(0, 0, EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.ApplyFaceNormalOffset, true)]
+    public void Presentation_EnabledSnappingShowsCenteredRegionsButNoneRemainsSuppressed(
+        int u, int v, EBuildBrushSnapping mode, bool visible)
     {
         Context context = new(BlockFacing.NORTH, u, v, mode);
-        Assert.Null(context.Presentation);
+        Assert.Equal(visible, context.Presentation is not null);
+        if (visible)
+        {
+            var snapshot = Assert.IsType<BrushSnappingPresentation>(context.Presentation);
+            Assert.True(snapshot.ShowsSnappingRegions);
+            Assert.Equal(0, snapshot.Result.ResolvedSnapping.FaceU);
+            Assert.Equal(0, snapshot.Result.ResolvedSnapping.FaceV);
+        }
         context.VerifyValidationCount(1);
     }
 

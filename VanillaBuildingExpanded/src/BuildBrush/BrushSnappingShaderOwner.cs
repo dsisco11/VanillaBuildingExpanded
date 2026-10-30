@@ -4,13 +4,14 @@ using Vintagestory.API.Client;
 
 namespace VanillaBuildingExpanded.BuildBrush;
 
-internal sealed class BrushSnappingShaderOwner(ICoreClientAPI api, Func<IBrushSnappingShader>? createShader = null) : IDisposable
+internal sealed class BrushSnappingShaderOwner<TShader>(
+    ICoreClientAPI api, string passName, Func<TShader> createShader) : IDisposable
+    where TShader : class, IShaderProgram
 {
-    private readonly Func<IBrushSnappingShader> createShader = createShader ?? (static () => new BrushSnappingShader());
-    private IBrushSnappingShader? program;
+    private TShader? program;
     private bool disposed;
 
-    public IBrushSnappingShader GetProgram()
+    public TShader GetProgram()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         if (program is null || program.Disposed) Replace();
@@ -22,19 +23,19 @@ internal sealed class BrushSnappingShaderOwner(ICoreClientAPI api, Func<IBrushSn
         ObjectDisposedException.ThrowIf(disposed, this);
         var previous = program;
         program = null;
-        IBrushSnappingShader? candidate = null;
+        TShader? candidate = null;
         try
         {
             candidate = createShader()
-                ?? throw new InvalidOperationException("Snapping shader creation returned no program.");
+                ?? throw new InvalidOperationException($"Snapping shader {passName} creation returned no program.");
             candidate.AssetDomain = "vanillabuildingexpanded";
             candidate.Oit = true;
-            api.Shader.RegisterFileShaderProgram("vbe-snapping", candidate);
+            api.Shader.RegisterFileShaderProgram(passName, candidate);
             if (candidate.LoadError || !candidate.Compile())
-                throw new InvalidOperationException("The snapping indicator shader failed to compile.");
+                throw new InvalidOperationException($"The snapping indicator shader {passName} failed to compile.");
             program = candidate;
             candidate = null;
-            api.Logger.Notification("[BuildBrush] Snapping indicator shader compiled.");
+            api.Logger.Notification("[BuildBrush] Snapping indicator shader {0} compiled.", passName);
         }
         finally
         {

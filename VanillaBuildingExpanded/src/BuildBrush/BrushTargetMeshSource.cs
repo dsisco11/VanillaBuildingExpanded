@@ -38,7 +38,7 @@ internal sealed class BrushTargetMeshSource : IDisposable
     public Block? GetTargetBlock(BrushSnappingPresentation presentation)
     {
         EnsureMainThread();
-        if (!presentation.HasTangentialSnapping) return null;
+        if (!presentation.ShowsSnappingRegions) return null;
         Vec3d hit = presentation.TargetHitPosition;
         if (!double.IsFinite(hit.X) || !double.IsFinite(hit.Y) || !double.IsFinite(hit.Z)) return null;
         BlockPos position = presentation.TargetPosition;

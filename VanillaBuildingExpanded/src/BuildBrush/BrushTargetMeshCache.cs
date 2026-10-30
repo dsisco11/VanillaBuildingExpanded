@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -86,6 +87,8 @@ internal sealed class BrushTargetMesh : IDisposable
 {
     private readonly BrushTargetMeshSource source;
     private MeshRef? mesh;
+    private BrushTargetMesh?[]? chevrons;
+    private bool[]? chevronsBuilt;
     private bool disposed;
 
     public MeshData Data { get; }
@@ -115,6 +118,29 @@ internal sealed class BrushTargetMesh : IDisposable
         return mesh;
     }
 
+    public BrushTargetMesh? GetChevrons(BlockFacing face)
+    {
+        source.EnsureMainThread();
+        ObjectDisposedException.ThrowIf(disposed, this);
+        chevrons ??= new BrushTargetMesh?[BlockFacing.ALLFACES.Length];
+        chevronsBuilt ??= new bool[BlockFacing.ALLFACES.Length];
+        if (!chevronsBuilt[face.Index])
+        {
+            MeshData? data = BrushSnappingChevronMesh.Build(Data, face);
+            if (data is not null)
+            {
+                if (!BrushTargetBounds.TryRead(data, out var bounds))
+                {
+                    data.Dispose();
+                    throw new InvalidOperationException("The generated snapping chevron mesh is invalid.");
+                }
+                chevrons[face.Index] = new BrushTargetMesh(source, data, bounds);
+            }
+            chevronsBuilt[face.Index] = true;
+        }
+        return chevrons[face.Index];
+    }
+
     public void Dispose()
     {
         source.EnsureMainThread();
@@ -122,7 +148,19 @@ internal sealed class BrushTargetMesh : IDisposable
         disposed = true;
         MeshRef? previous = mesh;
         mesh = null;
+        List<Exception>? errors = null;
+        if (chevrons is not null)
+        {
+            foreach (BrushTargetMesh? child in chevrons)
+            {
+                try { child?.Dispose(); }
+                catch (Exception error) { (errors ??= []).Add(error); }
+            }
+            chevrons = null;
+        }
         try { previous?.Dispose(); }
+        catch (Exception error) { (errors ??= []).Add(error); }
         finally { Data.Dispose(); }
+        if (errors is not null) throw new AggregateException("Snapping mesh cleanup failed.", errors);
     }
 }

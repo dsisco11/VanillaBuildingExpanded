@@ -14,8 +14,9 @@ internal sealed class BrushSnappingPresentation
     public BlockFacing Face => target.Face;
     public int? TargetBlockId => targetBlockId;
     public BrushPlacementResult Result { get; }
-    public bool HasTangentialSnapping => Result.Outcome != BrushPlacementOutcome.NoBlock
-        && (Result.ResolvedSnapping.FaceU != 0 || Result.ResolvedSnapping.FaceV != 0);
+    public bool ShowsSnappingRegions => Result.Outcome != BrushPlacementOutcome.NoBlock
+        && !Result.RequestedSnapping.Mode.HasFlag(EBuildBrushSnapping.None)
+        && (Result.RequestedSnapping.Mode & (EBuildBrushSnapping.Horizontal | EBuildBrushSnapping.Vertical)) != 0;
 
     public BrushSnappingPresentation(BlockSelection target, BrushPlacementResult result, long revision)
     {

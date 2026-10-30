@@ -607,7 +607,7 @@ public class BuildBrushInstance
         if (!IsActive || !_isValidPlacementBlock || IsDirty || !supportedGeometry
             || currentSelection is null || presentation is null
             || !presentation.Matches(currentSelection, Snapping, snappingPresentationRevision)
-            || !presentation.HasTangentialSnapping
+            || !presentation.ShowsSnappingRegions
             || presentation.Result.Position != Position
             || heldStack is null || heldStack.Block?.Id != BlockId || heldStack.StackSize <= 0
             || SourceHotbarSlotNumber != inventory.ActiveHotbarSlotNumber
